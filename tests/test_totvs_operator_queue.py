@@ -20,7 +20,11 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-from app.core.operator_sectors import OPERATOR_SECTOR_BY_ROUTE, OPERATOR_SECTORS
+from app.core.operator_sectors import (
+    OPERATOR_PROFILES,
+    OPERATOR_SECTOR_BY_ROUTE,
+    OPERATOR_SECTORS,
+)
 from app.core.permissions import USER_LEVELS, navigation_for_level
 from app.core.resource_mapping import (
     SECTOR_OWNED_RESOURCE_SECTORS,
@@ -65,8 +69,9 @@ RECURSOS_CANONICOS = (
     # JATO permanece com tipo_setor nulo no cadastro; a associação a Pintura
     # foi validada diretamente pela Manufatura.
     {"codigo": "JATO", "nome": "Jateamento", "tipo_setor": None},
-    {"codigo": "SOLDA4", "nome": "Solda", "tipo_setor": "Solda"},
-    {"codigo": "MT NT", "nome": "MONT SOLDA TILLER", "tipo_setor": "Solda"},
+    # Wave 6F — SOLDA4 foi para Protótipo; o resto da antiga Solda é Solda Aço.
+    {"codigo": "SOLDA4", "nome": "Solda", "tipo_setor": "Protótipo"},
+    {"codigo": "MT NT", "nome": "MONT SOLDA TILLER", "tipo_setor": "Solda Aço"},
     # Recursos cujo nome lembra Montagem, porém sem pertencimento cadastral.
     {"codigo": "MPRT1", "nome": "MONTAGEM", "tipo_setor": None},
     {"codigo": "MONTAGEM PM05", "nome": "MONTAGEM PM 05", "tipo_setor": None},
@@ -456,7 +461,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
             self._scalar("SELECT COUNT(*) AS total FROM apontamentos_operacionais"), 0
         )
         # Nenhuma etapa não apontável alcança qualquer fila operacional.
-        for setor in ("Usinagem", "Serra", "Dobra", "Pintura", "Solda", "Montagem"):
+        for setor in ("Usinagem", "Serra", "Dobra", "Pintura", "Solda Aço", "Montagem"):
             self.assertEqual(self.db.listar_proximas_operacoes_roteiro(setor), [])
 
     def test_marco_terminal_e_persistido_mas_invisivel_para_o_operador(self):
@@ -488,7 +493,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
             },
             {"10", "20"},
         )
-        for setor in ("Corte", "Usinagem", "Serra", "Dobra", "Pintura", "Solda"):
+        for setor in ("Corte", "Usinagem", "Serra", "Dobra", "Pintura", "Solda Aço"):
             for item in self.db.listar_proximas_operacoes_roteiro(setor):
                 self.assertNotEqual(item.get("numero_operacao"), "99")
                 self.assertNotEqual(item.get("codigo_recurso"), "ALMOX4")
@@ -665,7 +670,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
                 {
                     "numero_operacao": "10",
                     "descricao_operacao": "SOLDA",
-                    "tipo_setor": "Solda",
+                    "tipo_setor": "Solda Aço",
                     "codigo_recurso": "MT NT",
                     "ordem": 1,
                 }
@@ -673,7 +678,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         )
         for estacao in ("Estação 1", "Estação 7"):
             with self.subTest(estacao=estacao):
-                fila = self.flow.listar_cartoes("Solda", estacao)["queue"]
+                fila = self.flow.listar_cartoes("Solda Aço", estacao)["queue"]
                 self.assertEqual(len(fila), 1)
                 self.assertEqual(fila[0]["codigo_recurso"], "MT NT")
 
@@ -691,7 +696,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
             ],
         )
         self.assertEqual(self.flow.listar_cartoes("Pintura", "Pintura")["queue"], [])
-        self.assertEqual(self.flow.listar_cartoes("Solda", "Estação 1")["queue"], [])
+        self.assertEqual(self.flow.listar_cartoes("Solda Aço", "Estação 1")["queue"], [])
         # O posto correto continua enxergando normalmente.
         self.assertEqual(
             len(self.flow.listar_cartoes("Usinagem", "Romi D 1000")["queue"]), 1
@@ -936,17 +941,17 @@ class ElegibilidadeDePostoTests(unittest.TestCase):
             with self.subTest(estacao=numero):
                 self.assertTrue(
                     station_matches_route(
-                        "Solda", f"Estação {numero}", "MT NT", resource_sector="Solda"
+                        "Solda Aço", f"Estação {numero}", "MT NT", resource_sector="Solda Aço"
                     )
                 )
                 self.assertTrue(
                     station_matches_route(
-                        "Solda", f"Estação {numero}", "SOLDA4", resource_sector="Solda"
+                        "Protótipo", "Protótipo", "SOLDA4", resource_sector="Protótipo"
                     )
                 )
 
     def test_recurso_de_outro_setor_nunca_entra_em_pintura_ou_solda(self):
-        for setor, posto in (("Pintura", "Pintura"), ("Solda", "Estação 1")):
+        for setor, posto in (("Pintura", "Pintura"), ("Solda Aço", "Estação 1")):
             for recurso, cadastro in (
                 ("CNC-01", "Usinagem"),
                 ("PLASMA", "Corte"),
@@ -970,7 +975,7 @@ class ElegibilidadeDePostoTests(unittest.TestCase):
                 )
                 self.assertFalse(
                     station_matches_route(
-                        "Solda", "Estação 1", recurso, resource_sector=None
+                        "Solda Aço", "Estação 1", recurso, resource_sector=None
                     )
                 )
 
@@ -991,7 +996,12 @@ class ElegibilidadeDePostoTests(unittest.TestCase):
     def test_regra_canonica_nao_esta_duplicada_no_adaptador_totvs(self):
         self.assertIs(RESOURCE_OWNED_POINTABLE_SECTORS, SECTOR_OWNED_RESOURCE_SECTORS)
         self.assertEqual(
-            SECTOR_OWNED_RESOURCE_SECTORS, {"pintura", "solda", "montagem"}
+            SECTOR_OWNED_RESOURCE_SECTORS,
+            {
+                "pintura", "montagem",
+                "solda aço", "solda alumínio", "solda robô",
+                "proj. ferramentaria", "protótipo",
+            },
         )
         adaptador = (ROOT / "mes/integrations/totvs/resource_mapping.py").read_text(
             encoding="utf-8"
@@ -1190,7 +1200,11 @@ class Etapa3FronteiraCanonicaTests(unittest.TestCase):
         self.assertEqual(len(rotas), len(set(rotas)))
         niveis = [sector.level for sector in OPERATOR_SECTORS]
         self.assertEqual(len(niveis), len(set(niveis)))
-        for nivel in niveis:
+        # Wave 6F — a frente de Solda entra em OPERATOR_SECTORS só como catálogo
+        # de setor/rota (prefixo ``setor_``); quem autentica é OPERATOR_PROFILES.
+        perfis = [sector.level for sector in OPERATOR_PROFILES]
+        self.assertEqual(len(perfis), len(set(perfis)))
+        for nivel in perfis:
             self.assertIn(nivel, USER_LEVELS)
 
 

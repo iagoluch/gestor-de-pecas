@@ -32,7 +32,7 @@ visual_manager_id = database.criar_usuario("Gestor Visual", "visual-local", "ges
 database.criar_usuario("Operador Dobra Visual", "visual-operador", "operador_dobra")
 database.criar_usuario("Operador Corte Visual", "visual-corte", "operador_corte")
 database.criar_usuario("Operador Destaque Visual", "visual-destaque", "operador_destaque")
-database.criar_usuario("Operador Solda Visual", "visual-solda", "operador_solda")
+database.criar_usuario("Operador Solda Visual", "visual-solda", "estacao1aco")
 
 visual_now = datetime.now().replace(microsecond=0)
 # A pré-visualização usa exatamente os códigos e nomes do cadastro oficial
@@ -53,7 +53,7 @@ visual_resources = [
     {"codigo": "SERRA1", "nome": "S4220", "tipo_setor": "Serra", "habilitado": True},
     {"codigo": "SERRA2", "nome": "SFHA-10", "tipo_setor": "Serra", "habilitado": True},
     {"codigo": "SERRA3", "nome": "SFG-330", "tipo_setor": "Serra", "habilitado": True},
-    {"codigo": "SOLDA4", "nome": "Solda", "tipo_setor": "Solda", "habilitado": True},
+    {"codigo": "SOLDA4", "nome": "Solda", "tipo_setor": "Solda Aço", "habilitado": True},
     {"codigo": "PINT.L", "nome": "Pintura", "tipo_setor": "Pintura", "habilitado": True},
 ]
 visual_states = [
@@ -71,11 +71,11 @@ visual_states = [
     # A Solda aponta por estação: o posto escolhido pelo operador é o recurso do
     # evento de estado, e é assim que ele chega ao Andon (recurso fora do
     # catálogo, com pertencimento canônico ao setor). Setup não existe em Solda.
-    {"id": 8121, "recurso": "Estação 1", "setor": "Solda", "tipo_setor": "Solda", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=44), "op": "OP-VISUAL-601", "numero_operacao": "10", "produto_codigo": "CHASSI-601"},
-    {"id": 8122, "recurso": "Estação 3", "setor": "Solda", "tipo_setor": "Solda", "categoria": "parada", "data_inicio": visual_now - timedelta(minutes=14), "motivo": "Aguardando ponte rolante"},
-    {"id": 8123, "recurso": "Estação 5", "setor": "Solda", "tipo_setor": "Solda", "categoria": "atividade_sem_op", "data_inicio": visual_now - timedelta(hours=1, minutes=6), "motivo": "Apoio à montagem"},
-    {"id": 8124, "recurso": "Estação 7", "setor": "Solda", "tipo_setor": "Solda", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=58), "op": "OP-VISUAL-606", "numero_operacao": "20", "produto_codigo": "LONGARINA-606"},
-    {"id": 8125, "recurso": "Estação 9", "setor": "Solda", "tipo_setor": "Solda", "categoria": "retrabalho", "data_inicio": visual_now - timedelta(minutes=11), "op": "OP-VISUAL-603", "numero_operacao": "10", "produto_codigo": "SUPORTE-603"},
+    {"id": 8121, "recurso": "Estação 1", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=44), "op": "OP-VISUAL-601", "numero_operacao": "10", "produto_codigo": "CHASSI-601"},
+    {"id": 8122, "recurso": "Estação 3", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "parada", "data_inicio": visual_now - timedelta(minutes=14), "motivo": "Aguardando ponte rolante"},
+    {"id": 8123, "recurso": "Estação 5", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "atividade_sem_op", "data_inicio": visual_now - timedelta(hours=1, minutes=6), "motivo": "Apoio à montagem"},
+    {"id": 8124, "recurso": "Estação 7", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=58), "op": "OP-VISUAL-606", "numero_operacao": "20", "produto_codigo": "LONGARINA-606"},
+    {"id": 8125, "recurso": "Estação 9", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "retrabalho", "data_inicio": visual_now - timedelta(minutes=11), "op": "OP-VISUAL-603", "numero_operacao": "10", "produto_codigo": "SUPORTE-603"},
     {"id": 813, "recurso": "PINT.L", "setor": "Pintura", "tipo_setor": "Pintura", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=52), "op": "OP-VISUAL-401", "produto_codigo": "ESTRUTURA-401"},
     {"id": 814, "recurso": "LASER1", "setor": "Corte", "tipo_setor": "Corte", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=38), "op": "OP-VISUAL-501", "produto_codigo": "SUPORTE-501"},
     {"id": 815, "recurso": "PLASMA", "setor": "Corte", "tipo_setor": "Corte", "categoria": "setup", "data_inicio": visual_now - timedelta(minutes=8), "op": "OP-VISUAL-502", "produto_codigo": "CHAPA-502"},
@@ -368,7 +368,7 @@ for (
         "codigo_recurso": _recurso,
         "descricao_operacao": f"SOLDA {_recurso}",
         "recurso_nome": f"SOLDA {_recurso}",
-        "tipo_setor": "Solda",
+        "tipo_setor": "Solda Aço",
         "produto_codigo": _produto,
         "produto_descricao": _descricao,
         "quantidade": 4,
@@ -379,7 +379,7 @@ for (
     if not _estacao:
         continue
     _welding_appointment = database.enfileirar_apontamento_operacional(
-        _codigo_op, None, None, "Solda", _estacao, "Operador Solda Visual",
+        _codigo_op, None, None, "Solda Aço", _estacao, "Operador Solda Visual",
         quantidade=4, data_entrada=visual_now - timedelta(hours=6),
         operacao=_welding_operation,
     )

@@ -62,8 +62,10 @@ class WebApiTests(unittest.TestCase):
         self.db.criar_usuario("Operador Web", "senha-operador", "operador_dobra")
         self.db.criar_usuario("Operador Corte Web", "senha-corte", "operador_corte")
         self.db.criar_usuario("Operador Destaque Web", "senha-destaque", "operador_destaque")
-        self.db.criar_usuario("Soldador Web A", "senha-solda-a", "operador_solda")
-        self.db.criar_usuario("Soldador Web B", "senha-solda-b", "operador_solda")
+        # Wave 6F — dois operadores no mesmo perfil de estação (a estação vem do
+        # login), que é o cenário real de disputa pelo posto.
+        self.db.criar_usuario("Soldador Web A", "senha-solda-a", "estacao1aco")
+        self.db.criar_usuario("Soldador Web B", "senha-solda-b", "estacao1aco")
         task_id = self.db.inserir_tarefa("T-WEB", material="AÇO 304", espessura=3)
         self.db.inserir_op_na_tarefa(task_id, "OP-WEB", "PECA-WEB", "Dobra", 2)
         self.db.catalog_operations.append({
@@ -88,7 +90,7 @@ class WebApiTests(unittest.TestCase):
                 "numero_operacao": "30",
                 "codigo_recurso": "SOLDA4",
                 "descricao_operacao": "SOLDAGEM",
-                "tipo_setor": "Solda",
+                "tipo_setor": "Solda Aço",
                 "produto_codigo": f"PECA-SOLDA-{suffix}",
                 "produto_descricao": "Peça de solda Web",
                 "quantidade": 1,

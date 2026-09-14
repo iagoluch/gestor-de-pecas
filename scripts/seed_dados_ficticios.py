@@ -28,7 +28,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.database.config import load_postgres_config  # noqa: E402
 from app.database.database import Database  # noqa: E402
-from app.core.operator_sectors import operator_route_resource_label  # noqa: E402
+from app.core.operator_sectors import (  # noqa: E402
+    WELDING_OPERATOR_PROFILES,
+    operator_route_resource_label,
+)
 
 
 DEFAULT_SOURCE = Path(
@@ -819,7 +822,16 @@ def _seed_users(cursor, db, password, now):
         ("serra", "operador_serra"),
         ("corte", "operador_corte"),
         ("pintura", "operador_pintura"),
-        ("solda", "operador_solda"),
+        # TODO(lançamento em produção): estas contas são criadas com a senha
+        # de teste passada em --senha (hoje "1234" no ambiente de TESTE).
+        # Antes de subir para produção, as senhas das contas dos cinco
+        # setores da frente de Solda precisam ser definidas manualmente:
+        # estacao1aco..estacao10aco, estacao1alu..estacao6alu, robo1,
+        # projetos e prototipo. O Dev Observatory não possui hoje um
+        # mecanismo de pendência/card onde registrar isso.
+        # Wave 6F — a antiga conta genérica de Solda foi substituída pelas
+        # contas por estação dos cinco setores da frente de Solda.
+        *((profile.level, profile.level) for profile in WELDING_OPERATOR_PROFILES),
     )
     legacy_names = (
         "Teste Admin", "Teste Destaque", "Teste Dobra", "Teste Usinagem", "Teste Serra",

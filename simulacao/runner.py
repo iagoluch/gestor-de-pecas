@@ -52,12 +52,12 @@ PERFIS_SIMULACAO = {
     "sim_usinagem": "operador_usinagem",
     "sim_serra": "operador_serra",
     "sim_pintura": "operador_pintura",
-    "sim_solda01": "operador_solda_estacao_1",
-    "sim_solda02": "operador_solda_estacao_2",
-    "sim_solda03": "operador_solda_estacao_3",
-    "sim_solda04": "operador_solda_estacao_4",
-    "sim_solda05": "operador_solda_estacao_5",
-    "sim_solda06": "operador_solda_estacao_6",
+    "sim_solda01": "estacao1aco",
+    "sim_solda02": "estacao2aco",
+    "sim_solda03": "estacao3aco",
+    "sim_solda04": "estacao4aco",
+    "sim_solda05": "estacao5aco",
+    "sim_solda06": "estacao6aco",
     "sim_supervisor": "supervisor",
     # O rodízio de 10 s entre Andon e Solda (useTvRotation) só roda no perfil
     # dedicado de TV. Observar o Andon pela sessão de gestão mostrava a tela

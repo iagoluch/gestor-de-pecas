@@ -49,7 +49,7 @@ RESOURCES = {
         "Torno Mecânico",
     ),
     "Serra": ("SFG-330", "S4220", "SFHA-10"),
-    "Solda": tuple(f"Estação {number}" for number in range(1, 11)),
+    "Solda Aço": tuple(f"Estação {number}" for number in range(1, 11)),
     "Pintura": ("Pintura",),
 }
 RESOURCE_ROWS = tuple(
@@ -152,7 +152,7 @@ PRODUCT_BASE_QUANTITY = {
     "Dobra": 560,
     "Usinagem": 420,
     "Serra": 680,
-    "Solda": 300,
+    "Solda Aço": 300,
     "Pintura": 840,
 }
 

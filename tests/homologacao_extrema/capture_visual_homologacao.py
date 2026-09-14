@@ -50,7 +50,7 @@ OPERATOR_PROFILES = (
     ("operador_corte", "corte_selecao", ""),
     ("operador_corte", "corte_fila", "Laser Ensis 3015"),
     ("operador_pintura", "pintura", ""),
-    ("operador_solda", "solda_estacoes", ""),
+    ("estacao1aco", "solda_estacoes", ""),
 )
 
 
@@ -190,7 +190,7 @@ def main() -> None:
         for level, name, click in (
             ("operador_dobra", "dobra_posto", "1303"),
             ("operador_corte", "corte_fila", "Laser Ensis 3015"),
-            ("operador_solda", "solda_estacoes", ""),
+            ("estacao1aco", "solda_estacoes", ""),
         ):
             if only and name not in only:
                 continue

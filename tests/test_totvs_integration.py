@@ -511,7 +511,7 @@ class TotvsParserContractTests(unittest.TestCase):
         result = TotvsProductionOrderMapper(
             TotvsResourceResolver(
                 known_resource_sectors={
-                    resource: "Solda" for resource in AUDITED_WELDING_RESOURCES
+                    resource: "Solda Aço" for resource in AUDITED_WELDING_RESOURCES
                 }
             )
         ).map(message)
@@ -520,7 +520,7 @@ class TotvsParserContractTests(unittest.TestCase):
             list(AUDITED_WELDING_RESOURCES),
         )
         self.assertTrue(
-            all(operation.tipo_setor == "Solda" for operation in result.operations)
+            all(operation.tipo_setor == "Solda Aço" for operation in result.operations)
         )
 
         welding_activity = welding_activities[0]
@@ -534,7 +534,7 @@ class TotvsParserContractTests(unittest.TestCase):
         unknown_result = TotvsProductionOrderMapper(
             TotvsResourceResolver(
                 known_resource_sectors={
-                    resource: "Solda" for resource in AUDITED_WELDING_RESOURCES
+                    resource: "Solda Aço" for resource in AUDITED_WELDING_RESOURCES
                 },
                 known_resource_codes={"SOLD-CANON-X"},
             )
@@ -614,7 +614,7 @@ class TotvsParserContractTests(unittest.TestCase):
 
         # Recurso cadastrado em outro setor nunca é promovido para Montagem.
         outro_setor = TotvsProductionOrderMapper(
-            TotvsResourceResolver(known_resource_sectors={"SOLDA4": "Solda"})
+            TotvsResourceResolver(known_resource_sectors={"SOLDA4": "Solda Aço"})
         ).map(self._montagem_message("SOLDA4"))
         self.assertEqual(outro_setor.operations, ())
         self.assertEqual(

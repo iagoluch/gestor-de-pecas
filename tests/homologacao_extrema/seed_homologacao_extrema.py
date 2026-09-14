@@ -52,7 +52,7 @@ SECTOR_RESOURCES = {
         "Torno Mecânico",
     ),
     "Serra": ("SFG-330", "S4220", "SFHA-10"),
-    "Solda": tuple(f"Estação {number}" for number in range(1, 11)),
+    "Solda Aço": tuple(f"Estação {number}" for number in range(1, 11)),
     "Pintura": ("Pintura",),
     "Destaque": ("Destaque 1", "Destaque 2"),
 }
@@ -299,7 +299,7 @@ def _appointment_status(index: int) -> str:
 
 def _insert_orders(cursor) -> dict:
     totals = Counter()
-    sectors = ("Corte", "Dobra", "Usinagem", "Serra", "Solda", "Pintura")
+    sectors = ("Corte", "Dobra", "Usinagem", "Serra", "Solda Aço", "Pintura")
     operator_ids = [row["id"] for row in cursor.execute("SELECT id FROM operadores_apontamento ORDER BY id")]
     simultaneous_ops = []
 
