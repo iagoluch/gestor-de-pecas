@@ -42,20 +42,31 @@ STATE_LABELS = {
 # por semelhança de texto. Destaque é um posto operacional de Corte, não uma
 # máquina inventada nem um quinto setor visual.
 ANDON_PANEL_ORDER = ("Corte", "Caldeiraria", "Solda", "Pintura")
+# Wave 6F — os cinco setores que substituíram a antiga "Solda" continuam em um
+# único painel "Solda" e viram sub-grupos dele, exatamente como Laser/Plasma/
+# Destaque fazem dentro de Corte. O painel é a leitura de chão de fábrica
+# ("a frente de solda"); o grupo é o setor real.
+ANDON_WELDING_GROUP_BY_SECTOR = {
+    "solda aço": "Aço",
+    "solda alumínio": "Alumínio",
+    "solda robô": "Robô",
+    "proj. ferramentaria": "Ferramentaria",
+    "protótipo": "Protótipo",
+}
 ANDON_PANEL_BY_SECTOR = {
     "corte": "Corte",
     "dobra": "Caldeiraria",
     "usinagem": "Caldeiraria",
     "serra": "Caldeiraria",
-    "solda": "Solda",
     "pintura": "Pintura",
+    **{sector: "Solda" for sector in ANDON_WELDING_GROUP_BY_SECTOR},
 }
 ANDON_GROUP_BY_SECTOR = {
     "dobra": "Dobra",
     "usinagem": "Usinagem",
     "serra": "Serra",
-    "solda": "Solda",
     "pintura": "Pintura",
+    **ANDON_WELDING_GROUP_BY_SECTOR,
 }
 ANDON_CUT_GROUP_BY_IDENTITY = {
     "laser": "Laser",
@@ -67,7 +78,7 @@ ANDON_CUT_GROUP_BY_IDENTITY = {
 ANDON_GROUP_ORDER = {
     "Corte": {"Laser": 0, "Plasma": 1, "Destaque": 2, "Corte": 3},
     "Caldeiraria": {"Dobra": 0, "Usinagem": 1, "Serra": 2},
-    "Solda": {"Solda": 0},
+    "Solda": {name: index for index, name in enumerate(ANDON_WELDING_GROUP_BY_SECTOR.values())},
     "Pintura": {"Pintura": 0},
 }
 ACTIVE_ANDON_CATEGORIES = {

@@ -19,11 +19,11 @@ const ANDON_BOARD_COLUMNS: ReadonlyArray<readonly string[]> = [
   ["Corte", "Solda"],
   ["Caldeiraria", "Pintura"],
 ];
-// A Solda ainda chega do backend como um grupo único, então cada estação ganha
-// o próprio quadro — como Dobra, Usinagem e Serra dentro da Caldeiraria. O
-// cabeçalho do quadro é o nome que vier no recurso: quando a relação oficial de
-// recursos definir agrupamentos próprios para o setor, o backend passa a mandar
-// `groups` e a divisão por recurso deixa de ser aplicada sozinha.
+// Fallback para quando o painel chega do backend sem agrupamento próprio: cada
+// recurso ganha o próprio quadro, como Dobra, Usinagem e Serra dentro da
+// Caldeiraria. Desde a Wave 6F o painel "Solda" manda os cinco setores reais
+// (Aço, Alumínio, Robô, Ferramentaria, Protótipo) em `groups`, e a divisão por
+// recurso deixa de ser aplicada sozinha — exatamente como já estava previsto.
 const ANDON_PER_RESOURCE_PANELS = ["Solda"];
 
 function usesPerResourceGroups(sector: AndonSnapshot["sectors"][number]) {

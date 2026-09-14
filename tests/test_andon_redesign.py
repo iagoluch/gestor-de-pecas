@@ -17,11 +17,11 @@ class AndonRepositoryFake:
             {"codigo": "DOBRA1", "nome": "Gasparini", "tipo_setor": "Dobra", "ordem": 1},
             {"codigo": "CNC-01", "nome": "Romi D 1000", "tipo_setor": "Usinagem", "ordem": 1},
             {"codigo": "SERRA1", "nome": "S4220", "tipo_setor": "Serra", "ordem": 1},
-            {"codigo": "SOLDA1", "nome": "Solda 01", "tipo_setor": "Solda", "ordem": 1},
-            {"codigo": "SOLDA2", "nome": "Solda 02", "tipo_setor": "Solda", "ordem": 2},
+            {"codigo": "SOLDA1", "nome": "Solda 01", "tipo_setor": "Solda Aço", "ordem": 1},
+            {"codigo": "SOLDA2", "nome": "Solda 02", "tipo_setor": "Solda Aço", "ordem": 2},
             {"codigo": "PINT.L", "nome": "Cabine 01", "tipo_setor": "Pintura", "ordem": 1},
-            {"codigo": "INATIVO", "nome": "Recurso apenas cadastrado", "tipo_setor": "Solda", "ordem": 99},
-            {"codigo": "FILA", "nome": "Recurso em fila", "tipo_setor": "Solda", "ordem": 100},
+            {"codigo": "INATIVO", "nome": "Recurso apenas cadastrado", "tipo_setor": "Solda Aço", "ordem": 99},
+            {"codigo": "FILA", "nome": "Recurso em fila", "tipo_setor": "Solda Aço", "ordem": 100},
         ]
         self.highlights = []
         self.active_cuts = []
@@ -47,10 +47,10 @@ class AndonActiveResourcesTests(unittest.TestCase):
             {"recurso": "DOBRA1", "setor": "Dobra", "categoria": "parada", "codigo_status": "0029", "motivo": "0029 - Falta de material", "inicio": self.now},
             {"recurso": "CNC-01", "setor": "Usinagem", "categoria": "retrabalho", "inicio": self.now, "ops_ativas": [{"op": "1002", "produto": "CNC-P"}]},
             {"recurso": "SERRA1", "setor": "Serra", "categoria": "producao", "inicio": self.now, "ops_ativas": [{"op": "1003", "produto": "SERRA-P"}]},
-            {"recurso": "SOLDA1", "setor": "Solda", "categoria": "atividade_sem_op", "tipo_atividade": "diaria", "descricao_atividade": "Limpeza do posto", "inicio": self.now},
-            {"recurso": "SOLDA2", "setor": "Solda", "categoria": "atividade_sem_op", "descricao_atividade": "Apoio à montagem", "inicio": self.now},
+            {"recurso": "SOLDA1", "setor": "Solda Aço", "categoria": "atividade_sem_op", "tipo_atividade": "diaria", "descricao_atividade": "Limpeza do posto", "inicio": self.now},
+            {"recurso": "SOLDA2", "setor": "Solda Aço", "categoria": "atividade_sem_op", "descricao_atividade": "Apoio à montagem", "inicio": self.now},
             {"recurso": "PINT.L", "setor": "Pintura", "categoria": "producao", "inicio": self.now, "ops_ativas": [{"op": "1004", "produto": "PINT-P"}]},
-            {"recurso": "FILA", "setor": "Solda", "categoria": "fila", "inicio": self.now},
+            {"recurso": "FILA", "setor": "Solda Aço", "categoria": "fila", "inicio": self.now},
         ]
         self.kpis = []
         for index, code in enumerate(("LASER1", "PLASMA", "DOBRA1", "CNC-01", "SERRA1", "SOLDA1", "SOLDA2", "PINT.L"), 1):

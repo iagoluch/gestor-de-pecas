@@ -380,7 +380,7 @@ class _AndonRepo(_CanonicalRepo):
             {"id": 3, "recurso": "R-SETUP", "tipo_setor": "Usinagem", "categoria": "setup", "data_inicio": start},
             {"id": 4, "recurso": "R-REWORK", "tipo_setor": "Usinagem", "categoria": "retrabalho", "data_inicio": start},
             {"id": 5, "recurso": "R-QUEUE", "tipo_setor": "Serra", "categoria": "fila", "data_inicio": start},
-            {"id": 6, "recurso": "R-NOOP", "tipo_setor": "Solda", "categoria": "atividade_sem_op", "data_inicio": start},
+            {"id": 6, "recurso": "R-NOOP", "tipo_setor": "Solda Aço", "categoria": "atividade_sem_op", "data_inicio": start},
             {"id": 7, "recurso": "R-OFF", "tipo_setor": "Pintura", "categoria": "fora_turno", "data_inicio": start},
             {"id": 8, "recurso": "R-UNKNOWN", "tipo_setor": "Corte", "categoria": "desconhecido", "data_inicio": start},
         ]
@@ -389,7 +389,7 @@ class _AndonRepo(_CanonicalRepo):
         self.catalog_calls += 1
         sectors = {
             "R-PROD": "Dobra", "R-STOP": "Dobra", "R-SETUP": "Usinagem",
-            "R-REWORK": "Usinagem", "R-QUEUE": "Serra", "R-NOOP": "Solda",
+            "R-REWORK": "Usinagem", "R-QUEUE": "Serra", "R-NOOP": "Solda Aço",
             "R-OFF": "Pintura", "R-UNKNOWN": "Corte", "R-NOSTATE": "Corte",
         }
         return [
@@ -532,15 +532,15 @@ class AndonProjectionTests(unittest.TestCase):
         class CaseSensitiveCatalogRepo(_AndonRepo):
             def listar_recursos_pcfactory(self, *_args, **_kwargs):
                 return [
-                    {"codigo": "SCCGMM", "nome": "Solda A", "tipo_setor": "Solda", "habilitado": True},
-                    {"codigo": "SCCGmm", "nome": "Solda B", "tipo_setor": "Solda", "habilitado": True},
+                    {"codigo": "SCCGMM", "nome": "Solda A", "tipo_setor": "Solda Aço", "habilitado": True},
+                    {"codigo": "SCCGmm", "nome": "Solda B", "tipo_setor": "Solda Aço", "habilitado": True},
                 ]
 
             def listar_estados_recurso_atuais(self, **_kwargs):
                 start = datetime(2026, 8, 19, 9, 0)
                 return [
-                    {"recurso": "SCCGMM", "tipo_setor": "Solda", "categoria": "producao", "data_inicio": start},
-                    {"recurso": "SCCGmm", "tipo_setor": "Solda", "categoria": "setup", "data_inicio": start},
+                    {"recurso": "SCCGMM", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": start},
+                    {"recurso": "SCCGmm", "tipo_setor": "Solda Aço", "categoria": "setup", "data_inicio": start},
                 ]
 
             def listar_fatos_operacionais_periodo(self, *_args, **_kwargs):
