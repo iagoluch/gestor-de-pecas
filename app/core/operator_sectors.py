@@ -71,8 +71,13 @@ WELDING_FAMILY_SECTORS = (
         tuple(f"estacao{number}alu" for number in range(1, 7)),
     ),
     ("Solda Robô", ("Robô 1",), ("robo1",)),
-    ("Proj. Ferramentaria", ("Projetos",), ("projetos",)),
-    ("Protótipo", ("Protótipo",), ("prototipo",)),
+    # Proj. Ferramentaria e Protótipo têm uma conta só, mas cobrem mais de um
+    # recurso nomeado do cadastro corporativo cada. Os nomes aqui já são os
+    # próprios códigos do PC Factory (DISPEX/DISPG/SERVGE/DISPOS, PREMTG,
+    # SOLDA4) — não é rótulo de posto físico como nos demais, porque não há
+    # quiosque por recurso aqui, é um único login escolhendo entre eles.
+    ("Proj. Ferramentaria", ("DISPEX", "DISPG", "SERVGE", "DISPOS"), ("projetos",)),
+    ("Protótipo", ("PREMTG", "SOLDA4"), ("prototipo",)),
 )
 
 #: Sucessor direto do antigo setor "Solda": mesmas dez estações, mesma regra.
@@ -82,6 +87,15 @@ WELDING_STEEL_SECTOR = WELDING_FAMILY_SECTORS[0][0]
 #: quem precisa tratar a frente inteira como um bloco (Andon, acompanhamento
 #: gerencial da Solda, regras de setor).
 WELDING_SECTOR_NAMES = tuple(name for name, _stations, _levels in WELDING_FAMILY_SECTORS)
+
+#: Setores da frente de Solda cujo login enxerga vários recursos ao mesmo
+#: tempo e por isso pede seleção na tela, igual Dobra/Usinagem/Serra — ao
+#: contrário dos demais, onde o posto é fixo pelo login e a tela vai direto
+#: para o apontamento. Decisão do usuário em 14/09/2026: Robô fica fixo (só
+#: existe "Robô 1"); Proj. Ferramentaria e Protótipo têm uma conta só cobrindo
+#: recursos nomeados distintos e o operador escolhe qual está executando, com
+#: o mesmo formulário de apontamento dos demais.
+WELDING_OPEN_PICKER_SECTORS = frozenset({"Proj. Ferramentaria", "Protótipo"})
 
 
 OPERATOR_SECTORS = (
@@ -121,12 +135,31 @@ OPERATOR_SECTORS = (
 )
 
 WELDING_STATIONS = WELDING_FAMILY_SECTORS[0][1]
-#: Uma conta por estação: o posto é fixo pelo login e não é escolhido na tela.
-WELDING_OPERATOR_PROFILES = tuple(
-    OperatorSector(level, name, name, (station,))
-    for name, stations, levels in WELDING_FAMILY_SECTORS
-    for station, level in zip(stations, levels)
-)
+
+
+def _weld_operator_profiles():
+    """Gera os perfis por login da frente de Solda.
+
+    Dois formatos: a maioria é uma conta por posto (o recurso é fixo pelo
+    login, não escolhido na tela). Proj. Ferramentaria e Protótipo são uma
+    conta só cobrindo vários recursos nomeados — aí o login enxerga a lista
+    inteira e a tela pede seleção, igual Dobra/Usinagem/Serra.
+    """
+
+    profiles = []
+    for name, stations, levels in WELDING_FAMILY_SECTORS:
+        if name in WELDING_OPEN_PICKER_SECTORS:
+            (level,) = levels
+            profiles.append(OperatorSector(level, name, name, stations))
+        else:
+            profiles.extend(
+                OperatorSector(level, name, name, (station,))
+                for station, level in zip(stations, levels)
+            )
+    return tuple(profiles)
+
+
+WELDING_OPERATOR_PROFILES = _weld_operator_profiles()
 
 # ``OPERATOR_SECTORS`` continua sendo o catálogo único dos setores/rotas.
 # Perfis fixos podem compartilhar a mesma rota sem duplicar a definição do

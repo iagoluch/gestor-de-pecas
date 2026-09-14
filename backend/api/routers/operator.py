@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 
-from app.core.operator_sectors import WELDING_SECTOR_NAMES
+from app.core.operator_sectors import WELDING_OPEN_PICKER_SECTORS, WELDING_SECTOR_NAMES
 from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, require_operator_user
 from backend.api.dependencies.clock import request_now_func
@@ -95,15 +95,18 @@ def _raise_result(result):
 @router.get("/context")
 def context(user: SessionUser = Depends(require_operator_user)):
     sector = sector_for_user(user)
-    # Wave 6F — a estação continua sendo definida pelo login, e não escolhida na
-    # tela, nos cinco setores que substituíram a antiga "Solda".
+    # Wave 6F — a estação é definida pelo login (não escolhida na tela) nos
+    # setores da frente de Solda, exceto Proj. Ferramentaria e Protótipo: ali
+    # uma conta só cobre vários recursos nomeados e o operador escolhe entre
+    # eles, igual Dobra/Usinagem/Serra (decisão do usuário em 14/09/2026).
     welding = sector.name in WELDING_SECTOR_NAMES
+    locked_to_login = welding and sector.name not in WELDING_OPEN_PICKER_SECTORS
     return {
         "sector": sector.name,
         "route": sector.route,
         "resources": list(sector.resources),
-        "fixed_resource": welding and len(sector.resources) == 1,
-        "station_profile_required": welding and len(sector.resources) != 1,
+        "fixed_resource": locked_to_login and len(sector.resources) == 1,
+        "station_profile_required": locked_to_login and len(sector.resources) != 1,
         # Quem decide se o posto tem Setup é o domínio, não a tela: o React
         # mantinha a própria lista de setores sem Setup e ela já nascia
         # desatualizada a cada setor novo.
