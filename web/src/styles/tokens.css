@@ -1,0 +1,43 @@
+:root {
+  font-family: Arial, sans-serif;
+  color: #081630;
+  background: #f5f7fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-alt: #f1f3f6;
+  --border: #c7d3e2;
+  --divider: #dde5ef;
+  --text: #081630;
+  --muted: #71809d;
+  --primary: #0866f5;
+  --primary-hover: #075bd8;
+  --primary-soft: #e8f2ff;
+  --accent: #16a34a;
+  --accent-soft: #eaf8ef;
+  --warning: #f59e0b;
+  --warning-soft: #fff6e6;
+  --danger: #ef3340;
+  --danger-soft: #fff0f1;
+  --sidebar: #001e3f;
+  --sidebar-panel: #03264b;
+  --sidebar-button: #082c55;
+  --sidebar-hover: #0c3765;
+  --sidebar-border: #0a426f;
+  --purple: #7047e8;
+  --teal: #20a7a1;
+  /* Estados operacionais do apontamento: a mesma identidade dos botoes do
+     operador, para que o Andon leia igual ao posto. */
+  --state-setup: #0cc0df;
+  --state-setup-soft: #e6f8fc;
+  --state-rework: #7a2f00;
+  --state-rework-soft: #f5ebe4;
+  --orange: #ff7100;
+  --radius-control: 5px;
+  --radius-card: 10px;
+  --radius-panel: 12px;
+  --shadow-card: 0 1px 2px rgba(8, 22, 48, .05), 0 1px 3px rgba(8, 22, 48, .06);
+  --shadow-hover: 0 10px 24px rgba(8, 22, 48, .12);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}

@@ -1,0 +1,14 @@
+Gestor de Peças — Backend Consolidado v11
+Data: 2026-08-19
+Schema: 11
+Contrato frontend/backend: 2026-08-19.1
+Arquivos antes deste manifesto: 330
+Validação executável no container: 112 testes aprovados.
+Compilação: python -m compileall -q app mes qlik scripts tests — OK.
+Excluídos da entrega: .env, credenciais Qlik, .venv, caches, logs, dados locais, tmp/output e dumps de teste.
+Encoding: UTF-8 validado em nomes e arquivos textuais incluídos.
+
+HOTFIX LOGIN 2026-08-19
+- Restaurados PASSWORD_SCHEME, PASSWORD_ITERATIONS, LEGACY_PASSWORD_ITERATIONS, CATALOG_SYNC_LOCK_ID e agora_db em app/database/database.py.
+- Corrigido import de OperationVisual no teste de fluxo do operador.
+- Ver docs/HOTFIX_V11_LOGIN_20260819.md.

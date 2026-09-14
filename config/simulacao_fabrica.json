@@ -1,0 +1,396 @@
+{
+  "versao": 2,
+  "descricao": "Turno industrial completo simulado no banco TESTE do Gestor de Peças (Wave 5).",
+  "banco_esperado": "gestor_pecas_test",
+  "api": {
+    "base_url": "http://127.0.0.1:8001",
+    "porta": 8001,
+    "prefixo": "/api/v1"
+  },
+  "relogio": {
+    "data_turno": "2026-09-14",
+    "inicio_virtual": "07:50",
+    "fim_virtual": "17:45",
+    "escala_padrao": 16.0,
+    "turno_esperado": "Oficial"
+  },
+  "seed_padrao": 20260908,
+  "marcador_simulacao": "SIMULAÇÃO",
+  "operadores": {
+    "Corte": "sim_corte",
+    "Destaque": "sim_destaque",
+    "Dobra": "sim_dobra",
+    "Usinagem": "sim_usinagem",
+    "Serra": "sim_serra",
+    "Solda": "sim_solda01",
+    "Pintura": "sim_pintura",
+    "Gestão": "sim_supervisor"
+  },
+  "operadores_por_posto": {
+    "Solda": {
+      "Estação 1": "sim_solda01",
+      "Estação 2": "sim_solda02",
+      "Estação 3": "sim_solda03",
+      "Estação 4": "sim_solda04",
+      "Estação 5": "sim_solda05",
+      "Estação 6": "sim_solda06"
+    }
+  },
+  "crachas_simulacao": [
+    {"cracha": "SIM01", "nome": "SIMULAÇÃO — Operador Corte", "autorizador_retrabalho": false},
+    {"cracha": "SIM02", "nome": "SIMULAÇÃO — Operador Destaque", "autorizador_retrabalho": false},
+    {"cracha": "SIM03", "nome": "SIMULAÇÃO — Operador Dobra", "autorizador_retrabalho": false},
+    {"cracha": "SIM04", "nome": "SIMULAÇÃO — Operador Usinagem", "autorizador_retrabalho": false},
+    {"cracha": "SIM05", "nome": "SIMULAÇÃO — Operador Serra", "autorizador_retrabalho": false},
+    {"cracha": "SIM06", "nome": "SIMULAÇÃO — Operador Solda 01", "autorizador_retrabalho": false},
+    {"cracha": "SIM07", "nome": "SIMULAÇÃO — Operador Solda 02", "autorizador_retrabalho": false},
+    {"cracha": "SIM08", "nome": "SIMULAÇÃO — Operador Solda 03", "autorizador_retrabalho": false},
+    {"cracha": "SIM09", "nome": "SIMULAÇÃO — Operador Pintura", "autorizador_retrabalho": false},
+    {"cracha": "SIM99", "nome": "SIMULAÇÃO — Responsável de retrabalho", "autorizador_retrabalho": true},
+    {"cracha": "SIM00", "nome": "SIMULAÇÃO — Crachá não autorizado", "autorizador_retrabalho": false}
+  ],
+  "cracha_autorizador": "SIM99",
+  "cracha_nao_autorizado": "SIM00",
+  "recursos": {
+    "Corte": ["Laser Ensis 3015", "Plasma TerraBlade 4"],
+    "Dobra": ["Gasparini", "2204", "1303"],
+    "Usinagem": ["Romi D 1000", "Eurostec", "Fresadora FTV31", "Romi GL 350M", "Torno Mecânico"],
+    "Serra": ["S4220", "SFHA-10", "SFG-330"],
+    "Solda": ["Estação 1", "Estação 2", "Estação 3", "Estação 4", "Estação 5", "Estação 6"],
+    "Pintura": ["Pintura"]
+  },
+  "motivos_parada": {
+    "falta_material": "9999",
+    "falta_componentes": "0041",
+    "espera_ponte": "0029",
+    "manutencao_corretiva": "0011",
+    "aguardando_qualidade": "0036",
+    "problema_tocha": "0027",
+    "ajuste_dobradeira": "0023",
+    "aguardando_etapa_anterior": "0053"
+  },
+  "motivo_atividade_sem_op": "0044",
+  "motivo_atividade_diaria": "1031",
+  "comportamento": {
+    "probabilidade_parada_por_recurso": 0.45,
+    "probabilidade_setup": 0.35,
+    "probabilidade_refugo": 0.3,
+    "probabilidade_retrabalho": 0.2,
+    "probabilidade_finalizacao_parcial": 0.3,
+    "duracao_parada_minutos": [8, 45],
+    "duracao_setup_minutos": [10, 25],
+    "atraso_inicial_minutos": [0, 22],
+    "intervalo_entre_eventos_minutos": [3, 12]
+  },
+  "carga_continua": {
+    "ativa": true,
+    "prefixo": "SIMCARGA",
+    "ops_por_posto": 4,
+    "quantidade_por_op": 24,
+    "ciclos_por_op": 4,
+    "roteiro_base": 800,
+    "postos": {
+      "Dobra": {
+        "Gasparini": {"atividade": "DOBRA", "centro": "CALDER", "maquinas": ["DOBRA1"]},
+        "2204": {"atividade": "DOBRA", "centro": "CALDER", "maquinas": ["DOBRA2"]},
+        "1303": {"atividade": "DOBRA", "centro": "CALDER", "maquinas": ["DOBRA3"]}
+      },
+      "Usinagem": {
+        "Romi D 1000": {"atividade": "USINAGEM", "centro": "USIN", "maquinas": ["CNC-01"]},
+        "Eurostec": {"atividade": "USINAGEM", "centro": "USIN", "maquinas": ["CNC-02"]},
+        "Fresadora FTV31": {"atividade": "USINAGEM", "centro": "USIN", "maquinas": ["FRESA1"]},
+        "Romi GL 350M": {"atividade": "USINAGEM", "centro": "USIN", "maquinas": ["TCNC-1"]},
+        "Torno Mecânico": {"atividade": "USINAGEM", "centro": "USIN", "maquinas": ["TORNOC"]}
+      },
+      "Serra": {
+        "S4220": {"atividade": "SERRA", "centro": "CALDER", "maquinas": ["SERRA1"]},
+        "SFHA-10": {"atividade": "SERRA", "centro": "CALDER", "maquinas": ["SERRA2"]},
+        "SFG-330": {"atividade": "SERRA", "centro": "CALDER", "maquinas": ["SERRA3"]}
+      },
+      "Solda": {
+        "Estação 1": {"atividade": "SOLDA CENTRAL", "centro": "SOLDA", "maquinas": ["S CEN"]},
+        "Estação 2": {"atividade": "SOLDA ROBO", "centro": "SOLDA", "maquinas": ["ROBO S"]},
+        "Estação 3": {"atividade": "SOLDA FRONTAL", "centro": "SOLDA", "maquinas": ["SF5"]},
+        "Estação 4": {"atividade": "SOLDA ARTICULACAO", "centro": "SOLDA", "maquinas": ["S ART"]},
+        "Estação 5": {"atividade": "SOLDA ROBO", "centro": "SOLDA", "maquinas": ["ROBO P"]},
+        "Estação 6": {"atividade": "SOLDA CABECALHO", "centro": "SOLDA", "maquinas": ["S CAB"]}
+      },
+      "Pintura": {
+        "Pintura": {"atividade": "PINTURA", "centro": "PINTU", "maquinas": ["TINTA", "PREP", "ESTUFA", "RETOQ"]}
+      }
+    }
+  },
+  "fases": [
+    {"nome": "abertura", "inicio": "08:00", "fim": "08:35", "recursos_ativos": 6},
+    {"nome": "ramp_up", "inicio": "08:35", "fim": "09:40", "recursos_ativos": 12},
+    {"nome": "pico", "inicio": "09:40", "fim": "12:10", "recursos_ativos": 21},
+    {"nome": "pausa_almoco", "inicio": "12:10", "fim": "12:52", "recursos_ativos": 0},
+    {"nome": "retorno", "inicio": "12:52", "fim": "15:30", "recursos_ativos": 21},
+    {"nome": "pausa_cafe", "inicio": "15:30", "fim": "15:45", "recursos_ativos": 0},
+    {"nome": "segunda_metade", "inicio": "15:45", "fim": "17:15", "recursos_ativos": 18},
+    {"nome": "encerramento", "inicio": "17:15", "fim": "17:45", "recursos_ativos": 0}
+  ],
+  "checkpoints": [
+    {"nome": "inicio_turno", "hora": "08:05"},
+    {"nome": "ramp_up", "hora": "09:00"},
+    {"nome": "pico", "hora": "10:30", "observar_andon": true},
+    {"nome": "pico_tardio", "hora": "11:30", "observar_andon": true},
+    {"nome": "antes_da_pausa", "hora": "12:05"},
+    {"nome": "durante_a_pausa", "hora": "12:30"},
+    {"nome": "retorno_da_pausa", "hora": "13:10"},
+    {"nome": "qualidade_e_retrabalho", "hora": "14:30"},
+    {"nome": "pos_cafe", "hora": "15:50"},
+    {"nome": "segunda_metade", "hora": "16:40", "observar_andon": true},
+    {"nome": "final_do_turno", "hora": "17:35"}
+  ],
+  "massa_sintetica": {
+    "empresa": "01",
+    "filial": "010004",
+    "ordens": [
+      {
+        "numero": "SIM090001001",
+        "produto": "SIMPRD000001",
+        "descricao": "SIMULACAO - SUPORTE USINADO",
+        "quantidade": 6,
+        "roteiro": "60",
+        "atividades": [
+          {"codigo": "10", "descricao": "USINAGEM", "centro": "USIN", "maquina": "CNC-01"},
+          {"codigo": "20", "descricao": "INSPECAO QUALIDADE", "centro": "CALDER", "maquina": "INSPEC"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001002",
+        "produto": "SIMPRD000002",
+        "descricao": "SIMULACAO - TUBO SERRADO",
+        "quantidade": 8,
+        "roteiro": "61",
+        "atividades": [
+          {"codigo": "10", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA1"},
+          {"codigo": "20", "descricao": "INSPECAO", "centro": "CALDER", "maquina": "INSPEC"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001003",
+        "produto": "SIMPRD000003",
+        "descricao": "SIMULACAO - CHAPA DOBRADA",
+        "quantidade": 10,
+        "roteiro": "62",
+        "atividades": [
+          {"codigo": "10", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA2"},
+          {"codigo": "20", "descricao": "INSPECAO QUALIDADE", "centro": "CALDER", "maquina": "INSPEC"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001004",
+        "produto": "SIMPRD000004",
+        "descricao": "SIMULACAO - CONJUNTO SOLDADO CENTRAL",
+        "quantidade": 4,
+        "roteiro": "63",
+        "atividades": [
+          {"codigo": "10", "descricao": "SOLDA CENTRAL", "centro": "SOLDA", "maquina": "S CEN"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001005",
+        "produto": "SIMPRD000005",
+        "descricao": "SIMULACAO - CHASSI ROBO S",
+        "quantidade": 4,
+        "roteiro": "64",
+        "atividades": [
+          {"codigo": "10", "descricao": "SOLDA ROBO", "centro": "SOLDA", "maquina": "ROBO S"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001006",
+        "produto": "SIMPRD000006",
+        "descricao": "SIMULACAO - FRONTAL 510",
+        "quantidade": 3,
+        "roteiro": "65",
+        "atividades": [
+          {"codigo": "10", "descricao": "SOLDA FRONTAL", "centro": "SOLDA", "maquina": "SF5"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001007",
+        "produto": "SIMPRD000007",
+        "descricao": "SIMULACAO - CONJUNTO PINTADO",
+        "quantidade": 5,
+        "roteiro": "66",
+        "atividades": [
+          {"codigo": "10", "descricao": "PREPARACAO", "centro": "PINTU", "maquina": "PREP"},
+          {"codigo": "20", "descricao": "PINTURA", "centro": "PINTU", "maquina": "TINTA"},
+          {"codigo": "30", "descricao": "SECAGEM", "centro": "PINTU", "maquina": "ESTUFA"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001008",
+        "produto": "SIMPRD000008",
+        "descricao": "SIMULACAO - EIXO TORNEADO OVERRIDE DE RECURSO",
+        "quantidade": 3,
+        "roteiro": "67",
+        "atividades": [
+          {"codigo": "10", "descricao": "USINAGEM", "centro": "USIN", "maquina": "TCNC-1"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001009",
+        "produto": "SIMPRD000009",
+        "descricao": "SIMULACAO - SUPORTE COM REFUGO",
+        "quantidade": 3,
+        "roteiro": "68",
+        "atividades": [
+          {"codigo": "10", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA3"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001010",
+        "produto": "SIMPRD000010",
+        "descricao": "SIMULACAO - PERFIL SERRADO",
+        "quantidade": 5,
+        "roteiro": "69",
+        "atividades": [
+          {"codigo": "10", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA2"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001011",
+        "produto": "SIMPRD000011",
+        "descricao": "SIMULACAO - CONJUNTO MULTISSETOR A",
+        "quantidade": 6,
+        "roteiro": "70",
+        "multissetor": true,
+        "atividades": [
+          {"codigo": "10", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA3"},
+          {"codigo": "20", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA1"},
+          {"codigo": "30", "descricao": "USINAGEM", "centro": "USIN", "maquina": "CNC-02"},
+          {"codigo": "40", "descricao": "INSPECAO QUALIDADE", "centro": "CALDER", "maquina": "INSPEC"},
+          {"codigo": "50", "descricao": "SOLDA ARTICULACAO", "centro": "SOLDA", "maquina": "S ART"},
+          {"codigo": "60", "descricao": "PINTURA", "centro": "PINTU", "maquina": "TINTA"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001012",
+        "produto": "SIMPRD000012",
+        "descricao": "SIMULACAO - CONJUNTO MULTISSETOR B",
+        "quantidade": 4,
+        "roteiro": "71",
+        "multissetor": true,
+        "atividades": [
+          {"codigo": "10", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA3"},
+          {"codigo": "20", "descricao": "USINAGEM", "centro": "USIN", "maquina": "FRESA1"},
+          {"codigo": "30", "descricao": "INSPECAO", "centro": "CALDER", "maquina": "INSPEC"},
+          {"codigo": "40", "descricao": "SOLDA ROBO", "centro": "SOLDA", "maquina": "ROBO P"},
+          {"codigo": "50", "descricao": "PREPARACAO", "centro": "PINTU", "maquina": "PREP"},
+          {"codigo": "60", "descricao": "PINTURA", "centro": "PINTU", "maquina": "TINTA"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001013",
+        "produto": "SIMPRD000013",
+        "descricao": "SIMULACAO - CONJUNTO MULTISSETOR C RETRABALHO",
+        "quantidade": 5,
+        "roteiro": "72",
+        "multissetor": true,
+        "atividades": [
+          {"codigo": "10", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA2"},
+          {"codigo": "20", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA2"},
+          {"codigo": "30", "descricao": "INSPECAO QUALIDADE", "centro": "CALDER", "maquina": "INSPEC"},
+          {"codigo": "40", "descricao": "SOLDA", "centro": "SOLDA", "maquina": "SMSX"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001014",
+        "produto": "SIMPRD000014",
+        "descricao": "SIMULACAO - CONJUNTO MULTISSETOR D OVERRIDE DE ETAPA",
+        "quantidade": 3,
+        "roteiro": "73",
+        "multissetor": true,
+        "atividades": [
+          {"codigo": "10", "descricao": "USINAGEM", "centro": "USIN", "maquina": "TORNOC"},
+          {"codigo": "20", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA3"},
+          {"codigo": "30", "descricao": "SOLDA CABECALHO", "centro": "SOLDA", "maquina": "S CAB"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001015",
+        "produto": "SIMPRD000015",
+        "descricao": "SIMULACAO - PECA UNITARIA PRIMEIRA PECA",
+        "quantidade": 1,
+        "roteiro": "74",
+        "atividades": [
+          {"codigo": "10", "descricao": "USINAGEM", "centro": "USIN", "maquina": "CNC-02"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001016",
+        "produto": "SIMPRD000016",
+        "descricao": "SIMULACAO - PRIMEIRA PECA EM RETRABALHO",
+        "quantidade": 8,
+        "roteiro": "75",
+        "atividades": [
+          {"codigo": "10", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA1"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001017",
+        "produto": "SIMPRD000017",
+        "descricao": "SIMULACAO - REFUGO E REPOSICAO PCP",
+        "quantidade": 10,
+        "roteiro": "76",
+        "atividades": [
+          {"codigo": "10", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA1"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001018",
+        "produto": "SIMPRD000018",
+        "descricao": "SIMULACAO - RETRABALHO EM PECA POSTERIOR",
+        "quantidade": 6,
+        "roteiro": "77",
+        "atividades": [
+          {"codigo": "10", "descricao": "USINAGEM", "centro": "USIN", "maquina": "FRESA1"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001019",
+        "produto": "SIMPRD000019",
+        "descricao": "SIMULACAO - FINALIZAR COM SETUP PENDENTE",
+        "quantidade": 5,
+        "roteiro": "78",
+        "atividades": [
+          {"codigo": "10", "descricao": "DOBRA", "centro": "CALDER", "maquina": "DOBRA2"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      },
+      {
+        "numero": "SIM090001020",
+        "produto": "SIMPRD000020",
+        "descricao": "SIMULACAO - PRIMEIRA PECA REFUGADA E REPOSTA",
+        "quantidade": 4,
+        "roteiro": "79",
+        "atividades": [
+          {"codigo": "10", "descricao": "SERRA", "centro": "CALDER", "maquina": "SERRA3"},
+          {"codigo": "99", "descricao": "FINALIZADA", "centro": "ALMOX4", "maquina": "ALMOX4", "final": true}
+        ]
+      }
+    ]
+  }
+}

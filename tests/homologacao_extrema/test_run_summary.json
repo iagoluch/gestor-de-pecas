@@ -1,0 +1,37 @@
+{
+  "executed_at": "2026-08-20T18:14:00-03:00",
+  "database": "gestor_pecas_test_homologacao_extrema_20260820",
+  "seed": {
+    "idempotent_second_run": true,
+    "created_on_second_run": false
+  },
+  "reconciliation": {
+    "total": 53,
+    "passed": 53,
+    "failed": 0,
+    "gate": "PASS"
+  },
+  "python": {
+    "framework": "unittest",
+    "total": 263,
+    "passed": 263,
+    "failed": 0,
+    "duration_seconds": 41.856
+  },
+  "web": {
+    "framework": "vitest",
+    "files": 3,
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "duration_seconds": 7.62
+  },
+  "build": {
+    "typescript": "PASS",
+    "vite": "PASS",
+    "vite_duration_seconds": 2.19
+  },
+  "compileall": "PASS",
+  "cleanup_dry_run": "PASS",
+  "database_preserved": true
+}

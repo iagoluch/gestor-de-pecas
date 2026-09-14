@@ -1,0 +1,155 @@
+{
+  "common_test": {
+    "dbname": "gestor_pecas_test_simulacao_residencia_20260824",
+    "host": "127.0.0.1",
+    "port": "15432",
+    "user": "gestor_app"
+  },
+  "created": false,
+  "expected": {
+    "counts": {
+      "appointments": 1752,
+      "automatic_shift_interruptions": 3456,
+      "completed_actual_cutting_seconds": 416633,
+      "completed_cuttings": 276,
+      "cut_appointments": 288,
+      "data_issues": 36,
+      "highlight_events": 338,
+      "history_events": 1752,
+      "operations": 1752,
+      "operator_badges": 36,
+      "operator_events": 27588,
+      "orders": 1752,
+      "participations": 1740,
+      "plans": 288,
+      "predicted_cutting_seconds": 407520,
+      "quantity_events": 5040,
+      "resource_state_events": 29391,
+      "tasks": 144
+    },
+    "current": {
+      "active_resources": 12,
+      "queued_or_free_resources": 12,
+      "reference_time": "2026-08-24T08:32:00"
+    },
+    "dataset": "simulacao_historica_3_meses_v1",
+    "edge_cases": {
+      "conflicting_state_seconds": 2700,
+      "issues": 36,
+      "rateio_allocated_seconds": 43200,
+      "rateio_physical_seconds": 43200,
+      "rateio_sessions": 12
+    },
+    "months": {
+      "6": {
+        "good": 286792,
+        "kpis": {
+          "ae": 82.36611096796396,
+          "availability": 88.59262329305433,
+          "ftt": 97.64661019257484,
+          "oee": 80.4277153076714,
+          "performance": 92.9717485568818,
+          "productivity": 87.59015804095695,
+          "utilization": 92.28870772485874
+        },
+        "orders": 624,
+        "planned": 288480,
+        "rework": 1533,
+        "scrap": 5379,
+        "seconds:available": 32572800,
+        "seconds:downtime": 2410555,
+        "seconds:no_op": 130416,
+        "seconds:production": 27387942,
+        "seconds:queue": 1304513,
+        "seconds:rework": 195312,
+        "seconds:setup": 1143428,
+        "seconds:standard_run": 25359792.593372967,
+        "seconds:unknown": 634,
+        "seconds:worked": 28857098
+      },
+      "7": {
+        "good": 301542,
+        "kpis": {
+          "ae": 87.67892740235503,
+          "availability": 91.4732569414881,
+          "ftt": 98.73544550824481,
+          "oee": 86.57017958756579,
+          "performance": 95.85197940250433,
+          "productivity": 90.96904170042008,
+          "utilization": 94.38210219235222
+        },
+        "orders": 648,
+        "planned": 299700,
+        "rework": 903,
+        "scrap": 2959,
+        "seconds:available": 33825600,
+        "seconds:downtime": 1840920,
+        "seconds:no_op": 101736,
+        "seconds:production": 29822471,
+        "seconds:queue": 1042501,
+        "seconds:rework": 169128,
+        "seconds:setup": 848043,
+        "seconds:standard_run": 28539016.267411005,
+        "seconds:unknown": 801,
+        "seconds:worked": 30941378
+      },
+      "8": {
+        "good": 214973,
+        "kpis": {
+          "ae": 90.32159357354351,
+          "availability": 92.57626251718209,
+          "ftt": 99.27680464027266,
+          "oee": 89.66839199998785,
+          "performance": 97.56452800930464,
+          "productivity": 92.3856228330584,
+          "utilization": 95.16962643235011
+        },
+        "orders": 480,
+        "planned": 222120,
+        "rework": 319,
+        "scrap": 1247,
+        "seconds:available": 23891160,
+        "seconds:downtime": 1121746,
+        "seconds:no_op": 71592,
+        "seconds:production": 21470537,
+        "seconds:queue": 651032,
+        "seconds:rework": 95304,
+        "seconds:setup": 480110,
+        "seconds:standard_run": 20931870.435204998,
+        "seconds:unknown": 839,
+        "seconds:worked": 22117543
+      }
+    },
+    "period": {
+      "end": "2026-08-24T08:32:00",
+      "start": "2026-06-01T06:00:00"
+    },
+    "random_seed": 20260824,
+    "rules": {
+      "good_only_completes_order": true,
+      "no_future_data": true,
+      "official_cutoffs": [
+        "17:30:00",
+        "21:30:00"
+      ],
+      "rateio_conserves_physical_time": true,
+      "setup_is_productive": true,
+      "simulation_only": true
+    },
+    "schema_version": 15,
+    "users_copied": 12
+  },
+  "expected_path": "C:\\Users\\iago.luchtenberg\\Documents\\Sistema - Iago\\Gestor de Peças - Area de Testes\\tests\\simulacao_historica_3_meses\\expected_results.json",
+  "target": {
+    "dbname": "gestor_pecas_test_homolog_simulacao_3_meses_20260824",
+    "host": "127.0.0.1",
+    "port": "15432",
+    "user": "gestor_app"
+  },
+  "user_source_test": {
+    "dbname": "gestor_pecas_test_simulacao_residencia_20260824",
+    "host": "127.0.0.1",
+    "port": "15432",
+    "user": "gestor_app"
+  }
+}

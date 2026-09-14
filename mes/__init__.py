@@ -1,0 +1,2 @@
+"""Nucleo modular do MES."""
+

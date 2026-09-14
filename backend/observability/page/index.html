@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dev Observatory — Gestor de Peças</title>
+<link rel="stylesheet" href="/dev-observatory/app.css">
+</head>
+<body>
+<header>
+  <div class="topo">
+    <div class="marca">
+      <h1>Dev Observatory</h1>
+      <span class="rotulo">observabilidade do desenvolvedor · fora da navegação do operador</span>
+    </div>
+    <div class="relogios">
+      <div><span class="rotulo">Agora</span><br><b id="relogio">--:--:--</b></div>
+      <div><span class="rotulo">Turno corrente</span><br><b id="turno">—</b></div>
+      <div><span class="rotulo">Ambiente observado</span><br>
+        <select id="ambiente">
+          <option value="test">TESTE (banco da API)</option>
+          <option value="real">REAL (somente leitura)</option>
+        </select>
+      </div>
+      <div><span class="rotulo">Atualização</span><br>
+        <select id="intervalo">
+          <option value="5000">5 s</option>
+          <option value="10000" selected>10 s</option>
+          <option value="30000">30 s</option>
+          <option value="0">manual</option>
+        </select>
+      </div>
+      <div class="acoes">
+        <button id="atualizar" type="button">Atualizar agora</button>
+      </div>
+    </div>
+  </div>
+  <div id="faixa-seguranca" class="faixa">Verificando garantias de somente leitura…</div>
+</header>
+
+<main>
+  <section class="grade">
+    <div class="painel"><h2>API</h2><div class="numeros" id="num-api"></div></div>
+    <div class="painel"><h2>PostgreSQL <span id="banco-alvo" class="tag"></span></h2>
+      <div class="numeros" id="num-banco"></div></div>
+    <div class="painel"><h2>Processo da API</h2><div class="numeros" id="num-processo"></div></div>
+  </section>
+
+  <section>
+    <h2 class="titulo-secao">Telas dos operadores — estado corrente de cada posto
+      <span class="tag" id="viewports-fonte"></span></h2>
+    <div class="postos" id="postos"><div class="vazio">Carregando…</div></div>
+  </section>
+
+  <section class="grade dupla">
+    <div class="painel">
+      <h2>Erros reais e técnicos <span class="tag">bug do sistema</span></h2>
+      <div class="lista"><table id="erros"></table></div>
+    </div>
+    <div class="painel">
+      <h2>Bloqueios esperados <span class="tag">regra funcionando</span></h2>
+      <div class="lista"><table id="bloqueios"></table></div>
+    </div>
+  </section>
+
+  <section class="grade dupla">
+    <div class="painel">
+      <h2>Ações e eventos recentes</h2>
+      <div class="lista"><table id="eventos"></table></div>
+    </div>
+    <div class="painel">
+      <h2>Rotas mais lentas · consultas e locks</h2>
+      <div class="lista"><table id="lentidao"></table></div>
+    </div>
+  </section>
+
+  <section class="painel">
+    <h2>Relatórios por turno</h2>
+    <div class="turnos" id="turnos"></div>
+    <div class="relatorios">
+      <div class="lista"><table id="relatorios"></table></div>
+      <pre id="relatorio-conteudo" class="markdown">Selecione um relatório para lê-lo aqui.</pre>
+    </div>
+  </section>
+</main>
+
+<div id="aviso" class="aviso" hidden></div>
+<script src="/dev-observatory/app.js"></script>
+</body>
+</html>

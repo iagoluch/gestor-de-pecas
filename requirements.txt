@@ -1,0 +1,20 @@
+openpyxl
+# Driver PostgreSQL 3 com distribuição binária para o backend Web.
+psycopg[binary]
+# Pool síncrono thread-safe usado pela facade Database.
+psycopg_pool
+# Parser XML endurecido contra DTD, entidades e XXE.
+defusedxml>=0.7,<1
+# Carrega o arquivo local .env sem sobrescrever variáveis do sistema.
+python-dotenv
+# Adaptador HTTP oficial. O domínio e os serviços continuam neutros.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+# Cliente usado pelos testes de contrato HTTP do FastAPI.
+httpx>=0.27,<1
+# SDK assíncrono oficial usado somente quando a IA gerencial está habilitada.
+groq>=1.6,<2
+# Driver ODBC usado somente para LER o banco SigmaNEST (planejamento de Corte).
+# O produto importa pyodbc sob demanda: sem ele o Gestor sobe normalmente e
+# apenas a sincronização do Corte fica indisponível.
+pyodbc>=5.1,<6

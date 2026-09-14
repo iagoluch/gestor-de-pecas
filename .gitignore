@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+node_modules/
+.vite/
+playwright-report/
+test-results/
+.test_dbs/
+output/
+tmp/
+backups/test/*.dump
+
+# Local application data
+dados/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.swp
+*~
+.env
+.env.*
+!.env.example
+
+# Session artifacts
+cookies.json
+
+# Codex/local workspace metadata
+.codex/
+.agents/
+.git/
+
+# Grande volume gerado (evidências, simulações, build) — não versionar
+simulation_runs/
+dev_reports/
+web/dist/
+web/node_modules/
+_quarentena_revisar/
+docs/evidencias/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

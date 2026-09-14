@@ -1,0 +1,68 @@
+{
+  "counts": {
+    "appointments": 120,
+    "cut_appointments": 30,
+    "cut_plans": 48,
+    "data_issues": 12,
+    "highlight_events": 44,
+    "operations": 120,
+    "operator_badges": 12,
+    "orders": 120,
+    "quantity_events": 149,
+    "tasks": 24
+  },
+  "cutting": {
+    "actual_cuttings": 30,
+    "completed_actual_cutting_seconds": 22000,
+    "completed_cuttings": 20,
+    "highlight_events": 44,
+    "plans": 48,
+    "predicted_cutting_seconds": 59520,
+    "tasks": 24
+  },
+  "dataset": "homologacao_extrema_v1",
+  "edge_cases": {
+    "automatic_shift_interruptions": 18,
+    "conflicting_state_seconds": 1800,
+    "issues": 12,
+    "manual_no_op_stops": 10,
+    "productive_no_op_activities": 10,
+    "rateio_allocated_seconds": 7200,
+    "rateio_session_seconds": 7200,
+    "zero_duration_events": 1
+  },
+  "period": {
+    "end": "2026-08-20T21:30:00",
+    "start": "2026-08-11T06:00:00"
+  },
+  "quantities": {
+    "good": 4968,
+    "planned": 7200,
+    "rework": 26,
+    "scrap": 72
+  },
+  "rules": {
+    "automatic_interruption_is_planned": true,
+    "conflicts_are_unknown": true,
+    "good_only_completes_order": true,
+    "management_correction_tab": false,
+    "manual_stop_is_unplanned": true,
+    "official_cutoffs": [
+      "17:30:00",
+      "21:30:00"
+    ],
+    "scrap_does_not_complete_order": true,
+    "setup_is_productive": true,
+    "simultaneous_orders_do_not_multiply_physical_time": true
+  },
+  "schema_version": 11,
+  "statuses": {
+    "Aguardando": 12,
+    "Em processo": 12,
+    "Finalizado": 72,
+    "Parada": 12,
+    "Retrabalho": 6,
+    "Setup": 6
+  },
+  "users_copied": 11
+}

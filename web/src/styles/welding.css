@@ -1,0 +1,624 @@
+/*
+ * Acompanhamento gerencial da Solda (Wave 6D).
+ *
+ * Duas composições da mesma tela: `--manager`, que rola no navegador e se
+ * organiza em sub-abas, e `--tv`, que participa do ciclo de gestão à vista e
+ * precisa caber na tela sem interação e sem rolagem. As cores de estado
+ * reaproveitam os tokens já existentes; nenhuma paleta nova é criada.
+ */
+
+.welding-page {
+  --welding-gap: 12px;
+  width: 100%;
+  min-height: 100dvh;
+  padding: 14px 16px 18px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.welding-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--welding-gap);
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: var(--welding-gap);
+}
+
+.welding-header h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.2px;
+}
+
+.welding-header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.welding-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.welding-summary > div {
+  min-width: 104px;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.welding-summary dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.welding-summary dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.welding-stale {
+  margin-bottom: var(--welding-gap);
+  padding: 9px 12px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-control);
+  background: var(--warning-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* -------------------------------------------------------------------------
+ * Sub-abas da tela gerencial.
+ *
+ * São seções desta tela, não navegação de aplicação: por isso `role="tab"`
+ * local e não rota nova. A contagem no rótulo vem do resumo do backend.
+ * ------------------------------------------------------------------------- */
+.welding-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--welding-gap);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.welding-tab {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.welding-tab:hover { color: var(--text); border-color: var(--text-soft, var(--muted)); }
+
+.welding-tab span {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.welding-tab--active {
+  color: var(--surface);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.welding-tab--active span { color: var(--text); background: var(--surface); }
+
+/* -------------------------------------------------------------------------
+ * Acompanhamento por MACRO: pivô (MACRO × situação), pizza da composição
+ * total e barra 100% empilhada por MACRO — o mesmo modelo de planilha que a
+ * PCP já usa, sem biblioteca de gráfico (a pizza e as barras são SVG/CSS
+ * puro). Cor pedida explicitamente pela PCP para esta seção, reaproveitando
+ * tokens que já existem no resto do sistema: atrasado = `--danger` (vermelho),
+ * a vencer = `--accent` (verde), finalizado = `--primary` (azul). Diverge de
+ * propósito da convenção do resumo do cabeçalho desta mesma tela (âmbar).
+ * ------------------------------------------------------------------------- */
+.welding-macros {
+  margin-bottom: var(--welding-gap);
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.welding-macros > header { margin-bottom: 10px; }
+.welding-macros h2 { margin: 0; font-size: 14px; }
+.welding-macros > header p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+
+.welding-macros__body {
+  display: grid;
+  /* `auto` em vez de um teto fixo: a tabela tem 6 colunas e um teto estreito
+     forçava rolagem horizontal interna nela mesma, escondendo colunas atrás
+     de uma barra de rolagem — o oposto de "fácil de visualizar". */
+  grid-template-columns: minmax(320px, auto) minmax(280px, 1fr);
+  gap: 14px;
+  /* Sem `align-items: start`: a coluna do gráfico precisa esticar até a
+     altura da tabela+pizza para a barra 100% empilhada ter espaço real para
+     desenhar a proporção — senão cada barra fica do tamanho do seu conteúdo. */
+}
+
+/* Mesmo ponto de quebra que o resto do sistema usa para desfazer duas colunas.
+   Abaixo dele a tabela pivô consome a largura e sobra o mínimo para o gráfico:
+   sete MACROs em ~280px deixam cada rótulo ilegível. Empilhado, o gráfico
+   recebe a largura inteira. */
+@media (max-width: 1180px) {
+  .welding-macros__body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.welding-macros__left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Tabela pivô */
+.welding-macros__table-scroll { overflow-x: auto; }
+.welding-macro-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.welding-macro-table th[scope="col"] {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface-alt);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.welding-macro-table th[scope="col"]:first-child { text-align: left; }
+.welding-macro-table th[scope="col"][data-tone="late"] { color: var(--danger); }
+.welding-macro-table th[scope="col"][data-tone="due"] { color: #0d7a3c; }
+.welding-macro-table th[scope="col"][data-tone="done"] { color: var(--primary); }
+.welding-macro-table td,
+.welding-macro-table th[scope="row"] {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--divider);
+  text-align: right;
+  vertical-align: middle;
+}
+.welding-macro-table th[scope="row"] { text-align: left; }
+.welding-macro-table th[scope="row"] strong { display: block; font-weight: 700; }
+.welding-macro-table th[scope="row"] small { color: var(--muted); font-size: 10px; }
+.welding-macro-table td[data-tone="late"] { color: var(--danger); font-weight: 700; }
+.welding-macro-table td[data-tone="due"] { color: #0d7a3c; font-weight: 700; }
+.welding-macro-table td[data-tone="done"] { color: var(--primary); font-weight: 700; }
+.welding-macro-table tfoot th,
+.welding-macro-table tfoot td {
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+  font-weight: 700;
+}
+
+/* Pizza — fatias cheias, sem furo central. */
+.welding-pie {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-alt);
+}
+.welding-pie svg { width: 120px; height: 120px; flex: 0 0 auto; }
+.welding-pie path[data-tone="late"] { fill: var(--danger); }
+.welding-pie path[data-tone="due"] { fill: var(--accent); }
+.welding-pie path[data-tone="done"] { fill: var(--primary); }
+.welding-pie__empty { fill: var(--surface); }
+.welding-pie figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+}
+.welding-pie figcaption span {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+.welding-pie figcaption i { width: 10px; height: 10px; border-radius: 2px; }
+.welding-pie figcaption span[data-tone="late"] i { background: var(--danger); }
+.welding-pie figcaption span[data-tone="due"] i { background: var(--accent); }
+.welding-pie figcaption span[data-tone="done"] i { background: var(--primary); }
+.welding-pie figcaption span[data-tone="unknown"] i { background: var(--muted); }
+.welding-pie figcaption b { font-weight: 600; }
+.welding-pie figcaption em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+
+/* Barra 100% empilhada por MACRO, com eixo de 0 a 100%. */
+.welding-barchart {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-alt);
+  min-height: 260px;
+}
+.welding-barchart h3 { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); }
+.welding-barchart__plot {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 200px;
+  /* Numa TV muito alta o gráfico não deve esticar até ficar desproporcional:
+     acima disso, sobra espaço em branco em vez de barras finas e altas
+     demais para ler bem. */
+  max-height: 520px;
+  margin: 0 auto;
+  padding-left: 30px;
+}
+.welding-barchart__gridline {
+  position: absolute;
+  left: 30px;
+  right: 0;
+  border-top: 1px dashed var(--divider);
+}
+.welding-barchart__gridline span {
+  position: absolute;
+  left: -30px;
+  top: -6px;
+  width: 26px;
+  text-align: right;
+  font-size: 9px;
+  color: var(--muted);
+}
+.welding-barchart__group {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.welding-barchart__bar {
+  width: 100%;
+  max-width: 56px;
+  height: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+.welding-barchart__bar i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+}
+.welding-barchart__bar i[data-tone="late"] { background: var(--danger); }
+.welding-barchart__bar i[data-tone="due"] { background: var(--accent); }
+.welding-barchart__bar i[data-tone="done"] { background: var(--primary); }
+.welding-barchart__label {
+  /* Os MACROs compartilham o prefixo "CONJ. SOLD.": cortados numa linha só
+     ficavam todos iguais. Três linhas, sempre reservadas em todos os grupos,
+     para que as barras continuem com a mesma altura disponível — reserva
+     variável faria o mesmo valor desenhar alturas diferentes por grupo. */
+  flex: 0 0 auto;
+  max-width: 100%;
+  height: 3.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------------------
+ * Estações: uma por vez, em `<details>` nativo.
+ * ------------------------------------------------------------------------- */
+.welding-table-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.welding-station {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.welding-station__summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--surface-alt);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.welding-station__summary::-webkit-details-marker { display: none; }
+.welding-station__summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.welding-station[open] > .welding-station__summary::before { transform: rotate(45deg); }
+.welding-station__summary:hover { background: var(--surface); }
+
+.welding-station__name { font-size: 13px; font-weight: 700; }
+.welding-station__count {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.welding-station__tally { display: flex; gap: 5px; margin-left: auto; }
+.welding-station__tally i {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.welding-station__tally i[data-tone="late"] { color: var(--danger); background: var(--danger-soft); }
+.welding-station__tally i[data-tone="due"] { color: #0f6e69; background: var(--surface); border: 1px solid var(--teal); }
+.welding-station__tally i[data-tone="done"] { color: #15803d; background: var(--accent-soft); }
+
+.welding-station[data-availability="sem_registros"] .welding-station__name {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.welding-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.welding-table thead th {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.welding-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+  vertical-align: top;
+  text-align: left;
+}
+
+.welding-table tbody tr:last-child td { border-bottom: 0; }
+
+.welding-op strong { font-variant-numeric: tabular-nums; }
+
+.welding-table strong { display: block; }
+
+.welding-table small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.welding-product { max-width: 320px; }
+.welding-machine { max-width: 240px; }
+
+.welding-machine small[data-availability="nao_configurado"] { font-style: italic; }
+
+.welding-dates { display: grid; gap: 2px; }
+.welding-dates__main small { margin: 0; }
+.welding-dates__main strong { font-variant-numeric: tabular-nums; }
+.welding-dates__absent { color: var(--muted); font-size: 11px; }
+.welding-dates__real { color: var(--muted); font-size: 10px; }
+
+.welding-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.welding-badge--late { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+.welding-badge--due { border-color: var(--warning); color: #8a5300; background: var(--warning-soft); }
+.welding-badge--done { border-color: var(--accent); color: #15803d; background: var(--accent-soft); }
+.welding-badge--unknown { color: var(--muted); background: var(--surface-alt); }
+
+.welding-status small { max-width: 230px; white-space: normal; }
+.welding-late small { max-width: 260px; white-space: normal; }
+
+/* -------------------------------------------------------------------------
+ * Sub-abas Atrasos e Entregas.
+ * ------------------------------------------------------------------------- */
+.welding-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
+  gap: var(--welding-gap);
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .welding-panel { grid-template-columns: minmax(0, 1fr); }
+}
+
+.welding-card {
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.welding-card h3 { margin: 0; font-size: 13px; }
+.welding-card > p { margin: 2px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.welding-card__scroll { overflow-x: auto; }
+.welding-card .welding-table thead th { background: var(--surface-alt); }
+
+.welding-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.welding-metrics > div {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-alt);
+}
+.welding-metrics dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.welding-metrics dd { margin: 2px 0 0; font-size: 17px; font-weight: 800; }
+
+.welding-ranking {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.welding-ranking li {
+  display: grid;
+  /* Mesma proporção do `.bar-list__row` do sistema: a sobra vai primeiro para
+     o rótulo, senão nomes de estação longos ficam com reticências enquanto a
+     barra ocupa o dobro da linha. */
+  grid-template-columns: minmax(70px, 1.4fr) minmax(60px, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+}
+.welding-ranking__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welding-ranking__bar {
+  display: flex;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--surface-alt);
+}
+.welding-ranking__bar i[data-tone="late"] { background: var(--danger); }
+.welding-ranking__bar i[data-tone="done"] { background: var(--accent); }
+.welding-ranking strong { font-variant-numeric: tabular-nums; }
+
+.welding-footer {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Modo TV: passivo, sem rolagem e legível à distância.               */
+/* ------------------------------------------------------------------ */
+html:has(.welding-page--tv),
+body:has(.welding-page--tv),
+body:has(.welding-page--tv) #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.welding-page--tv {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Na TV a lista por estação nem é renderizada (ver WeldingManagementPage) — a
+ * TV mostra só o acompanhamento por MACRO (tabela + pizza + barra), que ocupa
+ * toda a altura que sobra do cabeçalho. A rolagem da tabela é rede de
+ * segurança para um número anormal de MACROs: na contagem normal tudo cabe
+ * sem rolar. */
+.welding-page--tv .welding-macros {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0;
+}
+.welding-page--tv .welding-macros__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+  grid-template-columns: minmax(320px, auto) minmax(280px, 1fr);
+}
+.welding-page--tv .welding-macros__left { min-height: 0; }
+.welding-page--tv .welding-macros__table-scroll { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
+.welding-page--tv .welding-barchart { flex: 1 1 auto; min-height: 0; }
+.welding-page--tv .welding-header h1 { font-size: 24px; }
+.welding-page--tv .welding-macro-table { font-size: 14px; }
+.welding-page--tv .welding-pie svg { width: 150px; height: 150px; }
+.welding-page--tv .welding-pie figcaption { font-size: 13px; }
+.welding-page--tv .welding-barchart__label { font-size: 11px; }
+.welding-page--tv .welding-barchart__bar i { font-size: 13px; }
+
+@media (min-width: 2500px) and (min-height: 1300px) {
+  .welding-page--tv .welding-macros__body { grid-template-columns: minmax(360px, auto) minmax(320px, 1fr); }
+  .welding-page--tv .welding-macro-table { font-size: 20px; }
+  .welding-page--tv .welding-pie svg { width: 220px; height: 220px; }
+  .welding-page--tv .welding-pie figcaption { font-size: 18px; }
+  .welding-page--tv .welding-macros h2 { font-size: 22px; }
+  .welding-page--tv .welding-barchart__label { font-size: 16px; }
+  .welding-page--tv .welding-barchart__bar i { font-size: 18px; }
+  .welding-page--tv .welding-header h1 { font-size: 34px; }
+  .welding-page--tv .welding-summary dd { font-size: 30px; }
+}

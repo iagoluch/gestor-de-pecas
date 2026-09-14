@@ -1,0 +1,168 @@
+{
+  "operators_simulated": 40,
+  "duration_seconds": 45.0,
+  "pgpool_max_size": 10,
+  "sync_thread_pool_size": 100,
+  "total_requests": 3614,
+  "by_endpoint": [
+    {
+      "endpoint": "acao_finalizar",
+      "requests": 40,
+      "ok": 0,
+      "errors": 40,
+      "p50_ms": 697.0,
+      "p95_ms": 952.4,
+      "p99_ms": 1052.7,
+      "max_ms": 1052.7
+    },
+    {
+      "endpoint": "acao_inicio",
+      "requests": 40,
+      "ok": 26,
+      "errors": 14,
+      "p50_ms": 2181.4,
+      "p95_ms": 2971.2,
+      "p99_ms": 2993.1,
+      "max_ms": 2993.1
+    },
+    {
+      "endpoint": "acao_parada",
+      "requests": 40,
+      "ok": 26,
+      "errors": 14,
+      "p50_ms": 236.1,
+      "p95_ms": 607.9,
+      "p99_ms": 631.0,
+      "max_ms": 631.0
+    },
+    {
+      "endpoint": "acao_retomar",
+      "requests": 40,
+      "ok": 26,
+      "errors": 14,
+      "p50_ms": 428.7,
+      "p95_ms": 691.5,
+      "p99_ms": 719.3,
+      "max_ms": 719.3
+    },
+    {
+      "endpoint": "carregar_roteiro",
+      "requests": 40,
+      "ok": 40,
+      "errors": 0,
+      "p50_ms": 535.4,
+      "p95_ms": 609.3,
+      "p99_ms": 659.9,
+      "max_ms": 659.9
+    },
+    {
+      "endpoint": "context",
+      "requests": 1043,
+      "ok": 1043,
+      "errors": 0,
+      "p50_ms": 74.8,
+      "p95_ms": 226.3,
+      "p99_ms": 534.8,
+      "max_ms": 662.7
+    },
+    {
+      "endpoint": "history",
+      "requests": 1043,
+      "ok": 1043,
+      "errors": 0,
+      "p50_ms": 116.3,
+      "p95_ms": 294.1,
+      "p99_ms": 713.2,
+      "max_ms": 792.4
+    },
+    {
+      "endpoint": "login",
+      "requests": 40,
+      "ok": 40,
+      "errors": 0,
+      "p50_ms": 2166.4,
+      "p95_ms": 3694.3,
+      "p99_ms": 3976.3,
+      "max_ms": 3976.3
+    },
+    {
+      "endpoint": "management_overview",
+      "requests": 100,
+      "ok": 100,
+      "errors": 0,
+      "p50_ms": 576.0,
+      "p95_ms": 1133.7,
+      "p99_ms": 1359.5,
+      "max_ms": 1437.1
+    },
+    {
+      "endpoint": "management_sectors",
+      "requests": 100,
+      "ok": 100,
+      "errors": 0,
+      "p50_ms": 455.0,
+      "p95_ms": 957.0,
+      "p99_ms": 1260.6,
+      "max_ms": 1380.5
+    },
+    {
+      "endpoint": "manager_login",
+      "requests": 5,
+      "ok": 5,
+      "errors": 0,
+      "p50_ms": 4241.6,
+      "p95_ms": 4280.4,
+      "p99_ms": 4280.4,
+      "max_ms": 4280.4
+    },
+    {
+      "endpoint": "workbench",
+      "requests": 1083,
+      "ok": 1083,
+      "errors": 0,
+      "p50_ms": 141.9,
+      "p95_ms": 365.0,
+      "p99_ms": 747.4,
+      "max_ms": 826.1
+    }
+  ],
+  "errors_by_endpoint_status_code": [
+    {
+      "endpoint": "acao_finalizar",
+      "status": 409,
+      "code": "primeira_peca_nao_produzida",
+      "count": 15
+    },
+    {
+      "endpoint": "acao_finalizar",
+      "status": 409,
+      "code": "operator_resource_occupied",
+      "count": 14
+    },
+    {
+      "endpoint": "acao_inicio",
+      "status": 409,
+      "code": "operator_resource_occupied",
+      "count": 14
+    },
+    {
+      "endpoint": "acao_parada",
+      "status": 409,
+      "code": "operator_resource_occupied",
+      "count": 14
+    },
+    {
+      "endpoint": "acao_retomar",
+      "status": 409,
+      "code": "operator_resource_occupied",
+      "count": 14
+    },
+    {
+      "endpoint": "acao_finalizar",
+      "status": 409,
+      "code": "primeira_peca_gate_obrigatorio",
+      "count": 11
+    }
+  ],
+  "transport_failures": []
+}

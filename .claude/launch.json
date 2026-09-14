@@ -1,0 +1,82 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gestor-teste-8000",
+      "runtimeExecutable": "C:/Python314/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "backend.api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
+      "port": 8000,
+      "url": "http://127.0.0.1:8000"
+    },
+    {
+      "name": "gestor-dev-observatory-8001",
+      "runtimeExecutable": "C:/Python314/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "backend.api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8001",
+        "--reload",
+        "--reload-dir",
+        "backend",
+        "--reload-dir",
+        "app",
+        "--reload-dir",
+        "mes"
+      ],
+      "port": 8001,
+      "url": "http://127.0.0.1:8001"
+    },
+    {
+      "name": "gestor-preview-visual",
+      "runtimeExecutable": "./.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "tests.web_preview_api:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8010"
+      ],
+      "port": 8010,
+      "url": "http://127.0.0.1:8010"
+    },
+    {
+      "name": "gestor-preview-ia",
+      "runtimeExecutable": "./.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-c",
+        "import os;os.environ['GESTOR_VISUAL_AI']='1';os.environ['GESTOR_VISUAL_AI_KEY']='preview-visual-sem-credencial';os.environ['GESTOR_VISUAL_AUTOLOGIN']='1';import uvicorn;uvicorn.run('tests.web_preview_api:app',host='127.0.0.1',port=8012)"
+      ],
+      "port": 8012,
+      "url": "http://127.0.0.1:8012"
+    },
+    {
+      "name": "gestor-preview-andon",
+      "runtimeExecutable": "./.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "tests.andon_visual_preview:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8011"
+      ],
+      "port": 8011,
+      "url": "http://127.0.0.1:8011"
+    }
+  ]
+}
