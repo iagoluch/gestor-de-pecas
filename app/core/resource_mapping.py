@@ -83,6 +83,17 @@ STATION_RESOURCE_CODES = {
 SECTOR_OWNED_RESOURCE_SECTORS = {"pintura", "solda", "montagem"}
 
 
+# Setores onde o bloqueio de "recurso divergente do roteiro" (confirmação por
+# crachá antes de apontar) fica desativado. Decisão do usuário em 14/09/2026:
+# a Solda já vai crescer para múltiplas contas de recurso (Aço, Alumínio,
+# Robô, Ferramentaria, ainda a fechar com a Manufatura) e o bloqueio atrapalha
+# o fluxo sem agregar controle real, porque o posto já é dono do setor
+# (SECTOR_OWNED_RESOURCE_SECTORS). Não afeta o registro de auditoria
+# (setor_roteiro/setor_divergente continuam gravados normalmente); só remove
+# a exigência de crachá para prosseguir.
+RESOURCE_CONFIRMATION_EXEMPT_SECTORS = {"solda"}
+
+
 # Associação funcional oficial aprovada diretamente pela Manufatura, usada
 # somente quando o cadastro ainda não declara o ``tipo_setor`` do recurso. Não
 # é alias: o código do recurso permanece exatamente como está no roteiro.

@@ -10,6 +10,7 @@ from datetime import datetime
 import logging
 
 from app.core.resource_mapping import (
+    RESOURCE_CONFIRMATION_EXEMPT_SECTORS,
     resource_display_name,
     station_matches_route,
 )
@@ -819,7 +820,14 @@ class OperatorFlowService:
                         "operacao": dict(operacao),
                     },
                 )
-            if divergent_resource and not confirmar_recurso_divergente:
+            sector_exempt_from_resource_confirmation = (
+                str(setor or "").strip().casefold() in RESOURCE_CONFIRMATION_EXEMPT_SECTORS
+            )
+            if (
+                divergent_resource
+                and not confirmar_recurso_divergente
+                and not sector_exempt_from_resource_confirmation
+            ):
                 return OperatorFlowResult(
                     False,
                     (
@@ -837,7 +845,11 @@ class OperatorFlowService:
                     },
                 )
             requires_authorization = bool(
-                (divergent_resource and confirmar_recurso_divergente)
+                (
+                    divergent_resource
+                    and confirmar_recurso_divergente
+                    and not sector_exempt_from_resource_confirmation
+                )
                 or (etapa_pendente is not None and confirmar_etapa_anterior_pendente)
             )
             if requires_authorization:
