@@ -162,7 +162,7 @@ class OperatorFlowTests(unittest.TestCase):
                 self.assertEqual(result.data["status"], expected_status)
 
     def test_setup_nao_esta_disponivel_para_pintura_ou_solda(self):
-        for sector in ("Pintura", "Solda"):
+        for sector in ("Pintura", "Solda Aço", "Protótipo"):
             with self.subTest(sector=sector):
                 _db, service, operation = self._service()
                 result = service.executar(

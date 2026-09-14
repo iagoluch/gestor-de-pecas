@@ -46,14 +46,14 @@ POSTOS = {
     "Dobra": "1303",
     "Usinagem": "Romi D 1000",
     "Serra": "S4220",
-    "Solda": "Estação 1",
+    "Solda Aço": "Estação 1",
 }
 
 RECURSOS_ROTEIRO = {
     "Dobra": "DOBRA3",
     "Usinagem": "CNC-01",
     "Serra": "SERRA1",
-    "Solda": "SOLDA4",
+    "Solda Aço": "SOLDA4",
 }
 
 
@@ -182,9 +182,9 @@ class GateEstruturadoPorSetorTests(unittest.TestCase):
                 self.assertFalse(linha["pode_finalizar"])
 
     def test_setor_fora_da_caldeiraria_nao_recebe_este_portao(self):
-        db, fluxo, contexto = cenario("Solda", com_checklist=False)
+        db, fluxo, contexto = cenario("Solda Aço", com_checklist=False)
         self.assertFalse(
-            first_piece_gate_is_structured("Solda", contexto["operacao"])
+            first_piece_gate_is_structured("Solda Aço", contexto["operacao"])
         )
 
         inicio = fluxo.executar("Início", **contexto)
@@ -193,7 +193,7 @@ class GateEstruturadoPorSetorTests(unittest.TestCase):
         linha = next(
             row
             for row in fluxo.listar_operacoes(
-                contexto["op"], "Solda", contexto["recurso"]
+                contexto["op"], "Solda Aço", contexto["recurso"]
             )
             if row.get("id") == contexto["operacao"]["id"]
         )

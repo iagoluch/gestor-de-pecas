@@ -230,6 +230,14 @@ class OperatorFlowService:
                 if inspecao_sem_qualidade
                 else (row.get("codigo_recurso") or row.get("recurso"))
             )
+            # O pertencimento do recurso precisa vir da mesma linha do recurso:
+            # quando a INSPECAO é herdada, ``recurso_efetivo`` é o recurso da
+            # etapa anterior, e usar o ``recurso_tipo_setor`` da linha da
+            # INSPECAO (``INSPEC``, sem setor) tornava o posto inelegível para a
+            # própria etapa que ele acabou de executar.
+            recurso_setor_efetivo = (
+                setor_herdado if inspecao_sem_qualidade else row.get("recurso_tipo_setor")
+            )
             row["inspecao_sem_checklist"] = inspecao_sem_qualidade
             row["setor_efetivo"] = setor_efetivo
             row["recurso_efetivo"] = recurso_efetivo
@@ -248,7 +256,7 @@ class OperatorFlowService:
                     setor,
                     recurso,
                     recurso_efetivo,
-                    resource_sector=row.get("recurso_tipo_setor"),
+                    resource_sector=recurso_setor_efetivo,
                 )
             )
             row["pointable"] = pointable
@@ -601,7 +609,10 @@ class OperatorFlowService:
             requested_action = OperatorAction(action)
         except (TypeError, ValueError):
             return OperatorFlowResult(False, "Ação de apontamento inválida.", "acao_invalida")
-        if action == "Setup" and str(setor or "").casefold() in {"pintura", "solda"}:
+        # A lista de setores sem Setup vive em ``mes.domain.first_piece``; este
+        # gate repetia os nomes à mão e por isso ficava para trás sempre que a
+        # fábrica ganhava um setor (a Wave 6F quintuplicou a frente de Solda).
+        if action == "Setup" and not sector_has_setup(setor):
             return OperatorFlowResult(
                 False,
                 f"Setup não está disponível para {setor}.",

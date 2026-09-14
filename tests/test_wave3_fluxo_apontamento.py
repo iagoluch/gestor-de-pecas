@@ -186,7 +186,7 @@ class InspecaoTransitoriaTests(unittest.TestCase):
         ])
         fluxo = OperatorFlowService(db, "OPERADOR INSP")
         anterior = db.catalog_operations[0]
-        recurso_posto = {"Dobra": "1303", "Solda": "Estação 1", "Pintura": "Pintura"}[setor_anterior]
+        recurso_posto = {"Dobra": "1303", "Solda Aço": "Estação 1", "Pintura": "Pintura"}[setor_anterior]
         liberar_primeira_peca(db, "OPERADOR INSP", op="OP-INSP", setor=setor_anterior,
                               recurso=recurso_posto, operacao=anterior)
         fluxo.executar("Início", op="OP-INSP", setor=setor_anterior,
@@ -261,22 +261,22 @@ class InspecaoTransitoriaTests(unittest.TestCase):
     def test_solda_aponta_a_inspecao_so_para_contar_tempo(self):
         """Solda/Pintura não têm checklist dimensional; o tempo é contado."""
 
-        self.assertFalse(sector_has_quality("Solda"))
-        db, fluxo = self._cenario(setor_anterior="Solda", recurso_anterior="SOLDA4")
-        rota = fluxo.listar_operacoes("OP-INSP", "Solda", "Estação 1")
+        self.assertFalse(sector_has_quality("Solda Aço"))
+        db, fluxo = self._cenario(setor_anterior="Solda Aço", recurso_anterior="SOLDA4")
+        rota = fluxo.listar_operacoes("OP-INSP", "Solda Aço", "Estação 1")
         inspecao = next(row for row in rota if row["descricao_operacao"] == "INSPECAO")
 
         self.assertTrue(inspecao["inspecao_sem_checklist"])
-        self.assertEqual(inspecao["setor_efetivo"], "Solda")
+        self.assertEqual(inspecao["setor_efetivo"], "Solda Aço")
         self.assertTrue(inspecao["station_eligible"])
         self.assertTrue(inspecao["actionable"])
 
         iniciado = fluxo.executar(
-            "Início", op="OP-INSP", setor="Solda", recurso="Estação 1", operacao=inspecao
+            "Início", op="OP-INSP", setor="Solda Aço", recurso="Estação 1", operacao=inspecao
         )
         self.assertTrue(iniciado.ok, iniciado.message)
         concluido = fluxo.executar(
-            "Finalizado", op="OP-INSP", setor="Solda", recurso="Estação 1",
+            "Finalizado", op="OP-INSP", setor="Solda Aço", recurso="Estação 1",
             operacao=inspecao, pecas_boas=3, operadores_cracha=["1"],
         )
         self.assertTrue(concluido.ok, concluido.message)
