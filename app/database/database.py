@@ -12,6 +12,7 @@ from psycopg.errors import UniqueViolation
 
 from app.core.constants import FMT_DB
 from app.core.normalization import limpa_codigo, normalizar_data_db
+from app.core.operator_sectors import WELDING_STEEL_SECTOR
 from app.database.config import PostgresConfig, load_postgres_config
 from app.database.ai_repository import AIRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
@@ -49,6 +50,15 @@ PASSWORD_SCHEME = "pbkdf2_sha256"
 PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
+
+#: Setor cujo cadastro só é publicado em tela depois de comprovar uso real.
+#:
+#: Wave 6F — a Solda Aço herdou do PC Factory 41 recursos que são etapas de
+#: solda históricas, sem posto físico e sem aparecer no roteiro de nenhuma OP.
+#: Eles continuam no catálogo (rastreabilidade e sincronização com o TOTVS), mas
+#: ficam fora das listagens até uma OP real referenciá-los. A regra é desse
+#: setor e só dele: não existe filtro geral de "esconder recurso sem uso".
+CATALOG_ONLY_RESOURCE_SECTOR = WELDING_STEEL_SECTOR
 
 
 def agora_db():
@@ -3719,7 +3729,17 @@ class Database(
             return [dict(row) for row in cursor.fetchall()]
 
     def listar_configuracao_capacidade_recursos(self, *, setor=None, recurso=None):
-        """Expõe configuração, sem calcular capacidade restante por conta própria."""
+        """Expõe configuração, sem calcular capacidade restante por conta própria.
+
+        Wave 6F — o cadastro da Solda Aço herdou 41 recursos do PC Factory que
+        descrevem etapas de solda antigas e nunca aparecem no roteiro de uma OP.
+        Eles continuam no catálogo (rastreabilidade e sincronização com o TOTVS
+        dependem disso), mas não são posto de trabalho nem linha de capacidade:
+        exibi-los enchia a tela de Capacidade de recursos inexistentes na
+        prática. A regra é reativa e vale só para esse setor: o recurso de Solda
+        Aço volta a aparecer sozinho no dia em que uma OP real o referenciar em
+        ``catalogo_operacoes_op``. Nenhum outro setor é filtrado.
+        """
 
         query = """
             SELECT
@@ -3729,8 +3749,15 @@ class Database(
             FROM catalogo_recursos_pcfactory r
             LEFT JOIN calendarios_produtivos c ON c.codigo = r.calendario_codigo
             WHERE r.habilitado IS TRUE
+              AND (
+                UPPER(COALESCE(r.tipo_setor, '')) <> UPPER(%s)
+                OR EXISTS (
+                    SELECT 1 FROM catalogo_operacoes_op o
+                    WHERE UPPER(BTRIM(o.codigo_recurso)) = UPPER(BTRIM(r.codigo))
+                )
+              )
         """
-        params = []
+        params = [CATALOG_ONLY_RESOURCE_SECTOR]
         if setor:
             query += " AND UPPER(COALESCE(r.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())
