@@ -126,16 +126,24 @@ def resource_display_name(code, catalog_name=None):
 
 
 def station_resource_code(sector, station):
-    """Retorna o código exato representado por uma tela/posto conhecido."""
+    """Retorna o código exato representado por uma tela/posto conhecido.
+
+    Solda não tem, propositalmente, uma entrada aqui: as 10 estações físicas
+    não têm código de catálogo corporativo próprio (o TOTVS ainda não detalha
+    o roteiro por estação). Antes esta função colapsava toda estação de Solda
+    no código compartilhado ``SOLDA4``, o que fazia o Andon (``mes/services/
+    andon.py``, que usa este código para identificar o recurso) tratar as 10
+    estações como um único recurso — produzindo em paralelo em 3 estações
+    aparecia como 1 card só, com os outros estados sobrescritos. Devolver ""
+    aqui faz o Andon cair no caminho de recurso não cadastrado, que já usa o
+    nome exato do posto (``Estação 1``, ``Estação 2``, ...) como identidade —
+    cada estação vira um card distinto. Não afeta elegibilidade de apontamento:
+    ``station_matches_route`` cai em ``sector_serves_resource`` para Solda de
+    qualquer forma quando este retorno não bate com o recurso do roteiro.
+    """
 
     sector_key = str(sector or "").strip().casefold()
     station_key = str(station or "").strip().casefold()
-    if sector_key == "solda" and station_key in {
-        f"estação {number}".casefold() for number in range(1, 11)
-    }:
-        # A etapa oficial disponível hoje é SOLDA4; a estação física permanece
-        # uma escolha do operador até o roteiro corporativo detalhá-la.
-        return "SOLDA4"
     return STATION_RESOURCE_CODES.get((sector_key, station_key), "")
 
 
