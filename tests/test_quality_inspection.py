@@ -75,7 +75,7 @@ class QualityCapabilityTests(unittest.TestCase):
         for setor in ("Dobra", "Usinagem", "Serra"):
             with self.subTest(setor=setor):
                 self.assertTrue(sector_has_quality(setor))
-        for setor in ("Corte", "Pintura", "Solda", "Montagem", "Destaque"):
+        for setor in ("Corte", "Pintura", "Solda Aço", "Montagem", "Destaque"):
             with self.subTest(setor=setor):
                 self.assertFalse(sector_has_quality(setor))
 
@@ -96,7 +96,7 @@ class QualityCapabilityTests(unittest.TestCase):
             quality_sector_for_user_level("operador_dobra").name, "Dobra"
         )
         self.assertIsNone(quality_sector_for_user_level("operador_corte"))
-        self.assertIsNone(quality_sector_for_user_level("operador_solda"))
+        self.assertIsNone(quality_sector_for_user_level("estacao1aco"))
 
     def test_somente_supervisor_lider_e_admin_editam_template(self):
         for level in ("admin", "supervisor", "lider"):

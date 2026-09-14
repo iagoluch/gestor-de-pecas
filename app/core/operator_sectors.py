@@ -5,6 +5,8 @@ operação, produto, quantidades e motivos de parada virão do PostgreSQL.
 """
 
 from dataclasses import dataclass
+import re
+import unicodedata
 
 from app.core.resource_mapping import (
     RESOURCE_FRIENDLY_NAMES,
@@ -35,6 +37,53 @@ PAINTING_STATIONS = (
 )
 
 
+def _sector_level_slug(name):
+    """Identificador ASCII estável para o nome de um setor."""
+
+    plain = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", plain.casefold())).strip("_")
+
+
+# Wave 6F — a Solda deixa de ser um setor único com 10 estações genéricas e
+# passa a ser cinco setores reais e distintos (decisão do usuário em
+# 14/09/2026). Cada um tem ``tipo_setor`` próprio no catálogo, elegibilidade
+# própria e contas próprias; "Solda Aço" é o sucessor direto do antigo setor
+# "Solda" (mesmas 10 estações, mesma regra aberta), e os outros quatro nascem
+# do mesmo desmembramento. "Proj. Ferramentaria" e "Protótipo" não são solda no
+# sentido do processo, mas pertencem à mesma frente física e por isso entram no
+# mesmo painel do Andon.
+#
+# A tupla é a fonte única: nome do setor -> postos -> logins. Ela alimenta os
+# perfis de operador abaixo e a família consultada por Andon, Solda gerencial e
+# regras de setor. Os postos de cada setor têm rótulo próprio de propósito: o
+# Andon identifica recurso sem código de catálogo pelo nome do posto, então uma
+# "Estação 1" repetida em dois setores voltaria a colapsar dois cards em um
+# (mesma causa do bug corrigido em fb2c707).
+WELDING_FAMILY_SECTORS = (
+    (
+        "Solda Aço",
+        tuple(f"Estação {number}" for number in range(1, 11)),
+        tuple(f"estacao{number}aco" for number in range(1, 11)),
+    ),
+    (
+        "Solda Alumínio",
+        tuple(f"Alumínio {number}" for number in range(1, 7)),
+        tuple(f"estacao{number}alu" for number in range(1, 7)),
+    ),
+    ("Solda Robô", ("Robô 1",), ("robo1",)),
+    ("Proj. Ferramentaria", ("Projetos",), ("projetos",)),
+    ("Protótipo", ("Protótipo",), ("prototipo",)),
+)
+
+#: Sucessor direto do antigo setor "Solda": mesmas dez estações, mesma regra.
+WELDING_STEEL_SECTOR = WELDING_FAMILY_SECTORS[0][0]
+
+#: Nomes dos cinco setores que substituíram o antigo "Solda". Consultado por
+#: quem precisa tratar a frente inteira como um bloco (Andon, acompanhamento
+#: gerencial da Solda, regras de setor).
+WELDING_SECTOR_NAMES = tuple(name for name, _stations, _levels in WELDING_FAMILY_SECTORS)
+
+
 OPERATOR_SECTORS = (
     OperatorSector("operador_destaque", "Destaque", "Destaque"),
     OperatorSector("operador_dobra", "Dobra", "Dobra", ("1303", "2204", "Gasparini")),
@@ -53,12 +102,6 @@ OPERATOR_SECTORS = (
         automatic_queue=True,
     ),
     OperatorSector("operador_pintura", "Pintura", "Pintura", PAINTING_STATIONS),
-    OperatorSector(
-        "operador_solda",
-        "Solda",
-        "Solda",
-        tuple(f"Estação {number}" for number in range(1, 11)),
-    ),
     # Montagem possui regra funcional fechada pela Manufatura: recurso com
     # pertencimento canônico é apontável pelo próprio setor, com início,
     # execução e fim, como Pintura e Solda. O cadastro oficial ainda não
@@ -66,23 +109,31 @@ OPERATOR_SECTORS = (
     # sem posto configurado. Nenhum código/nome é promovido por semelhança:
     # a lista só deve crescer quando a Manufatura classificar os recursos.
     OperatorSector("operador_montagem", "Montagem", "Montagem"),
+) + tuple(
+    # Entrada de *catálogo* dos cinco setores da frente de Solda: ela descreve
+    # o setor inteiro (todos os postos) para quem precisa enumerar setores e
+    # rotas. O ``level`` usa o prefixo ``setor_`` justamente porque **não é uma
+    # conta**: a autenticação de Solda acontece só pelos perfis por estação
+    # (``WELDING_OPERATOR_PROFILES``), que ficam fora de ``OPERATOR_SECTORS`` e
+    # entram apenas em ``OPERATOR_PROFILES``.
+    OperatorSector(f"setor_{_sector_level_slug(name)}", name, name, stations)
+    for name, stations, _levels in WELDING_FAMILY_SECTORS
 )
 
-WELDING_STATIONS = tuple(f"Estação {number}" for number in range(1, 11))
+WELDING_STATIONS = WELDING_FAMILY_SECTORS[0][1]
+#: Uma conta por estação: o posto é fixo pelo login e não é escolhido na tela.
 WELDING_OPERATOR_PROFILES = tuple(
-    OperatorSector(
-        f"operador_solda_estacao_{number}",
-        "Solda",
-        "Solda",
-        (station,),
-    )
-    for number, station in enumerate(WELDING_STATIONS, start=1)
+    OperatorSector(level, name, name, (station,))
+    for name, stations, levels in WELDING_FAMILY_SECTORS
+    for station, level in zip(stations, levels)
 )
 
 # ``OPERATOR_SECTORS`` continua sendo o catálogo único dos setores/rotas.
 # Perfis fixos podem compartilhar a mesma rota sem duplicar a definição do
 # setor; autenticação resolve pelo catálogo completo abaixo.
-OPERATOR_PROFILES = OPERATOR_SECTORS + WELDING_OPERATOR_PROFILES
+OPERATOR_PROFILES = tuple(
+    sector for sector in OPERATOR_SECTORS if not sector.level.startswith("setor_")
+) + WELDING_OPERATOR_PROFILES
 OPERATOR_SECTOR_BY_LEVEL = {sector.level: sector for sector in OPERATOR_PROFILES}
 OPERATOR_SECTOR_BY_ROUTE = {sector.route: sector for sector in OPERATOR_SECTORS}
 OPERATOR_LEVELS = tuple(OPERATOR_SECTOR_BY_LEVEL)

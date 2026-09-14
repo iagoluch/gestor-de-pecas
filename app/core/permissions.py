@@ -1,6 +1,10 @@
 """Matriz central de visibilidade por nivel de usuario."""
 
-from app.core.operator_sectors import OPERATOR_LEVELS, operator_sector_for_level
+from app.core.operator_sectors import (
+    OPERATOR_LEVELS,
+    WELDING_OPERATOR_PROFILES,
+    operator_sector_for_level,
+)
 from app.core.quality import can_edit_quality_template, sector_has_quality
 
 USER_LEVELS = (
@@ -17,8 +21,11 @@ USER_LEVELS = (
     "operador_serra",
     "operador_corte",
     "operador_pintura",
-    "operador_solda",
-    *(f"operador_solda_estacao_{number}" for number in range(1, 11)),
+    # Wave 6F — a antiga Solda (nível genérico ``operador_solda`` + os dez
+    # ``operador_solda_estacao_N``) foi substituída pelas contas por estação dos
+    # cinco setores da frente de Solda. Os níveis vêm do catálogo para não
+    # existir uma segunda lista para o mesmo conceito.
+    *(profile.level for profile in WELDING_OPERATOR_PROFILES),
     "operador_montagem",
     "almoxarifado",
 )
@@ -79,7 +86,6 @@ NAVIGATION_BY_LEVEL = {
     "operador_serra": ("Serra",),
     "operador_corte": ("Corte",),
     "operador_pintura": ("Pintura",),
-    "operador_solda": ("Solda",),
     "operador_montagem": ("Montagem",),
     "almoxarifado": (
         "Tela Inicial",
@@ -108,7 +114,6 @@ CONSULTATION_TABS_BY_LEVEL = {
     "operador_serra": (),
     "operador_corte": (),
     "operador_pintura": (),
-    "operador_solda": (),
     "operador_montagem": (),
     "almoxarifado": ALL_OPERATIONAL_CONSULTATION_TABS,
 }

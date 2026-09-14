@@ -80,18 +80,31 @@ STATION_RESOURCE_CODES = {
 # Manufatura: todo recurso com pertencimento canônico ao setor é apontável pelo
 # fluxo do setor, mantendo a identidade real do recurso no roteiro. Os demais
 # setores continuam exigindo igualdade exata entre posto e recurso.
-SECTOR_OWNED_RESOURCE_SECTORS = {"pintura", "solda", "montagem"}
+# Wave 6F — a antiga Solda foi desmembrada em cinco setores reais com
+# ``tipo_setor`` próprio. As chaves são casefolded porque toda comparação de
+# setor neste módulo é feita assim; a acentuação é a mesma do nome oficial em
+# ``app.core.operator_sectors.WELDING_FAMILY_SECTORS``, e é por ela que o
+# ``tipo_setor`` gravado no catálogo precisa bater.
+#
+# A lista fica aqui, escrita, e não é importada de ``operator_sectors``: aquele
+# módulo importa este, e inverter a dependência criaria ciclo. O teste
+# ``test_stage4c_resource_registry`` trava as duas pontas juntas.
+WELDING_SECTOR_KEYS = frozenset(
+    {"solda aço", "solda alumínio", "solda robô", "proj. ferramentaria", "protótipo"}
+)
+
+
+SECTOR_OWNED_RESOURCE_SECTORS = {"pintura", "montagem", *WELDING_SECTOR_KEYS}
 
 
 # Setores onde o bloqueio de "recurso divergente do roteiro" (confirmação por
 # crachá antes de apontar) fica desativado. Decisão do usuário em 14/09/2026:
-# a Solda já vai crescer para múltiplas contas de recurso (Aço, Alumínio,
-# Robô, Ferramentaria, ainda a fechar com a Manufatura) e o bloqueio atrapalha
-# o fluxo sem agregar controle real, porque o posto já é dono do setor
-# (SECTOR_OWNED_RESOURCE_SECTORS). Não afeta o registro de auditoria
-# (setor_roteiro/setor_divergente continuam gravados normalmente); só remove
-# a exigência de crachá para prosseguir.
-RESOURCE_CONFIRMATION_EXEMPT_SECTORS = {"solda"}
+# a Solda cresceu para múltiplas contas de recurso (Aço, Alumínio, Robô,
+# Ferramentaria, Protótipo) e o bloqueio atrapalha o fluxo sem agregar controle
+# real, porque o posto já é dono do setor (SECTOR_OWNED_RESOURCE_SECTORS). Não
+# afeta o registro de auditoria (setor_roteiro/setor_divergente continuam
+# gravados normalmente); só remove a exigência de crachá para prosseguir.
+RESOURCE_CONFIRMATION_EXEMPT_SECTORS = set(WELDING_SECTOR_KEYS)
 
 
 # Associação funcional oficial aprovada diretamente pela Manufatura, usada

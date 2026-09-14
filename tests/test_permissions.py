@@ -34,7 +34,12 @@ class PermissionMatrixTests(unittest.TestCase):
             ("operador_corte", "Corte"),
             ("operador_destaque", "Destaque"),
             ("operador_pintura", "Pintura"),
-            ("operador_solda", "Solda"),
+            # Wave 6F — a Solda virou cinco setores com conta por estação.
+            ("estacao1aco", "Solda Aço"),
+            ("estacao6alu", "Solda Alumínio"),
+            ("robo1", "Solda Robô"),
+            ("projetos", "Proj. Ferramentaria"),
+            ("prototipo", "Protótipo"),
         ):
             self.assertEqual(
                 navigation_for_level(level),
@@ -48,13 +53,15 @@ class PermissionMatrixTests(unittest.TestCase):
         self.assertIn("operador_serra", USER_LEVELS)
         self.assertIn("operador_corte", USER_LEVELS)
         self.assertIn("operador_pintura", USER_LEVELS)
-        self.assertIn("operador_solda", USER_LEVELS)
+        self.assertIn("estacao1aco", USER_LEVELS)
+        self.assertIn("robo1", USER_LEVELS)
+        self.assertNotIn("operador_solda", USER_LEVELS)
         self.assertIn("andon", USER_LEVELS)
         self.assertEqual(normalize_user_level("comum"), "operador_destaque")
         self.assertEqual(normalize_user_level("nivel_desconhecido"), "operador_destaque")
         for level in (
             "operador_destaque", "operador_dobra", "operador_usinagem",
-            "operador_serra", "operador_corte", "operador_pintura", "operador_solda",
+            "operador_serra", "operador_corte", "operador_pintura", "estacao1aco",
         ):
             self.assertEqual(
                 consultation_tabs_for_level(level),
@@ -79,7 +86,8 @@ class PermissionMatrixTests(unittest.TestCase):
         self.assertEqual(consultation_tabs_for_level("andon"), ())
 
     def test_perfis_operacionais_resolvem_um_unico_setor(self):
-        self.assertTrue(is_sector_operator("operador_solda"))
+        self.assertTrue(is_sector_operator("estacao1aco"))
+        self.assertEqual(operator_sector_for_user_level("estacao3aco").resources, ("Estação 3",))
         self.assertFalse(is_sector_operator("supervisor"))
         self.assertEqual(operator_sector_for_user_level("operador_pintura").name, "Pintura")
         self.assertEqual(operator_sector_for_user_level("operador_dobra").resources, ("1303", "2204", "Gasparini"))

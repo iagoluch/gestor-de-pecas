@@ -12,7 +12,7 @@ from pathlib import Path
 import unittest
 from uuid import uuid4
 
-from app.core.operator_sectors import OPERATOR_SECTORS
+from app.core.operator_sectors import OPERATOR_SECTORS, WELDING_SECTOR_NAMES
 # Importado antes do skipUnless: é este módulo que carrega o .env com
 # TEST_DATABASE_URL, decidido na avaliação do decorador.
 from app.database import Database
@@ -20,6 +20,7 @@ from app.core.resource_mapping import (
     OFFICIAL_RESOURCE_ALIASES,
     RESOURCE_FRIENDLY_NAMES,
     SECTOR_OWNED_RESOURCE_SECTORS,
+    WELDING_SECTOR_KEYS,
     STATION_RESOURCE_CODES,
     canonical_resource_code,
     normalize_resource_code,
@@ -47,7 +48,9 @@ CADASTRO = {
     "PLASMA": "Corte", "LASER1": "Corte", "LASER": "Corte",
     "PINT.L": "Pintura", "PREP": "Pintura", "INSPE2": "Pintura",
     "ESTUFA": "Pintura", "RETOQ": "Pintura", "TINTA": "Pintura",
-    "SOLDA4": "Solda", "ROBO P": "Solda", "ROBO S": "Solda", "D02DUO": "Solda",
+    # Wave 6F — a antiga Solda virou cinco setores reais.
+    "SOLDA4": "Protótipo", "ROBO P": "Solda Robô", "ROBO S": "Solda Robô",
+    "D02DUO": "Solda Aço",
 }
 
 
@@ -215,12 +218,35 @@ class MatrizElegibilidadeTests(unittest.TestCase):
                 )
                 # O recurso continua sendo ele mesmo, não vira PINT.L.
                 self.assertEqual(canonical_resource_code(codigo), normalize_resource_code(codigo))
-        for codigo in ("SOLDA4", "ROBO P", "ROBO S", "D02DUO"):
+        # Wave 6F — cada setor da frente de Solda é dono só do próprio recurso.
+        solda = {
+            "D02DUO": ("Solda Aço", "Estação 7"),
+            "ROBO P": ("Solda Robô", "Robô 1"),
+            "ROBO S": ("Solda Robô", "Robô 1"),
+            "SOLDA4": ("Protótipo", "Protótipo"),
+        }
+        for codigo, (setor, posto) in solda.items():
             with self.subTest(codigo=codigo):
                 self.assertTrue(
-                    station_matches_route("Solda", "Estação 7", codigo, resource_sector="Solda")
+                    station_matches_route(setor, posto, codigo, resource_sector=setor)
                 )
                 self.assertEqual(canonical_resource_code(codigo), normalize_resource_code(codigo))
+
+    def test_chaves_da_frente_de_solda_acompanham_os_nomes_oficiais(self):
+        """Trava as duas pontas do nome do setor.
+
+        ``resource_mapping`` não pode importar ``operator_sectors`` (a
+        dependência é a inversa), então as chaves casefolded dos cinco setores
+        vivem escritas lá. Se um nome oficial mudar sem a chave mudar junto, o
+        posto deixa de ser dono do próprio recurso em silêncio.
+        """
+
+        self.assertEqual(
+            WELDING_SECTOR_KEYS,
+            frozenset(nome.casefold() for nome in WELDING_SECTOR_NAMES),
+        )
+        for nome in WELDING_SECTOR_NAMES:
+            self.assertIn(nome.casefold(), SECTOR_OWNED_RESOURCE_SECTORS)
 
     def test_montagem_continua_sem_recurso_cadastrado_e_sem_projecao_por_nome(self):
         montagem = next(
@@ -262,10 +288,10 @@ class IdentidadeVenceRotuloTests(unittest.TestCase):
     """O código de um recurso pode ser o nome de outro; o código manda."""
 
     CATALOGO = [
-        {"codigo": "ALMOX4", "nome": "ALMOX F IV", "tipo_setor": "Solda"},
-        {"codigo": "ALMOXF4", "nome": "ALMOX4", "tipo_setor": "Solda"},
-        {"codigo": "RETR", "nome": "RETRABALHO", "tipo_setor": "Solda"},
-        {"codigo": "RETRABALHO", "nome": "RETRABALHO", "tipo_setor": "Solda"},
+        {"codigo": "ALMOX4", "nome": "ALMOX F IV", "tipo_setor": "Solda Aço"},
+        {"codigo": "ALMOXF4", "nome": "ALMOX4", "tipo_setor": "Solda Aço"},
+        {"codigo": "RETR", "nome": "RETRABALHO", "tipo_setor": "Solda Aço"},
+        {"codigo": "RETRABALHO", "nome": "RETRABALHO", "tipo_setor": "Solda Aço"},
     ]
 
     def _snapshot(self, estados):
@@ -530,7 +556,7 @@ class ImportacaoDeRecursosTests(unittest.TestCase):
 
     def test_variante_de_caixa_atualiza_a_linha_existente_em_vez_de_duplicar(self):
         self.db.publicar_recursos_pcfactory(
-            [{"codigo": "SCGM8", "nome": "SOLD.TANQUE", "tipo_setor": "Solda"}]
+            [{"codigo": "SCGM8", "nome": "SOLD.TANQUE", "tipo_setor": "Solda Aço"}]
         )
         # Exportação seguinte do PC Factory traz o mesmo recurso com outra caixa.
         self.db.publicar_recursos_pcfactory(
@@ -540,7 +566,7 @@ class ImportacaoDeRecursosTests(unittest.TestCase):
         catalogo = self._catalogo()
         self.assertEqual([item["codigo"] for item in catalogo], ["SCGM8"])
         # O pertencimento cadastral sobrevive a uma importação sem tipo_setor.
-        self.assertEqual(catalogo[0]["tipo_setor"], "Solda")
+        self.assertEqual(catalogo[0]["tipo_setor"], "Solda Aço")
 
     def test_codigos_realmente_distintos_continuam_separados(self):
         self.db.publicar_recursos_pcfactory(
