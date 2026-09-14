@@ -118,7 +118,7 @@ function CardSection({ title, items, emptyTitle, onSelect, onMore, selectedKey, 
   return <section className={className}><header><h2>{title}</h2><div className="operator-card-heading-actions"><span>{items.length}</span><button type="button" onClick={onMore}>Ver mais</button></div></header><div className="operator-card-list">{items.length ? items.slice(0, 2).map((item, index) => <OperatorCardView key={`${item.id ?? item.op}-${index}`} item={item} selected={cardKey(item) === selectedKey} onSelect={onSelect} />) : <EmptyState title={emptyTitle} />}</div></section>;
 }
 
-export function WorkbenchPage({ sector, resource }: { sector: string; resource: string }) {
+export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: string; resource: string; hasSetup?: boolean }) {
   const [op, setOp] = useState("");
   const [loadedOp, setLoadedOp] = useState("");
   const [routeSelection, setRouteSelection] = useState<{ op: string; operationKey: string } | null>(null);
@@ -234,9 +234,10 @@ export function WorkbenchPage({ sector, resource }: { sector: string; resource: 
     balance: Number(selected?.saldo_quantidade ?? selected?.saldo_quantidade_boa ?? selectedCard?.balance ?? 0),
   }), [loadedOp, selected, selectedCard, resource]);
   // Setup é apontamento de estado do posto (tempo de preparação da máquina).
-  // Ele existe onde o setor possui Setup — Solda e Pintura não possuem — e é
-  // ele que satisfaz o portão da primeira peça.
-  const showSetup = !["Pintura", "Solda"].includes(sector);
+  // Quais setores possuem Setup é decisão do domínio (`SECTORS_WITHOUT_SETUP`):
+  // a tela recebe a resposta pronta em `/operator/context` em vez de manter uma
+  // segunda lista, que já nascia desatualizada a cada setor novo.
+  const showSetup = hasSetup;
   const currentStatus = String(selectedCard?.status ?? "");
   const startAction = currentStatus === "Parada"
     ? "Retomar"

@@ -10,12 +10,14 @@ import { HighlightPage } from "./HighlightPage";
 import { WorkbenchPage } from "./WorkbenchPage";
 
 function ResourceSelection({ context, onSelect }: { context: OperatorContext; onSelect: (resource: string) => void }) {
-  if (context.sector === "Solda") {
+  // Quem decide que o posto vem do login, e não de uma escolha na tela, é o
+  // backend (`station_profile_required`). A tela não repete a lista de setores.
+  if (context.station_profile_required) {
     return (
       <section className="operator-selection operator-selection--welding">
         <EmptyState
-          title="Perfil de Solda sem estação fixa"
-          detail="Este login precisa ser vinculado pela liderança a um dos perfis Estação 1 a Estação 10. A estação não pode ser escolhida manualmente."
+          title={`Perfil de ${context.sector} sem estação fixa`}
+          detail="Este login precisa ser vinculado pela liderança ao perfil de uma estação específica do setor. A estação não pode ser escolhida manualmente."
         />
       </section>
     );
@@ -74,9 +76,11 @@ export function OperatorPortalPage() {
     <OperatorShell
       sector={sector}
       resource={selectedResource}
-      onBack={sector !== "Solda" && context.data.resources.length > 1 ? () => setResource(null) : undefined}
+      onBack={!context.data.fixed_resource && !context.data.station_profile_required && context.data.resources.length > 1 ? () => setResource(null) : undefined}
     >
-      {context.data.workflow === "cutting" ? <CuttingPage resource={selectedResource} /> : <WorkbenchPage sector={sector} resource={selectedResource} />}
+      {context.data.workflow === "cutting"
+        ? <CuttingPage resource={selectedResource} />
+        : <WorkbenchPage sector={sector} resource={selectedResource} hasSetup={context.data.has_setup !== false} />}
     </OperatorShell>
   );
 }

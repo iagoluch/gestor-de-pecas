@@ -43,7 +43,7 @@ class FirstPieceDomainTests(unittest.TestCase):
     def test_setup_existe_na_caldeiraria_e_nao_em_solda_ou_pintura(self):
         for setor in ("Dobra", "Usinagem", "Serra", "Montagem"):
             self.assertTrue(sector_has_setup(setor), setor)
-        for setor in ("Solda", "Pintura", "solda", "PINTURA"):
+        for setor in ("Solda Aço", "Pintura", "solda aço", "PINTURA", "Protótipo"):
             self.assertFalse(sector_has_setup(setor), setor)
 
     def test_inspecao_do_roteiro_e_marco_terminal_ficam_fora_do_portao(self):
@@ -328,22 +328,22 @@ class FirstPieceServiceTests(unittest.TestCase):
         _db, servico = self._servico()
         operacao = {**self.OPERACAO, "id": 79, "codigo_recurso": "SOLDA4"}
         linha = servico.garantir(
-            op="OP-SOLDA", setor="Solda", recurso="Estação 1", operacao=operacao
+            op="OP-SOLDA", setor="Solda Aço", recurso="Estação 1", operacao=operacao
         )
         self.assertFalse(linha["setup_obrigatorio"])
         servico.registrar_producao(
-            op="OP-SOLDA", setor="Solda", recurso="Estação 1", operacao=operacao
+            op="OP-SOLDA", setor="Solda Aço", recurso="Estação 1", operacao=operacao
         )
         servico.inspecionar(
             op="OP-SOLDA",
-            setor="Solda",
+            setor="Solda Aço",
             recurso="Estação 1",
             operacao=operacao,
             resultado="CONFORME",
         )
         self.assertTrue(
             servico.avaliar_finalizacao(
-                op="OP-SOLDA", setor="Solda", operacao=operacao
+                op="OP-SOLDA", setor="Solda Aço", operacao=operacao
             ).liberado
         )
 

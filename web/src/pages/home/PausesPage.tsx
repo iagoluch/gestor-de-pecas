@@ -32,7 +32,8 @@ interface PausesResponse {
 
 const SETORES = [
   "Corte", "Dobra", "Usinagem", "Serra", "Caldeiraria",
-  "Solda", "Pintura", "Montagem", "Destaque",
+  "Solda Aço", "Solda Alumínio", "Solda Robô", "Proj. Ferramentaria", "Protótipo",
+  "Pintura", "Montagem", "Destaque",
 ];
 
 const FILTROS_INICIAIS = { setor: "", tipo: "", busca: "" };

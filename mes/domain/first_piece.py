@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.core.operator_sectors import WELDING_SECTOR_NAMES
 from app.core.quality import sector_has_quality
 
 
@@ -71,7 +72,9 @@ PRODUCTION_SCRAP_OCCURRENCE = "REFUGO_APONTAMENTO"
 # configurado no Gestor. A lista não é estética: ela é a mesma barreira que o
 # ``OperatorFlowService`` já aplicava ao recusar a ação Setup. Inventar Setup
 # aqui criaria uma exigência industrial que a fábrica não tem.
-SECTORS_WITHOUT_SETUP = ("Pintura", "Solda")
+# Wave 6F — os cinco setores que substituíram a antiga "Solda" herdam a mesma
+# ausência de Setup que o setor único tinha.
+SECTORS_WITHOUT_SETUP = ("Pintura", *WELDING_SECTOR_NAMES)
 
 # Setores com fluxo operacional próprio: eles não passam pelo posto de bancada
 # e por isso não participam do portão da primeira peça.

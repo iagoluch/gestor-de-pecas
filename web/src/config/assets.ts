@@ -60,7 +60,11 @@ export const assets = {
     logo: operatorLogo,
     profile: operatorProfile,
     actions: { start: actionStart, stop: actionStop, finish: actionFinish, setup: actionSetup, rework: actionRework },
-    navigation: { Destaque: navDestaque, Dobra: navDobra, Usinagem: navUsinagem, Serra: navSerra, Corte: navCorte, Pintura: navPintura, Solda: navSolda, Qualidade: navQualidade },
+    navigation: { Destaque: navDestaque, Dobra: navDobra, Usinagem: navUsinagem, Serra: navSerra, Corte: navCorte, Pintura: navPintura, Solda: navSolda, Qualidade: navQualidade,
+      // Wave 6F — os cinco setores que substituíram a antiga "Solda"
+      // reaproveitam o mesmo ícone da frente até a arte própria existir.
+      "Solda Aço": navSolda, "Solda Alumínio": navSolda, "Solda Robô": navSolda,
+      "Proj. Ferramentaria": navSolda, "Protótipo": navSolda },
     resources: {
       "1303": dobra1303,
       "2204": dobra2204,

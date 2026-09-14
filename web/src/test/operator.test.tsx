@@ -515,23 +515,23 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByLabelText("Padrão da cota 1")).toBeInTheDocument();
   });
 
-  it("mostra Solda por número de estação e não oferece Setup", async () => {
+  it("mostra Solda Aço por número de estação e não oferece Setup", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
-      if (path.includes("/auth/session")) return json({ id: 5, name: "Soldador", role: "operador_solda", management_access: false, operator_access: true, operator_sector: "Solda" });
-      // Wave 4: cada login de Solda pertence a um dos dez perfis fixos de
-      // estação. O contexto entrega uma única estação e ela não é escolhida
-      // na tela.
-      if (path.includes("/operator/context")) return json({ sector: "Solda", route: "Solda", resources: ["Estação 1"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/auth/session")) return json({ id: 5, name: "Soldador", role: "estacao1aco", management_access: false, operator_access: true, operator_sector: "Solda Aço" });
+      // Wave 6F: cada login de Solda Aço é uma estação fixa. O contexto
+      // entrega uma única estação, diz que ela não é escolhida na tela
+      // (`fixed_resource`) e que o setor não possui Setup (`has_setup`).
+      if (path.includes("/operator/context")) return json({ sector: "Solda Aço", route: "Solda Aço", resources: ["Estação 1"], fixed_resource: true, station_profile_required: false, has_setup: false, automatic_queue: false, workflow: "workbench" });
       if (path.includes("/operator/stop-reasons")) return json({ items: [] });
       if (path.includes("/operator/operators")) return json({ items: [] });
-      if (path.includes("/operator/workbench")) return json({ sector: "Solda", resource: "Estação 1", queue: [], production: [] });
+      if (path.includes("/operator/workbench")) return json({ sector: "Solda Aço", resource: "Estação 1", queue: [], production: [] });
       if (path.includes("/operator/history")) return json({ items: [], has_more: false });
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     }));
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Solda - Estação 1" });
+    await screen.findByRole("heading", { name: "Solda Aço - Estação 1" });
     expect(screen.queryByRole("heading", { name: "Selecione o recurso" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Voltar" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Ações operacionais")).toHaveClass("operator-actions--without-setup");
@@ -539,18 +539,18 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
   });
 
-  it("recusa escolher estação de Solda quando o login não tem perfil fixo", async () => {
+  it("recusa escolher estação de Solda Aço quando o login não tem perfil fixo", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
-      if (path.includes("/auth/session")) return json({ id: 6, name: "Soldador", role: "operador_solda", management_access: false, operator_access: true, operator_sector: "Solda" });
-      if (path.includes("/operator/context")) return json({ sector: "Solda", route: "Solda", resources: ["Estação 1", "Estação 2"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/auth/session")) return json({ id: 6, name: "Soldador", role: "estacao1aco", management_access: false, operator_access: true, operator_sector: "Solda Aço" });
+      if (path.includes("/operator/context")) return json({ sector: "Solda Aço", route: "Solda Aço", resources: ["Estação 1", "Estação 2"], fixed_resource: false, station_profile_required: true, has_setup: false, automatic_queue: false, workflow: "workbench" });
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     }));
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     // A estação é atributo do login, não uma escolha do operador: sem vínculo,
     // a tela explica em vez de oferecer um seletor.
-    expect(await screen.findByText("Perfil de Solda sem estação fixa")).toBeInTheDocument();
+    expect(await screen.findByText("Perfil de Solda Aço sem estação fixa")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Selecione o recurso" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Estação 1" })).not.toBeInTheDocument();
   });

@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 
+from app.core.operator_sectors import WELDING_SECTOR_NAMES
 from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, require_operator_user
 from backend.api.dependencies.clock import request_now_func
@@ -14,6 +15,7 @@ from backend.api.dependencies.operator import sector_for_user, validate_resource
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.operator import FirstPieceRequest, OperatorActionRequest
+from mes.domain.first_piece import sector_has_setup
 from mes.services.drawings import DrawingLookupService, parse_drawing_roots
 from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
@@ -93,12 +95,19 @@ def _raise_result(result):
 @router.get("/context")
 def context(user: SessionUser = Depends(require_operator_user)):
     sector = sector_for_user(user)
+    # Wave 6F — a estação continua sendo definida pelo login, e não escolhida na
+    # tela, nos cinco setores que substituíram a antiga "Solda".
+    welding = sector.name in WELDING_SECTOR_NAMES
     return {
         "sector": sector.name,
         "route": sector.route,
         "resources": list(sector.resources),
-        "fixed_resource": sector.name == "Solda" and len(sector.resources) == 1,
-        "station_profile_required": sector.name == "Solda" and len(sector.resources) != 1,
+        "fixed_resource": welding and len(sector.resources) == 1,
+        "station_profile_required": welding and len(sector.resources) != 1,
+        # Quem decide se o posto tem Setup é o domínio, não a tela: o React
+        # mantinha a própria lista de setores sem Setup e ela já nascia
+        # desatualizada a cada setor novo.
+        "has_setup": sector_has_setup(sector.name),
         "automatic_queue": sector.automatic_queue,
         "workflow": (
             "highlight" if sector.name == "Destaque"

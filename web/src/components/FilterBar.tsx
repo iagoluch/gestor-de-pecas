@@ -5,7 +5,8 @@ import { DatePicker } from "./DatePicker";
 
 const MANAGEMENT_SECTORS = [
   "Corte", "Dobra", "Usinagem", "Serra", "Caldeiraria", "Pintura",
-  "Solda", "Montagem", "Destaque", "Almoxarifado",
+  "Solda Aço", "Solda Alumínio", "Solda Robô", "Proj. Ferramentaria", "Protótipo",
+  "Montagem", "Destaque", "Almoxarifado",
 ];
 
 export function FilterBar({ period = true }: { period?: boolean } = {}) {

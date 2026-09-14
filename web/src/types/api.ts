@@ -33,6 +33,7 @@ export interface OperatorContext {
   automatic_queue: boolean;
   fixed_resource?: boolean;
   station_profile_required?: boolean;
+  has_setup?: boolean;
   workflow: "workbench" | "cutting" | "highlight";
 }
 
