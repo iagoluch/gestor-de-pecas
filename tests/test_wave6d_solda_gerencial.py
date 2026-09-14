@@ -60,7 +60,7 @@ class SoldaGerencialBase(unittest.TestCase):
         self._proximo_id = 6400
 
     # ------------------------------------------------------------------
-    def _op(self, codigo_op, *, recurso="S CEN", operacao="10", setor="Solda", **pcp):
+    def _op(self, codigo_op, *, recurso="S CEN", operacao="10", setor="Solda Aço", **pcp):
         self.db.pcp_ops.append(_pcp(codigo_op, **pcp))
         self._proximo_id += 1
         linha = {
@@ -345,7 +345,7 @@ class AtrasoNaoBloqueiaTests(SoldaGerencialBase):
 
         fluxo = OperatorFlowService(self.db, "OPERADOR 6D")
         contexto = dict(
-            op="OP-ATRASADA", setor="Solda", recurso="Estação 7", operacao=operacao
+            op="OP-ATRASADA", setor="Solda Aço", recurso="Estação 7", operacao=operacao
         )
         inicio = fluxo.executar("Início", **contexto)
         self.assertTrue(inicio.ok, inicio.message)

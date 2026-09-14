@@ -29,7 +29,12 @@ from datetime import date, datetime, time, timedelta
 from mes.domain.industrial import DataAvailability
 
 
-#: Setor do roteiro que define uma operação de conjunto soldado.
+#: Rótulo da frente acompanhada por esta visão.
+#:
+#: Wave 6F — desde o desmembramento da Solda em cinco setores, este valor é só
+#: o nome da frente na tela (o mesmo do painel "Solda" no Andon). **Não** é o
+#: filtro do roteiro: quem decide quais ``tipo_setor`` entram na consulta é
+#: ``app.database.welding_repository.WELDING_MANAGEMENT_SECTORS``.
 WELDING_SECTOR = "Solda"
 
 #: Os três estados do acompanhamento da PCP. Não existe um quarto estado: a

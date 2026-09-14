@@ -19,9 +19,19 @@ identificador novo é criado e a OP não é duplicada: a granularidade da linha 
 
 from __future__ import annotations
 
+from app.core.operator_sectors import WELDING_SECTOR_NAMES
+
 
 #: Estados do apontamento que representam execução viva no posto.
 ACTIVE_APPOINTMENT_STATUSES = ("Aguardando", "Em processo", "Parada", "Setup", "Retrabalho")
+
+#: Setores que a tela gerencial da Solda acompanha.
+#:
+#: Wave 6F — o setor único "Solda" virou cinco. ``"Solda"`` continua na lista
+#: porque os roteiros e apontamentos já gravados mantêm esse ``tipo_setor``: a
+#: reclassificação vale para o catálogo de recursos e só alcança as operações na
+#: próxima sincronização da OP. Retirá-lo esvaziaria o histórico da tela.
+WELDING_MANAGEMENT_SECTORS = ("Solda", *WELDING_SECTOR_NAMES)
 
 
 class WeldingRepositoryMixin:
@@ -75,7 +85,7 @@ class WeldingRepositoryMixin:
                     SELECT ap.maquina, ap.status, ap.data_inicio, ap.data_fim,
                            ap.operador_inicio, ap.operador_fim
                     FROM apontamentos_operacionais ap
-                    WHERE UPPER(ap.tipo_setor) = UPPER(%(setor)s)
+                    WHERE UPPER(ap.tipo_setor) = ANY(%(setores)s)
                       AND ap.op = operacao.codigo_op
                       AND (
                         ap.catalogo_operacao_id = operacao.id
@@ -101,12 +111,12 @@ class WeldingRepositoryMixin:
                     WHERE ap.op = operacao.codigo_op
                 ) historico ON TRUE
                 WHERE operacao.ativo IS TRUE
-                  AND UPPER(operacao.tipo_setor) = UPPER(%(setor)s)
+                  AND UPPER(operacao.tipo_setor) = ANY(%(setores)s)
                 ORDER BY operacao.codigo_op, operacao.ordem, operacao.id
                 LIMIT %(limite)s
                 """,
                 {
-                    "setor": "Solda",
+                    "setores": [name.upper() for name in WELDING_MANAGEMENT_SECTORS],
                     "ativos": list(ACTIVE_APPOINTMENT_STATUSES),
                     "limite": int(limite),
                 },

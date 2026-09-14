@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from app.core.normalization import limpa_codigo, normalizar_data_db
 from app.core.resource_mapping import resource_display_name
 from app.database.schema import SCHEMA_VERSION
+from app.database.welding_repository import WELDING_MANAGEMENT_SECTORS
 from mes.domain import (
     ManufacturingRules,
     OperatorState,
@@ -15,6 +16,10 @@ from mes.domain import (
     operator_status_for_state,
     return_state_for_transition,
 )
+
+
+#: Espelho do filtro de setor usado pela leitura gerencial da Solda no SQL.
+_SETORES_SOLDA = {nome.upper() for nome in WELDING_MANAGEMENT_SECTORS}
 
 
 class FakeDatabase:
@@ -1748,7 +1753,7 @@ class FakeDatabase:
             (
                 row for row in self.catalog_operations
                 if row.get("ativo", True)
-                and str(row.get("tipo_setor") or "").casefold() == "solda"
+                and str(row.get("tipo_setor") or "").upper() in _SETORES_SOLDA
                 and row["codigo_op"] in pcp_por_op
             ),
             key=lambda row: (row["codigo_op"], int(row.get("ordem") or 0), int(row.get("id") or 0)),
@@ -1758,7 +1763,7 @@ class FakeDatabase:
             candidatos = [
                 item for item in self.appointments
                 if item["op"] == operacao["codigo_op"]
-                and str(item["tipo_setor"]).casefold() == "solda"
+                and str(item["tipo_setor"]).upper() in _SETORES_SOLDA
                 and (
                     item.get("catalogo_operacao_id") == operacao.get("id")
                     or (
