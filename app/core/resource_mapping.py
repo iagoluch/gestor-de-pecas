@@ -23,7 +23,10 @@ RESOURCE_FRIENDLY_NAMES = {
     "PLASMA": "Plasma TerraBlade 4",
     "LASER1": "Laser Ensis 3015",
     "PINT.L": "Pintura",
-    "SOLDA4": "Solda",
+    # SOLDA4 é do Protótipo desde o desmembramento da Solda (Wave 6F, ver
+    # WELDING_FAMILY_SECTORS em app.core.operator_sectors); o rótulo segue o
+    # nome do cadastro ("SOLDAGEM"), não mais o setor genérico antigo.
+    "SOLDA4": "Soldagem",
 }
 
 
