@@ -324,6 +324,87 @@ class FirstPieceServiceTests(unittest.TestCase):
             ).ok
         )
 
+    def test_solda_finaliza_a_etapa_real_pela_conferencia_simples(self):
+        """Regressão: Solda não tinha saída para o portão da primeira peça.
+
+        O posto de Solda não possui Setup nem checklist de cotas, e o único
+        caminho do portão nesses setores é ``produzida`` + ``inspecionar`` —
+        que é o que a tela agora oferece no Finalizar. Enquanto esse caminho
+        não existia, ``pode_finalizar`` ficava permanentemente falso na etapa
+        real e o marco terminal era a única linha com o botão liberado.
+        """
+
+        db = FakeDatabase()
+        tarefa = db.inserir_tarefa("T-SOLDA")
+        db.inserir_op_na_tarefa(tarefa, "OP-SOLDA", "PECA", "Solda Aço", 5)
+        solda = {
+            "id": 10,
+            "codigo_op": "OP-SOLDA",
+            "numero_operacao": "10",
+            "codigo_recurso": "SOLDA1",
+            "descricao_operacao": "SOLDA",
+            "tipo_setor": "Solda Aço",
+            "recurso_tipo_setor": "Solda Aço",
+            "produto_codigo": "PECA",
+            "quantidade": 5,
+        }
+        terminal = {
+            **solda,
+            "id": 99,
+            "numero_operacao": "99",
+            "codigo_recurso": "ALMOX4",
+            "descricao_operacao": "FINALIZADA",
+            "tipo_setor": None,
+            "recurso_tipo_setor": None,
+            "ativo": False,
+            "marco_terminal": True,
+        }
+        db.catalog_operations.extend([solda, terminal])
+        db.cadastrar_operador_apontamento("SOLD1", "Soldador")
+        flow = OperatorFlowService(db, "OPERADOR SOLDA")
+        servico = FirstPieceService(db, "OPERADOR SOLDA")
+
+        self.assertTrue(
+            flow.executar(
+                "Início", op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6",
+                operacao=solda,
+            ).ok
+        )
+        # O marco terminal nunca é o caminho: ele não é apontável e não deve
+        # aparecer como alternativa quando a etapa real ainda está presa.
+        roteiro = flow.listar_operacoes("OP-SOLDA", "Solda Aço", "Estação 6")
+        marco = next(row for row in roteiro if row["numero_operacao"] == "99")
+        self.assertFalse(marco["selectable"])
+        self.assertFalse(marco["pode_finalizar"])
+
+        self.assertTrue(
+            servico.registrar_producao(
+                op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6", operacao=solda
+            ).ok
+        )
+        inspecao = servico.inspecionar(
+            op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6", operacao=solda,
+            resultado="CONFORME",
+        )
+        self.assertTrue(inspecao.ok)
+        self.assertTrue(inspecao.data["liberado"])
+
+        etapa = next(
+            row
+            for row in flow.listar_operacoes("OP-SOLDA", "Solda Aço", "Estação 6")
+            if row["numero_operacao"] == "10"
+        )
+        self.assertTrue(etapa["pode_finalizar"])
+        final = flow.executar(
+            "Finalizado", op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6",
+            operacao=etapa, pecas_boas=5, operadores_cracha=["SOLD1"],
+        )
+        self.assertTrue(final.ok, final.message)
+        self.assertEqual(
+            [row["visual_status"] for row in flow.listar_operacoes("OP-SOLDA", "Solda Aço", "Estação 6")],
+            ["done", "done"],
+        )
+
     def test_solda_nao_ganha_setup_artificial(self):
         _db, servico = self._servico()
         operacao = {**self.OPERACAO, "id": 79, "codigo_recurso": "SOLDA4"}

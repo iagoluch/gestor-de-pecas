@@ -394,54 +394,115 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(destaque[0]["selectable"])
         self.assertFalse(destaque[1]["selectable"])
 
-    def test_workbench_normal_libera_inspecao_e_finalizada_com_confirmacao(self):
-        for operation_number, description in (("40", "INSPECAO"), ("99", "FINALIZADA")):
-            with self.subTest(operation=description):
-                db, service, dobra = self._service()
-                db.catalog_operations.extend([
-                    {
-                        **dobra,
-                        "id": 40,
-                        "numero_operacao": "40",
-                        "codigo_recurso": "INSPEC",
-                        "descricao_operacao": "INSPECAO",
-                        "tipo_setor": None,
-                        "ativo": False,
-                        "inspecao_qualidade": True,
-                    },
-                    {
-                        **dobra,
-                        "id": 99,
-                        "numero_operacao": "99",
-                        "codigo_recurso": "ALMOX4",
-                        "descricao_operacao": "FINALIZADA",
-                        "tipo_setor": None,
-                        "ativo": False,
-                        "marco_terminal": True,
-                    },
-                ])
-                route = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
-                selected = next(row for row in route if row["numero_operacao"] == operation_number)
-                self.assertTrue(selected["selectable"])
-                self.assertTrue(selected["requires_confirmation"])
+    def _roteiro_com_inspecao_e_marco_terminal(self):
+        db, service, dobra = self._service()
+        db.catalog_operations.extend([
+            {
+                **dobra,
+                "id": 40,
+                "numero_operacao": "40",
+                "codigo_recurso": "INSPEC",
+                "descricao_operacao": "INSPECAO",
+                "tipo_setor": None,
+                "ativo": False,
+                "inspecao_qualidade": True,
+            },
+            {
+                **dobra,
+                "id": 99,
+                "numero_operacao": "99",
+                "codigo_recurso": "ALMOX4",
+                "descricao_operacao": "FINALIZADA",
+                "tipo_setor": None,
+                "ativo": False,
+                "marco_terminal": True,
+            },
+        ])
+        return db, service
 
-                pending = service.executar(
-                    "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
-                    operacao=selected,
-                )
-                self.assertFalse(pending.ok)
-                self.assertIn(
-                    pending.code,
-                    {"confirmacao_etapa_anterior_obrigatoria", "confirmacao_recurso_obrigatoria"},
-                )
+    def test_workbench_normal_libera_inspecao_com_confirmacao(self):
+        _db, service = self._roteiro_com_inspecao_e_marco_terminal()
+        route = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
+        selected = next(row for row in route if row["numero_operacao"] == "40")
+        self.assertTrue(selected["selectable"])
+        self.assertTrue(selected["requires_confirmation"])
 
-                authorized = service.executar(
-                    "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
-                    operacao=selected, confirmar_etapa_anterior_pendente=True,
-                    confirmar_recurso_divergente=True, operadores_cracha=["1"],
-                )
-                self.assertTrue(authorized.ok, authorized.message)
-                self.assertEqual(authorized.data["catalogo_operacao_id"], selected["id"])
+        pending = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=selected,
+        )
+        self.assertFalse(pending.ok)
+        self.assertIn(
+            pending.code,
+            {"confirmacao_etapa_anterior_obrigatoria", "confirmacao_recurso_obrigatoria"},
+        )
+
+        authorized = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=selected, confirmar_etapa_anterior_pendente=True,
+            confirmar_recurso_divergente=True, operadores_cracha=["1"],
+        )
+        self.assertTrue(authorized.ok, authorized.message)
+        self.assertEqual(authorized.data["catalogo_operacao_id"], selected["id"])
+
+    def test_marco_terminal_nunca_e_apontavel_nem_vira_etapa_atual(self):
+        """99 - FINALIZADA é leitura do roteiro, não um posto de trabalho.
+
+        Ele nasce com ``ativo = FALSE``, fica fora de toda consulta canônica e
+        o TOTVS o deriva da última operação produtiva. Oferecê-lo no seletor
+        criava um beco sem saída: era a única linha com ``pode_finalizar``
+        enquanto o portão da primeira peça segurava a etapa real, e finalizar
+        por ele não fecha apontamento nenhum.
+        """
+
+        db, service = self._roteiro_com_inspecao_e_marco_terminal()
+        route = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
+        terminal = next(row for row in route if row["numero_operacao"] == "99")
+        self.assertFalse(terminal["selectable"])
+        self.assertFalse(terminal["pode_finalizar"])
+        self.assertFalse(terminal["visual_current"])
+
+        recusa = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=terminal, confirmar_etapa_anterior_pendente=True,
+            confirmar_recurso_divergente=True, operadores_cracha=["1"],
+        )
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "operacao_nao_apontavel")
+        self.assertEqual(db.appointments, [])
+
+    def test_ultima_etapa_real_concluida_encerra_o_roteiro_sem_selecionar_o_marco(self):
+        """A última etapa real finalizada já leva a OP ao marco terminal."""
+
+        db, service, dobra = self._service()
+        db.catalog_operations.append(
+            {
+                **dobra,
+                "id": 99,
+                "numero_operacao": "99",
+                "codigo_recurso": "ALMOX4",
+                "descricao_operacao": "FINALIZADA",
+                "tipo_setor": None,
+                "ativo": False,
+                "marco_terminal": True,
+            }
+        )
+        self.assertTrue(
+            service.executar(
+                "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=dobra
+            ).ok
+        )
+        self._liberar_primeira_peca(db, dobra)
+        final = service.executar(
+            "Finalizado", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=dobra, pecas_boas=2, operadores_cracha=["1"],
+        )
+        self.assertTrue(final.ok, final.message)
+
+        route = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
+        self.assertEqual([row["visual_status"] for row in route], ["done", "done"])
+        self.assertEqual([row["visual_current"] for row in route], [False, False])
+        self.assertFalse(any(row["selectable"] for row in route))
 
     def test_operacao_finalizada_nao_pode_ser_reaberta(self):
         db, service, operation = self._service()

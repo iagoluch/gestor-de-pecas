@@ -31,6 +31,7 @@ type DialogState =
   | { kind: "list"; source: "production" | "queue" | "history" }
   | { kind: "route"; operationKey: string }
   | { kind: "gate" }
+  | { kind: "firstPiece" }
   | { kind: "drawing" }
   | null;
 
@@ -263,9 +264,19 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     selected?.exige_gate_primeira_peca
       ?? (firstPiece?.gate_estruturado && !firstPiece?.liberado),
   );
+  // Setores sem checklist de cotas — Solda e Pintura — conferem a primeira peça
+  // no próprio posto: peça produzida + resultado, sem Setup e sem cotas. É a
+  // mesma regra que o backend já aplica (`first_piece_applies` sem
+  // `gate_estruturado`); o que faltava era a entrada dela na tela. Sem esse
+  // caminho `pode_finalizar` nunca ficava verdadeiro nesses setores e o
+  // Finalizar da etapa real ficava permanentemente desabilitado.
+  const simpleGateRequired = Boolean(
+    firstPiece?.aplicavel && !firstPiece?.liberado && !gateRequired,
+  );
   // O Finalizar continua clicável com o portão pendente: o clique é que
   // entrega a orientação ao operador, em vez de um botão morto.
-  const canFinish = canPoint && ((selected?.pode_finalizar ?? true) || gateRequired);
+  const canFinish = canPoint
+    && ((selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired);
   const canStart = canPoint && currentStatus !== "Retrabalho" && !firstPiece?.bloqueio_ativo;
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
@@ -349,16 +360,61 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   }
 
   function finishAppointment() {
+    // A etapa fica fixada para que o próximo snapshot do roteiro não apague a
+    // orientação que o operador acabou de receber.
+    const operationKey = routeStepKey(selected);
     if (gateRequired) {
-      // A primeira peça ainda não foi aprovada. A frase é a do backend, e a
-      // etapa fica fixada para que o próximo snapshot do roteiro não apague a
-      // orientação que o operador acabou de receber.
-      const operationKey = routeStepKey(selected);
+      // A primeira peça ainda não foi aprovada. A frase é a do backend.
       if (operationKey) setRouteSelection({ op: loadedOp, operationKey });
       setMessage(firstPiece?.message ?? "Aponte o Setup desta operação para conferir a primeira peça antes de finalizar.");
       return;
     }
+    if (simpleGateRequired) {
+      if (operationKey) setRouteSelection({ op: loadedOp, operationKey });
+      // Retrabalho da primeira peça só sai com o crachá do responsável, e esse
+      // popup já existe e é o mesmo em qualquer setor.
+      if (firstPiece?.bloqueio_ativo) openGate();
+      else setDialog({ kind: "firstPiece" });
+      return;
+    }
     setDialog({ kind: "finish" });
+  }
+
+  /**
+   * Conferência da primeira peça nos setores sem checklist de cotas. São dois
+   * fatos, na ordem que o backend exige: a peça saiu do posto e qual foi o
+   * resultado. Nenhuma regra é decidida aqui — quem libera o lote é o portão,
+   * e é a resposta dele que abre (ou não) a finalização.
+   */
+  async function confirmFirstPiece(result: string, note: string) {
+    if (!loadedOp || !selected) return;
+    const base = {
+      resource,
+      op: loadedOp,
+      operation_id: selected.id ?? selected.catalogo_operacao_id,
+      operation_number: selected.numero_operacao ?? selected.codigo,
+    };
+    setSubmitting(true);
+    try {
+      if (!firstPiece?.peca_produzida) {
+        await postOperator("/api/v1/operator/first-piece", { ...base, action: "produzida" });
+      }
+      const response = await postOperator<{ message: string; data?: { liberado?: boolean } }>(
+        "/api/v1/operator/first-piece",
+        { ...base, action: "inspecionar", result, note: note || null },
+      );
+      setMessage(response.message);
+      operations.reload();
+      // Conforme libera o lote e o operador segue direto para a finalização
+      // que ele já tinha pedido. Retrabalho e refugo não fecham nada: a frase
+      // do backend é a orientação e a OP continua aberta.
+      setDialog(response.data?.liberado ? { kind: "finish" } : null);
+    } catch (reason) {
+      setMessage(operatorErrorMessage(reason));
+      setDialog(null);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   /**
@@ -573,6 +629,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         />
       ) : null}
       {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => void execute("Parada", { stop_reason_code: code, comment })} /> : null}
+      {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => void confirmFirstPiece(result, note)} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => void execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><button type="button" className="button button--primary" onClick={() => void execute(dialog.action)}>Confirmar</button></div></OperatorDialog> : null}
       {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => void execute(dialog.action, { badges: [badge], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" })} /> : null}
@@ -591,6 +648,55 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       ) : null}
       {dialog?.kind === "drawing" ? <DrawingDialog op={loadedOp} data={drawing.data} onCancel={() => setDialog(null)} /> : null}
     </section>
+  );
+}
+
+/**
+ * Primeira peça sem checklist — a conferência de Solda e Pintura.
+ *
+ * Esses setores não possuem Setup nem cotas dimensionais (decisão registrada em
+ * `mes/domain/first_piece.py` e `app/core/quality.py`), mas continuam sujeitos
+ * ao portão da Wave 5. O popup registra exatamente os dois fatos que o backend
+ * espera — peça produzida e resultado da inspeção — e nada mais: quem decide se
+ * o lote está liberado é o portão.
+ */
+function FirstPieceDialog({
+  context,
+  gate,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  context: OperationContext;
+  gate?: FirstPieceGate;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (result: string, note: string) => void;
+}) {
+  const [result, setResult] = useState("CONFORME");
+  const [note, setNote] = useState("");
+  return (
+    <OperatorDialog title="Primeira peça" context={<ContextLine {...context} />} onCancel={onCancel}>
+      <p className="operator-help">
+        {gate?.message ?? "Confira a primeira peça desta operação: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."}
+      </p>
+      <label>
+        Resultado da primeira peça
+        <select value={result} onChange={(event) => setResult(event.target.value)}>
+          <option value="CONFORME">Conforme — libera o lote</option>
+          <option value="RETRABALHO">Retrabalho — bloqueia a OP até o responsável</option>
+          <option value="REFUGO">Refugo — produzir outra primeira peça</option>
+        </select>
+      </label>
+      <label>
+        Observação
+        <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="O que foi verificado no posto" />
+      </label>
+      <div className="operator-dialog__actions">
+        <button type="button" onClick={onCancel}>Cancelar</button>
+        <button type="button" className="button button--primary" disabled={busy} onClick={() => onConfirm(result, note.trim())}>Registrar primeira peça</button>
+      </div>
+    </OperatorDialog>
   );
 }
 

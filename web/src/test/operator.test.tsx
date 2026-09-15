@@ -87,7 +87,7 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(actionCall?.[1]?.body))).toMatchObject({ action: "Início", resource: "1303", op: "OP-101", operation_id: 101 });
   });
 
-  it("habilita qualquer etapa do Workbench, inclusive inspeção e finalizada, com confirmação", async () => {
+  it("habilita qualquer etapa apontável do Workbench, inclusive inspeção, e mantém o marco terminal fora do seletor", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path.includes("/auth/session")) return json({ id: 2, name: "Operador", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["Gasparini"] });
@@ -101,7 +101,9 @@ describe("fluxo Web do operador", () => {
         { id: 2, numero_operacao: "20", descricao_operacao: "DOBRA", visual_status: "pending", actionable: false, selectable: true, requires_confirmation: true },
         { id: 3, numero_operacao: "30", descricao_operacao: "USINAGEM", visual_status: "pending", actionable: false, selectable: true, requires_confirmation: true },
         { id: 4, numero_operacao: "40", descricao_operacao: "INSPECAO", visual_status: "pending", actionable: false, selectable: true, requires_confirmation: true },
-        { id: 5, numero_operacao: "99", descricao_operacao: "FINALIZADA", visual_status: "pending", actionable: false, selectable: true, requires_confirmation: true },
+        // O marco terminal é leitura do roteiro: o backend nunca o devolve
+        // selecionável, e por isso ele não pode virar destino de apontamento.
+        { id: 5, numero_operacao: "99", descricao_operacao: "FINALIZADA", visual_status: "pending", actionable: false, selectable: false, requires_confirmation: false },
       ] });
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     });
@@ -120,7 +122,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "20 - DOBRA — Próxima" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "30 - USINAGEM — Próxima" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "40 - INSPECAO — Próxima" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "99 - FINALIZADA — Próxima" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "99 - FINALIZADA — Próxima" })).toBeDisabled();
     expect(container.querySelectorAll(".operator-route__item--current")).toHaveLength(1);
     expect(container.querySelectorAll(".operator-route__item--done")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Iniciar" })).toBeEnabled();
@@ -139,8 +141,9 @@ describe("fluxo Web do operador", () => {
     expect(within(await screen.findByRole("dialog")).getByText("40 - INSPECAO")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
+    // O marco terminal não abre confirmação nenhuma: não há etapa para apontar.
     fireEvent.click(screen.getByRole("button", { name: "99 - FINALIZADA — Próxima" }));
-    expect(within(await screen.findByRole("dialog")).getByText("99 - FINALIZADA")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("pede confirmação para apontar etapa diferente da atual e preserva a atual ao cancelar", async () => {
@@ -541,6 +544,70 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByLabelText("Ações operacionais")).toHaveClass("operator-actions");
     expect(screen.queryByRole("button", { name: "Setup" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
+  });
+
+  it("finaliza na Solda pela conferência simples da primeira peça, sem selecionar o marco terminal", async () => {
+    // Regressão do posto de Solda Aço: sem Setup e sem checklist de cotas, o
+    // portão da primeira peça não tinha entrada na tela. `pode_finalizar`
+    // ficava permanentemente falso na etapa real e o único botão Finalizar
+    // habilitado era o do marco terminal — que não fecha apontamento nenhum.
+    const calls: { path: string; method: string; body: unknown }[] = [];
+    const gate = {
+      aplicavel: true,
+      liberado: false,
+      status: "PENDENTE",
+      peca_produzida: false,
+      setup_obrigatorio: false,
+      setup_registrado: false,
+      inspecao_concluida: false,
+      bloqueio_ativo: false,
+      gate_estruturado: false,
+      code: "primeira_peca_nao_produzida",
+      message: "Produza e registre a primeira peça antes de finalizar a operação.",
+      pendencias: ["primeira_peca"],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      calls.push({ path, method, body: init?.body ? JSON.parse(String(init.body)) : null });
+      if (path.includes("/auth/session")) return json({ id: 61, name: "Soldador", role: "estacao6aco", management_access: false, operator_access: true, operator_sector: "Solda Aço" });
+      if (path.includes("/operator/context")) return json({ sector: "Solda Aço", route: "Solda Aço", resources: ["Estação 6"], fixed_resource: true, has_setup: false, automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/workbench")) return json({ sector: "Solda Aço", resource: "Estação 6", queue: [], production: [] });
+      if (path.includes("/operator/drawings")) return json({ available: false, message: "Nenhum desenho disponível." });
+      if (path.includes("/operator/first-piece") && method === "POST") {
+        return json({ ok: true, message: "Primeira peça conforme. O lote está liberado.", code: "primeira_peca_conforme", data: { ...gate, liberado: true } });
+      }
+      if (path.includes("/operator/operations/OP-SOLDA")) return json({ items: [
+        { id: 10, numero_operacao: "10", descricao_operacao: "SOLDA", visual_status: "current", visual_current: true, actionable: true, selectable: true, requires_confirmation: false, quantidade_planejada: 5, pode_finalizar: false, exige_gate_primeira_peca: false, primeira_peca: gate },
+        { id: 99, numero_operacao: "99", descricao_operacao: "FINALIZADA", visual_status: "pending", actionable: false, selectable: false, requires_confirmation: false, pode_finalizar: false },
+      ] });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    }));
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Solda Aço - Estação 6" });
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-SOLDA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "10 - SOLDA — Atual" });
+
+    // O marco terminal continua visível como leitura, mas não é selecionável.
+    expect(screen.getByRole("button", { name: "99 - FINALIZADA — Próxima" })).toBeDisabled();
+    // E o Finalizar da etapa real é clicável: o portão tem saída.
+    const finalizar = screen.getByRole("button", { name: "Finalizar" });
+    expect(finalizar).toBeEnabled();
+    fireEvent.click(finalizar);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Primeira peça" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Registrar primeira peça" }));
+
+    // Conforme libera o lote e leva direto para a finalização pedida.
+    await screen.findByRole("heading", { name: "Finalizar produção" });
+    const posts = calls.filter((call) => call.method === "POST" && call.path.includes("/first-piece"));
+    expect(posts.map((call) => (call.body as { action?: string }).action)).toEqual(["produzida", "inspecionar"]);
+    expect(posts[1].body).toMatchObject({ action: "inspecionar", result: "CONFORME", op: "OP-SOLDA", operation_id: 10 });
   });
 
   it("recusa escolher estação de Solda Aço quando o login não tem perfil fixo", async () => {

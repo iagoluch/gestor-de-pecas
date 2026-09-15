@@ -129,14 +129,19 @@ class OperatorFlowService:
                 ),
                 None,
             )
-        if current_index is None:
-            current_index = next(
-                (
-                    index for index, row in enumerate(rows)
-                    if index > override_boundary and row.get("id") not in finalized_ids
-                ),
-                None,
-            )
+        # O marco terminal (99 - FINALIZADA) não é etapa de trabalho: ele nasce
+        # com ``ativo = FALSE``, não tem recurso apontável e fica fora de toda
+        # consulta canônica do roteiro (``marco_terminal IS FALSE``), que deriva
+        # o marco da **última operação produtiva**. Por isso ele nunca vira
+        # etapa atual: concluída a última etapa real, a OP já alcançou o marco,
+        # e ele fica no roteiro apenas como leitura. Sem isso o posto era
+        # empurrado para uma etapa em que nenhum apontamento pode existir e o
+        # Finalizar não tinha saída.
+        roteiro_concluido = all(
+            row.get("id") in finalized_ids
+            for row in rows
+            if not row.get("marco_terminal")
+        )
 
         # Wave 5 — portão da primeira peça. Uma única leitura por OP: projetar
         # o portão etapa a etapa com consulta individual transformaria abrir
@@ -208,7 +213,9 @@ class OperatorFlowService:
             row["operational_status"] = (operation_progress or {}).get("status")
             if current_index is not None and index == current_index:
                 row["visual_status"] = "current"
-            elif row.get("id") in finalized_ids:
+            elif row.get("id") in finalized_ids or (
+                row.get("marco_terminal") and roteiro_concluido
+            ):
                 row["visual_status"] = "done"
             else:
                 row["visual_status"] = "pending"
@@ -269,17 +276,24 @@ class OperatorFlowService:
             )
             row["station_eligible"] = station_eligible
             # No Workbench normal, o roteiro completo permite selecionar toda
-            # etapa ainda não concluída, inclusive INSPECAO, FINALIZADA ou uma
-            # etapa pertencente a outro recurso. A seleção fora da atual
-            # continua sujeita à confirmação canônica e ao crachá autorizado
-            # quando houver divergência. Corte e Destaque mantêm seus fluxos
+            # etapa ainda não concluída, inclusive INSPECAO ou uma etapa
+            # pertencente a outro recurso. A seleção fora da atual continua
+            # sujeita à confirmação canônica e ao crachá autorizado quando
+            # houver divergência. Corte e Destaque mantêm seus fluxos
             # especializados e continuam limitados à elegibilidade do posto.
+            #
+            # O marco terminal fica fora dessa abertura: ele não é apontável
+            # (``pointable`` já é falso) e oferecê-lo no seletor só produzia um
+            # beco sem saída — era a única linha com ``pode_finalizar`` quando o
+            # portão da primeira peça segurava a etapa real, e o operador
+            # acabava "finalizando" a OP por ele, sem apontamento nenhum.
             normal_workbench = str(setor or "").casefold() not in {
                 "corte",
                 "destaque",
             }
             row["selectable"] = bool(
                 row["visual_status"] != "done"
+                and not row.get("marco_terminal")
                 and (normal_workbench or station_eligible)
             )
             # Etapa fora da atual reabre a regra canônica de exceção
