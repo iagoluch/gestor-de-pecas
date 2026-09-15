@@ -225,7 +225,7 @@ class _FakeChamadaDatabase:
         self.contatos = {
             1: {
                 "id": 1, "nome": "Fulano", "funcao": "Líder", "ativo": True,
-                "padrao_gestao": False, "telegram_chat_id": None,
+                "padrao_gestao": False, "telegram_chat_id": None, "setores": [],
             }
         }
         self.chamadas = []
@@ -250,10 +250,12 @@ class _FakeChamadaDatabase:
             item.pop("telegram_chat_id", None)
         return item
 
-    def listar_chamada_contatos(self, *, somente_ativos=True, busca=None, completo=False):
+    def listar_chamada_contatos(self, *, somente_ativos=True, busca=None, completo=False, setor=None):
         items = list(self.contatos.values())
         if somente_ativos:
             items = [c for c in items if c["ativo"]]
+        if setor:
+            items = [c for c in items if not c.get("setores") or setor in c["setores"]]
         if completo:
             return [dict(c) for c in items]
         return [{k: v for k, v in c.items() if k != "telegram_chat_id"} for c in items]
@@ -303,7 +305,8 @@ class _FakeChamadaDatabase:
         return None
 
     def salvar_chamada_contato(
-        self, *, contato_id=None, nome, funcao, ativo=True, padrao_gestao=False, telegram_chat_id=None
+        self, *, contato_id=None, nome, funcao, ativo=True, padrao_gestao=False,
+        telegram_chat_id=None, setores=None,
     ):
         if not str(nome or "").strip() or not str(funcao or "").strip():
             raise ValueError("Nome e função do contato são obrigatórios.")
@@ -315,6 +318,7 @@ class _FakeChamadaDatabase:
         self.contatos[contato_id] = {
             "id": contato_id, "nome": nome, "funcao": funcao, "ativo": ativo,
             "padrao_gestao": padrao_gestao, "telegram_chat_id": telegram_chat_id,
+            "setores": list(setores or []),
         }
         return dict(self.contatos[contato_id])
 

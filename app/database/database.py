@@ -36,6 +36,7 @@ from mes.integrations.totvs.outbound_enqueue import (
     plan_terminal_milestone,
 )
 from mes.domain import (
+    EXECUTING_APPOINTMENT_STATUSES,
     ManufacturingRules,
     PHYSICAL_STATE_VALUES,
     SIGMANEST_LASER_MACHINE,
@@ -2710,26 +2711,54 @@ class Database(
         A OP interrompida permanece em ``Parada`` e exige retomada manual. A
         fila criada aqui não carrega OP nem estado produtivo: ela registra
         apenas que o recurso voltou à janela oficial sem demanda em execução.
+
+        Recurso com execução em curso fica de fora: o Corte é interrompido no
+        fim do turno sem encerrar o nesting, então o estado físico pode dizer
+        ``fora_turno`` enquanto a máquina continua cortando. Publicar ausência
+        de demanda por cima disso apagaria produção real da linha do tempo e
+        do Andon.
         """
 
         instante = _period_value(data_hora)
         if instante is None:
             raise ValueError("data_hora é obrigatória para o retorno do turno.")
+        executando = sorted(EXECUTING_APPOINTMENT_STATUSES)
         changed = []
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT *
-                FROM eventos_estado_recurso
-                WHERE data_fim IS NULL
-                  AND categoria = 'fora_turno'
-                  AND automatico IS TRUE
-                  AND tipo_interrupcao = 'fim_turno'
-                  AND data_inicio < %s
-                ORDER BY recurso, id
+                SELECT e.*
+                FROM eventos_estado_recurso e
+                WHERE e.data_fim IS NULL
+                  AND e.categoria = 'fora_turno'
+                  AND e.automatico IS TRUE
+                  AND e.tipo_interrupcao = 'fim_turno'
+                  AND e.data_inicio < %s
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM apontamentos_operacionais a
+                      WHERE UPPER(a.maquina) = UPPER(e.recurso)
+                        AND a.status = ANY(%s)
+                        AND a.data_inicio IS NOT NULL
+                        AND a.data_inicio <= %s
+                        AND (a.data_fim IS NULL OR a.data_fim > %s)
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM apontamentos_corte c
+                      WHERE UPPER(c.maquina) = UPPER(e.recurso)
+                        AND c.status = 'Em processo'
+                        AND c.data_inicio IS NOT NULL
+                        AND c.data_inicio <= %s
+                        AND (c.data_fim IS NULL OR c.data_fim > %s)
+                  )
+                ORDER BY e.recurso, e.id
                 FOR UPDATE
                 """,
-                (instante,),
+                (
+                    instante, executando, instante, instante,
+                    instante, instante,
+                ),
             )
             for current in [dict(row) for row in cursor.fetchall()]:
                 state = self._transicionar_estado_recurso_tx(

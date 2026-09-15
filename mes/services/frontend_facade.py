@@ -18,8 +18,10 @@ from mes.contracts import (
     ReportError,
 )
 from mes.domain import (
+    EXECUTING_APPOINTMENT_STATUSES,
     ManufacturingRules,
     NO_APPOINTMENT_STOP_REASON,
+    OPEN_APPOINTMENT_STATUSES,
     PLANNED_STOP_GROUP_CODES,
     RESOURCE_WITHOUT_OP_STOP_REASON,
     SHIFT_START_NO_DEMAND_TYPE,
@@ -287,7 +289,7 @@ class FrontendBackendFacade:
 
         active_by_resource = {}
         for fact in facts:
-            if fact.get("status") not in {"Em processo", "Parada", "Setup", "Retrabalho"}:
+            if fact.get("status") not in OPEN_APPOINTMENT_STATUSES:
                 continue
             resource = str(fact.get("maquina") or "").strip()
             if not resource:
@@ -323,17 +325,25 @@ class FrontendBackendFacade:
                 elapsed = max(0.0, (now - start).total_seconds())
             # Classificação e cor decididas uma única vez, no domínio.
             classification = classify_state_row(state)
+            ops_ativas = active_by_resource.get(resource.casefold(), [])
+            # A OP interrompida no fim do turno continua aberta para retomada
+            # manual (status ``Parada``), mas não é execução ativa no estado
+            # lógico criado às 08:00: não a associe ao card de recurso sem
+            # demanda. Apontamento em execução é outra história — ele é fato
+            # registrado e vence o estado físico, que pode estar defasado.
+            # Sem esta invalidação, um recurso produzindo apareceria como
+            # "Sem demanda" e a própria evidência (``ops_ativas``) seria
+            # apagada antes de o domínio poder considerá-la.
+            em_execucao = [
+                op for op in ops_ativas
+                if str(op.get("status") or "") in EXECUTING_APPOINTMENT_STATUSES
+            ]
             explicit_shift_return = (
                 state.get("tipo_interrupcao") == SHIFT_START_NO_DEMAND_TYPE
+                and not em_execucao
             )
-            # A OP interrompida no fim do turno continua aberta para retomada
-            # manual, mas não é execução ativa no estado lógico criado às
-            # 08:00. Não a associe ao card de recurso sem demanda.
-            ops_ativas = (
-                []
-                if explicit_shift_return
-                else active_by_resource.get(resource.casefold(), [])
-            )
+            if explicit_shift_return:
+                ops_ativas = []
             items.append({
                 # Fora de turno, sem HE e sem ninguém trabalhando: ausência de
                 # demanda, não parada. Quem decide é o domínio; o calendário do
@@ -526,6 +536,12 @@ class FrontendBackendFacade:
             item.update({
                 "estado_recurso_id": item.get("estado_recurso_id"),
                 "categoria": "producao",
+                # Nesting em curso é execução física. O último evento de estado
+                # pode ser o fechamento automático de turno (o Corte é
+                # interrompido sem encerrar o nesting) ou o retorno sem demanda
+                # das 08:00 — nenhum dos dois pode rotular de "sem demanda" uma
+                # máquina que está cortando.
+                "sem_demanda": False,
                 "inicio": cut.get("data_inicio"),
                 "duracao_segundos": max(0.0, (now - cut["data_inicio"]).total_seconds()) if isinstance(cut.get("data_inicio"), datetime) else None,
                 "op_estado": None,

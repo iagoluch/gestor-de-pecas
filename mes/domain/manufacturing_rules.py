@@ -11,6 +11,25 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
 from .industrial import EventCategory, ShiftWindowKind, StopClassification
+from .operator_state_machine import OperatorState, operator_status_for_state
+
+
+#: Status de apontamento que significam execução em curso no recurso.
+#: Uma OP nesses estados é trabalho acontecendo agora: nenhuma leitura de
+#: ausência de demanda, ociosidade ou fora de turno pode escondê-la.
+EXECUTING_APPOINTMENT_STATUSES = frozenset(
+    operator_status_for_state(state)
+    for state in (
+        OperatorState.PRODUCTION,
+        OperatorState.SETUP,
+        OperatorState.REWORK,
+    )
+)
+#: Apontamentos abertos no recurso: execução mais a parada manual/programada,
+#: que mantém a OP vinculada ao posto aguardando retomada.
+OPEN_APPOINTMENT_STATUSES = EXECUTING_APPOINTMENT_STATUSES | {
+    operator_status_for_state(OperatorState.STOPPED),
+}
 
 
 # Horários de interrupção automática definidos com a Manufatura.
@@ -232,14 +251,20 @@ class ManufacturingRules:
         qualquer outro consumidor perguntam para esta função.
         """
 
+        # Execução registrada vence qualquer leitura de ausência de demanda,
+        # inclusive a do retorno do turno. O estado físico é a leitura do
+        # último evento do recurso e pode estar defasado (Corte interrompido
+        # sem encerrar o nesting, limite de turno recuperado retroativamente);
+        # apontamento ativo é fato. Divergiram: o fato manda, senão uma OP em
+        # execução sumiria do Andon.
+        if int(active_operations or 0) > 0:
+            return False
         # Ao abrir o turno oficial, o scheduler encerra o estado físico
         # ``fora_turno`` e grava uma fila sem OP. Essa origem explícita é a
         # única fila dentro do turno que significa ausência de demanda; uma
         # fila operacional comum continua sem essa interpretação.
         if explicit_shift_return:
             return category == EventCategory.QUEUE.value
-        if int(active_operations or 0) > 0:
-            return False
         if cls.is_operational_window(window_kind):
             return False
         if category in (None, ""):

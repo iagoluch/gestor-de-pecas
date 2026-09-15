@@ -247,6 +247,17 @@ class NoDemandStateTests(unittest.TestCase):
             explicit_shift_return=True,
         ))
 
+    def test_operacao_ativa_vence_o_retorno_do_turno(self):
+        # Invariante do Andon: recurso com apontamento ativo está produzindo,
+        # não "sem demanda" — nem mesmo com o estado de retorno do turno
+        # pendurado no último evento físico do recurso.
+        self.assertFalse(ManufacturingRules.resource_has_no_demand(
+            category=EventCategory.QUEUE.value,
+            window_kind=self._kind(self.sem_he, 8),
+            active_operations=1,
+            explicit_shift_return=True,
+        ))
+
     def test_hora_extra_planejada_afasta_a_ausencia_de_demanda(self):
         self.assertFalse(ManufacturingRules.resource_has_no_demand(
             category=EventCategory.OUT_OF_SHIFT.value,

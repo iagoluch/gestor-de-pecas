@@ -648,6 +648,101 @@ class OperationalViewIdentityTests(unittest.TestCase):
         self.assertEqual(resource["ops_ativas"], [])
         self.assertEqual(resource["quantidade_ops_ativas"], 0)
 
+    def test_op_em_execucao_nunca_vira_sem_demanda_no_retorno_do_turno(self):
+        """OP rodando some do Andon se o estado físico ganhar do apontamento.
+
+        O estado físico é a leitura do último evento do recurso e pode estar
+        defasado; apontamento ativo é fato registrado. Execução em curso tem
+        de aparecer como execução, seja qual for o estado pendurado.
+        """
+
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        for status in ("Em processo", "Setup", "Retrabalho"):
+            with self.subTest(status=status):
+                repository = OperationalViewRepositoryFake()
+                repository.states = [{
+                    **repository.states[0],
+                    "categoria": "fila",
+                    "motivo": "Retorno do turno — recurso sem demanda",
+                    "data_inicio": datetime(2026, 9, 4, 8, 0),
+                    "planejado": None,
+                    "tipo_interrupcao": "retorno_turno_sem_demanda",
+                }]
+                repository.listar_fatos_operacionais_periodo = (
+                    lambda *_args, _status=status, **_kwargs: [{
+                        "id": 77,
+                        "maquina": "Gasparini",
+                        "tipo_setor": "Dobra",
+                        "op": "OP-EM-EXECUCAO",
+                        "numero_operacao": 20,
+                        "status": _status,
+                        "data_inicio": datetime(2026, 9, 4, 8, 5),
+                    }]
+                )
+                moment = datetime(2026, 9, 4, 9, 30)
+                facade = FrontendBackendFacade(
+                    repository, now_func=lambda: moment, simulation_mode=True
+                )
+
+                payload = facade.consulta_operacional(
+                    AnalyticsFilter(inicio=datetime(2026, 9, 4, 8, 0), fim=moment),
+                    somente_vinculo_operacional=True,
+                )
+
+                resource = next(
+                    item for item in payload["resources"]
+                    if item["recurso"] == "Gasparini"
+                )
+                self.assertFalse(resource["sem_demanda"])
+                self.assertTrue(resource["tem_apontamento_canonico"])
+                self.assertEqual(resource["quantidade_ops_ativas"], 1)
+                self.assertEqual(
+                    [op["op"] for op in resource["ops_ativas"]], ["OP-EM-EXECUCAO"]
+                )
+
+    def test_corte_ativo_nunca_e_publicado_como_sem_demanda(self):
+        """O nesting continua rodando mesmo com o estado físico de fim de turno."""
+
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repository = OperationalViewRepositoryFake()
+        repository.states = [{
+            **repository.states[0],
+            "recurso": "Laser Ensis 3015",
+            "tipo_setor": "Corte",
+            "categoria": "fila",
+            "motivo": "Retorno do turno — recurso sem demanda",
+            "data_inicio": datetime(2026, 9, 4, 8, 0),
+            "planejado": None,
+            "tipo_interrupcao": "retorno_turno_sem_demanda",
+        }]
+        repository.listar_cortes_ativos_andon = lambda: [{
+            "maquina": "Laser Ensis 3015",
+            "codigo_tarefa": "8478",
+            "programa": "N-8478",
+            "nome_chapa": "CH-1",
+            "operador_inicio": "Operador Corte",
+            "data_inicio": datetime(2026, 9, 3, 23, 40),
+        }]
+        moment = datetime(2026, 9, 4, 9, 0)
+        facade = FrontendBackendFacade(
+            repository, now_func=lambda: moment, simulation_mode=True
+        )
+
+        payload = facade.consulta_operacional(
+            AnalyticsFilter(inicio=datetime(2026, 9, 4, 8, 0), fim=moment),
+            somente_vinculo_operacional=True,
+        )
+
+        resource = next(
+            item for item in payload["resources"]
+            if item["recurso"] == "Laser Ensis 3015"
+        )
+        self.assertEqual(resource["categoria"], "producao")
+        self.assertFalse(resource["sem_demanda"])
+        self.assertEqual(resource["fonte"], "apontamentos_corte")
+
 
 class SerializableExpectedBlockTests(unittest.TestCase):
     def test_bloqueio_com_datetime_nos_detalhes_permanece_409(self):
