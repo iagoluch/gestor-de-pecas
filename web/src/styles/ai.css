@@ -154,7 +154,12 @@
 
 .ai-messages {
   min-width: 0;
-  min-height: 0;
+  /* Numa janela baixa, as linhas "auto" da conversa (progresso, avisos,
+     ações rápidas, composer) podem sobrar mais espaço do que existe e
+     espremer esta linha "1fr" até 0 — a mensagem/estado vazio fica
+     inteiramente fora da área visível, sem nem barra de rolagem pra
+     alcançar. Um piso mínimo garante que sempre haja algo pra ver/rolar. */
+  min-height: 140px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -192,7 +197,9 @@
 
 .ai-message--user {
   align-self: flex-end;
-  border-color: #b9d4fb;
+  /* Era uma cor de borda fixa (#b9d4fb) pensada só pro tema claro; ficava
+     baixo contraste com o fundo escuro do modo escuro. */
+  border-color: var(--primary);
   background: var(--primary-soft);
 }
 
@@ -206,7 +213,9 @@
 }
 
 .ai-message--streaming {
-  background: #fbfdff;
+  /* Era uma cor fixa (#fbfdff) — ficava clara demais e sem contraste com
+     o fundo escuro no modo escuro. */
+  background: var(--surface-alt);
 }
 
 .ai-markdown {
@@ -321,7 +330,9 @@
   gap: 6px;
   padding: 10px 18px;
   border-top: 1px solid var(--divider);
-  background: #fbfcfe;
+  /* Era uma cor fixa (#fbfcfe): ficava um retângulo quase branco cravado no
+     meio da tela escura no modo escuro. */
+  background: var(--surface);
 }
 
 .ai-quick-actions button {

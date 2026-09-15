@@ -1,5 +1,11 @@
 :root {
   font-family: Arial, sans-serif;
+  /* color-scheme decide as cores que o próprio navegador pinta (fundo de
+     campo, texto de campo, barra de rolagem, lista do select, autofill).
+     Sem ele o tema escuro trocava só os tokens e todo input que não declara
+     um fundo continuava branco, com o texto var(--text) claro por cima —
+     as letras sumiam ao digitar. */
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -56,6 +62,7 @@
    operacional via prefers-color-scheme. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0b1524;
     --surface: #13233a;
     --surface-alt: #0f1d30;
@@ -85,6 +92,7 @@
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0b1524;
   --surface: #13233a;
   --surface-alt: #0f1d30;

@@ -196,7 +196,10 @@ table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { height: 42px; padding: 8px 12px; border-bottom: 1px solid var(--divider); text-align: left; white-space: nowrap; }
 thead th { color: var(--muted); background: var(--surface-alt); font-size: 11px; }
 tbody tr:nth-child(even) { background: var(--surface-alt); }
-.issue-list { display: grid; gap: 19px; margin: 0; padding: 0; list-style: none; }
+/* margin-block: auto centraliza a lista quando ela não enche o card (1-2
+   itens deixando um vão enorme embaixo) e não faz nada quando ela já enche
+   — mesmo raciocínio do EmptyState, agora para listas curtas. */
+.issue-list { display: grid; gap: 19px; margin: auto 0; padding: 0; list-style: none; }
 .issue-list li { display: flex; gap: 11px; }
 .issue-list li > i { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--danger); }
 .issue-list li > div { display: grid; gap: 4px; }
@@ -206,7 +209,10 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .management-insight-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 15px; }
 .management-insight-grid .section-card__body { min-height: 220px; padding: 0; }
 .section-count { color: var(--muted); font-size: 11px; font-weight: 700; }
-.management-exception-list, .management-impact-list { margin: 0; padding: 0; list-style: none; }
+/* Mesmo raciocínio do EmptyState: com só 1-2 itens a lista fica presa no
+   topo do card e sobra um vão enorme embaixo. margin-block: auto centraliza
+   quando há espaço livre e não faz diferença quando a lista já enche o card. */
+.management-exception-list, .management-impact-list { margin: auto 0; padding: 0; list-style: none; }
 .management-exception-list li + li, .management-impact-list li + li { border-top: 1px solid var(--divider); }
 .management-exception-list button { width: 100%; min-height: 55px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 9px 13px; border: 0; color: var(--text); background: var(--surface); font: inherit; text-align: left; cursor: pointer; transition: background-color .15s ease; }
 .management-exception-list button:hover, .management-exception-list button:focus-visible { background: var(--surface-alt); }
@@ -278,7 +284,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .login-card p { margin: 0; color: var(--muted); }
 .login-card form { display: grid; gap: 14px; }
 .login-card label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
-.login-card input { min-height: 44px; padding: 8px 11px; border: 1px solid #c9d5e5; border-radius: 5px; color: var(--text); outline: none; }
+.login-card input { min-height: 44px; padding: 8px 11px; border: 1px solid #c9d5e5; border-radius: 5px; color: var(--text); background: var(--surface); outline: none; }
 .login-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .login-card button, .pending-page button { min-height: 44px; border: 1px solid var(--primary); border-radius: 6px; color: white; background: var(--primary); font-weight: 700; }
 .login-card button:hover { background: var(--primary-hover); }
@@ -802,7 +808,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .operator-workbench { padding: 22px 30px 30px; }
 .operator-op-form { display: flex; align-items: end; justify-content: center; gap: 12px; }
 .operator-op-form label { width: min(720px, 72%); display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
-.operator-op-form input { min-height: 50px; padding: 8px 13px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); font-size: 15px; text-align: center; outline: none; }
+.operator-op-form input { min-height: 50px; padding: 8px 13px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-size: 15px; text-align: center; outline: none; }
 .operator-op-form input:focus, .operator-dialog input:focus, .operator-dialog select:focus, .operator-dialog textarea:focus, .cutting-search input:focus, .highlight-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
 .operator-op-form button { min-height: 50px; padding: 0 18px; border: 1px solid var(--primary); border-radius: 6px; color: white; background: var(--primary); font-weight: 700; }
 /* Flex em vez de grid manual com nth-child: qualquer setor pode ter de 4 a
@@ -1061,7 +1067,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .insp-search { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); background: var(--surface); }
 .insp-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .insp-search img { width: 20px; height: 20px; opacity: .65; }
-.insp-search input { flex: 1; min-width: 0; min-height: 44px; border: 0; color: var(--text); font-size: 15px; outline: none; }
+.insp-search input { flex: 1; min-width: 0; min-height: 44px; border: 0; color: var(--text); background: transparent; font-size: 15px; outline: none; }
 .insp-search button { min-height: 36px; padding: 0 14px; border: 1px solid var(--primary); border-radius: 6px; color: white; background: var(--primary); font-weight: 700; }
 .insp-filter { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
 .insp-filter select { min-width: 190px; min-height: 44px; padding: 5px 10px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); background: var(--surface); }
@@ -1148,7 +1154,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .insp-table--checklist th[scope="row"] small { color: var(--muted); font-size: 11px; font-weight: normal; }
 .insp-cota-number { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border-radius: 6px; color: var(--primary); background: var(--primary-soft); font-size: 12px; }
 .insp-standard { color: var(--muted); white-space: nowrap; }
-.insp-table--checklist input { width: 100%; min-height: 40px; padding: 5px 10px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); font-size: 16px; text-align: center; }
+.insp-table--checklist input { width: 100%; min-height: 40px; padding: 5px 10px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-size: 16px; text-align: center; }
 .insp-table--checklist input:focus, .insp-status-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
 .insp-status-select { min-width: 150px; min-height: 40px; padding: 5px 10px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-weight: 700; }
 .insp-status-select--conforme { border-color: var(--success-ink); color: var(--success-ink); background: var(--accent-soft); }
@@ -1187,7 +1193,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .insp-template-editor fieldset { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, .8fr) auto; align-items: end; gap: 12px; margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-card); }
 .insp-template-editor legend { padding: 0 6px; font-size: 12px; font-weight: 700; }
 .insp-template-editor label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
-.insp-template-editor input { min-height: 40px; padding: 5px 10px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); }
+.insp-template-editor input { min-height: 40px; padding: 5px 10px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); background: var(--surface); }
 
 .insp-panel--drawing { position: sticky; top: 16px; }
 .insp-drawing__meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
