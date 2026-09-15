@@ -99,6 +99,9 @@ class OnDemandSyncRepository(Protocol):
     def buscar_cabecalho_op_local_totvs(self, codigo_op: str) -> dict | None:
         ...
 
+    def atualizar_produto_modelo(self, produto_codigo: str, modelo: str) -> int:
+        ...
+
     def abrir_solicitacao_sync_op(
         self,
         *,
@@ -173,6 +176,7 @@ class ProductionOrderOnDemandSyncService:
         *,
         ingestion_service=None,
         gateway: ProductionOrderRequestGateway | None = None,
+        model_gateway=None,
         company_id: str | None = None,
         branch_id: str | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
@@ -184,6 +188,7 @@ class ProductionOrderOnDemandSyncService:
         self.repository = repository
         self.ingestion_service = ingestion_service
         self.gateway = gateway
+        self.model_gateway = model_gateway
         self.company_id = str(company_id or "").strip() or None
         self.branch_id = str(branch_id or "").strip() or None
         self.timeout_seconds = max(float(timeout_seconds), 0.0)
@@ -391,6 +396,7 @@ class ProductionOrderOnDemandSyncService:
             self.repository.finalizar_solicitacao_sync_op(
                 solicitacao_id=solicitacao_id, status="DONE", agora=self._now()
             )
+            self._sync_product_model_best_effort(found)
             return OnDemandSyncOutcome(
                 op=codigo,
                 status=STATUS_SINCRONIZADA,
@@ -403,6 +409,7 @@ class ProductionOrderOnDemandSyncService:
             self.repository.finalizar_solicitacao_sync_op(
                 solicitacao_id=solicitacao_id, status="DONE", agora=self._now()
             )
+            self._sync_product_model_best_effort(incomplete)
             return OnDemandSyncOutcome(
                 op=codigo,
                 status=STATUS_SEM_ROTEIRO,
@@ -477,6 +484,53 @@ class ProductionOrderOnDemandSyncService:
             detail="prazo_esgotado",
             elapsed_seconds=self._elapsed(started),
         )
+
+    def _sync_product_model_best_effort(self, order: dict) -> None:
+        """Busca o MODELO do produto após uma OP nascer, sem bloquear o operador.
+
+        ``B1_ZMODELO`` só tem sentido para conjunto soldado — é o campo que a
+        tela `/welding-management` mostra na coluna MÁQUINA/MODELO. Consultar
+        para toda OP seria uma chamada ao TOTVS sem consumidor nenhum, então
+        só dispara quando a OP tem operação ativa em algum setor da frente de
+        Solda.
+
+        Best-effort de propósito: a OP acabou de ser provisionada com sucesso e
+        isso não pode regredir por causa de um campo auxiliar. Sem
+        ``model_gateway`` configurado, ou se o modelo já está preenchido, não
+        toca no ERP — mesma regra do lookup de OP (§8): nunca consulta o que já
+        tem localmente.
+        """
+
+        if self.model_gateway is None:
+            return
+        produto_codigo = str((order or {}).get("produto_codigo") or "").strip()
+        if not produto_codigo:
+            return
+        if str((order or {}).get("produto_modelo") or "").strip():
+            return
+        codigo_op = str((order or {}).get("codigo_op") or "").strip()
+        verificar_solda = getattr(self.repository, "op_possui_operacao_solda", None)
+        if callable(verificar_solda):
+            try:
+                if not verificar_solda(codigo_op):
+                    return
+            except Exception:  # pragma: no cover - checagem auxiliar nunca propaga
+                return
+        try:
+            result = self.model_gateway.request_product_model(
+                company_id=self.company_id, branch_id=self.branch_id, product_code=produto_codigo
+            )
+        except Exception:  # pragma: no cover - falha de transporte nunca propaga
+            return
+        if not result.accepted:
+            return
+        atualizar = getattr(self.repository, "atualizar_produto_modelo", None)
+        if not callable(atualizar):
+            return
+        try:
+            atualizar(produto_codigo, result.modelo or "")
+        except Exception:  # pragma: no cover - gravação auxiliar nunca propaga
+            return
 
     def _lookup_incomplete_header(self, codigo: str) -> dict | None:
         loader = getattr(self.repository, "buscar_cabecalho_op_local_totvs", None)

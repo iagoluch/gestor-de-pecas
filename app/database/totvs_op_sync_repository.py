@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from app.database.welding_repository import WELDING_MANAGEMENT_SECTORS
+
 
 MAX_ERROR_MESSAGE_CHARS = 2000
 
@@ -42,6 +44,7 @@ class TotvsOpSyncRepositoryMixin:
                 SELECT pcp.codigo_op,
                        pcp.produto_codigo,
                        pcp.produto_descricao,
+                       pcp.produto_modelo,
                        pcp.quantidade,
                        pcp.unidade,
                        pcp.filial,
@@ -56,8 +59,9 @@ class TotvsOpSyncRepositoryMixin:
                  WHERE pcp.codigo_op = %s
                    AND pcp.ativo = TRUE
                  GROUP BY pcp.codigo_op, pcp.produto_codigo, pcp.produto_descricao,
-                          pcp.quantidade, pcp.unidade, pcp.filial, pcp.totvs_unique_id,
-                          pcp.totvs_company_id, pcp.totvs_branch_id, pcp.sincronizado_em
+                          pcp.produto_modelo, pcp.quantidade, pcp.unidade, pcp.filial,
+                          pcp.totvs_unique_id, pcp.totvs_company_id, pcp.totvs_branch_id,
+                          pcp.sincronizado_em
                 """,
                 (codigo,),
             )
@@ -189,6 +193,58 @@ class TotvsOpSyncRepositoryMixin:
                     int(solicitacao_id),
                 ),
             )
+
+    def op_possui_operacao_solda(self, codigo_op: str) -> bool:
+        """``B1_ZMODELO`` só tem sentido para conjunto soldado.
+
+        A tela que consome o campo (``/welding-management``) é a própria
+        definição de escopo: só as OPs com operação ativa nos setores da
+        frente de Solda precisam desse dado. Consultar o modelo para as
+        demais OPs seria uma chamada ao TOTVS sem nenhum consumidor.
+        """
+
+        codigo = str(codigo_op or "").strip().upper()
+        if not codigo:
+            return False
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 1
+                  FROM catalogo_operacoes_op
+                 WHERE codigo_op = %s
+                   AND ativo = TRUE
+                   AND tipo_setor = ANY(%s)
+                 LIMIT 1
+                """,
+                (codigo, list(WELDING_MANAGEMENT_SECTORS)),
+            )
+            return cursor.fetchone() is not None
+
+    def atualizar_produto_modelo(self, produto_codigo: str, modelo: str) -> int:
+        """Grava o MODELO (``B1_ZMODELO``) em toda OP ativa desse produto.
+
+        O modelo é do cadastro de produto, não da OP: uma consulta serve todas
+        as OPs ativas do mesmo ``produto_codigo``, não só a que disparou a
+        busca. ``modelo`` vazio é gravado como ``NULL`` — texto vazio não é
+        "modelo identificado", é a mesma ausência de sempre.
+        """
+
+        codigo = str(produto_codigo or "").strip()
+        if not codigo:
+            return 0
+        valor = str(modelo or "").strip() or None
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE catalogo_pcp_ops
+                   SET produto_modelo = %s
+                 WHERE produto_codigo = %s
+                   AND ativo = TRUE
+                   AND produto_modelo IS DISTINCT FROM %s
+                """,
+                (valor, codigo, valor),
+            )
+            return cursor.rowcount
 
     def consultar_solicitacao_sync_op(self, codigo_op: str) -> dict | None:
         codigo = str(codigo_op or "").strip().upper()

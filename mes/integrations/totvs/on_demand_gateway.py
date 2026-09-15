@@ -40,6 +40,7 @@ from mes.integrations.totvs.on_demand import (
     ProductionOrderRequestResult,
     operator_message,
 )
+from mes.integrations.totvs.product_model_gateway import ProtheusProductModelGateway
 from mes.integrations.totvs.service import build_totvs_ingestion_service
 from mes.services.order_provisioning import OrderProvisioningService
 
@@ -205,6 +206,7 @@ def build_on_demand_sync_service(
     *,
     ingestion_service=None,
     gateway=None,
+    model_gateway=None,
     env=None,
     now_func=None,
     sleep_func=None,
@@ -222,10 +224,13 @@ def build_on_demand_sync_service(
     # para descartá-lo custaria uma consulta de catálogo por requisição.
     if ingestion_service is None and gateway is not None:
         ingestion_service = build_totvs_ingestion_service(repository, settings)
+    if model_gateway is None:
+        model_gateway = ProtheusProductModelGateway.from_env(env)
     return ProductionOrderOnDemandSyncService(
         repository,
         ingestion_service=ingestion_service,
         gateway=gateway,
+        model_gateway=model_gateway,
         company_id=getattr(settings, "totvs_op_pull_company_id", "") or None,
         branch_id=getattr(settings, "totvs_op_pull_branch_id", "") or None,
         timeout_seconds=float(getattr(settings, "totvs_op_pull_timeout_seconds", 25)),
