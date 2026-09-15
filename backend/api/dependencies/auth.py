@@ -58,6 +58,22 @@ def require_management_user(user: SessionUser = Depends(get_current_user)) -> Se
     return user
 
 
+def require_admin_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    """Nível acima da gestão comum — só quem tem ``nivel = 'admin'``.
+
+    Usado para o que a gestão não deve poder fazer sozinha: cadastro de
+    usuários e a lista de contatos de chamada (decisão do usuário, 14/09/2026).
+    """
+
+    if user.role != "admin":
+        raise AppError(
+            "admin_access_denied",
+            "Só a conta administradora tem acesso a esta área.",
+            status_code=403,
+        )
+    return user
+
+
 def require_dev_observatory_user(request: Request) -> SessionUser:
     """Porta do Dev Observatory — login próprio, isolado do login principal.
 

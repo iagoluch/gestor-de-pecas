@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { ChamadaButton } from "../components/ChamadaButton";
+import { ChamadaSino } from "../components/ChamadaSino";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { assets } from "../config/assets";
@@ -31,6 +33,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <strong>Olá,</strong>
             <span>{user?.name ?? "Usuário"}</span>
           </div>
+          <ChamadaSino />
         </div>
         <nav className="sidebar__nav" aria-label="Navegação gerencial">
           {managementSections.map((item) => (
@@ -60,6 +63,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
       </aside>
       <main className="app-content">{children ?? <Outlet />}</main>
+      <ChamadaButton variant="gestao" />
     </div>
   );
 }

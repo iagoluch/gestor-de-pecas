@@ -48,3 +48,12 @@ export function useAuth() {
   return value;
 }
 
+/**
+ * Variante que não explode fora do ``AuthProvider`` — usada por componentes
+ * de layout (como ``PageFrame``) que também são montados isoladamente em
+ * testes de tela sem a árvore de autenticação inteira.
+ */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
+}
+

@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, Request
 
+from app.core.permissions import USER_LEVELS
 from backend.api.database import get_database
-from backend.api.dependencies.auth import require_csrf, require_management_user
+from backend.api.dependencies.auth import (
+    require_admin_user,
+    require_csrf,
+    require_management_user,
+)
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
-from backend.api.schemas.common import AutomaticPauseRequest, OperatorBadgeRequest
+from backend.api.schemas.common import AutomaticPauseRequest, OperatorBadgeRequest, UserAccountRequest
 from mes.contracts import AnalyticsFilter
 from mes.services.internal_alerts import InternalAlertService
 
@@ -224,6 +229,65 @@ def internal_alerts(
         ),
         "summary": service.resumo(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Cadastro de usuários — exclusivo da conta admin (decisão do usuário,
+# 14/09/2026). A gestão comum continua sem poder criar login de ninguém, do
+# mesmo jeito que não pode mais editar a lista de contatos de chamada.
+# ---------------------------------------------------------------------------
+@router.get("/users")
+def list_users(
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    rows = list(database.listar_usuarios() or [])
+    return {
+        "items": rows,
+        "count": len(rows),
+        "active": sum(1 for row in rows if row.get("ativo")),
+        "levels": list(USER_LEVELS),
+    }
+
+
+@router.post("/users", dependencies=[Depends(require_csrf)])
+def save_user(
+    payload: UserAccountRequest,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    if payload.nivel not in USER_LEVELS:
+        raise AppError(
+            "invalid_user_level",
+            "Nível de acesso inválido.",
+            status_code=422,
+        )
+    if payload.id is None:
+        if not payload.senha:
+            raise AppError(
+                "user_password_required",
+                "Defina uma senha para o novo usuário.",
+                status_code=422,
+            )
+        usuario_id = database.criar_usuario(payload.nome, payload.senha, payload.nivel)
+        if usuario_id is None:
+            raise AppError(
+                "user_name_taken",
+                "Já existe um usuário com esse nome.",
+                status_code=409,
+            )
+        if not payload.ativo:
+            database.ativar_desativar_usuario(usuario_id, False)
+    else:
+        usuario_id = payload.id
+        database.atualizar_nivel_usuario(usuario_id, payload.nivel)
+        database.ativar_desativar_usuario(usuario_id, payload.ativo)
+        if payload.senha:
+            database.resetar_senha_usuario(usuario_id, payload.senha)
+    row = database.obter_usuario_por_id(usuario_id)
+    if row is None:
+        raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
+    return {"ok": True, "item": row}
 
 
 @router.get("/first-pieces")

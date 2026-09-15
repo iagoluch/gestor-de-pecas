@@ -21,7 +21,7 @@ import logging
 import os
 import socket
 import threading
-from typing import Protocol
+from typing import Callable, Protocol
 
 from mes.integrations.totvs.outbound_models import TotvsOutboundMessage
 from mes.integrations.totvs.outbox import (
@@ -85,6 +85,7 @@ class TotvsOutboxWorker:
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         max_authentication_attempts: int = DEFAULT_MAX_AUTHENTICATION_ATTEMPTS,
         now_func=None,
+        error_notifier: Callable[[dict], None] | None = None,
     ):
         self.database = database
         self.gateway = gateway
@@ -94,6 +95,11 @@ class TotvsOutboxWorker:
         self.max_attempts = max(1, int(max_attempts))
         self.max_authentication_attempts = max(1, int(max_authentication_attempts))
         self._now = now_func or getattr(database, "_now", None)
+        # Pendência 2 do piloto (14/09/2026): item que para em ERROR (ex.: OP já
+        # totalizada no TOTVS) precisa de alguém olhando, não só ficar na outbox.
+        # ``None`` mantém o comportamento anterior — sem Telegram configurado,
+        # nada muda.
+        self.error_notifier = error_notifier
 
     def _instant(self):
         if self._now is not None:
@@ -217,7 +223,20 @@ class TotvsOutboxWorker:
                 cycle.retried += 1
             elif status == OutboxStatus.ERROR.value:
                 cycle.failed += 1
+                self._notify_error(final)
         return cycle
+
+    def _notify_error(self, item: dict) -> None:
+        if self.error_notifier is None:
+            return
+        try:
+            self.error_notifier(item)
+        except Exception:
+            # Aviso é best-effort: o item já está persistido como ERROR: uma
+            # falha ao notificar não pode mascarar isso nem derrubar o ciclo.
+            logging.exception(
+                "Falha ao notificar item %s da outbox TOTVS em ERROR.", item.get("id")
+            )
 
 
 __all__ = [

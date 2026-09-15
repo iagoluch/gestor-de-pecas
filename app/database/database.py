@@ -15,6 +15,7 @@ from app.core.normalization import limpa_codigo, normalizar_data_db
 from app.core.operator_sectors import WELDING_STEEL_SECTOR
 from app.database.config import PostgresConfig, load_postgres_config
 from app.database.ai_repository import AIRepositoryMixin
+from app.database.chamada_repository import ChamadaRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
 from app.database.quality_repository import QualityRepositoryMixin
 from app.database.report_repository import ReportRepositoryMixin
@@ -90,6 +91,7 @@ class Database(
     TotvsOutboundRepositoryMixin,
     TotvsOutboxRepositoryMixin,
     TotvsOpSyncRepositoryMixin,
+    ChamadaRepositoryMixin,
     QualityRepositoryMixin,
     WeldingRepositoryMixin,
     FirstPieceRepositoryMixin,
@@ -258,6 +260,7 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT id, nome, nivel, ativo, data_criacao FROM usuarios ORDER BY nome")
             return [dict(row) for row in cursor.fetchall()]
+
 
     def inserir_historico(
         self, op, tipo, setor, motivo, quantidade, operador, peca="", tarefa_id=None, data_hora=None

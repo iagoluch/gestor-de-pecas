@@ -354,6 +354,27 @@ class TotvsParserContractTests(unittest.TestCase):
         self.assertIsNone(by_code["99"].sector)
         self.assertIsNone(by_code["99"].resource_code)
 
+    def test_default_branch_id_preenche_filial_ausente_no_cabecalho_e_operacoes(self):
+        """Piloto roda em filial única; BranchId ausente vira a filial configurada."""
+
+        sem_filial = REAL_OP.read_text(encoding="utf-8").replace(
+            "<BranchId>010004</BranchId>", "<BranchId></BranchId>", 1
+        )
+        message = self.parser.parse(sem_filial.encode("utf-8"))
+        self.assertIsNone(message.metadata.branch_id)
+
+        result = TotvsProductionOrderMapper(default_branch_id="4").map(message)
+        self.assertEqual(result.order.filial, "4")
+        self.assertEqual(result.order.totvs_branch_id, "4")
+        self.assertTrue(result.operations)
+        self.assertTrue(all(item.filial == "4" for item in result.operations))
+
+    def test_default_branch_id_nao_sobrescreve_filial_real_enviada_pelo_totvs(self):
+        result = TotvsProductionOrderMapper(default_branch_id="4").map(
+            self.parser.parse(REAL_OP.read_bytes())
+        )
+        self.assertEqual(result.order.filial, "010004")
+
     def test_marco_terminal_sem_activity_code_ou_recurso_nao_e_projetado(self):
         """Sem os metadados reais o marco terminal simplesmente não existe."""
 

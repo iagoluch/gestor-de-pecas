@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { NavLink } from "react-router-dom";
+import { useOptionalAuth } from "../auth/AuthContext";
 import type { ManagementSectionId } from "../config/navigation";
 import { sectionById } from "../config/navigation";
 import { FilterBar } from "./FilterBar";
@@ -14,10 +15,12 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
   period?: boolean;
 }>) {
   const section = sectionById(sectionId);
+  const auth = useOptionalAuth();
+  const tabs = section.tabs.filter((tab) => !tab.adminOnly || auth?.user?.role === "admin");
   return (
     <div className="page-wrap">
       <div className="page-tabs" role="tablist" aria-label={section.label}>
-        {section.tabs.map((tab) => (
+        {tabs.map((tab) => (
           <NavLink key={tab.path} to={tab.path} role="tab" className={({ isActive }) => isActive ? "page-tab page-tab--active" : "page-tab"}>
             {tab.label}
           </NavLink>

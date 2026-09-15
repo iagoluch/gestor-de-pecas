@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 
 from app.core.quality import is_quality_inspection_signature
@@ -62,10 +63,24 @@ def _pending_warning(activity, label: str, reason: str) -> str:
 
 
 class TotvsProductionOrderMapper:
-    def __init__(self, resolver: TotvsResourceResolver | None = None):
+    def __init__(
+        self,
+        resolver: TotvsResourceResolver | None = None,
+        *,
+        default_branch_id: str | None = None,
+    ):
         self.resolver = resolver or TotvsResourceResolver()
+        self.default_branch_id = str(default_branch_id or "").strip() or None
 
     def map(self, message: ProductionOrderMessage) -> TotvsMappingResult:
+        # Piloto roda em filial única; quando o TOTVS não informa BranchId no
+        # envelope, assume a filial configurada em vez de gravar vazio. Aplicado
+        # uma única vez aqui para que cabeçalho, operações e marco terminal
+        # herdem o mesmo valor sem duplicar a regra em cada ponto de uso.
+        if not str(message.metadata.branch_id or "").strip() and self.default_branch_id:
+            message = replace(
+                message, metadata=replace(message.metadata, branch_id=self.default_branch_id)
+            )
         source = message.production_order
         external_id = message.external_id
         if not external_id:

@@ -13,6 +13,8 @@ export interface ManagementTab {
   label: string;
   path: string;
   screen: string;
+  /** Só a conta admin vê esta aba (decisão do usuário, 14/09/2026). */
+  adminOnly?: boolean;
 }
 
 export interface ManagementSection {
@@ -39,6 +41,8 @@ export const managementSections: ManagementSection[] = [
       { label: "IA", path: "/inicio/ia", screen: "home-ai" },
       { label: "Pausas", path: "/inicio/pausas", screen: "home-pauses" },
       { label: "Crachás", path: "/inicio/crachas", screen: "home-badges" },
+      { label: "Chamadas", path: "/inicio/chamadas", screen: "home-chamadas" },
+      { label: "Cadastro", path: "/inicio/cadastro", screen: "home-cadastro", adminOnly: true },
     ],
   },
   {

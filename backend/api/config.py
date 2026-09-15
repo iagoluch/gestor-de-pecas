@@ -164,6 +164,15 @@ class WebSettings:
     totvs_op_pull_negative_ttl_seconds: int = 60
     totvs_op_pull_company_id: str = ""
     totvs_op_pull_branch_id: str = ""
+    # Pendência 2 do piloto (14/09/2026): avisa o supervisor quando a outbox
+    # TOTVS para em ERROR (ex.: OP já totalizada). Reaproveita o mesmo bot já
+    # configurado em ``telegram_bot_token``; só falta o chat do supervisor. Sem
+    # chat_id configurado, o worker segue exatamente como antes — sem aviso.
+    totvs_outbox_telegram_chat_id: str = ""
+    # Botão de chamada (operador e gestão). Mesmo bot de ``telegram_bot_token``;
+    # sem este chat configurado, a chamada continua sendo registrada no banco,
+    # só não sai o aviso — nunca falha silenciosamente sem deixar rastro.
+    chamada_telegram_chat_id: str = ""
     # Sincronização automática do planejamento de Corte (Wave 2). O operador do
     # Corte não deve pesquisar para descobrir que existe tarefa nova: o mesmo
     # SigmaNestSyncService do script manual roda em ciclo, somente leitura no
@@ -522,6 +531,12 @@ class WebSettings:
             ),
             totvs_op_pull_branch_id=_text_option(
                 env.get("GESTOR_TOTVS_OP_PULL_BRANCH_ID"), default=""
+            ),
+            totvs_outbox_telegram_chat_id=_text_option(
+                env.get("GESTOR_TOTVS_OUTBOX_TELEGRAM_CHAT_ID"), default=""
+            ),
+            chamada_telegram_chat_id=_text_option(
+                env.get("GESTOR_CHAMADA_TELEGRAM_CHAT_ID"), default=""
             ),
             sigmanest_sync_enabled=_as_bool(
                 env.get("GESTOR_SIGMANEST_SYNC_ENABLED"), default=sigmanest_configured

@@ -30,6 +30,7 @@ from backend.api.routers import (
     analytics,
     audit,
     auth,
+    chamadas,
     cutting,
     dev_observatory,
     highlight,
@@ -56,6 +57,7 @@ from backend.messaging import TelegramProvider
 from backend.integrations import totvs_soap
 from backend.integrations.sigmanest_sqlserver import SigmaNestSqlServerGateway
 from backend.integrations.totvs_wspcp import TotvsWspcpClient
+from mes.integrations.notifications.telegram import build_outbox_error_notifier
 from mes.integrations.totvs.on_demand_gateway import build_order_provisioning_service
 from mes.integrations.totvs.service import build_totvs_ingestion_service
 from mes.services.frontend_facade import FrontendBackendFacade
@@ -159,6 +161,10 @@ def _build_totvs_outbox_worker(application: FastAPI) -> TotvsOutboxWorker:
         batch_size=settings.totvs_outbox_batch_size,
         lease_seconds=settings.totvs_outbox_lease_seconds,
         max_attempts=settings.totvs_outbox_max_attempts,
+        error_notifier=build_outbox_error_notifier(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.totvs_outbox_telegram_chat_id,
+        ),
     )
 
 
@@ -518,6 +524,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     prefix = "/api/v1"
     application.include_router(system.router, prefix=prefix)
     application.include_router(auth.router, prefix=prefix)
+    application.include_router(chamadas.router, prefix=prefix)
     application.include_router(ai.router, prefix=prefix)
     application.include_router(operator.router, prefix=prefix)
     application.include_router(quality.router, prefix=prefix)

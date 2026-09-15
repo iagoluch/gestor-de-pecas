@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { ChamadaButton } from "../components/ChamadaButton";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { assets } from "../config/assets";
@@ -73,6 +74,7 @@ export function OperatorShell({
         </header>
         <div className="operator-content">{children}</div>
       </main>
+      <ChamadaButton />
     </div>
   );
 }
