@@ -17,6 +17,7 @@ from backend.api.dependencies.auth import (
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import ChamadaContatoRequest, ChamadaRequest
+from app.core.operator_sectors import OPERATOR_SECTORS
 from mes.integrations.notifications.telegram import (
     format_chamada_message,
     send_telegram_message,
@@ -54,13 +55,26 @@ def contato_padrao_gestao(
 @router.get("/contatos")
 def buscar_contatos(
     q: str | None = None,
+    setor: str | None = None,
     _user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
-    """Dropdown com busca, usado tanto pelo operador quanto pela gestão."""
+    """Dropdown com busca, usado tanto pelo operador quanto pela gestão.
 
-    items = database.listar_chamada_contatos(somente_ativos=True, busca=q)
+    ``setor`` restringe aos contatos configurados para o setor do posto que
+    está chamando; contato sem setor configurado aparece em qualquer setor.
+    """
+
+    items = database.listar_chamada_contatos(somente_ativos=True, busca=q, setor=setor)
     return {"items": items, "count": len(items)}
+
+
+@router.get("/setores")
+def listar_setores(_user: SessionUser = Depends(get_current_user)):
+    """Setores disponíveis para configurar por contato, na tela de chamada."""
+
+    nomes = sorted({sector.name for sector in OPERATOR_SECTORS})
+    return {"items": nomes}
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
@@ -102,6 +116,26 @@ def criar_chamada(
                 "Informe seu crachá para registrar a chamada.",
                 status_code=422,
             )
+        # O login do posto identifica a estação, não a pessoa. Resolva o
+        # crachá no cadastro canônico antes de gravar ou enviar para que o
+        # histórico e o Telegram não exibam apenas o código digitado.
+        operadores = database.buscar_operadores_apontamento([cracha])
+        operador = next(
+            (
+                item
+                for item in operadores
+                if str(item.get("cracha") or "").strip() == cracha
+            ),
+            None,
+        )
+        nome_canonico = str((operador or {}).get("nome") or "").strip()
+        if not nome_canonico:
+            raise AppError(
+                "chamada_cracha_invalido",
+                "Crachá não cadastrado ou inativo. Informe um crachá ativo.",
+                status_code=422,
+            )
+        solicitante_nome = nome_canonico
         solicitante_cracha = cracha
 
     try:
@@ -168,6 +202,7 @@ def salvar_contato(
             ativo=payload.ativo,
             padrao_gestao=payload.padrao_gestao,
             telegram_chat_id=payload.telegram_chat_id,
+            setores=payload.setores,
         )
     except ValueError as exc:
         raise AppError("contato_invalido", str(exc)) from exc

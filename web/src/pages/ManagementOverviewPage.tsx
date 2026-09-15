@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
 import { ManagementInsightDrawer } from "../components/ManagementInsightDrawer";
 import { MetricCard } from "../components/MetricCard";
@@ -22,13 +23,33 @@ function hours(seconds: number) {
 
 export function ManagementOverviewPage() {
   const filters = useManagementFilters();
+  const navigate = useNavigate();
   const query = useApiQuery<ManagementOverview>(`/api/v1/management/overview?${filters.query}`);
   const [selectedKpi, setSelectedKpi] = useState<KpiExplanation | null>(null);
-  const [selectedException, setSelectedException] = useState<ManagementException | null>(null);
   const closeInsight = useCallback(() => {
     setSelectedKpi(null);
-    setSelectedException(null);
   }, []);
+
+  const navigateTo = useCallback((path: string, overrides: Partial<typeof filters.filters> = {}) => {
+    filters.setFilters({ ...filters.filters, ...overrides });
+    navigate(path);
+  }, [filters, navigate]);
+
+  const exceptionDestination = (exception: ManagementException) => {
+    const scopedFilters = {
+      sector: exception.sector ?? "",
+      resource: exception.resource ?? "",
+      op: exception.op ?? "",
+      operation: exception.operation ?? "",
+    };
+    if (exception.type === "actual_time_above_standard") {
+      return () => navigateTo("/analises/tempo-padrao-real", scopedFilters);
+    }
+    if (exception.type === "configured_kpi_target") {
+      return () => navigateTo("/inicio/metas");
+    }
+    return () => navigateTo("/analises/paradas", scopedFilters);
+  };
 
   if (query.loading) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><LoadingState label="Carregando visão gerencial…" /></PageFrame>;
   if (query.error) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
@@ -69,6 +90,7 @@ export function ManagementOverviewPage() {
             title="O que precisa de atenção"
             className="management-attention-card"
             action={<span className="section-count">{insights.exception_count} exceções</span>}
+            navigation={{ label: "Abrir análise das exceções", onNavigate: () => navigateTo("/analises/paradas") }}
           >
             {insights.exceptions.length === 0 ? (
               <EmptyState title="Nenhuma exceção identificada" detail="Não há fatos confiáveis que exijam priorização no filtro atual." />
@@ -76,7 +98,11 @@ export function ManagementOverviewPage() {
               <ul className="management-exception-list">
                 {insights.exceptions.slice(0, 4).map((exception) => (
                   <li key={exception.id}>
-                    <button type="button" onClick={() => setSelectedException(exception)}>
+                    <button
+                      type="button"
+                      onClick={exceptionDestination(exception)}
+                      aria-label={`Ver análise relacionada a ${exception.title}`}
+                    >
                       <i data-severity={exception.severity} />
                       <span>
                         <strong>{exception.title}</strong>
@@ -92,25 +118,39 @@ export function ManagementOverviewPage() {
               </ul>
             )}
           </SectionCard>
-          <SectionCard title="Maiores perdas">
+          <SectionCard
+            title="Maiores perdas"
+            navigation={{ label: "Abrir análise das maiores perdas", onNavigate: () => navigateTo("/analises/paradas") }}
+          >
             {insights.losses.length === 0 ? <EmptyState /> : (
               <ol className="management-impact-list">
                 {insights.losses.slice(0, 4).map((item) => (
                   <li key={`${item.rank}-${item.cause}`}>
-                    <span><b>{item.rank}</b><span>{item.cause ?? "Não informado"}</span></span>
-                    <strong>{item.impact_unit === "s" ? formatHours(item.impact_value) : `${item.impact_value.toLocaleString("pt-BR")} ${item.impact_unit}`}</strong>
+                    <button type="button" onClick={() => navigateTo("/analises/paradas")} aria-label={`Ver paradas por ${item.cause ?? "motivo não informado"}`}>
+                      <span><b>{item.rank}</b><span>{item.cause ?? "Não informado"}</span></span>
+                      <strong>{item.impact_unit === "s" ? formatHours(item.impact_value) : `${item.impact_value.toLocaleString("pt-BR")} ${item.impact_unit}`}</strong>
+                    </button>
                   </li>
                 ))}
               </ol>
             )}
           </SectionCard>
-          <SectionCard title="Recursos com maior impacto">
+          <SectionCard
+            title="Recursos com maior impacto"
+            navigation={{ label: "Abrir análise dos recursos com maior impacto", onNavigate: () => navigateTo("/analises/paradas") }}
+          >
             {insights.critical_resources.length === 0 ? <EmptyState /> : (
               <ol className="management-impact-list">
                 {insights.critical_resources.slice(0, 4).map((item) => (
                   <li key={`${item.rank}-${item.resource}`}>
-                    <span><b>{item.rank}</b><span>{item.resource ?? "Não informado"}</span></span>
-                    <strong>{item.impact_unit === "s" ? formatHours(item.impact_value) : `${item.impact_value.toLocaleString("pt-BR")} ${item.impact_unit}`}</strong>
+                    <button
+                      type="button"
+                      onClick={() => navigateTo("/analises/paradas", { resource: item.resource ?? "" })}
+                      aria-label={`Ver paradas do recurso ${item.resource ?? "não informado"}`}
+                    >
+                      <span><b>{item.rank}</b><span>{item.resource ?? "Não informado"}</span></span>
+                      <strong>{item.impact_unit === "s" ? formatHours(item.impact_value) : `${item.impact_value.toLocaleString("pt-BR")} ${item.impact_unit}`}</strong>
+                    </button>
                   </li>
                 ))}
               </ol>
@@ -118,7 +158,11 @@ export function ManagementOverviewPage() {
           </SectionCard>
         </div>
         <div className="overview-grid">
-          <SectionCard title="Planejado × realizado — acumulado" className="overview-grid__chart">
+          <SectionCard
+            title="Planejado × realizado — acumulado"
+            className="overview-grid__chart"
+            navigation={{ label: "Abrir Produção: Planejado versus Realizado", onNavigate: () => navigateTo("/producao/planejado-realizado") }}
+          >
             {simulation ? (
               <div className="plan-actual-summary">
                 <div><span>Quantidade planejada</span><strong>{simulation.planned_quantity.toLocaleString("pt-BR")} peças</strong></div>
@@ -133,7 +177,10 @@ export function ManagementOverviewPage() {
               />
             )}
           </SectionCard>
-          <SectionCard title="Composição do tempo">
+          <SectionCard
+            title="Composição do tempo"
+            navigation={{ label: "Abrir Consulta Operacional: Tempo MES", onNavigate: () => navigateTo("/consulta-operacional/tempo-mes") }}
+          >
             {data.time_composition.availability === "sem_registros" ? (
               <EmptyState state={data.time_composition.availability} />
             ) : (
@@ -150,7 +197,11 @@ export function ManagementOverviewPage() {
           </SectionCard>
         </div>
         <div className="overview-grid overview-grid--bottom">
-          <SectionCard title="Setores — leitura rápida" className="overview-grid__table">
+          <SectionCard
+            title="Setores — leitura rápida"
+            className="overview-grid__table"
+            navigation={{ label: "Abrir Consulta Operacional: Recursos", onNavigate: () => navigateTo("/consulta-operacional/recursos") }}
+          >
             {data.sectors.length === 0 ? <EmptyState /> : (
               <div className="table-scroll">
                 <table>
@@ -171,7 +222,10 @@ export function ManagementOverviewPage() {
               </div>
             )}
           </SectionCard>
-          <SectionCard title="Inconsistências de dados">
+          <SectionCard
+            title="Inconsistências de dados"
+            navigation={{ label: "Abrir Auditoria: Inconsistências", onNavigate: () => navigateTo("/auditoria/inconsistencias") }}
+          >
             {data.audit.open_issues.length === 0 ? (
               <EmptyState title="Sem inconsistências abertas" />
             ) : (
@@ -186,7 +240,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
         </div>
-        <ManagementInsightDrawer explanation={selectedKpi} exception={selectedException} onClose={closeInsight} />
+        <ManagementInsightDrawer explanation={selectedKpi} exception={null} onClose={closeInsight} />
     </PageFrame>
   );
 }

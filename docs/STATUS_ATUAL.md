@@ -205,6 +205,81 @@ reorganização da navegação em abas ("painéis") agrupando Chamadas/Crachás
 commitar sem entender, e não recriar do zero.** Rodar `git diff` para ver o
 estado exato antes de continuar essa frente.
 
+### 2.1 Correção visual do Andon/Painéis Operacionais (15/09/2026)
+
+O botão de navegação do Andon/Solda estava `position: fixed`, por isso ficava
+sobre o primeiro card de Corte; a troca pela navegação lateral também havia
+removido as sub-abas de Painéis Operacionais dessas páginas cheias. A faixa
+`AndonSidebarNav` agora participa do fluxo normal, acima do quadro, mantém as
+abas Andon, Solda, Metas e Pausas e permite recolhê-las sem voltar a sobrepor
+cards. A tela/rota de Chamadas foi movida para o IagoDev, sem mudar seus
+contratos ou autorização. Cobertura direcionada em `web/src/test/andon.test.tsx`
+valida a faixa, as abas e o ciclo minimizar/restaurar.
+
+Os itens de priorização da Visão Geral também passaram a ser acionáveis
+(15/09/2026): exceções de parada, perdas por motivo e recursos críticos levam
+à análise de Paradas; uma exceção de tempo padrão leva à análise Tempo Padrão ×
+Real; e uma exceção de meta leva ao painel de Metas. O período já selecionado é
+preservado, e recurso/setor/OP/operação são reaplicados quando a análise aceita
+esses filtros. Nenhum contrato do backend foi alterado.
+
+Todos os cards grandes da Visão Geral também são clicáveis sem aninhar links
+ou botões: Planejado × Realizado abre Produção, Composição do tempo abre Tempo
+MES, Setores abre Recursos e Inconsistências abre a Auditoria. O controle de
+navegação é acessível por teclado e os botões internos dos cards mantêm seus
+atalhos específicos.
+
+**Correção Full HD (15/09/2026):** no Andon gerencial, a faixa de navegação
+passou a ocupar uma linha `auto` própria no grid em 1920×1080; antes ela tomava
+a única linha flexível e empurrava o quadro para baixo, deixando um grande vazio
+acima das abas. O menu e as sub-abas continuam no fluxo normal, sem sobrepor os
+cartões.
+
+### 2.2 Diagnóstico da chamada por Telegram (15/09/2026)
+
+O fluxo do botão foi conferido de ponta a ponta: a chamada é persistida antes
+do envio, o contato selecionado define o destino e a falha do Telegram fica
+registrada sem desfazer a chamada. No banco `gestor_pecas_test`, o destino
+pessoal informado pelo usuário foi associado ao contato Iago; o identificador
+não foi versionado nem copiado para este documento.
+
+O token do bot foi configurado somente no `.env` local e a integração foi
+habilitada, sem copiar a credencial para código ou documentação. Após a
+normalização da conectividade externa, um envio real controlado foi confirmado
+para o contato Iago no ambiente TESTE. O botão de Chamada já usa esse mesmo
+destino, token e transporte; a credencial continua fora do repositório.
+
+### 2.3 Identificação de chamada por crachá (15/09/2026)
+
+No botão de chamada do operador, o crachá continua obrigatório, mas deixou de
+ser tratado como nome. Antes de persistir a chamada ou montar o aviso do
+Telegram, a API resolve o crachá no cadastro ativo canônico de operadores. Um
+crachá inexistente/inativo é recusado e não cria chamada; o histórico e a
+mensagem passam a mostrar o nome cadastrado, mantendo o crachá como
+identificação complementar.
+
+### 2.3 Retomada automática de pausas e abertura do turno (15/09/2026)
+
+Regra confirmada com o usuário: toda parada automática cadastrada em
+`pausas_automaticas_setor` termina sozinha no `hora_fim` configurado (almoço,
+café ou outra pausa), retomando o estado físico que ainda estiver sustentado
+pela execução. Se o operador tiver declarado outro estado durante a pausa, o
+scheduler não o sobrescreve.
+
+A causa da falha era de execução: `ShiftBoundaryService` já calculava os dois
+limites e o repositório já sabia finalizar a pausa, mas o ciclo em
+`backend/api/main.py` só era criado com a simulação acelerada. O ciclo agora
+fica ativo também no relógio normal; mesmo quando detecta alguns segundos
+depois, persiste a transição exatamente no horário configurado.
+
+Na abertura do turno oficial às **08:00**, um `fora_turno` automático ainda
+aberto é encerrado e passa para a leitura **Recurso sem demanda**. A OP
+interrompida continua em `Parada` e exige retomada manual: o retorno do
+calendário não presume OP, produção nem outro estado físico. A persistência usa
+`fila` com origem/tipo `retorno_turno_sem_demanda`, sem vínculo de OP; a fachada
+remove a OP parada somente dessa projeção lógica. Uma fila operacional comum
+dentro do turno continua não significando "sem demanda".
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Notificação Telegram ao supervisor em rejeição `FUNCTIONAL` do outbox TOTVS

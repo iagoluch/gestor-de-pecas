@@ -40,6 +40,7 @@ class BreakRepositoryFake:
     def __init__(self):
         self.started = []
         self.finished = []
+        self.shift_returns = []
 
     def listar_apontamentos_abertos_no_limite_turno(self, _boundary):
         return []
@@ -60,6 +61,12 @@ class BreakRepositoryFake:
     def finalizar_intervalo_automatico(self, moment, name, *, operador, tipo_setor=None):
         self.finished.append((moment, name, operador, tipo_setor))
         return [{"id": 2, "recurso": "1303"}]
+
+    def finalizar_fora_turno_automatico(
+        self, moment, *, operador, motivo, tipo_interrupcao
+    ):
+        self.shift_returns.append((moment, operador, motivo, tipo_interrupcao))
+        return [{"id": 3, "recurso": "1303"}]
 
 
 class AutomaticBreakTests(unittest.TestCase):
@@ -96,6 +103,42 @@ class AutomaticBreakTests(unittest.TestCase):
             any(moment == datetime(2026, 8, 31, 12, 52) for moment, *_ in db.finished)
         )
         self.assertGreaterEqual(finish_result["count"], 1)
+
+    def test_intervalo_configuravel_nao_retorna_antes_e_retorna_no_fim_cadastrado(self):
+        db = _PausaConfiguradaFake([{
+            "tipo_setor": "Serra",
+            "nome": "Café especial",
+            "hora_inicio": datetime.strptime("14:03", "%H:%M").time(),
+            "hora_fim": datetime.strptime("14:17", "%H:%M").time(),
+            "ativo": True,
+            "ordem": 1,
+        }])
+        service = ShiftBoundaryService(db)
+
+        service.apply_due(datetime(2026, 8, 31, 14, 16, 59))
+        self.assertFalse(any(
+            moment == datetime(2026, 8, 31, 14, 17)
+            for moment, *_ in db.finished
+        ))
+
+        service.apply_due(datetime(2026, 8, 31, 14, 17))
+        self.assertTrue(any(
+            moment == datetime(2026, 8, 31, 14, 17)
+            and name == "Café especial"
+            and sector == "Serra"
+            for moment, name, _operator, sector in db.finished
+        ))
+
+    def test_abertura_do_turno_dispara_retorno_sem_demanda_as_0800(self):
+        db = BreakRepositoryFake()
+        service = ShiftBoundaryService(db)
+
+        service.apply_due(datetime(2026, 9, 4, 8, 0))
+
+        returns_today = [item for item in db.shift_returns if item[0].date() == date(2026, 9, 4)]
+        self.assertEqual(len(returns_today), 1)
+        self.assertEqual(returns_today[0][0], datetime(2026, 9, 4, 8, 0))
+        self.assertEqual(returns_today[0][3], "retorno_turno_sem_demanda")
 
     def test_sem_configuracao_a_pausa_vale_para_a_fabrica_inteira(self):
         """Fallback do domínio: nenhum setor declarado, nenhuma filtragem."""
@@ -567,6 +610,43 @@ class OperationalViewIdentityTests(unittest.TestCase):
 
         self.assertEqual([item["recurso"] for item in payload["resources"]], ["Laser Ensis 3015"])
         self.assertEqual(payload["resources"][0]["fonte"], "apontamentos_corte")
+
+    def test_retorno_das_0800_e_sem_demanda_sem_reabrir_op_interrompida(self):
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repository = OperationalViewRepositoryFake()
+        repository.states = [{
+            **repository.states[0],
+            "categoria": "fila",
+            "motivo": "Retorno do turno — recurso sem demanda",
+            "data_inicio": datetime(2026, 9, 4, 8, 0),
+            "planejado": None,
+            "tipo_interrupcao": "retorno_turno_sem_demanda",
+        }]
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: [{
+            "id": 51,
+            "maquina": "Gasparini",
+            "tipo_setor": "Dobra",
+            "op": "OP-INTERROMPIDA",
+            "status": "Parada",
+            "data_inicio": datetime(2026, 9, 3, 16, 0),
+        }]
+        moment = datetime(2026, 9, 4, 8, 1)
+        facade = FrontendBackendFacade(
+            repository, now_func=lambda: moment, simulation_mode=True
+        )
+
+        payload = facade.consulta_operacional(
+            AnalyticsFilter(inicio=datetime(2026, 9, 4, 8, 0), fim=moment),
+            somente_vinculo_operacional=True,
+        )
+
+        self.assertEqual(len(payload["resources"]), 1)
+        resource = payload["resources"][0]
+        self.assertTrue(resource["sem_demanda"])
+        self.assertEqual(resource["categoria"], "fila")
+        self.assertEqual(resource["ops_ativas"], [])
+        self.assertEqual(resource["quantidade_ops_ativas"], 0)
 
 
 class SerializableExpectedBlockTests(unittest.TestCase):

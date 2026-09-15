@@ -530,7 +530,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
           preparação da máquina, que é quando a primeira peça é fabricada. */}
-      <div className={`operator-actions ${showSetup ? "" : "operator-actions--without-setup"}`} aria-label="Ações operacionais">
+      <div className="operator-actions" aria-label="Ações operacionais">
         <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => void execute(startAction)}><img src={assets.operator.actions.start} alt="" /><span>{startLabel}</span></button>
         <button type="button" className="operator-action operator-action--stop" disabled={submitting || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>

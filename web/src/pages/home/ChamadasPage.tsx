@@ -19,6 +19,7 @@ interface ChamadaContato {
   ativo: boolean;
   padrao_gestao: boolean;
   telegram_chat_id?: string | null;
+  setores?: string[];
 }
 
 interface Chamada {
@@ -35,7 +36,7 @@ interface Chamada {
   criado_em: string;
 }
 
-const NOVO: ChamadaContato = { id: 0, nome: "", funcao: "", ativo: true, padrao_gestao: false, telegram_chat_id: "" };
+const NOVO: ChamadaContato = { id: 0, nome: "", funcao: "", ativo: true, padrao_gestao: false, telegram_chat_id: "", setores: [] };
 
 const FILTROS_INICIAIS = { situacao: "", busca: "" };
 
@@ -54,6 +55,8 @@ export function ManagementChamadasPage() {
     isAdmin ? "/api/v1/chamadas/admin/contatos" : null,
   );
   const historicoQuery = useApiQuery<{ items: Chamada[] }>("/api/v1/chamadas/admin/historico");
+  const setoresQuery = useApiQuery<{ items: string[] }>(isAdmin ? "/api/v1/chamadas/setores" : null);
+  const setoresDisponiveis = setoresQuery.data?.items ?? [];
   const [editando, setEditando] = useState<ChamadaContato | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -61,7 +64,7 @@ export function ManagementChamadasPage() {
 
   const contatos = useMemo(() => contatosQuery.data?.items ?? [], [contatosQuery.data]);
   const historico = historicoQuery.data?.items ?? [];
-  const title = "Painéis Operacionais — Chamadas";
+  const title = "IagoDev — Chamadas";
   const subtitle = isAdmin
     ? "Contatos de quem pode ser chamado e o histórico de chamadas."
     : "Histórico de chamadas do operador e da gestão.";
@@ -85,6 +88,7 @@ export function ManagementChamadasPage() {
         ativo: contato.ativo ?? true,
         padrao_gestao: contato.padrao_gestao ?? false,
         telegram_chat_id: contato.telegram_chat_id?.trim() || null,
+        setores: contato.setores ?? [],
       });
       setMensagem("Contato salvo.");
       setEditando(null);
@@ -112,7 +116,7 @@ export function ManagementChamadasPage() {
     || (isAdmin && contatosQuery.loading && !contatosQuery.data);
   if (carregando) {
     return (
-      <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <LoadingState />
       </PageFrame>
     );
@@ -120,7 +124,7 @@ export function ManagementChamadasPage() {
   const erroCarregamento = historicoQuery.error ?? (isAdmin ? contatosQuery.error : null);
   if (erroCarregamento) {
     return (
-      <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <ErrorState error={erroCarregamento} onRetry={() => { historicoQuery.reload(); contatosQuery.reload(); }} />
       </PageFrame>
     );
@@ -131,7 +135,7 @@ export function ManagementChamadasPage() {
 
   return (
     <PageFrame
-      sectionId="panels"
+      sectionId="dev"
       title={title}
       subtitle={subtitle}
       filters={false}
@@ -213,6 +217,13 @@ export function ManagementChamadasPage() {
                     row.telegram_chat_id
                       ? <StatusBadge value="Configurado" />
                       : <span className="section-count">Usa o chat geral</span>
+                  ),
+                },
+                {
+                  key: "setores",
+                  label: "Setores",
+                  render: (row) => (
+                    row.setores?.length ? row.setores.join(", ") : <span className="section-count">Todos os setores</span>
                   ),
                 },
                 {
@@ -318,6 +329,31 @@ export function ManagementChamadasPage() {
               vai aqui. Sem preencher, a chamada desse contato continua indo pro chat geral
               já configurado no ambiente.
             </p>
+            <fieldset className="chamada-setores">
+              <legend>Setores em que aparece</legend>
+              <p className="operator-help">Nenhum setor marcado = aparece para todos os setores.</p>
+              <div className="chamada-setores__grid">
+                {setoresDisponiveis.map((nomeSetor) => {
+                  const marcado = (editando.setores ?? []).includes(nomeSetor);
+                  return (
+                    <label key={nomeSetor} className="pause-form__check">
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        onChange={(event) => {
+                          const atuais = editando.setores ?? [];
+                          const proximos = event.target.checked
+                            ? [...atuais, nomeSetor]
+                            : atuais.filter((item) => item !== nomeSetor);
+                          setEditando({ ...editando, setores: proximos });
+                        }}
+                      />
+                      {nomeSetor}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
             <label className="pause-form__check">
               <input
                 type="checkbox"

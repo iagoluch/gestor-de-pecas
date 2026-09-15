@@ -112,12 +112,21 @@ function planoDe(programa: string) {
   return bloco as HTMLElement;
 }
 
+// As tarefas chegam recolhidas (decisão do usuário, 15/09/2026): os testes
+// que dependem dos planos visíveis precisam expandir a tarefa primeiro.
+function expandirTarefa(codigo: string) {
+  const toggle = screen.getByRole("heading", { name: codigo }).closest("button");
+  if (!toggle) throw new Error(`toggle da tarefa ${codigo} não encontrado`);
+  fireEvent.click(toggle);
+}
+
 describe("hierarquia da tela de Corte", () => {
   it("renderiza tarefa, planos, OPs e produtos sem abrir outra tela", async () => {
     stubQueue([TAREFA]);
     renderCorte();
 
     expect(await screen.findByRole("heading", { name: "ZZT4503" })).toBeInTheDocument();
+    expandirTarefa("ZZT4503");
     expect(screen.getByText("001")).toBeInTheDocument();
     expect(screen.getByText("002")).toBeInTheDocument();
 
@@ -134,17 +143,19 @@ describe("hierarquia da tela de Corte", () => {
     stubQueue([TAREFA]);
     renderCorte();
 
-    const toggle = await screen.findByRole("button", { expanded: true });
-    expect(screen.getByText("001")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "ZZT4503" });
+    // A tarefa chega recolhida — o operador expande o que precisa ver.
+    const toggle = screen.getByRole("button", { expanded: false });
+    expect(screen.queryByText("001")).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
 
-    await waitFor(() => expect(screen.queryByText("001")).not.toBeInTheDocument());
-    expect(screen.getByRole("heading", { name: "ZZT4503" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { expanded: false })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
     expect(await screen.findByText("001")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ZZT4503" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { expanded: true })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { expanded: true }));
+    await waitFor(() => expect(screen.queryByText("001")).not.toBeInTheDocument());
   });
 
   it("mostra o estado de cada plano sem confundir corte com Destaque", async () => {
@@ -152,6 +163,7 @@ describe("hierarquia da tela de Corte", () => {
     renderCorte();
 
     await screen.findByRole("heading", { name: "ZZT4503" });
+    expandirTarefa("ZZT4503");
     expect(within(planoDe("001")).getByText("AGUARDANDO CORTE")).toBeInTheDocument();
     expect(within(planoDe("002")).getByText("DISPONÍVEL PARA DESTAQUE")).toBeInTheDocument();
     expect(screen.queryByText(/aguardando destaque/i)).not.toBeInTheDocument();
@@ -162,6 +174,7 @@ describe("hierarquia da tela de Corte", () => {
     renderCorte();
 
     await screen.findByRole("heading", { name: "ZZT4503" });
+    expandirTarefa("ZZT4503");
     const plano001 = planoDe("001");
     expect(within(plano001).getByText("0 de 2")).toBeInTheDocument();
     expect(within(plano001).getByText("1, 2")).toBeInTheDocument();
@@ -179,6 +192,7 @@ describe("hierarquia da tela de Corte", () => {
     renderCorte();
 
     await screen.findByRole("heading", { name: "ZZT4503" });
+    expandirTarefa("ZZT4503");
     // Somente o plano que ainda aguarda oferece o comando.
     const botoes = screen.getAllByRole("button", { name: "Iniciar corte" });
     expect(botoes).toHaveLength(1);
@@ -203,7 +217,8 @@ describe("hierarquia da tela de Corte", () => {
 
     expect(await screen.findByRole("heading", { name: "ZZT4503" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ZZT4504" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { expanded: true })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { expanded: false })).toHaveLength(2);
+    expandirTarefa("ZZT4504");
     expect(within(planoDe("010")).getByText("OP 1079689C010")).toBeInTheDocument();
   });
 
@@ -256,6 +271,7 @@ describe("hierarquia da tela de Corte", () => {
     renderCorte();
 
     await screen.findByRole("heading", { name: "ZZT-ANTIGA" });
+    expandirTarefa("ZZT-ANTIGA");
     expect(within(planoDe("700")).getByText("Nenhuma OP vinculada a este plano.")).toBeInTheDocument();
     expect(planoDe("701")).toBeInTheDocument();
   });

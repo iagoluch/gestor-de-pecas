@@ -2024,6 +2024,18 @@ CHAMADA_CONTATO_TELEGRAM_STATEMENTS = (
 )
 
 
+CHAMADA_CONTATO_SETORES_DESCRIPTION = (
+    "contatos de chamada configuráveis por setor"
+)
+
+CHAMADA_CONTATO_SETORES_STATEMENTS = (
+    # Setores em que o contato aparece no dropdown do botão de chamada do
+    # operador. Lista vazia (padrão) preserva o comportamento anterior:
+    # contato visível em todos os setores.
+    "ALTER TABLE chamada_contatos ADD COLUMN setores TEXT[] NOT NULL DEFAULT '{}'",
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2062,6 +2074,7 @@ MIGRATIONS = {
     ),
     34: (CHAMADA_VISUALIZACAO_DESCRIPTION, CHAMADA_VISUALIZACAO_STATEMENTS),
     35: (CHAMADA_CONTATO_TELEGRAM_DESCRIPTION, CHAMADA_CONTATO_TELEGRAM_STATEMENTS),
+    36: (CHAMADA_CONTATO_SETORES_DESCRIPTION, CHAMADA_CONTATO_SETORES_STATEMENTS),
 }
 
 

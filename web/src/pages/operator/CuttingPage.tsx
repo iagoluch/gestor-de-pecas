@@ -161,9 +161,9 @@ export function CuttingPage({ resource }: { resource: string }) {
   const [stopOpen, setStopOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Estado só de apresentação: as tarefas chegam expandidas e o operador
-  // recolhe o que não está usando. Nada disso precisa existir no banco.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  // Estado só de apresentação: as tarefas chegam recolhidas e o operador
+  // expande o que precisa ver. Nada disso precisa existir no banco.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const query = `/api/v1/cutting/queue?resource=${encodeURIComponent(resource)}${appliedSearch ? `&search=${encodeURIComponent(appliedSearch)}` : ""}`;
@@ -198,7 +198,7 @@ export function CuttingPage({ resource }: { resource: string }) {
   }
 
   function toggleTask(codigo: string) {
-    setCollapsed((atual) => {
+    setExpanded((atual) => {
       const proximo = new Set(atual);
       if (proximo.has(codigo)) proximo.delete(codigo);
       else proximo.add(codigo);
@@ -252,7 +252,7 @@ export function CuttingPage({ resource }: { resource: string }) {
               key={`${item.codigo_tarefa}-${item.plano_hash}-${index}`}
               item={item}
               busy={busy}
-              collapsed={collapsed.has(String(item.codigo_tarefa ?? index))}
+              collapsed={!expanded.has(String(item.codigo_tarefa ?? index))}
               onToggle={() => toggleTask(String(item.codigo_tarefa ?? index))}
               onStart={(planHash) => void action({ action: "Início", plan_hash: planHash })}
             />

@@ -68,6 +68,10 @@ class ChamadaContatoRequest(BaseModel):
     ativo: bool = True
     padrao_gestao: bool = False
     telegram_chat_id: str | None = Field(default=None, max_length=64)
+    # Setores em que este contato aparece no dropdown de chamada do operador.
+    # Vazio = aparece em todos os setores (comportamento anterior, sem
+    # configuração por setor).
+    setores: list[str] = Field(default_factory=list)
 
 
 class ChamadaRequest(BaseModel):

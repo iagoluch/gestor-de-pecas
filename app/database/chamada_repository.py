@@ -7,12 +7,16 @@ _COLUNAS_CONTATO_BUSCA = "id, nome, funcao, ativo, padrao_gestao"
 
 
 class ChamadaRepositoryMixin:
-    def listar_chamada_contatos(self, *, somente_ativos=True, busca=None, completo=False):
+    def listar_chamada_contatos(self, *, somente_ativos=True, busca=None, completo=False, setor=None):
         """Lista de contatos.
 
         ``completo=False`` (padrão) é o dropdown de busca do operador e da
         gestão comum — nunca traz o Telegram do contato. ``completo=True`` é
         exclusivo da tela de Cadastro/Contatos, que só o admin acessa.
+
+        ``setor``, quando informado, restringe aos contatos configurados para
+        aquele setor — contato sem setor configurado (lista vazia) continua
+        aparecendo em qualquer setor.
         """
 
         colunas = "*" if completo else _COLUNAS_CONTATO_BUSCA
@@ -25,6 +29,10 @@ class ChamadaRepositoryMixin:
         if termo:
             condicoes.append("(nome ILIKE %s OR funcao ILIKE %s)")
             parametros.extend([f"%{termo}%", f"%{termo}%"])
+        setor = str(setor or "").strip()
+        if setor:
+            condicoes.append("(setores = '{}' OR %s = ANY(setores))")
+            parametros.append(setor)
         if condicoes:
             query += " WHERE " + " AND ".join(condicoes)
         query += " ORDER BY nome, funcao"
@@ -41,6 +49,7 @@ class ChamadaRepositoryMixin:
         ativo=True,
         padrao_gestao=False,
         telegram_chat_id=None,
+        setores=None,
     ):
         """Cria ou atualiza um contato. Tela de gestão, nunca o Dev Observatory.
 
@@ -48,7 +57,8 @@ class ChamadaRepositoryMixin:
         pré-seleciona. Só existe um por vez: marcar um novo desmarca o
         anterior, na mesma transação. ``telegram_chat_id`` é opcional: quando
         preenchido, a chamada para este contato avisa direto esse chat, em
-        vez do chat geral do ambiente.
+        vez do chat geral do ambiente. ``setores`` vazio/None mantém o
+        contato visível em todos os setores.
         """
 
         nome = str(nome or "").strip()
@@ -56,33 +66,35 @@ class ChamadaRepositoryMixin:
         if not nome or not funcao:
             raise ValueError("Nome e função do contato são obrigatórios.")
         telegram_chat_id = str(telegram_chat_id or "").strip() or None
+        setores = [str(item).strip() for item in (setores or []) if str(item).strip()]
         with self.connection() as connection, connection.cursor() as cursor:
             if padrao_gestao:
                 cursor.execute("UPDATE chamada_contatos SET padrao_gestao = FALSE")
             if contato_id is None:
                 cursor.execute(
                     """
-                    INSERT INTO chamada_contatos (nome, funcao, ativo, padrao_gestao, telegram_chat_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO chamada_contatos (nome, funcao, ativo, padrao_gestao, telegram_chat_id, setores)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (LOWER(nome), LOWER(funcao)) DO UPDATE SET
                         ativo = EXCLUDED.ativo,
                         padrao_gestao = EXCLUDED.padrao_gestao,
                         telegram_chat_id = EXCLUDED.telegram_chat_id,
+                        setores = EXCLUDED.setores,
                         atualizado_em = CURRENT_TIMESTAMP
                     RETURNING *
                     """,
-                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id),
+                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, setores),
                 )
             else:
                 cursor.execute(
                     """
                     UPDATE chamada_contatos
                     SET nome = %s, funcao = %s, ativo = %s, padrao_gestao = %s,
-                        telegram_chat_id = %s, atualizado_em = CURRENT_TIMESTAMP
+                        telegram_chat_id = %s, setores = %s, atualizado_em = CURRENT_TIMESTAMP
                     WHERE id = %s
                     RETURNING *
                     """,
-                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, int(contato_id)),
+                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, setores, int(contato_id)),
                 )
             row = cursor.fetchone()
             if row is None:

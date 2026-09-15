@@ -210,6 +210,31 @@ describe("Andon Geral Web", () => {
     expect(screen.getByRole("link", { name: "Painéis Operacionais" })).toBeInTheDocument();
   });
 
+  it("mantém as sub-abas dos Painéis em fluxo acima do quadro e permite minimizá-las", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return authResponse();
+      if (path.includes("/api/v1/andon")) return new Response(JSON.stringify(snapshot()), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(null, { status: 404 });
+    });
+    const { container } = renderAndon(fetchMock, "/inicio/andon");
+
+    await screen.findByRole("heading", { name: /andon geral/i });
+    const navRow = container.querySelector(".andon-nav-row");
+    expect(navRow).toBeInTheDocument();
+    expect(within(navRow as HTMLElement).getByRole("link", { name: "Andon" })).toHaveClass("page-tab--active");
+    for (const label of ["Solda", "Metas", "Pausas"]) {
+      expect(within(navRow as HTMLElement).getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    expect(within(navRow as HTMLElement).queryByRole("link", { name: "Chamadas" })).not.toBeInTheDocument();
+    expect(navRow?.compareDocumentPosition(container.querySelector(".andon-content") as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    fireEvent.click(screen.getByRole("button", { name: "Minimizar abas dos Painéis Operacionais" }));
+    expect(screen.queryByRole("link", { name: "Solda" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar abas dos Painéis Operacionais" }));
+    expect(screen.getByRole("link", { name: "Solda" })).toBeInTheDocument();
+  });
+
   it("redireciona a entrada gerencial para a visão geral dedicada", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

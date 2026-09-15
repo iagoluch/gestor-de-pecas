@@ -2697,6 +2697,59 @@ class Database(
                     resumed.append(dict(state))
         return resumed
 
+    def finalizar_fora_turno_automatico(
+        self,
+        data_hora,
+        *,
+        operador="SISTEMA",
+        motivo="Retorno do turno — recurso sem demanda",
+        tipo_interrupcao="retorno_turno_sem_demanda",
+    ):
+        """Encerra o fora de turno e publica ausência de demanda às 08:00.
+
+        A OP interrompida permanece em ``Parada`` e exige retomada manual. A
+        fila criada aqui não carrega OP nem estado produtivo: ela registra
+        apenas que o recurso voltou à janela oficial sem demanda em execução.
+        """
+
+        instante = _period_value(data_hora)
+        if instante is None:
+            raise ValueError("data_hora é obrigatória para o retorno do turno.")
+        changed = []
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM eventos_estado_recurso
+                WHERE data_fim IS NULL
+                  AND categoria = 'fora_turno'
+                  AND automatico IS TRUE
+                  AND tipo_interrupcao = 'fim_turno'
+                  AND data_inicio < %s
+                ORDER BY recurso, id
+                FOR UPDATE
+                """,
+                (instante,),
+            )
+            for current in [dict(row) for row in cursor.fetchall()]:
+                state = self._transicionar_estado_recurso_tx(
+                    cursor,
+                    current["recurso"],
+                    "fila",
+                    tipo_setor=current.get("tipo_setor"),
+                    operador=str(operador or "SISTEMA").strip() or "SISTEMA",
+                    motivo=str(motivo or "").strip(),
+                    data_hora=instante,
+                    origem="retorno_turno_sem_demanda",
+                    referencia_origem=f"evento_estado:{current.get('id')}",
+                    planejado=None,
+                    automatico=True,
+                    tipo_interrupcao=tipo_interrupcao,
+                )
+                if state and not state.get("retroativo_ignorado"):
+                    changed.append(dict(state))
+        return changed
+
     def interromper_apontamento_fim_turno(
         self,
         apontamento_id,

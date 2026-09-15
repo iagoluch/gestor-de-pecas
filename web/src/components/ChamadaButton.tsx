@@ -30,7 +30,7 @@ const DEBOUNCE_MS = 250;
  *   está chamando;
  * - "operador" (padrão): abre a busca vazia e pede o crachá de quem chama.
  */
-export function ChamadaButton({ variant = "operador" }: { variant?: Variante }) {
+export function ChamadaButton({ variant = "operador", sector }: { variant?: Variante; sector?: string | null }) {
   const gestao = variant === "gestao";
   const [aberto, setAberto] = useState(false);
   const [passo, setPasso] = useState<Passo>("form");
@@ -71,7 +71,10 @@ export function ChamadaButton({ variant = "operador" }: { variant?: Variante }) 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setBuscando(true);
     debounceRef.current = setTimeout(() => {
-      const query = busca.trim() ? `?q=${encodeURIComponent(busca.trim())}` : "";
+      const params = new URLSearchParams();
+      if (busca.trim()) params.set("q", busca.trim());
+      if (sector) params.set("setor", sector);
+      const query = params.toString() ? `?${params.toString()}` : "";
       api.get<{ items: ChamadaContato[] }>(`/api/v1/chamadas/contatos${query}`)
         .then((response) => setOpcoes(response.items))
         .catch(() => setOpcoes([]))
@@ -80,7 +83,7 @@ export function ChamadaButton({ variant = "operador" }: { variant?: Variante }) 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [aberto, busca, contato]);
+  }, [aberto, busca, contato, sector]);
 
   function reiniciar() {
     setPasso("form");

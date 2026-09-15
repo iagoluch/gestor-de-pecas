@@ -229,8 +229,18 @@ class _FakeChamadaDatabase:
             }
         }
         self.chamadas = []
+        self.operadores = {
+            "0042": {"cracha": "0042", "nome": "Maria Operadora", "ativo": True},
+        }
         self._next_id = 1
         self.vistas = {}
+
+    def buscar_operadores_apontamento(self, crachas):
+        return [
+            dict(self.operadores[cracha])
+            for cracha in crachas
+            if cracha in self.operadores and self.operadores[cracha]["ativo"]
+        ]
 
     def buscar_contato_padrao_gestao(self):
         item = next(
@@ -404,6 +414,7 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertFalse(corpo["telegram_enviado"])
         self.assertEqual(corpo["item"]["contato_nome"], "Fulano")
         self.assertEqual(corpo["item"]["solicitante_cracha"], "0042")
+        self.assertEqual(corpo["item"]["solicitante_nome"], "Maria Operadora")
 
     def test_operador_sem_cracha_e_recusado(self):
         self._as(_operator_user())
@@ -413,6 +424,19 @@ class ChamadaApiTests(unittest.TestCase):
         )
         self.assertEqual(resposta.status_code, 422)
         self.assertEqual(resposta.json()["code"], "chamada_identificacao_obrigatoria")
+
+    def test_operador_com_cracha_inexistente_e_recusado_sem_registrar(self):
+        self._as(_operator_user())
+        resposta = self.client.post(
+            "/api/v1/chamadas",
+            json={
+                "contato_id": 1, "motivo": "Manutenção", "comentario": "Máquina parada",
+                "solicitante_cracha": "9999",
+            },
+        )
+        self.assertEqual(resposta.status_code, 422)
+        self.assertEqual(resposta.json()["code"], "chamada_cracha_invalido")
+        self.assertEqual(self.db.chamadas, [])
 
     def test_gestao_sem_nome_ou_email_e_recusada(self):
         self._as(_management_user())
@@ -475,6 +499,7 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertTrue(resposta.json()["telegram_enviado"])
         mocked.assert_called_once()
         self.assertEqual(mocked.call_args.kwargs["chat_id"], "-100999")
+        self.assertIn("Maria Operadora (operador_corte) — crachá 0042", mocked.call_args.kwargs["text"])
 
     def test_contato_com_telegram_proprio_e_avisado_direto_nao_no_chat_geral(self):
         self.db.contatos[1]["telegram_chat_id"] = "555111222"

@@ -13,6 +13,8 @@ from mes.domain.manufacturing_rules import (
     ManufacturingRules,
     SHIFT_END_INTERRUPTION_TYPE,
     SHIFT_END_REASON,
+    SHIFT_START_NO_DEMAND_REASON,
+    SHIFT_START_NO_DEMAND_TYPE,
     SYSTEM_OPERATOR,
 )
 
@@ -47,6 +49,21 @@ class ShiftBoundaryService:
     def latest_due_boundary(self, now=None):
         boundaries = self.due_boundaries(now)
         return boundaries[-1] if boundaries else None
+
+    def due_shift_starts(self, now=None, *, lookback_hours=24):
+        """Aberturas do turno oficial alcançadas na janela de recuperação."""
+
+        now = now or self._now()
+        floor = now - timedelta(hours=max(1, int(lookback_hours)))
+        shift_start = self.rules.official_work_window[0]
+        candidates = []
+        for day_offset in (-1, 0):
+            moment = datetime.combine(
+                now.date() + timedelta(days=day_offset), shift_start
+            )
+            if floor <= moment <= now:
+                candidates.append(moment)
+        return tuple(sorted(set(candidates)))
 
     def configured_breaks(self):
         """Pausas automáticas vigentes, por setor.
@@ -161,6 +178,21 @@ class ShiftBoundaryService:
                     if result is not None and result.get("interrupcao_registrada"):
                         cut_interrupted.append(result)
 
+        shift_returns = []
+        shift_returner = getattr(
+            self.db, "finalizar_fora_turno_automatico", None
+        )
+        if callable(shift_returner):
+            for moment in self.due_shift_starts(now):
+                rows = list(shift_returner(
+                    moment,
+                    operador=SYSTEM_OPERATOR,
+                    motivo=SHIFT_START_NO_DEMAND_REASON,
+                    tipo_interrupcao=SHIFT_START_NO_DEMAND_TYPE,
+                ) or [])
+                if rows:
+                    shift_returns.extend(rows)
+
         break_events = self.due_break_events(now)
         break_changes = []
         break_starter = getattr(self.db, "iniciar_intervalo_automatico", None)
@@ -190,8 +222,9 @@ class ShiftBoundaryService:
             "checked_at": now,
             "interrupted": interrupted,
             "cut_interrupted": cut_interrupted,
+            "shift_returns": shift_returns,
             "break_changes": break_changes,
-            "count": len(interrupted) + len(cut_interrupted) + sum(
+            "count": len(interrupted) + len(cut_interrupted) + len(shift_returns) + sum(
                 len(item["recursos"]) for item in break_changes
             ),
         }

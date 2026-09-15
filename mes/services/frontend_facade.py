@@ -22,6 +22,7 @@ from mes.domain import (
     NO_APPOINTMENT_STOP_REASON,
     PLANNED_STOP_GROUP_CODES,
     RESOURCE_WITHOUT_OP_STOP_REASON,
+    SHIFT_START_NO_DEMAND_TYPE,
     STOP_CLASSIFICATION_COLORS,
     STOP_CLASSIFICATION_UI_TOKENS,
 )
@@ -322,7 +323,17 @@ class FrontendBackendFacade:
                 elapsed = max(0.0, (now - start).total_seconds())
             # Classificação e cor decididas uma única vez, no domínio.
             classification = classify_state_row(state)
-            ops_ativas = active_by_resource.get(resource.casefold(), [])
+            explicit_shift_return = (
+                state.get("tipo_interrupcao") == SHIFT_START_NO_DEMAND_TYPE
+            )
+            # A OP interrompida no fim do turno continua aberta para retomada
+            # manual, mas não é execução ativa no estado lógico criado às
+            # 08:00. Não a associe ao card de recurso sem demanda.
+            ops_ativas = (
+                []
+                if explicit_shift_return
+                else active_by_resource.get(resource.casefold(), [])
+            )
             items.append({
                 # Fora de turno, sem HE e sem ninguém trabalhando: ausência de
                 # demanda, não parada. Quem decide é o domínio; o calendário do
@@ -337,12 +348,17 @@ class FrontendBackendFacade:
                         resource, start if isinstance(start, datetime) else now
                     ),
                     active_operations=len(ops_ativas),
+                    explicit_shift_return=explicit_shift_return,
                 ),
                 # A visão de posto só publica execução registrada. Uma OP,
                 # rota, demanda ou elegibilidade não substitui apontamento.
                 # Evento físico manual e apontamento operacional ativo são as
                 # duas fontes canônicas desta projeção.
-                "tem_apontamento_canonico": bool(ops_ativas) or not bool(state.get("automatico")),
+                "tem_apontamento_canonico": (
+                    explicit_shift_return
+                    or bool(ops_ativas)
+                    or not bool(state.get("automatico"))
+                ),
                 "estado_recurso_id": state.get("id"),
                 "recurso": resource,
                 "setor": state.get("tipo_setor"),

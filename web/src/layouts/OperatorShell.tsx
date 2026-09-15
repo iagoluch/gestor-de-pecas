@@ -74,7 +74,7 @@ export function OperatorShell({
         </header>
         <div className="operator-content">{children}</div>
       </main>
-      <ChamadaButton />
+      <ChamadaButton sector={sector} />
     </div>
   );
 }

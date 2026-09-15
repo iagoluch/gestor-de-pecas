@@ -17,6 +17,8 @@ from .industrial import EventCategory, ShiftWindowKind, StopClassification
 SHIFT_END_BOUNDARIES = (time(17, 30), time(21, 30))
 SHIFT_END_REASON = "Fim de turno — interrupção programada automática"
 SHIFT_END_INTERRUPTION_TYPE = "fim_turno"
+SHIFT_START_NO_DEMAND_REASON = "Retorno do turno — recurso sem demanda"
+SHIFT_START_NO_DEMAND_TYPE = "retorno_turno_sem_demanda"
 AUTOMATIC_BREAKS = (
     (time(12, 10), time(12, 52), "Almoço"),
     (time(15, 30), time(15, 45), "Café"),
@@ -216,6 +218,7 @@ class ManufacturingRules:
         category=None,
         window_kind,
         active_operations=0,
+        explicit_shift_return=False,
     ) -> bool:
         """Recurso fora de turno, sem HE e sem ninguém trabalhando nele.
 
@@ -229,6 +232,12 @@ class ManufacturingRules:
         qualquer outro consumidor perguntam para esta função.
         """
 
+        # Ao abrir o turno oficial, o scheduler encerra o estado físico
+        # ``fora_turno`` e grava uma fila sem OP. Essa origem explícita é a
+        # única fila dentro do turno que significa ausência de demanda; uma
+        # fila operacional comum continua sem essa interpretação.
+        if explicit_shift_return:
+            return category == EventCategory.QUEUE.value
         if int(active_operations or 0) > 0:
             return False
         if cls.is_operational_window(window_kind):

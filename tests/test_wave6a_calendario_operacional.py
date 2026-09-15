@@ -239,6 +239,14 @@ class NoDemandStateTests(unittest.TestCase):
             window_kind=self._kind(self.sem_he, 10),
         ))
 
+    def test_retorno_automatico_das_0800_e_sem_demanda_sem_generalizar_fila(self):
+        self.assertTrue(ManufacturingRules.resource_has_no_demand(
+            category=EventCategory.QUEUE.value,
+            window_kind=self._kind(self.sem_he, 8),
+            active_operations=0,
+            explicit_shift_return=True,
+        ))
+
     def test_hora_extra_planejada_afasta_a_ausencia_de_demanda(self):
         self.assertFalse(ManufacturingRules.resource_has_no_demand(
             category=EventCategory.OUT_OF_SHIFT.value,

@@ -144,11 +144,18 @@ button { cursor: pointer; }
 
 .overview-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(310px, 1fr); gap: 16px; margin-top: 15px; }
 .overview-grid--bottom { grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); }
-.section-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); transition: box-shadow .18s var(--ease); overflow: hidden; }
+/* Grid "stretch" alinha a altura da linha, mas sem flex column o conteúdo
+   fica no topo do card e sobra um vão em branco quando um vizinho da mesma
+   linha é mais alto (ex.: "Planejado × realizado" vazio ao lado de
+   "Composição do tempo" com dados) — daí o corpo virar flex e centralizar. */
+.section-card { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); transition: box-shadow .18s var(--ease); overflow: hidden; }
 .section-card:hover { box-shadow: var(--shadow-hover); }
-.section-card__header { min-height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--divider); }
+.section-card--navigable { cursor: pointer; }
+.section-card--navigable:has(.section-card__navigation:focus-visible) { outline: 3px solid var(--primary-soft); outline-offset: 2px; }
+.section-card__header { min-height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--divider); flex: none; }
 .section-card__header h2 { margin: 0; font-size: 16px; }
-.section-card__body { min-height: 218px; padding: 16px; }
+.section-card__body { flex: 1 1 auto; min-height: 218px; padding: 16px; display: flex; flex-direction: column; }
+.section-card__body > .state-box { flex: 1; }
 .oee-evolution { display: grid; gap: 7px; min-height: 186px; }
 .oee-evolution__summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; }
 .oee-evolution__summary span { display: flex; align-items: center; gap: 7px; }
@@ -212,11 +219,13 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .management-exception-list__impact { display: grid; gap: 3px; text-align: right; }
 .management-exception-list__impact strong { font-size: 11px !important; }
 .management-exception-list__impact small { color: var(--primary) !important; font-weight: 700; }
-.management-impact-list li { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 13px; }
-.management-impact-list li > span { min-width: 0; display: flex; align-items: center; gap: 9px; }
-.management-impact-list li > span > b { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; border-radius: 50%; color: var(--primary); background: var(--primary-soft); font-size: 10px; }
-.management-impact-list li > span > span { overflow: hidden; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.management-impact-list li > strong { flex: 0 0 auto; font-size: 11px; }
+.management-impact-list li { min-height: 54px; }
+.management-impact-list li > button { width: 100%; min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 13px; border: 0; color: var(--text); background: var(--surface); font: inherit; text-align: left; transition: background-color .15s ease; }
+.management-impact-list li > button:hover, .management-impact-list li > button:focus-visible { background: var(--primary-soft); outline: none; }
+.management-impact-list li > button > span { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.management-impact-list li > button > span > b { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; border-radius: 50%; color: var(--primary); background: var(--primary-soft); font-size: 10px; }
+.management-impact-list li > button > span > span { overflow: hidden; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.management-impact-list li > button > strong { flex: 0 0 auto; font-size: 11px; }
 
 .insight-drawer-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; justify-content: flex-end; background: rgba(0, 18, 39, .48); animation: fadeIn .15s ease; }
 .insight-drawer { width: min(720px, 94vw); height: 100vh; display: flex; flex-direction: column; border-left: 1px solid var(--border); color: var(--text); background: var(--surface); animation: slideInRight .22s var(--ease); }
@@ -587,6 +596,10 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 
 @media (min-width: 1700px) and (min-height: 900px) {
   .andon-page--single-view { height: 100dvh; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  /* A faixa de Painéis é irmã do quadro no Andon gerencial. Sem uma linha
+     própria, ela ocupava o único `1fr` e empurrava o quadro para uma linha
+     implícita abaixo da viewport em Full HD. */
+  .andon-page--single-view:has(.andon-nav-row) { grid-template-rows: auto minmax(0, 1fr); }
   .andon-page--single-view .andon-header { position: relative; min-height: 72px; }
   .andon-page--single-view .andon-content { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; padding: 6px 10px 8px; overflow: hidden; }
   .andon-page--single-view .andon-stale { position: fixed; z-index: 30; top: 8px; right: 10px; max-width: 520px; margin: 0; }
@@ -792,16 +805,14 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .operator-op-form input { min-height: 50px; padding: 8px 13px; border: 1px solid #c9d5e5; border-radius: var(--radius-control); color: var(--text); font-size: 15px; text-align: center; outline: none; }
 .operator-op-form input:focus, .operator-dialog input:focus, .operator-dialog select:focus, .operator-dialog textarea:focus, .cutting-search input:focus, .highlight-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
 .operator-op-form button { min-height: 50px; padding: 0 18px; border: 1px solid var(--primary); border-radius: 6px; color: white; background: var(--primary); font-weight: 700; }
-.operator-actions { width: min(830px, 100%); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px 16px; margin: 18px auto 0; }
-.operator-actions > * { grid-column: span 2; }
-.operator-actions > :nth-child(4) { grid-column: 2 / span 2; }
-.operator-actions > :nth-child(5) { grid-column: 4 / span 2; }
-.operator-actions--without-setup { width: min(535px, 100%); grid-template-columns: repeat(2, minmax(0, 255px)); justify-content: center; gap: 8px 25px; }
-.operator-actions--without-setup > * { grid-column: auto !important; }
+/* Flex em vez de grid manual com nth-child: qualquer setor pode ter de 4 a
+   5 botões apontáveis (Setup é condicional) e o flex centraliza e distribui
+   igualmente sem precisar de um layout especial por quantidade. */
+.operator-actions { width: min(830px, 100%); display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 16px; margin: 18px auto 0; }
 /* O ícone e o texto acompanham a largura da coluna (clamp) em vez de tamanho
    fixo: com o card do desenho ocupando a lateral, a coluna disponível varia
    e um tamanho fixo espremia ícone+texto um no outro. */
-.operator-action { min-height: 56px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: clamp(6px, 1vw, 12px); padding: 6px clamp(6px, 1.3vw, 13px); border: 1px solid transparent; border-radius: 8px; color: white; font-size: clamp(12px, 1vw, 15px); font-weight: 700; }
+.operator-action { flex: 1 1 240px; max-width: 266px; min-height: 56px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: clamp(6px, 1vw, 12px); padding: 6px clamp(6px, 1.3vw, 13px); border: 1px solid transparent; border-radius: 8px; color: white; font-size: clamp(12px, 1vw, 15px); font-weight: 700; }
 .operator-action span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operator-action img { width: clamp(30px, 3.2vw, 51px); height: clamp(24px, 2.6vw, 41px); flex: 0 0 auto; object-fit: contain; }
 .operator-action--start { background: #42d85a; }
@@ -1248,8 +1259,6 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
   .operator-workbench__top { grid-template-columns: minmax(0, 1fr); }
   .operator-workbench__aside { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-selection--welding .operator-resource-grid { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
-  .operator-actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .operator-actions--without-setup { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-card-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-card-columns > section:last-child { grid-column: 1 / -1; }
   .cutting-queue { grid-template-columns: 1fr; }
@@ -1262,8 +1271,8 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
   .operator-resource-grid, .operator-selection--welding .operator-resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-resource-card { min-height: 220px; }
   .operator-workbench, .cutting-page, .highlight-page { padding: 18px; }
-  .operator-actions, .operator-actions--without-setup { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .operator-actions > * { grid-column: auto; }
+  .operator-actions { width: 100%; }
+  .operator-action { flex-basis: calc(50% - 8px); max-width: none; }
   .operator-finish-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cutting-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .highlight-detail > .highlight-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1283,7 +1292,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
   .operator-workbench__aside { grid-template-columns: minmax(0, 1fr); }
   .operator-op-form, .cutting-search, .highlight-search { align-items: stretch; flex-direction: column; }
   .operator-op-form label, .cutting-search label, .highlight-search label { width: 100%; }
-  .operator-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operator-action { flex-basis: 100%; }
   .operator-card-columns { grid-template-columns: 1fr; }
   .operator-card-columns > section:last-child { grid-column: auto; }
   .cutting-toolbar { align-items: stretch; flex-direction: column; }
@@ -1328,6 +1337,9 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 @media (max-width: 480px) {
   .chamada-identificacao { grid-template-columns: 1fr; }
 }
+.chamada-setores { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px 14px; }
+.chamada-setores legend { font-size: 12px; font-weight: 700; padding: 0 4px; }
+.chamada-setores__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 16px; margin-top: 6px; }
 .chamada-options {
   max-height: 200px;
   margin-top: 8px;
@@ -1405,25 +1417,26 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 }
 .chamada-sino:hover { background: var(--sidebar-hover); }
 
-/* Andon/Solda abrem em página cheia, fora do menu lateral da gestão. Este
-   botão abre o mesmo menu lateral (.sidebar) como camada sobreposta ao
-   quadro, sem empurrar o conteúdo — reaproveita o visual do menu mobile
-   (.mobile-menu/.sidebar-scrim), só que disponível em qualquer resolução. */
+/* Andon/Solda abrem em página cheia, fora do menu lateral da gestão. Esta
+   faixa fica no fluxo normal da página (não fixa), pra não sobrepor os
+   cartões do quadro: à esquerda, o botão que abre o menu lateral completo
+   (.sidebar) como camada sobreposta — reaproveita o visual do menu mobile
+   (.mobile-menu/.sidebar-scrim) — e ao lado, as sub-abas dos Painéis
+   Operacionais (minimizáveis, como antes). */
+.andon-nav-row { display: flex; align-items: flex-end; gap: 8px; margin: 0 0 14px; }
+.andon-page .andon-nav-row { margin: 0 0 8px; }
 .andon-sidebar-toggle {
-  position: fixed;
-  top: 14px;
-  left: 14px;
-  z-index: 40;
-  width: 44px;
-  height: 44px;
+  flex: none;
+  width: 43px;
+  height: 43px;
   display: grid;
   place-content: center;
-  gap: 5px;
+  gap: 4px;
   border: 1px solid var(--sidebar-border);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--sidebar);
 }
-.andon-sidebar-toggle span { width: 22px; height: 2px; background: white; }
+.andon-sidebar-toggle span { width: 18px; height: 2px; background: white; }
 .andon-sidebar-scrim { position: fixed; inset: 0; z-index: 41; border: 0; background: rgba(0, 18, 39, .54); }
 .sidebar.andon-sidebar-panel {
   position: fixed;
@@ -1436,6 +1449,35 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
   transition: transform .2s ease;
 }
 .sidebar.andon-sidebar-panel--open { transform: translateX(0); }
+.andon-nav-row .panels-tabs-row { display: flex; align-items: flex-end; flex: 1 1 auto; min-width: 0; gap: 8px; }
+.andon-nav-row .panels-tabs-row .panels-tabs { flex: 1 1 auto; min-width: 0; margin: 0; }
+.panels-tabs-minimize {
+  flex: none;
+  height: 43px;
+  width: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-alt);
+  font-size: 15px;
+}
+.panels-tabs-minimize:hover { color: var(--text); background: var(--surface); }
+.panels-tabs-reopen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 43px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-alt);
+  font-size: 12px;
+  font-weight: 700;
+}
+.panels-tabs-reopen:hover { color: var(--text); background: var(--surface); }
 .chamada-sino__badge {
   position: absolute;
   top: -6px;

@@ -117,6 +117,11 @@ Não transformar logs, prompts ou relatórios históricos em fonte de verdade at
 - Turno normal: **08:00–17:30**. Fora de turno: **17:30–08:00**.
 - **Hora extra planejada** é uma janela pontual fora do turno normal (ex.: 17:30–21:30, 06:00–08:00), cadastrada como exceção `disponivel_extra` em `excecoes_calendario_produtivo`. Não é um segundo turno fixo e não tem tela própria. Quando planejada, o período integra a janela operacional planejada; quando não, o período continua fora de turno.
 - **O relógio, sozinho, nunca bloqueia apontamento.** 18:00, 21:30, 01:00, 06:00 e 07:30 são horários operacionalmente válidos. Não implementar `if agora > 17:30: bloqueia`. Fora de turno muda a contabilidade de disponibilidade, não a permissão de apontar.
+- Pausa automática cadastrada em `pausas_automaticas_setor` termina e retoma
+  automaticamente no `hora_fim` configurado. Na abertura do turno oficial às
+  **08:00**, o estado `fora_turno` termina em **Recurso sem demanda**, sem
+  presumir OP, produção ou estado físico; uma OP interrompida continua exigindo
+  retomada manual.
 - Fora de turno **não** compõe disponibilidade e **não** é parada da máquina.
 - Fora de turno é grandeza **global** de calendário: o mesmo intervalo noturno observado em vários setores/recursos não é somado na agregação global (a métrica por recurso/setor permanece).
 - Classificação central de parada em `ManufacturingRules.classify_stop`: **PLANEJADA** (grupo `0002 — PARADA PROGRAMADA` do catálogo PCFactory: intervalo, café, reunião, limpeza, manutenção preventiva, fora de turno sem hora extra) ou **NÃO_PLANEJADA** (todo o resto). A cor deriva da classificação (`planejada` → amarela, `nao_planejada` → vermelha); nenhum componente visual decide cor por grupo de catálogo ou por texto do motivo.

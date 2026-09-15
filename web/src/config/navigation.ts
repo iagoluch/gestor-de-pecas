@@ -52,7 +52,6 @@ export const managementSections: ManagementSection[] = [
       { label: "Solda", path: "/inicio/solda", screen: "panels-welding" },
       { label: "Metas", path: "/inicio/metas", screen: "panels-goals" },
       { label: "Pausas", path: "/inicio/pausas", screen: "panels-pauses" },
-      { label: "Chamadas", path: "/inicio/chamadas", screen: "panels-chamadas" },
     ],
   },
   {
@@ -132,7 +131,7 @@ export const managementSections: ManagementSection[] = [
   },
   {
     id: "dev",
-    label: "DEV",
+    label: "IagoDev",
     icon: assets.navigation.dev,
     defaultPath: "/inicio/crachas",
     adminOnly: true,
@@ -143,6 +142,7 @@ export const managementSections: ManagementSection[] = [
     tabs: [
       { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges" },
       { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users" },
+      { label: "Chamadas", path: "/inicio/chamadas", screen: "dev-chamadas" },
     ],
   },
 ];

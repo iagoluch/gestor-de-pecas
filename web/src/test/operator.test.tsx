@@ -255,6 +255,10 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByRole("heading", { name: "Corte - Laser Ensis 3015" });
+    // A tarefa chega recolhida — expande para ver os planos.
+    const toggle = (await screen.findByRole("heading", { name: "T-CORTE" })).closest("button");
+    if (!toggle) throw new Error("toggle da tarefa T-CORTE não encontrado");
+    fireEvent.click(toggle);
     // Cada nesting vive dentro do seu plano; o tempo continua individual.
     expect(await screen.findByText("P-01")).toBeInTheDocument();
     expect(screen.getByText("P-02")).toBeInTheDocument();
@@ -534,7 +538,7 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("heading", { name: "Solda Aço - Estação 1" });
     expect(screen.queryByRole("heading", { name: "Selecione o recurso" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Voltar" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Ações operacionais")).toHaveClass("operator-actions--without-setup");
+    expect(screen.getByLabelText("Ações operacionais")).toHaveClass("operator-actions");
     expect(screen.queryByRole("button", { name: "Setup" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
   });

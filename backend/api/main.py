@@ -242,24 +242,31 @@ async def _sigmanest_sync_loop(application: FastAPI) -> None:
         await asyncio.sleep(interval)
 
 
-async def _simulation_shift_boundary_loop(application: FastAPI) -> None:
-    """Aplica os limites canônicos enquanto o relógio TESTE está acelerado."""
+async def _shift_boundary_loop(application: FastAPI) -> None:
+    """Aplica pausas e limites canônicos no relógio ativo da aplicação."""
 
-    database = application.state.database_manager.get()
-    if not _simulation_target_is_explicit(database):
-        raise RuntimeError(
-            "Relógio virtual recusado: o banco ativo não é o alvo TESTE explicitamente esperado."
-        )
-    service = ShiftBoundaryService(database, now_func=application.state.clock.now)
+    clock = application.state.clock
+    service = None
     while True:
         try:
+            if service is None:
+                database = application.state.database_manager.get()
+                if clock.simulation_mode and not _simulation_target_is_explicit(database):
+                    raise RuntimeError(
+                        "Relógio virtual recusado: o banco ativo não é o alvo "
+                        "TESTE explicitamente esperado."
+                    )
+                service = ShiftBoundaryService(database, now_func=clock.now)
             result = await asyncio.to_thread(service.apply_due)
             if int(result.get("count") or 0):
                 application.state.realtime.publish("shift_boundary")
         except asyncio.CancelledError:
             raise
         except Exception:
-            logging.exception("Falha controlada ao aplicar limite de turno na simulação 4B.")
+            # Se a aquisição inicial do banco falhou, o próximo ciclo tenta
+            # novamente. Uma pausa não pode ficar sem scheduler até o restart.
+            service = None
+            logging.exception("Falha controlada ao aplicar pausas e limites de turno.")
         await asyncio.sleep(1.0)
 
 
@@ -361,11 +368,10 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 _report_scheduler_loop(_app),
                 name="gestor-report-scheduler",
             )
-        if clock.running:
-            shift_boundary_task = asyncio.create_task(
-                _simulation_shift_boundary_loop(_app),
-                name="gestor-simulation-shift-boundary",
-            )
+        shift_boundary_task = asyncio.create_task(
+            _shift_boundary_loop(_app),
+            name="gestor-shift-boundary",
+        )
         try:
             yield
         finally:

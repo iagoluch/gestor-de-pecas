@@ -5,6 +5,7 @@ import App from "../App";
 import { AuthProvider } from "../auth/AuthContext";
 import { FilterBar } from "../components/FilterBar";
 import { SearchInput } from "../components/SearchInput";
+import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { managementRoutes } from "../config/navigation";
 import { FilterProvider, useManagementFilters } from "../filters/FilterContext";
@@ -70,24 +71,42 @@ function managementInsightsFixture() {
 }
 
 describe("contrato gerencial Web", () => {
+  it("permite abrir um card pelo conteúdo sem desviar o botão interno", () => {
+    const onNavigate = vi.fn();
+    const onInternalAction = vi.fn();
+    render(
+      <SectionCard title="Resumo" navigation={{ label: "Abrir resumo", onNavigate }}>
+        <p>Leitura do resumo</p>
+        <button type="button" onClick={onInternalAction}>Ver detalhe</button>
+      </SectionCard>,
+    );
+
+    fireEvent.click(screen.getByText("Leitura do resumo"));
+    expect(onNavigate).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Ver detalhe" }));
+    expect(onInternalAction).toHaveBeenCalledOnce();
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Abrir resumo" })).toBeInTheDocument();
+  });
+
   it("mantém as telas gerenciais e inclui as sub-abas do Andon e da Solda", () => {
     expect(managementRoutes).toHaveLength(38);
     expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(38);
     // Wave 6D: o acompanhamento gerencial da Solda entra como sub-aba dos
     // Painéis Operacionais, ao lado do Andon, sem aplicação nem navegação
-    // paralela. Reorganização 15/09/2026: Andon/Solda/Metas/Pausas/Chamadas
+    // paralela. Reorganização 15/09/2026: Andon/Solda/Metas/Pausas
     // saíram da Tela inicial para a seção própria "Painéis Operacionais".
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "panels" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Solda", path: "/inicio/solda", sectionId: "panels" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Metas", path: "/inicio/metas", sectionId: "panels" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "panels" }));
-    // Botão de chamada (14/09/2026): a lista de contatos é gerida aqui, nunca
-    // pelo Dev Observatory, que é somente leitura de propósito.
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas", path: "/inicio/chamadas", sectionId: "panels" }));
+    // Chamadas reúne configuração e histórico técnico, por isso fica no
+    // IagoDev, nunca no Dev Observatory (somente leitura).
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas", path: "/inicio/chamadas", sectionId: "dev" }));
     // Wave 5: a designação do responsável pelo retrabalho da primeira peça é
     // configuração gerencial e vive no cadastro de crachás que já existia.
     // Reorganização 15/09/2026: Crachás e Cadastro viraram exclusivos da
-    // conta admin, agrupados na seção "DEV".
+    // conta admin, agrupados na seção "IagoDev".
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Crachás", path: "/inicio/crachas", sectionId: "dev" }));
     // Cadastro de usuários (14/09/2026): exclusivo da conta admin, mesma
     // tela de login que os funcionários usam.
@@ -296,6 +315,13 @@ describe("contrato gerencial Web", () => {
     expect(screen.getByRole("heading", { name: "O que precisa de atenção" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Maiores perdas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recursos com maior impacto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir análise das exceções" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir análise das maiores perdas" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir análise dos recursos com maior impacto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Produção: Planejado versus Realizado" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Consulta Operacional: Tempo MES" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Consulta Operacional: Recursos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Auditoria: Inconsistências" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /OEE: Dados insuficientes.*Ver explicação/i }));
     expect(screen.getByRole("dialog", { name: "Entenda o OEE" })).toBeInTheDocument();
@@ -303,10 +329,8 @@ describe("contrato gerencial Web", () => {
     expect(screen.getByRole("link", { name: "Rastrear OP" })).toHaveAttribute("href", "/rastreabilidade/linha-do-tempo?op=OP-17");
     fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /DOBRA-01 está em parada não programada/i }));
-    expect(screen.getByRole("dialog", { name: "DOBRA-01 está em parada não programada" })).toBeInTheDocument();
-    expect(screen.getByText("Por que requer atenção")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
+    fireEvent.click(screen.getByRole("button", { name: /Ver análise relacionada a DOBRA-01 está em parada não programada/i }));
+    await screen.findByRole("heading", { name: "Análises — Paradas" });
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
     await screen.findByRole("heading", { name: "Entrar no Gestor" });
     expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/auth/logout") && init?.method === "POST")).toBe(true);
