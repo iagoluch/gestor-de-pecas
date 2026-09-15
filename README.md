@@ -233,6 +233,8 @@ falhas conhecidas que devem ser corrigidas sem mascaramento:
 ## Documentação principal
 
 - `ROADMAP.md` — direção oficial e próxima etapa;
+- `docs/STATUS_ATUAL.md` — o que aconteceu depois da última atualização do
+  ROADMAP; ler antes de assumir que o ROADMAP está em dia;
 - `AGENTS.md` — regras obrigatórias para agentes;
 - `docs/INTEGRACAO_TOTVS_PRODUCTION_ORDER_V1.md` — contrato inbound homologado;
 - `docs/HOMOLOGACAO_TOTVS_PRODUCTION_ORDER_V1_20260826.md` — histórico da

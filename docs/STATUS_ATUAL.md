@@ -1,0 +1,232 @@
+# STATUS ATUAL — Gestor de Peças
+
+**Atualizado em:** 15/09/2026.
+**Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
+corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
+arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
+Claude ou outro) começar uma sessão sabendo o estado real do repositório sem
+precisar reconstruir isso a partir de commits soltos ou de memória de outra
+ferramenta.
+
+Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
+(seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
+commit `4a60564`.
+
+Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
+ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e
+este arquivo pode ser esvaziado para a wave seguinte — não deixar os dois
+divergirem por muito tempo.
+
+---
+
+## 1. O que mudou desde a Wave 6E (11/09) até hoje (15/09)
+
+### 1.1 Solda deixou de ser um setor único — agora são 5 (13–14/09/2026)
+
+Especificação fechada com o usuário em 14/09/2026 e já implementada:
+
+| Setor | Login(s) | Recursos TOTVS |
+| --- | --- | --- |
+| **Solda Aço** | `estacao1aco`..`estacao10aco` | os 41 códigos legados que já eram "Solda" |
+| **Solda Alumínio** | `estacao1alu`..`estacao6alu` | nenhum ainda (nasce vazio, como Montagem) |
+| **Solda Robô** | `robo1` (posto fixo) | `ROBO P`, `ROBO S` |
+| **Proj. Ferramentaria** | `projetos` (pede seleção de recurso) | `DISPEX`, `DISPG`, `SERVGE`, `DISPOS` |
+| **Protótipo** | `prototipo` (pede seleção de recurso) | `PREMTG`, `SOLDA4` |
+
+Regras confirmadas: cada um é um `tipo_setor` real e distinto; todos seguem
+elegibilidade aberta (qualquer recurso do setor é apontável, sem bloqueio de
+recurso divergente — mesma exceção que já valia para "Solda" desde o commit
+`44675f3`); no Andon os 5 aparecem como **sub-grupos dentro de 1 painel
+"Solda"** (mesmo padrão do Corte para Laser/Plasma/Destaque), não como 5
+painéis de topo; os 41 recursos legados de Solda Aço ficam no banco mas não
+aparecem em telas/listagem por padrão (só "vêm para frente" se uma OP real
+referenciar um deles no roteiro). Senha das contas novas é `1234`, só em
+TEST — trocar manualmente antes do piloto em produção.
+
+Commits relevantes: `fb2c707`, `44675f3`, `4ff7dce`, `9c39eb8`, `0dc50f9`,
+`25f3208`, `da28772`, `382b1ee`, `17fbcba`, `d996e10`, `f37c3f8`.
+
+Arquivos-chave: `app/core/operator_sectors.py`, `app/core/resource_mapping.py`
+(`SECTOR_OWNED_RESOURCE_SECTORS`, `RESOURCE_CONFIRMATION_EXEMPT_SECTORS`),
+`mes/services/andon.py`.
+
+**Não reabrir esta investigação** sem fato novo — a especificação foi
+aprovada sem ajuste pelo usuário.
+
+### 1.2 Auditoria de segurança (14/09/2026) — 1 crítico corrigido, 3 pendências aguardando decisão
+
+Relatório completo: `docs/AUDITORIA_SEGURANCA_2026-09-14.md`.
+
+**Corrigido:**
+- **Crítico**: o receptor SOAP do TOTVS (`POST /PcfIntegService`) não exigia
+  autenticação e gravava OP no banco a partir de qualquer mensagem aceita. Como
+  o sistema pode ser publicado num túnel Cloudflare público
+  (`iniciar_sistema_teste_cloudflare.py`) com `GESTOR_TOTVS_SOAP_ENABLED=true`,
+  isso era gravável pela internet. Corrigido em
+  `backend/integrations/totvs_soap.py:30`
+  (`_arrived_through_public_host`): recusa 403 quando a requisição chega pelo
+  hostname público do túnel, aceita pela LAN normalmente.
+- **Alto**: login do Dev Observatory sem freio de tentativa (credencial única
+  guardando stack trace/leitura do REAL) — agora bloqueia por IP após 5
+  falhas/300s. Corrigido de brinde um bug que derrubava o login com 500 em
+  senha acentuada.
+
+**Pendências que exigem decisão do usuário (não corrigidas de propósito):**
+1. Login principal (`/api/v1/auth/login`) também sem freio de tentativa —
+   não travado porque bloqueio total pode impedir operador de apontar no chão
+   de fábrica. Sugestão do relatório: atraso progressivo por IP+usuário.
+2. IDOR na Qualidade: `registrar_peca`/`finalizar_inspecao` não validam que o
+   `inspecao_id` pertence ao setor do operador. Não corrigido porque
+   `qualidade_inspecoes` não guarda o setor de origem — precisa migração de
+   schema.
+3. `.env` não define `GESTOR_WEB_SESSION_SECRET` nem
+   `GESTOR_DEVOBS_SESSION_SECRET` — sessões caem a cada restart do processo.
+
+Verificado como correto e não precisa mexer: SQL parametrizado, sem
+subprocess/eval/pickle, XXE bloqueado, path traversal protegido, CSRF em
+rotas de escrita, PBKDF2-SHA256 600k, sem `dangerouslySetInnerHTML`,
+somente-leitura do REAL sem desvio. `pip-audit`: 0 vulnerabilidades.
+
+### 1.3 Pente-fino de qualidade de código (14/09/2026)
+
+Relatório completo: `docs/PENTE_FINO_2026-09-14.md`.
+
+Corrigido: seed de homologação da Etapa 7A que estava quebrado desde a Wave 5
+(faltava `autorizador_retrabalho`); uma query redundante em
+`iniciar_intervalo_automatico`; 12 imports mortos; 27 arquivos-lixo (0 bytes
+na raiz, um zip com `__pycache__` dentro, um `.pyc` órfão) movidos para
+`_quarentena_revisar/` — **nada foi apagado**, é seguro revisar e apagar
+depois.
+
+**Pendência de negócio (não decidida):** roteiro de Pintura tem o mesmo posto
+(`PINT.L`) aparecendo duas vezes (`PINT.L` op 40, `JATO` op 50, `PINT.L` op
+60). O mapper projeta 3 operações separadas; 2 testes esperam dedupe. Decidir:
+uma OP que repete o mesmo posto no roteiro vira duas operações apontáveis ou
+uma só? (Hipótese do agente: duas, para não perder passo de pintura — mas é
+decisão de chão de fábrica.)
+
+Achado importante: a suíte de testes (899 testes) **não está inchada** — sem
+duplicação real. A antiga falha conhecida em `manufacturing_rules.py`
+(citada em relatórios anteriores a setembro) **não existe mais**.
+
+Risco não resolvido: `docs/` está com ~120MB (evidências + screenshots).
+Recomendado tirar da árvore principal, não executado ainda (mover em massa é
+arriscado de desfazer).
+
+### 1.4 Validação visual completa (14/09/2026)
+
+Relatório completo: `docs/VALIDACAO_VISUAL_2026-09-14.md`. 55 telas/estados
+cobertos. 8 defeitos corrigidos (fonte inconsistente em KPI, 4 casos de texto
+cortado, Solda quebrada a 1024px, nome de operador com reticências
+inconsistente, e um bug real: `MetricCard` mostrava número quando o indicador
+vinha ausente do backend — caía silenciosamente no default `"disponivel"`).
+
+**Decisão pendente (baixo risco):** o breakpoint de `.welding-macros__body`
+foi movido de 900px para 1180px porque a 1024px a tabela da Solda comia o
+espaço do gráfico de MACROs. Se 1024px não for largura real de uso no chão de
+fábrica, é seguro reverter (`web/src/styles/welding.css`, uma linha).
+
+Documentado sem alterar: densidade do Andon TV (18 textos <10px a 1920×1080)
+— é consequência direta de "tudo cabe sem rolagem"; corrigir exigiria
+redesenhar a tela, não é CSS.
+
+### 1.5 Dev Observatory (13/09/2026) — implementado, testes agora passam
+
+Observabilidade permanente só para o desenvolvedor (logs/erros/telas por
+turno, TEST+REAL somente leitura). Vive em `backend/observability/` e
+`backend/api/routers/dev_observatory.py`, rota `/api/v1/dev-observatory`.
+Acesso ao REAL é somente-leitura garantido por prova de gravação recusada na
+abertura da conexão (falha fechada). Relatórios automáticos por turno em
+`dev_reports/<data>_<turno>/`.
+
+A pendência antiga de `tests/test_dev_observatory` (7 testes com 404 por
+fixture sem `dev_observatory_enabled=True`) **já está resolvida** — a flag já
+está na fixture (`tests/test_dev_observatory.py:154`); 19/19 passando desde a
+validação visual de 14/09.
+
+### 1.6 Reunião de alinhamento do piloto TOTVS (14/09/2026)
+
+Notas completas em memória do desenvolvedor; principais decisões fechadas:
+- VM do piloto: Docker + Ubuntu Server 24.04 LTS, acesso só via API interna.
+- Banco: mantém **PostgreSQL**, sem migração para MSSQL (decisão fechada —
+  sistema já acoplado a Postgres, VM isolada não tem o problema que
+  justificaria MSSQL, e MSSQL exigiria licença paga sem benefício técnico).
+- OP fechada no TOTVS via finalização parcial do PCP (rejeição
+  `A680OPTOT Operacao ja totalizada`): já não quebra nada tecnicamente
+  (classificada `FUNCTIONAL` no outbox, sem retry infinito). Falta apenas
+  **notificar o supervisor via Telegram** quando isso ocorrer — combinado,
+  ainda **não implementado**.
+- Cadastro de filial: piloto roda só na filial 4. Falta implementar: quando o
+  TOTVS não mandar `branch_id`, usar `"4"` como padrão em vez de string vazia
+  (`app/database/database.py:439`) — **implementado no commit `4a60564`**
+  ("default de filial TOTVS"), conferir se cobre exatamente esse ponto antes
+  de dar como fechado.
+- Retry/reconexão TOTVS: já resolvido antes desta reunião (outbox
+  transacional + worker em background, backoff 1/2/5/10/30/60min).
+
+**Pendência real restante desta reunião:** notificação Telegram ao supervisor
+quando o outbox cair em rejeição `FUNCTIONAL`. Ainda não implementado.
+
+### 1.7 Commits mais recentes (não descritos em nenhum relatório datado)
+
+```text
+4a60564 feat: botão de chamada, cadastro de usuários e default de filial TOTVS
+f37c3f8 fix: Projetos e Protótipo passam a pedir seleção de recurso
+d996e10 fix: rótulo de SOLDA4 deixa de dizer "Solda" (agora é do Protótipo)
+```
+
+O commit `4a60564` trouxe: sistema de "chamada" (botão + sino) para o
+operador acionar alguém — `web/src/components/ChamadaButton.tsx`,
+`ChamadaSino.tsx`, `app/database/chamada_repository.py`,
+`backend/api/routers/chamadas.py`; cadastro de usuários gerenciais
+(`web/src/pages/home/UsersPage.tsx`, testado em
+`tests/test_user_management.py`); integração de notificações
+(`mes/integrations/notifications/telegram.py` — possivelmente a base para a
+pendência do Telegram do item 1.6, conferir antes de reimplementar); e o
+default de filial TOTVS mencionado acima.
+
+## 2. Working tree com alterações não commitadas (verificar antes de mexer)
+
+Em 15/09/2026 o `git status` mostra trabalho em andamento, aparentemente uma
+reorganização da navegação em abas ("painéis") agrupando Chamadas/Crachás
+(Badges)/Metas/Pausas/Usuários sob uma barra nova:
+
+- novo componente `web/src/components/PanelsTabBar.tsx`;
+- novos ícones `assets/web/navigation/dev.svg` e `panels.svg`;
+- `web/src/config/navigation.ts`, `web/src/layouts/AppShell.tsx` e as páginas
+  de `web/src/pages/home/*` alteradas para usar essa nova barra;
+- testes `web/src/test/andon.test.tsx` e `management.test.tsx` ajustados;
+- `backend/api/routers/management.py` e `tests/test_user_management.py` com
+  pequenos ajustes.
+- Dois arquivos de 0 bytes (`0`, `None` — lixo do tipo já descrito no
+  pente-fino) estão marcados para exclusão (`D`), coerente com a limpeza.
+
+**Este é trabalho em progresso de uma sessão anterior — não descartar, não
+commitar sem entender, e não recriar do zero.** Rodar `git diff` para ver o
+estado exato antes de continuar essa frente.
+
+## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
+
+1. Notificação Telegram ao supervisor em rejeição `FUNCTIONAL` do outbox TOTVS
+   (§1.6) — não implementado.
+2. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
+   (§1.3) — decisão de chão de fábrica.
+3. Segurança: freio no login principal, IDOR na Qualidade, secrets de sessão
+   ausentes no `.env` (§1.2) — aguardando decisão do usuário.
+4. Breakpoint de 1024px na Solda: manter 1180px ou reverter para 900px?
+   (§1.4) — baixo risco, decisão de uso real.
+5. Todas as pendências antigas do `ROADMAP.md` seção 5 (cadastro de recursos,
+   Montagem, ingestão do MODELO da Solda, `prazo_entrega` sem origem, filtro
+   de setor em Crachás) continuam abertas — nada disso foi resolvido nesta
+   janela.
+
+## 4. O que NÃO fazer (reforço das regras já em `AGENTS.md`)
+
+- Não reabrir a investigação de pull de OP do TOTVS nem a divisão de setores
+  da Solda "para conferir" — ambas foram fechadas e homologadas com prova
+  real; qualquer dúvida nova exige fato novo, não releitura de hipótese antiga.
+- Não tratar os relatórios datados (`docs/*_2026-09-14.md`) como pendência —
+  eles são evidência de trabalho já concluído; as pendências reais estão
+  destacadas explicitamente nesses relatórios e resumidas na seção 3 acima.
+- Não apagar `_quarentena_revisar/` sem o usuário confirmar — nada nela é
+  referenciado, mas a decisão de apagar é dele.

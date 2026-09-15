@@ -2,12 +2,14 @@ import { assets } from "./assets";
 
 export type ManagementSectionId =
   | "home"
+  | "panels"
   | "operations"
   | "production"
   | "analytics"
   | "audit"
   | "reports"
-  | "traceability";
+  | "traceability"
+  | "dev";
 
 export interface ManagementTab {
   label: string;
@@ -23,6 +25,8 @@ export interface ManagementSection {
   icon: string;
   defaultPath: string;
   tabs: ManagementTab[];
+  /** Só a conta admin vê a seção inteira (decisão do usuário, 14/09/2026). */
+  adminOnly?: boolean;
 }
 
 export const managementSections: ManagementSection[] = [
@@ -35,14 +39,20 @@ export const managementSections: ManagementSection[] = [
       { label: "Visão Geral", path: "/inicio/visao-geral", screen: "home-overview" },
       { label: "Setores", path: "/inicio/setores", screen: "home-sectors" },
       { label: "Alertas", path: "/inicio/alertas", screen: "home-alerts" },
-      { label: "Andon", path: "/inicio/andon", screen: "home-andon" },
-      { label: "Solda", path: "/inicio/solda", screen: "home-welding" },
-      { label: "Metas", path: "/inicio/metas", screen: "home-goals" },
       { label: "IA", path: "/inicio/ia", screen: "home-ai" },
-      { label: "Pausas", path: "/inicio/pausas", screen: "home-pauses" },
-      { label: "Crachás", path: "/inicio/crachas", screen: "home-badges" },
-      { label: "Chamadas", path: "/inicio/chamadas", screen: "home-chamadas" },
-      { label: "Cadastro", path: "/inicio/cadastro", screen: "home-cadastro", adminOnly: true },
+    ],
+  },
+  {
+    id: "panels",
+    label: "Painéis Operacionais",
+    icon: assets.navigation.panels,
+    defaultPath: "/inicio/andon",
+    tabs: [
+      { label: "Andon", path: "/inicio/andon", screen: "panels-andon" },
+      { label: "Solda", path: "/inicio/solda", screen: "panels-welding" },
+      { label: "Metas", path: "/inicio/metas", screen: "panels-goals" },
+      { label: "Pausas", path: "/inicio/pausas", screen: "panels-pauses" },
+      { label: "Chamadas", path: "/inicio/chamadas", screen: "panels-chamadas" },
     ],
   },
   {
@@ -120,6 +130,21 @@ export const managementSections: ManagementSection[] = [
       { label: "Lote / Material / Nesting", path: "/rastreabilidade/lote-material-nesting", screen: "traceability-nesting" },
     ],
   },
+  {
+    id: "dev",
+    label: "DEV",
+    icon: assets.navigation.dev,
+    defaultPath: "/inicio/crachas",
+    adminOnly: true,
+    // Configurações exclusivas da conta admin. Crachás e Cadastro já
+    // existem; novas telas de configuração (ex.: parâmetros de integração,
+    // feature flags) entram aqui conforme forem criadas — decisão do
+    // usuário, 15/09/2026.
+    tabs: [
+      { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges" },
+      { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users" },
+    ],
+  },
 ];
 
 export const managementRoutes = managementSections.flatMap((section) =>
@@ -128,4 +153,12 @@ export const managementRoutes = managementSections.flatMap((section) =>
 
 export function sectionById(id: ManagementSectionId) {
   return managementSections.find((section) => section.id === id)!;
+}
+
+// "Tela inicial", "Painéis Operacionais" e "DEV" compartilham o prefixo de
+// URL /inicio/*, então a seção ativa só pode ser decidida comparando com as
+// rotas reais de cada uma — comparar só o primeiro trecho da URL marcaria as
+// três ao mesmo tempo.
+export function isSectionActive(section: ManagementSection, pathname: string) {
+  return section.tabs.some((tab) => pathname === tab.path || pathname.startsWith(`${tab.path}/`));
 }

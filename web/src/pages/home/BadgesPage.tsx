@@ -79,7 +79,7 @@ export function ManagementBadgesPage() {
   const filtros = usePersistentFilters("gestor.filtros.crachas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
-  const title = "Tela inicial — Crachás e responsáveis";
+  const title = "DEV — Crachás e responsáveis";
   const subtitle =
     "Crachás do chão de fábrica e quem está autorizado a liberar o retrabalho da primeira peça.";
 
@@ -127,14 +127,14 @@ export function ManagementBadgesPage() {
 
   if (query.loading && !query.data) {
     return (
-      <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <LoadingState />
       </PageFrame>
     );
   }
   if (query.error) {
     return (
-      <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <ErrorState error={query.error} onRetry={query.reload} />
       </PageFrame>
     );
@@ -145,7 +145,7 @@ export function ManagementBadgesPage() {
     : `${items.length} crachás cadastrados`;
   return (
     <PageFrame
-      sectionId="home"
+      sectionId="dev"
       title={title}
       subtitle={subtitle}
       filters={false}

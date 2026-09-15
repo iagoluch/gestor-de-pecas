@@ -198,14 +198,16 @@ describe("Andon Geral Web", () => {
     const { container } = renderAndon(fetchMock);
 
     await screen.findByRole("heading", { name: /andon geral/i });
-    expect(container.querySelector(".sidebar")).not.toBeInTheDocument();
-    expect(container.querySelector(".page-tabs")).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
-    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(container.querySelector(".andon-header")).not.toBeInTheDocument();
     expect(container.querySelector(".andon-summary")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tela cheia" })).not.toBeInTheDocument();
     expect(container.querySelector(".andon-page--manager")).toBeInTheDocument();
+    // Página cheia, mas quem é gestão ainda alcança o menu lateral completo
+    // (Tela inicial e demais seções) sobreposto ao quadro, sem depender do
+    // "voltar" do navegador (corrigido 15/09/2026).
+    expect(screen.getByRole("button", { name: "Abrir navegação" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Tela inicial" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Painéis Operacionais" })).toBeInTheDocument();
   });
 
   it("redireciona a entrada gerencial para a visão geral dedicada", async () => {

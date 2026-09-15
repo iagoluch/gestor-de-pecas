@@ -63,6 +63,17 @@ class UserManagementApiTests(unittest.TestCase):
         resposta = self.client.get("/api/v1/management/users")
         self.assertEqual(resposta.status_code, 403)
 
+    def test_crachas_agora_e_exclusivo_do_admin(self):
+        # Reorganização 15/09/2026: Crachás saiu de "qualquer gestão" para a
+        # seção DEV, junto do Cadastro de usuários.
+        self._as(_management_user())
+        resposta = self.client.get("/api/v1/management/badges")
+        self.assertEqual(resposta.status_code, 403)
+
+        self._as(_admin_user())
+        resposta = self.client.get("/api/v1/management/badges")
+        self.assertEqual(resposta.status_code, 200)
+
     def test_admin_lista_niveis_disponiveis(self):
         self._as(_admin_user())
         resposta = self.client.get("/api/v1/management/users")

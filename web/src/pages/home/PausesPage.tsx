@@ -81,7 +81,7 @@ export function ManagementPausesPage() {
   const filtros = usePersistentFilters("gestor.filtros.pausas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
-  const title = "Tela inicial — Pausas automáticas";
+  const title = "Painéis Operacionais — Pausas automáticas";
   const subtitle = "Horários em que o sistema interrompe o apontamento por setor.";
 
   const setores = useMemo(() => {
@@ -149,10 +149,10 @@ export function ManagementPausesPage() {
   }
 
   if (query.loading && !query.data) {
-    return <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}><LoadingState /></PageFrame>;
+    return <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}><LoadingState /></PageFrame>;
   }
   if (query.error) {
-    return <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+    return <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   }
 
   const setoresConfigurados = new Set(items.filter((item) => item.ativo).map((item) => item.tipo_setor));
@@ -165,7 +165,7 @@ export function ManagementPausesPage() {
     tipoDaPausa(item.nome).label.toLocaleLowerCase("pt-BR") !== item.nome.trim().toLocaleLowerCase("pt-BR"));
   return (
     <PageFrame
-      sectionId="home"
+      sectionId="panels"
       title={title}
       subtitle={subtitle}
       filters={false}

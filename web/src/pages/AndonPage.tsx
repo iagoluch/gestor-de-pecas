@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { AndonResourceDrawer } from "../components/AndonResourceDrawer";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
+import { AndonSidebarNav } from "../components/AndonSidebarNav";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
@@ -268,6 +269,11 @@ export function AndonPage() {
   useTvRotation("/andon");
   const closeResource = useCallback(() => setSelectedResourceKey(null), []);
   const pageClass = `andon-page andon-page--single-view ${user?.role === "andon" ? "andon-page--tv" : "andon-page--manager"}`;
+  // O Andon abre em página cheia, fora do menu lateral da gestão. Sem isso,
+  // quem chegou aqui pelo menu ficaria sem jeito de voltar pra Tela inicial
+  // (ou qualquer outra seção) a não ser pelo "voltar" do navegador (decisão
+  // do usuário, 15/09/2026). A TV dedicada (role "andon") nunca vê isso.
+  const showPanelsNav = Boolean(user?.management_access);
 
   useEffect(() => {
     if (realtime === "connected") return undefined;
@@ -276,13 +282,13 @@ export function AndonPage() {
   }, [query.reload, realtime]);
 
   if (query.loading && !query.data) {
-    return <main className={pageClass}><LoadingState label="Carregando Andon Geral…" /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<LoadingState label="Carregando Andon Geral…" /></main>;
   }
   if (query.error && !query.data) {
-    return <main className={pageClass}><ErrorState error={query.error} onRetry={query.reload} /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<ErrorState error={query.error} onRetry={query.reload} /></main>;
   }
   if (!query.data) {
-    return <main className={pageClass}><EmptyState title="Nenhum recurso disponível para o Andon." /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<EmptyState title="Nenhum recurso disponível para o Andon." /></main>;
   }
 
   const data = query.data;
@@ -296,6 +302,7 @@ export function AndonPage() {
   const selectedResource = resources.find((resource) => resourceKey(resource) === selectedResourceKey) ?? null;
   return (
     <main className={pageClass} data-simulation={data.simulation_only ? "true" : undefined}>
+      {showPanelsNav ? <AndonSidebarNav /> : null}
       <h1 className="visually-hidden">Andon Geral</h1>
       <div className="andon-content">
         {query.error ? <div className="andon-stale" role="alert">Atualização temporariamente indisponível. O último snapshot válido permanece visível.</div> : null}

@@ -1,7 +1,7 @@
 :root {
   font-family: Arial, sans-serif;
-  color: #081630;
-  background: #f5f7fa;
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --bg: #f5f7fa;
@@ -20,6 +20,12 @@
   --warning-soft: #fff6e6;
   --danger: #ef3340;
   --danger-soft: #fff0f1;
+  --danger-ink: #9f1d2a;
+  --danger-border: #f2b8bf;
+  --warning-ink: #8a5700;
+  --success-ink: #11823b;
+  /* A barra lateral mantém a mesma identidade azul-marinho nos dois temas —
+     é a cor de marca, não um token de superfície que deva clarear. */
   --sidebar: #001e3f;
   --sidebar-panel: #03264b;
   --sidebar-button: #082c55;
@@ -40,4 +46,69 @@
   --shadow-card: 0 1px 2px rgba(8, 22, 48, .05), 0 1px 3px rgba(8, 22, 48, .06);
   --shadow-hover: 0 10px 24px rgba(8, 22, 48, .12);
   --ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* Modo escuro — só a gestão/operador (telas de TV do Andon/Solda ficam de
+   fora de propósito: são pensadas para leitura à distância no chão de
+   fábrica e usam cores fixas e saturadas, não o sistema de tema).
+   [data-theme="dark"] é setado pelo botão na barra lateral e lembrado em
+   localStorage; sem escolha explícita, o tema segue o do sistema
+   operacional via prefers-color-scheme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1524;
+    --surface: #13233a;
+    --surface-alt: #0f1d30;
+    --border: #26394f;
+    --divider: #1e2f44;
+    --text: #edf2fa;
+    --muted: #93a3bd;
+    --primary: #4c8cff;
+    --primary-hover: #6ba0ff;
+    --primary-soft: #16375f;
+    --accent: #3ecb77;
+    --accent-soft: #123a24;
+    --warning: #fbbf24;
+    --warning-soft: #3d2c0b;
+    --danger: #ff6b78;
+    --danger-soft: #3d151a;
+    --danger-ink: #ff98a0;
+    --danger-border: #5c2530;
+    --warning-ink: #f2b866;
+    --success-ink: #7fe0a0;
+    --state-setup: #3fd4ef;
+    --state-setup-soft: #0f3540;
+    --state-rework: #ffb37a;
+    --state-rework-soft: #3a2415;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3);
+    --shadow-hover: 0 10px 24px rgba(0, 0, 0, .45);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1524;
+  --surface: #13233a;
+  --surface-alt: #0f1d30;
+  --border: #26394f;
+  --divider: #1e2f44;
+  --text: #edf2fa;
+  --muted: #93a3bd;
+  --primary: #4c8cff;
+  --primary-hover: #6ba0ff;
+  --primary-soft: #16375f;
+  --accent: #3ecb77;
+  --accent-soft: #123a24;
+  --warning: #fbbf24;
+  --warning-soft: #3d2c0b;
+  --danger: #ff6b78;
+  --danger-soft: #3d151a;
+  --danger-ink: #ff98a0;
+  --danger-border: #5c2530;
+  --warning-ink: #f2b866;
+  --success-ink: #7fe0a0;
+  --state-setup: #3fd4ef;
+  --state-setup-soft: #0f3540;
+  --state-rework: #ffb37a;
+  --state-rework-soft: #3a2415;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3);
+  --shadow-hover: 0 10px 24px rgba(0, 0, 0, .45);
 }

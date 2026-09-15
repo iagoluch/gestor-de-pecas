@@ -163,7 +163,9 @@ def delete_pause(
 # ---------------------------------------------------------------------------
 @router.get("/badges")
 def list_badges(
-    _user: SessionUser = Depends(require_management_user),
+    # Exclusivo do admin (decisão do usuário, 15/09/2026) — mesmo cadastro
+    # que só a conta admin gerencia, como usuários e contatos de chamada.
+    _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
     rows = list(database.listar_operadores_apontamento(somente_ativos=False) or [])
@@ -181,7 +183,7 @@ def list_badges(
 def save_badge(
     payload: OperatorBadgeRequest,
     request: Request,
-    _user: SessionUser = Depends(require_management_user),
+    _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
     try:

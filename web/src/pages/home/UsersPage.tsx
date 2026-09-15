@@ -52,7 +52,7 @@ export function ManagementUsersPage() {
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const niveis = query.data?.levels ?? [];
-  const title = "Tela inicial — Cadastro de usuários";
+  const title = "DEV — Cadastro de usuários";
   const subtitle = "Login de quem acessa o sistema — a mesma tela que os funcionários usam para entrar.";
 
   const filtrados = useMemo(() => {
@@ -88,14 +88,14 @@ export function ManagementUsersPage() {
 
   if (query.loading && !query.data) {
     return (
-      <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <LoadingState />
       </PageFrame>
     );
   }
   if (query.error) {
     return (
-      <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <ErrorState error={query.error} onRetry={query.reload} />
       </PageFrame>
     );
@@ -106,7 +106,7 @@ export function ManagementUsersPage() {
 
   return (
     <PageFrame
-      sectionId="home"
+      sectionId="dev"
       title={title}
       subtitle={subtitle}
       filters={false}

@@ -61,7 +61,7 @@ export function ManagementChamadasPage() {
 
   const contatos = useMemo(() => contatosQuery.data?.items ?? [], [contatosQuery.data]);
   const historico = historicoQuery.data?.items ?? [];
-  const title = "Tela inicial — Chamadas";
+  const title = "Painéis Operacionais — Chamadas";
   const subtitle = isAdmin
     ? "Contatos de quem pode ser chamado e o histórico de chamadas."
     : "Histórico de chamadas do operador e da gestão.";
@@ -112,7 +112,7 @@ export function ManagementChamadasPage() {
     || (isAdmin && contatosQuery.loading && !contatosQuery.data);
   if (carregando) {
     return (
-      <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}>
         <LoadingState />
       </PageFrame>
     );
@@ -120,7 +120,7 @@ export function ManagementChamadasPage() {
   const erroCarregamento = historicoQuery.error ?? (isAdmin ? contatosQuery.error : null);
   if (erroCarregamento) {
     return (
-      <PageFrame sectionId="home" title={title} subtitle={subtitle} filters={false}>
+      <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}>
         <ErrorState error={erroCarregamento} onRetry={() => { historicoQuery.reload(); contatosQuery.reload(); }} />
       </PageFrame>
     );
@@ -131,7 +131,7 @@ export function ManagementChamadasPage() {
 
   return (
     <PageFrame
-      sectionId="home"
+      sectionId="panels"
       title={title}
       subtitle={subtitle}
       filters={false}

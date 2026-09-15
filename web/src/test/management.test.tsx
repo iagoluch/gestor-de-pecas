@@ -73,22 +73,26 @@ describe("contrato gerencial Web", () => {
   it("mantém as telas gerenciais e inclui as sub-abas do Andon e da Solda", () => {
     expect(managementRoutes).toHaveLength(38);
     expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(38);
-    // Wave 6D: o acompanhamento gerencial da Solda entra como sub-aba da Tela
-    // inicial, ao lado do Andon, sem aplicação nem navegação paralela.
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Solda", path: "/inicio/solda", sectionId: "home" }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Metas", path: "/inicio/metas", sectionId: "home" }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "home" }));
-    // Wave 5: a designação do responsável pelo retrabalho da primeira peça é
-    // configuração gerencial e vive no cadastro de crachás que já existia.
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Crachás", path: "/inicio/crachas", sectionId: "home" }));
+    // Wave 6D: o acompanhamento gerencial da Solda entra como sub-aba dos
+    // Painéis Operacionais, ao lado do Andon, sem aplicação nem navegação
+    // paralela. Reorganização 15/09/2026: Andon/Solda/Metas/Pausas/Chamadas
+    // saíram da Tela inicial para a seção própria "Painéis Operacionais".
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "panels" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Solda", path: "/inicio/solda", sectionId: "panels" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Metas", path: "/inicio/metas", sectionId: "panels" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "panels" }));
     // Botão de chamada (14/09/2026): a lista de contatos é gerida aqui, nunca
     // pelo Dev Observatory, que é somente leitura de propósito.
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas", path: "/inicio/chamadas", sectionId: "home" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas", path: "/inicio/chamadas", sectionId: "panels" }));
+    // Wave 5: a designação do responsável pelo retrabalho da primeira peça é
+    // configuração gerencial e vive no cadastro de crachás que já existia.
+    // Reorganização 15/09/2026: Crachás e Cadastro viraram exclusivos da
+    // conta admin, agrupados na seção "DEV".
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Crachás", path: "/inicio/crachas", sectionId: "dev" }));
     // Cadastro de usuários (14/09/2026): exclusivo da conta admin, mesma
     // tela de login que os funcionários usam.
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Cadastro", path: "/inicio/cadastro", sectionId: "home" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Cadastro", path: "/inicio/cadastro", sectionId: "dev" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Confiabilidade", path: "/analises/confiabilidade", sectionId: "analytics" }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "home" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "IA", path: "/inicio/ia", sectionId: "home" }));
   });
 

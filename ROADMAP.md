@@ -4,6 +4,13 @@
 **Atualizado em:** 11/09/2026 (Wave 6D — acompanhamento gerencial da Solda e ciclo da TV)  
 **Workspace padrão:** `Gestor de Peças - Area de Testes`
 
+> **Aviso de defasagem:** este documento não foi editado desde 11/09/2026
+> (Wave 6E). Trabalho relevante aconteceu depois disso (divisão da Solda em 5
+> setores, auditoria de segurança, pente-fino, validação visual, alinhamento
+> do piloto TOTVS, novos commits) e ainda não foi incorporado aqui. Ler
+> `docs/STATUS_ATUAL.md` **antes** de assumir que a seção 5 abaixo é o estado
+> mais recente do projeto.
+
 > Este arquivo define a ordem oficial das próximas etapas. Quando um relatório
 > histórico, prompt antigo ou documentação anterior divergir deste roadmap,
 > prevalecem: (1) regras validadas com a Manufatura, (2) código/contratos atuais,

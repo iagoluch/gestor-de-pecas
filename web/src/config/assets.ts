@@ -7,6 +7,8 @@ import analytics from "../../../assets/web/navigation/analytics.png";
 import audit from "../../../assets/web/navigation/audit.png";
 import reports from "../../../assets/web/navigation/reports.png";
 import traceability from "../../../assets/web/navigation/traceability.png";
+import panels from "../../../assets/web/navigation/panels.svg";
+import dev from "../../../assets/web/navigation/dev.svg";
 import search from "../../../assets/icons/Pesquisa.svg";
 import clock from "../../../assets/icons/Relógio.svg";
 import trash from "../../../assets/icons/Lixeira.svg";
@@ -89,5 +91,7 @@ export const assets = {
     audit,
     reports,
     traceability,
+    panels,
+    dev,
   },
 } as const;

@@ -1,5 +1,68 @@
 # AGENTS.md — Gestor de Peças
 
+## Disciplina de execução do agente
+
+Esta seção define **como trabalhar**, não o que este projeto faz — isso vem
+nas seções seguintes. Vale para qualquer agente de codificação que abrir este
+repositório (Codex, Claude Code ou outro), sem depender de ferramenta.
+
+**Ordem de leitura no início de uma tarefa:** este arquivo → `ROADMAP.md`
+(seção 5, "Próxima ação concreta") → `docs/STATUS_ATUAL.md` (estado real após
+a última edição do ROADMAP — leia sempre, o ROADMAP fica defasado com
+frequência) → `git log`/`git status` para o que mudou depois disso → só então
+os `docs/*.md` específicos do assunto da tarefa. Não é preciso ler os dezenas
+de relatórios datados em `docs/` inteiros; eles são evidência histórica,
+consulte-os por nome quando a tarefa tocar o assunto deles.
+
+**Fluxo padrão:** entender o objetivo real → localizar a implementação
+responsável e seus consumidores → implementar na camada correta → validar de
+forma proporcional ao risco → entregar. A implementação deve começar cedo;
+não transforme uma tarefa localizada em auditoria do sistema inteiro antes de
+tocar em código.
+
+**Profundidade proporcional ao risco:**
+- mudança pequena e localizada (texto, UI simples, correção óbvia): localizar
+  → alterar → validar diretamente o que mudou;
+- feature ou bug de porte médio: inspecionar os arquivos afetados e suas
+  dependências diretas → implementar → validar o fluxo afetado;
+- causa raiz incerta, múltiplos módulos, concorrência, migração de schema ou
+  mudança de arquitetura: investigação mais profunda, mapear
+  produtores/consumidores/contratos antes de alterar, validação ampla do
+  fluxo.
+
+**Validação:** rode apenas os testes diretamente relacionados à mudança, não
+a suíte inteira por padrão (só quando o impacto for transversal, houver
+evidência de regressão, ou o usuário pedir explicitamente). Depois de validar
+adequadamente, pare — não entre em ciclo de procurar problema hipotético sem
+evidência concreta.
+
+**Escopo:** corrija problemas diretamente relacionados à tarefa ou
+necessários para que a solução fique correta. Problemas independentes
+encontrados no caminho devem ser **reportados**, não necessariamente
+corrigidos na mesma tarefa — a menos que o usuário peça um pente-fino
+explicitamente.
+
+**Autonomia:** decida sozinho o que for tecnicamente determinável pelo
+código, pelos testes, pela arquitetura existente ou pelas regras deste
+arquivo e do `ROADMAP.md`. Só pergunte ao usuário quando houver uma decisão
+de **negócio** genuína — múltiplas interpretações razoáveis, mudança de regra
+industrial, ou algo que nenhum documento do repositório resolve. As
+pendências já identificadas e aguardando decisão estão listadas em
+`docs/STATUS_ATUAL.md` (seção "Pendências abertas") — não decidir essas por
+conta própria, e não redescobri-las do zero.
+
+**Comunicação:** ao terminar, reporte de forma direta — o que mudou, o que
+foi validado, e limitações relevantes. Sem narrar cada arquivo investigado
+nem justificar passos triviais.
+
+**Manutenção destes documentos:** ao concluir uma tarefa que muda o estado do
+projeto (homologação aprovada, contrato descoberto, decisão de negócio
+fechada, bug corrigido de forma definitiva), atualize `docs/STATUS_ATUAL.md`
+no mesmo trabalho. Quando esse arquivo acumular uma wave inteira fechada,
+incorpore o conteúdo relevante ao `ROADMAP.md` (seção 5) e limpe
+`STATUS_ATUAL.md` para a próxima janela — não deixe os dois divergirem por
+muitos dias, como aconteceu entre 11/09 e 15/09/2026.
+
 ## Visão geral do projeto
 
 O Gestor de Peças é um MES industrial **Web-only**. A apresentação oficial é React/TypeScript sobre FastAPI/Python. PostgreSQL permanece como banco da aplicação. O Protheus/TOTVS é a fonte de planejamento corporativo e o Gestor é a fonte de execução real.

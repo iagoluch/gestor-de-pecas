@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
+import { AndonSidebarNav } from "../components/AndonSidebarNav";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
@@ -653,6 +654,10 @@ export function WeldingManagementPage() {
   // O ciclo da TV é o mesmo mecanismo do Andon: só o perfil dedicado alterna.
   const isTelevision = useTvRotation("/welding-management");
   const pageClass = `welding-page ${isTelevision || user?.role === "andon" ? "welding-page--tv" : "welding-page--manager"}`;
+  // Mesma correção do Andon: página cheia, fora da barra de abas da gestão —
+  // sem isso, ninguém alcançava Metas/Pausas/Chamadas sem o "voltar" do
+  // navegador (decisão do usuário, 15/09/2026). A TV dedicada nunca vê isso.
+  const showPanelsNav = Boolean(user?.management_access) && !isTelevision;
 
   // Mesma atualização automática do Andon: o canal em tempo real recarrega a
   // projeção e a varredura periódica só entra quando ele não está conectado.
@@ -666,13 +671,13 @@ export function WeldingManagementPage() {
   const linhas = useMemo(() => flatten(estacoes ?? []), [estacoes]);
 
   if (query.loading && !query.data) {
-    return <main className={pageClass}><LoadingState label="Carregando acompanhamento da Solda…" /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<LoadingState label="Carregando acompanhamento da Solda…" /></main>;
   }
   if (query.error && !query.data) {
-    return <main className={pageClass}><ErrorState error={query.error} onRetry={query.reload} /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<ErrorState error={query.error} onRetry={query.reload} /></main>;
   }
   if (!query.data) {
-    return <main className={pageClass}><EmptyState title="Nenhuma ordem de conjunto soldado disponível." /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<EmptyState title="Nenhuma ordem de conjunto soldado disponível." /></main>;
   }
 
   const data = query.data;
@@ -687,6 +692,7 @@ export function WeldingManagementPage() {
   const macros = data.macros?.length ? <MacroPivot macros={data.macros} /> : null;
   return (
     <main className={pageClass} data-simulation={data.simulation_only ? "true" : undefined}>
+      {showPanelsNav ? <AndonSidebarNav /> : null}
       <header className="welding-header">
         <div>
           <h1>Acompanhamento da Solda</h1>

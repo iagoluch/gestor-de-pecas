@@ -13,8 +13,8 @@ import { SectionCard } from "../../components/SectionCard";
 export function ManagementGoalsPage() {
   return (
     <PageFrame
-      sectionId="home"
-      title="Tela inicial — Metas"
+      sectionId="panels"
+      title="Painéis Operacionais — Metas"
       subtitle="Meta da fábrica comparada com o que está sendo entregue agora."
       filters={false}
     >

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -6,22 +6,56 @@ import { ChamadaButton } from "../components/ChamadaButton";
 import { ChamadaSino } from "../components/ChamadaSino";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { assets } from "../config/assets";
-import { managementSections } from "../config/navigation";
+import { isSectionActive, managementSections } from "../config/navigation";
+
+const SIDEBAR_COLLAPSED_KEY = "gestor.sidebar.collapsed";
+
+function readStoredCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function AppShell({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  // Recolher a barra lateral pro lado, do jeito que já existe no celular —
+  // só que fixo (não some sozinho ao navegar) e lembrado entre acessos
+  // (decisão do usuário, 15/09/2026).
+  const [collapsed, setCollapsed] = useState(readStoredCollapsed);
+  const sections = managementSections.filter((section) => !section.adminOnly || user?.role === "admin");
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch {
+      // Preferência não persiste (aba privada, storage bloqueado) — a barra
+      // continua funcionando normalmente dentro desta sessão.
+    }
+  }, [collapsed]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? "app-shell--collapsed" : ""}`}>
       <button className="mobile-menu" type="button" onClick={() => setOpen(true)} aria-label="Abrir navegação">
         <span />
         <span />
         <span />
       </button>
       {open ? <button className="sidebar-scrim" type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)} /> : null}
+      <button
+        type="button"
+        className="sidebar-collapse-toggle"
+        onClick={() => setCollapsed((value) => !value)}
+        aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+        title={collapsed ? "Expandir menu" : "Recolher menu"}
+      >
+        <span aria-hidden="true">{collapsed ? "›" : "‹"}</span>
+      </button>
       <aside className={`sidebar ${open ? "sidebar--open" : ""}`}>
         <div className="sidebar__brand">
           <img src={assets.logo} alt="Gestor de Peças" />
@@ -36,20 +70,24 @@ export function AppShell({ children }: PropsWithChildren) {
           <ChamadaSino />
         </div>
         <nav className="sidebar__nav" aria-label="Navegação gerencial">
-          {managementSections.map((item) => (
-            <Link
-              key={item.id}
-              to={item.defaultPath}
-              onClick={() => setOpen(false)}
-              aria-current={location.pathname.startsWith(`/${item.defaultPath.split("/")[1]}`) ? "page" : undefined}
-              className={`sidebar-link ${location.pathname.startsWith(`/${item.defaultPath.split("/")[1]}`) ? "sidebar-link--active" : ""}`}
-            >
-              <span className="sidebar-link__icon" aria-hidden="true"><img src={item.icon} alt="" /></span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          {sections.map((item) => {
+            const active = isSectionActive(item, location.pathname);
+            return (
+              <Link
+                key={item.id}
+                to={item.defaultPath}
+                onClick={() => setOpen(false)}
+                aria-current={active ? "page" : undefined}
+                className={`sidebar-link ${active ? "sidebar-link--active" : ""}`}
+              >
+                <span className="sidebar-link__icon" aria-hidden="true"><img src={item.icon} alt="" /></span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
         <div className="sidebar__footer">
+          <ThemeToggle />
           <LogoutButton />
           <div className="status-card">
             <div className="status-card__clock">
