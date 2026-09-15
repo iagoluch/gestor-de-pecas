@@ -59,6 +59,13 @@ TRUNCATE_TABLES = (
     "qualidade_primeira_peca",
     "apontamentos_corte",
     "apontamentos_operacionais",
+    # Histórico de chamadas (fato de execução, igual a "historico"/
+    # "eventos_sistema") e o marcador de "última vista" por usuário, que
+    # referencia esse histórico e ficaria com IDs órfãos se ele sobrevivesse
+    # à limpeza sozinho. O cadastro de quem pode ser chamado
+    # (chamada_contatos, com nome/função/setores) continua protegido.
+    "chamadas",
+    "chamada_visualizacoes",
     "catalogo_operacoes_op",
     "catalogo_pcp_ops",
     "catalogo_sigmanest_ops",
@@ -101,6 +108,9 @@ KNOWN_TABLES = frozenset(EXPECTED_TABLES) | {
     "alertas_internos",
     "qualidade_primeira_peca",
     "qualidade_primeira_peca_autorizacoes",
+    # Migration 34 acrescentou esta tabela depois da declaração histórica
+    # EXPECTED_TABLES.
+    "chamada_visualizacoes",
 }
 PROTECTED_TABLES = tuple(
     sorted(KNOWN_TABLES - frozenset(TRUNCATE_TABLES) - {SELECTIVE_TABLE})
