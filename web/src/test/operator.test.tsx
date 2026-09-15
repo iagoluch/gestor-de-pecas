@@ -546,43 +546,43 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
   });
 
-  it("finaliza na Solda pela conferência simples da primeira peça, sem selecionar o marco terminal", async () => {
+  it("finaliza na Solda direto, sem portão de primeira peça e sem selecionar o marco terminal", async () => {
     // Regressão do posto de Solda Aço: sem Setup e sem checklist de cotas, o
-    // portão da primeira peça não tinha entrada na tela. `pode_finalizar`
-    // ficava permanentemente falso na etapa real e o único botão Finalizar
-    // habilitado era o do marco terminal — que não fecha apontamento nenhum.
-    const calls: { path: string; method: string; body: unknown }[] = [];
-    const gate = {
-      aplicavel: true,
-      liberado: false,
-      status: "PENDENTE",
+    // portão da primeira peça (quando ainda se aplicava a esse setor) não
+    // tinha entrada na tela e `pode_finalizar` ficava permanentemente falso
+    // na etapa real — o único botão Finalizar habilitado era o do marco
+    // terminal, que não fecha apontamento nenhum. Decisão do usuário
+    // (15/09/2026): Solda e Pintura têm esquema de qualidade próprio e não
+    // participam do portão — o backend manda `primeira_peca.aplicavel: false`
+    // e o Finalizar da etapa real precisa funcionar direto, sem popup.
+    const gateNaoAplicavel = {
+      aplicavel: false,
+      liberado: true,
+      status: "CONFORME",
       peca_produzida: false,
       setup_obrigatorio: false,
       setup_registrado: false,
       inspecao_concluida: false,
       bloqueio_ativo: false,
       gate_estruturado: false,
-      code: "primeira_peca_nao_produzida",
-      message: "Produza e registre a primeira peça antes de finalizar a operação.",
-      pendencias: ["primeira_peca"],
+      code: "",
+      message: "Esta operação não está sujeita à regra da primeira peça.",
+      pendencias: [],
     };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       const method = (init?.method ?? "GET").toUpperCase();
-      calls.push({ path, method, body: init?.body ? JSON.parse(String(init.body)) : null });
       if (path.includes("/auth/session")) return json({ id: 61, name: "Soldador", role: "estacao6aco", management_access: false, operator_access: true, operator_sector: "Solda Aço" });
       if (path.includes("/operator/context")) return json({ sector: "Solda Aço", route: "Solda Aço", resources: ["Estação 6"], fixed_resource: true, has_setup: false, automatic_queue: false, workflow: "workbench" });
       if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
       if (path.includes("/operator/history")) return json({ items: [], has_more: false });
       if (path.includes("/operator/workbench")) return json({ sector: "Solda Aço", resource: "Estação 6", queue: [], production: [] });
       if (path.includes("/operator/drawings")) return json({ available: false, message: "Nenhum desenho disponível." });
-      if (path.includes("/operator/first-piece") && method === "POST") {
-        return json({ ok: true, message: "Primeira peça conforme. O lote está liberado.", code: "primeira_peca_conforme", data: { ...gate, liberado: true } });
-      }
       if (path.includes("/operator/operations/OP-SOLDA")) return json({ items: [
-        { id: 10, numero_operacao: "10", descricao_operacao: "SOLDA", visual_status: "current", visual_current: true, actionable: true, selectable: true, requires_confirmation: false, quantidade_planejada: 5, pode_finalizar: false, exige_gate_primeira_peca: false, primeira_peca: gate },
+        { id: 10, numero_operacao: "10", descricao_operacao: "SOLDA", visual_status: "current", visual_current: true, actionable: true, selectable: true, requires_confirmation: false, quantidade_planejada: 5, pode_finalizar: true, exige_gate_primeira_peca: false, primeira_peca: gateNaoAplicavel },
         { id: 99, numero_operacao: "99", descricao_operacao: "FINALIZADA", visual_status: "pending", actionable: false, selectable: false, requires_confirmation: false, pode_finalizar: false },
       ] });
+      if (method === "POST") return json({ ok: true, message: "Finalizado." });
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     }));
 
@@ -594,20 +594,11 @@ describe("fluxo Web do operador", () => {
 
     // O marco terminal continua visível como leitura, mas não é selecionável.
     expect(screen.getByRole("button", { name: "99 - FINALIZADA — Próxima" })).toBeDisabled();
-    // E o Finalizar da etapa real é clicável: o portão tem saída.
+    // E o Finalizar da etapa real vai direto para a finalização, sem popup.
     const finalizar = screen.getByRole("button", { name: "Finalizar" });
     expect(finalizar).toBeEnabled();
     fireEvent.click(finalizar);
-
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("heading", { name: "Primeira peça" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Registrar primeira peça" }));
-
-    // Conforme libera o lote e leva direto para a finalização pedida.
     await screen.findByRole("heading", { name: "Finalizar produção" });
-    const posts = calls.filter((call) => call.method === "POST" && call.path.includes("/first-piece"));
-    expect(posts.map((call) => (call.body as { action?: string }).action)).toEqual(["produzida", "inspecionar"]);
-    expect(posts[1].body).toMatchObject({ action: "inspecionar", result: "CONFORME", op: "OP-SOLDA", operation_id: 10 });
   });
 
   it("recusa escolher estação de Solda Aço quando o login não tem perfil fixo", async () => {

@@ -78,7 +78,12 @@ SECTORS_WITHOUT_SETUP = ("Pintura", *WELDING_SECTOR_NAMES)
 
 # Setores com fluxo operacional próprio: eles não passam pelo posto de bancada
 # e por isso não participam do portão da primeira peça.
-SECTORS_OUTSIDE_FIRST_PIECE = ("Corte", "Destaque", "Qualidade")
+#
+# Solda e Pintura entram aqui por decisão do usuário (15/09/2026): esses dois
+# setores têm esquema de qualidade próprio, fora do domínio da primeira peça —
+# no Gestor eles existem só como recurso apontável para contar tempo (Iniciar/
+# Parada/Finalizar/Retrabalho), sem checklist nem conferência de lote.
+SECTORS_OUTSIDE_FIRST_PIECE = ("Corte", "Destaque", "Qualidade", "Pintura", *WELDING_SECTOR_NAMES)
 
 
 def _normalized(value) -> str:
@@ -110,8 +115,9 @@ def first_piece_applies(sector, operation) -> bool:
     """Diz se a operação selecionada está sujeita ao portão da primeira peça.
 
     Ficam de fora: Corte e Destaque (fluxos próprios), a faixa interna da
-    Qualidade, o marco terminal e a própria operação ``INSPECAO`` do roteiro —
-    inclusive quando ela é apontada apenas para contar tempo em Solda/Pintura.
+    Qualidade, o marco terminal, a própria operação ``INSPECAO`` do roteiro, e
+    Solda/Pintura por completo — esses dois setores têm esquema de qualidade
+    próprio e no Gestor existem só como recurso apontável para contar tempo.
     """
 
     if _normalized(sector) in {_normalized(name) for name in SECTORS_OUTSIDE_FIRST_PIECE}:

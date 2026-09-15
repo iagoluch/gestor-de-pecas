@@ -25,7 +25,6 @@ from mes.domain.welding import (
     WELDING_STATUS_LATE,
     week_bounds,
 )
-from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.welding import WeldingManagementService
 from tests.fakes import FakeDatabase
@@ -356,13 +355,9 @@ class AtrasoNaoBloqueiaTests(SoldaGerencialBase):
         retomada = fluxo.executar("Retomar", **contexto)
         self.assertTrue(retomada.ok, retomada.message)
 
-        # O único portão do Finalizar continua sendo o da primeira peça, que já
-        # existia antes desta wave. Ele não conhece prazo nem atraso.
-        primeira_peca = FirstPieceService(self.db, "OPERADOR 6D")
-        produzida = primeira_peca.registrar_producao(**contexto)
-        self.assertTrue(produzida.ok, produzida.message)
-        inspecionada = primeira_peca.inspecionar(**contexto, resultado="Conforme")
-        self.assertTrue(inspecionada.ok, inspecionada.message)
+        # Solda não passa pelo portão da primeira peça (decisão do usuário,
+        # 15/09/2026: esquema de qualidade próprio, fora do domínio do
+        # Gestor) — Finalizar não tem pendência nenhuma, nem prazo nem atraso.
         final = fluxo.executar(
             "Finalizado", **contexto, pecas_boas=1, operadores_cracha=["1"]
         )

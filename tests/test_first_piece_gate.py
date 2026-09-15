@@ -324,14 +324,16 @@ class FirstPieceServiceTests(unittest.TestCase):
             ).ok
         )
 
-    def test_solda_finaliza_a_etapa_real_pela_conferencia_simples(self):
+    def test_solda_finaliza_a_etapa_real_sem_portao_da_primeira_peca(self):
         """Regressão: Solda não tinha saída para o portão da primeira peça.
 
-        O posto de Solda não possui Setup nem checklist de cotas, e o único
-        caminho do portão nesses setores é ``produzida`` + ``inspecionar`` —
-        que é o que a tela agora oferece no Finalizar. Enquanto esse caminho
-        não existia, ``pode_finalizar`` ficava permanentemente falso na etapa
-        real e o marco terminal era a única linha com o botão liberado.
+        Decisão do usuário (15/09/2026): Solda e Pintura têm esquema de
+        qualidade próprio e não participam do portão nenhum — no Gestor elas
+        existem só como recurso apontável para contar tempo. Antes dessa
+        decisão, elas ficavam presas no portão sem Setup nem checklist de
+        cotas para satisfazê-lo, e ``pode_finalizar`` ficava permanentemente
+        falso na etapa real; o marco terminal chegou a ser a única linha com
+        o botão liberado, até isso também ser corrigido.
         """
 
         db = FakeDatabase()
@@ -362,7 +364,6 @@ class FirstPieceServiceTests(unittest.TestCase):
         db.catalog_operations.extend([solda, terminal])
         db.cadastrar_operador_apontamento("SOLD1", "Soldador")
         flow = OperatorFlowService(db, "OPERADOR SOLDA")
-        servico = FirstPieceService(db, "OPERADOR SOLDA")
 
         self.assertTrue(
             flow.executar(
@@ -371,30 +372,16 @@ class FirstPieceServiceTests(unittest.TestCase):
             ).ok
         )
         # O marco terminal nunca é o caminho: ele não é apontável e não deve
-        # aparecer como alternativa quando a etapa real ainda está presa.
+        # aparecer como alternativa.
         roteiro = flow.listar_operacoes("OP-SOLDA", "Solda Aço", "Estação 6")
         marco = next(row for row in roteiro if row["numero_operacao"] == "99")
         self.assertFalse(marco["selectable"])
         self.assertFalse(marco["pode_finalizar"])
 
-        self.assertTrue(
-            servico.registrar_producao(
-                op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6", operacao=solda
-            ).ok
-        )
-        inspecao = servico.inspecionar(
-            op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6", operacao=solda,
-            resultado="CONFORME",
-        )
-        self.assertTrue(inspecao.ok)
-        self.assertTrue(inspecao.data["liberado"])
-
-        etapa = next(
-            row
-            for row in flow.listar_operacoes("OP-SOLDA", "Solda Aço", "Estação 6")
-            if row["numero_operacao"] == "10"
-        )
+        # A etapa real já finaliza direto: nenhuma primeira peça é exigida.
+        etapa = next(row for row in roteiro if row["numero_operacao"] == "10")
         self.assertTrue(etapa["pode_finalizar"])
+        self.assertFalse(etapa["primeira_peca"]["aplicavel"])
         final = flow.executar(
             "Finalizado", op="OP-SOLDA", setor="Solda Aço", recurso="Estação 6",
             operacao=etapa, pecas_boas=5, operadores_cracha=["SOLD1"],
@@ -405,22 +392,14 @@ class FirstPieceServiceTests(unittest.TestCase):
             ["done", "done"],
         )
 
-    def test_solda_nao_ganha_setup_artificial(self):
+    def test_solda_nao_participa_do_portao_da_primeira_peca(self):
         _db, servico = self._servico()
         operacao = {**self.OPERACAO, "id": 79, "codigo_recurso": "SOLDA4"}
-        linha = servico.garantir(
-            op="OP-SOLDA", setor="Solda Aço", recurso="Estação 1", operacao=operacao
-        )
-        self.assertFalse(linha["setup_obrigatorio"])
-        servico.registrar_producao(
-            op="OP-SOLDA", setor="Solda Aço", recurso="Estação 1", operacao=operacao
-        )
-        servico.inspecionar(
-            op="OP-SOLDA",
-            setor="Solda Aço",
-            recurso="Estação 1",
-            operacao=operacao,
-            resultado="CONFORME",
+        # Fora do domínio do portão: garantir não cria registro nenhum.
+        self.assertIsNone(
+            servico.garantir(
+                op="OP-SOLDA", setor="Solda Aço", recurso="Estação 1", operacao=operacao
+            )
         )
         self.assertTrue(
             servico.avaliar_finalizacao(
