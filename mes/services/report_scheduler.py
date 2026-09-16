@@ -24,6 +24,11 @@ def closed_report_period(frequency: str, local_now: datetime) -> tuple[datetime,
     week_start = today - timedelta(days=today.weekday())
     if normalized == "semanal":
         return week_start - timedelta(days=7), week_start
+    if normalized == "quinzenal":
+        # Janela corrida de 14 dias terminando hoje, não o calendário
+        # 1-15/16-fim de mês: mais simples e sempre compara o mesmo tamanho
+        # de período mês a mês.
+        return today - timedelta(days=14), today
     if normalized == "mensal":
         month_end = today.replace(day=1)
         return (month_end - timedelta(days=1)).replace(day=1), month_end

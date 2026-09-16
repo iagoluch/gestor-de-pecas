@@ -5,7 +5,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from contextlib import suppress
 from datetime import datetime
+from datetime import time as day_time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 import asyncio
 import logging
 import os
@@ -57,7 +59,11 @@ from backend.messaging import TelegramProvider
 from backend.integrations import totvs_soap
 from backend.integrations.sigmanest_sqlserver import SigmaNestSqlServerGateway
 from backend.integrations.totvs_wspcp import TotvsWspcpClient
-from mes.integrations.notifications.telegram import build_outbox_error_notifier
+from mes.integrations.notifications.telegram import (
+    build_outbox_error_notifier,
+    fetch_telegram_updates,
+    send_telegram_message,
+)
 from mes.integrations.totvs.on_demand_gateway import build_order_provisioning_service
 from mes.integrations.totvs.service import build_totvs_ingestion_service
 from mes.services.frontend_facade import FrontendBackendFacade
@@ -67,6 +73,8 @@ from mes.services.report_scheduler import ReportScheduler
 from mes.services.shift_boundary import ShiftBoundaryService
 from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.sigmanest_refresh import SigmaNestRefreshCoordinator
+from mes.services.telegram_bot import TelegramFactoryBotService
+from mes.services.telegram_digest import TelegramFactoryDigestScheduler
 from mes.services.totvs_outbox_worker import TotvsOutboxWorker
 
 
@@ -191,6 +199,89 @@ async def _totvs_outbox_worker_loop(application: FastAPI) -> None:
             raise
         except Exception:
             logging.exception("Falha controlada no ciclo do worker da outbox TOTVS.")
+        await asyncio.sleep(interval)
+
+
+async def _telegram_bot_loop(application: FastAPI) -> None:
+    """Long polling do bot de fábrica: comandos privados, nunca o grupo.
+
+    ``getUpdates`` com ``offset`` é suficiente aqui — não há volume que
+    justifique webhook, e este ambiente não tem URL pública fixa. O
+    ``offset`` avança a cada ciclo, então uma mensagem nunca é processada
+    duas vezes mesmo se o processo reiniciar no meio.
+    """
+
+    settings = application.state.settings
+    interval = settings.telegram_bot_poll_interval_seconds
+    token = settings.telegram_bot_token
+    offset = None
+    while True:
+        try:
+            database = application.state.database_manager.get()
+            service = TelegramFactoryBotService(database)
+            updates = await asyncio.to_thread(
+                fetch_telegram_updates, bot_token=token, offset=offset
+            )
+            for update in updates:
+                offset = int(update.get("update_id", 0)) + 1
+                reply = service.handle_update(update)
+                if reply is not None:
+                    await asyncio.to_thread(
+                        send_telegram_message,
+                        bot_token=token,
+                        chat_id=reply.chat_id,
+                        text=reply.text,
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("Falha controlada no ciclo do bot de fábrica no Telegram.")
+        await asyncio.sleep(interval)
+
+
+async def _telegram_digest_loop(application: FastAPI) -> None:
+    """Resumo diário/quinzenal/mensal para o grupo, um por período fechado."""
+
+    settings = application.state.settings
+    try:
+        fuso = ZoneInfo(settings.telegram_digest_timezone)
+    except Exception:
+        logging.exception(
+            "Fuso horário inválido para o resumo do Telegram (%s); usando UTC.",
+            settings.telegram_digest_timezone,
+        )
+        fuso = ZoneInfo("UTC")
+    try:
+        hora, minuto = (int(part) for part in settings.telegram_digest_daily_time.split(":"))
+        horario_execucao = day_time(hour=hora, minute=minuto)
+    except Exception:
+        logging.exception(
+            "Horário inválido para o resumo do Telegram (%s); usando 18:00.",
+            settings.telegram_digest_daily_time,
+        )
+        horario_execucao = day_time(hour=18, minute=0)
+    interval = 300
+    while True:
+        try:
+            database = application.state.database_manager.get()
+            scheduler = TelegramFactoryDigestScheduler(
+                database,
+                bot_token=settings.telegram_bot_token,
+                chat_id=settings.telegram_factory_chat_id,
+                run_time=horario_execucao,
+                timezone=fuso,
+            )
+            outcomes = await asyncio.to_thread(scheduler.run_due)
+            enviados = [item for item in outcomes if item.sent]
+            if enviados:
+                logging.info(
+                    "Resumo(s) de fábrica enviado(s) ao Telegram: %s",
+                    [item.frequency for item in enviados],
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("Falha controlada no ciclo do resumo de fábrica no Telegram.")
         await asyncio.sleep(interval)
 
 
@@ -354,6 +445,8 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         outbox_task = None
         sigmanest_task = None
         observatory_task = None
+        telegram_bot_task = None
+        telegram_digest_task = None
         if resolved_settings.dev_observatory_enabled:
             observatory_task = asyncio.create_task(
                 _dev_observatory_loop(_app),
@@ -379,6 +472,20 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
             _shift_boundary_loop(_app),
             name="gestor-shift-boundary",
         )
+        if resolved_settings.telegram_configured and resolved_settings.telegram_bot_polling_enabled:
+            telegram_bot_task = asyncio.create_task(
+                _telegram_bot_loop(_app),
+                name="gestor-telegram-bot",
+            )
+        if (
+            resolved_settings.telegram_configured
+            and resolved_settings.telegram_digest_enabled
+            and resolved_settings.telegram_factory_chat_id
+        ):
+            telegram_digest_task = asyncio.create_task(
+                _telegram_digest_loop(_app),
+                name="gestor-telegram-digest",
+            )
         try:
             yield
         finally:
@@ -398,6 +505,14 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 shift_boundary_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await shift_boundary_task
+            if telegram_bot_task is not None:
+                telegram_bot_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await telegram_bot_task
+            if telegram_digest_task is not None:
+                telegram_digest_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await telegram_digest_task
             if scheduler_task is not None:
                 scheduler_task.cancel()
                 with suppress(asyncio.CancelledError):

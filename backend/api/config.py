@@ -173,6 +173,16 @@ class WebSettings:
     # sem este chat configurado, a chamada continua sendo registrada no banco,
     # só não sai o aviso — nunca falha silenciosamente sem deixar rastro.
     chamada_telegram_chat_id: str = ""
+    # Bot de fábrica no Telegram: comandos privados (crachá -> chat) e
+    # resumos automáticos pro grupo. Mesmo bot/token de ``telegram_bot_token``;
+    # dois interruptores porque um funcionário pode querer só os resumos, sem
+    # ninguém digitando comando nenhum, ou vice-versa.
+    telegram_bot_polling_enabled: bool = False
+    telegram_bot_poll_interval_seconds: int = 3
+    telegram_factory_chat_id: str = ""
+    telegram_digest_enabled: bool = False
+    telegram_digest_daily_time: str = "18:00"
+    telegram_digest_timezone: str = "America/Sao_Paulo"
     # Sincronização automática do planejamento de Corte (Wave 2). O operador do
     # Corte não deve pesquisar para descobrir que existe tarefa nova: o mesmo
     # SigmaNestSyncService do script manual roda em ciclo, somente leitura no
@@ -537,6 +547,28 @@ class WebSettings:
             ),
             chamada_telegram_chat_id=_text_option(
                 env.get("GESTOR_CHAMADA_TELEGRAM_CHAT_ID"), default=""
+            ),
+            telegram_bot_polling_enabled=_as_bool(
+                env.get("GESTOR_TELEGRAM_BOT_POLLING_ENABLED"), default=False
+            ),
+            telegram_bot_poll_interval_seconds=_bounded_int(
+                env.get("GESTOR_TELEGRAM_BOT_POLL_INTERVAL_SECONDS"),
+                default=3,
+                minimum=1,
+                maximum=60,
+                name="GESTOR_TELEGRAM_BOT_POLL_INTERVAL_SECONDS",
+            ),
+            telegram_factory_chat_id=_text_option(
+                env.get("GESTOR_TELEGRAM_FACTORY_CHAT_ID"), default=""
+            ),
+            telegram_digest_enabled=_as_bool(
+                env.get("GESTOR_TELEGRAM_DIGEST_ENABLED"), default=False
+            ),
+            telegram_digest_daily_time=_text_option(
+                env.get("GESTOR_TELEGRAM_DIGEST_DAILY_TIME"), default="18:00"
+            ),
+            telegram_digest_timezone=_text_option(
+                env.get("GESTOR_TELEGRAM_DIGEST_TIMEZONE"), default="America/Sao_Paulo"
             ),
             sigmanest_sync_enabled=_as_bool(
                 env.get("GESTOR_SIGMANEST_SYNC_ENABLED"), default=sigmanest_configured

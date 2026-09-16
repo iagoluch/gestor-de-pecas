@@ -47,6 +47,39 @@ def send_telegram_message(
         return False
 
 
+def fetch_telegram_updates(
+    *, bot_token: str, offset: int | None = None, timeout: float = DEFAULT_TIMEOUT_SECONDS
+) -> list[dict]:
+    """Busca atualizações pendentes via ``getUpdates`` (long polling curto).
+
+    Sem webhook configurado (não há URL pública fixa neste ambiente), o
+    polling é o caminho simples e já comprovado manualmente com este bot.
+    ``offset`` é o ``update_id`` do último processado + 1, exatamente como a
+    Bot API espera para confirmar recebimento e não repetir a mesma mensagem.
+    """
+
+    url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+    params: dict[str, int] = {"timeout": 0}
+    if offset is not None:
+        params["offset"] = int(offset)
+    try:
+        response = httpx.get(url, params=params, timeout=timeout)
+        if response.status_code >= 400:
+            logging.warning(
+                "getUpdates do Telegram recusado (HTTP %s): %s",
+                response.status_code,
+                response.text[:300],
+            )
+            return []
+        data = response.json()
+        if not data.get("ok"):
+            return []
+        return list(data.get("result") or [])
+    except httpx.HTTPError:
+        logging.exception("Falha ao buscar atualizações do Telegram.")
+        return []
+
+
 def _format_outbox_error_message(item: dict) -> str:
     op = item.get("production_order") or "?"
     operacao = item.get("operation_code") or "-"
@@ -104,5 +137,6 @@ def build_outbox_error_notifier(
 
 __all__ = [
     "build_outbox_error_notifier",
+    "fetch_telegram_updates",
     "send_telegram_message",
 ]

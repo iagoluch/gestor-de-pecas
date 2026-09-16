@@ -4595,6 +4595,95 @@ class Database(
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def vincular_telegram_operador(self, cracha, chat_id):
+        """Liga um chat do Telegram a um crachá ativo, trocando vínculo anterior.
+
+        Mesmo modelo de confiança do crachá em qualquer apontamento: quem
+        digita o número é quem autoriza. Um chat só aponta para um crachá por
+        vez (índice único); vincular de novo troca, nunca duplica.
+        """
+
+        codigo = str(cracha or "").strip()
+        chat = str(chat_id or "").strip()
+        if not codigo or not chat:
+            return None
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, nome FROM operadores_apontamento WHERE cracha = %s AND ativo = TRUE",
+                (codigo,),
+            )
+            operador = cursor.fetchone()
+            if operador is None:
+                return None
+            cursor.execute(
+                "UPDATE operadores_apontamento SET telegram_chat_id = NULL "
+                "WHERE telegram_chat_id = %s AND id <> %s",
+                (chat, operador["id"]),
+            )
+            cursor.execute(
+                "UPDATE operadores_apontamento SET telegram_chat_id = %s WHERE id = %s "
+                "RETURNING id, cracha, nome",
+                (chat, operador["id"]),
+            )
+            return dict(cursor.fetchone())
+
+    def buscar_operador_por_telegram(self, chat_id):
+        chat = str(chat_id or "").strip()
+        if not chat:
+            return None
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, cracha, nome FROM operadores_apontamento "
+                "WHERE telegram_chat_id = %s AND ativo = TRUE",
+                (chat,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def participacoes_ativas_por_cracha(self, cracha):
+        """Participações em aberto (``data_fim IS NULL``) do crachá agora.
+
+        ``participacoes_operador`` (Wave 5.1) já é a fonte canônica de
+        "quem está com a mão em qual recurso agora"; não reabre o texto
+        livre de ``apontamentos_operacionais.operadores_cracha``.
+        """
+
+        codigo = str(cracha or "").strip()
+        if not codigo:
+            return []
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT recurso, tipo_setor, op, numero_operacao, data_inicio
+                FROM participacoes_operador
+                WHERE cracha = %s AND data_fim IS NULL
+                ORDER BY data_inicio DESC
+                """,
+                (codigo,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def ultimo_envio_digest_telegram(self, frequencia):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT periodo_fim FROM telegram_digest_envios WHERE frequencia = %s",
+                (str(frequencia),),
+            )
+            row = cursor.fetchone()
+            return row["periodo_fim"] if row else None
+
+    def registrar_envio_digest_telegram(self, frequencia, periodo_fim, enviado_em):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO telegram_digest_envios (frequencia, periodo_fim, enviado_em)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (frequencia)
+                DO UPDATE SET periodo_fim = EXCLUDED.periodo_fim, enviado_em = EXCLUDED.enviado_em
+                """,
+                (str(frequencia), periodo_fim, enviado_em),
+            )
+
     def listar_historico_operador(
         self,
         tipo_setor,

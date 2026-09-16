@@ -2072,6 +2072,39 @@ PARAMETROS_TURNO_STATEMENTS = (
 )
 
 
+OPERADOR_TELEGRAM_DESCRIPTION = (
+    "vínculo opcional crachá -> chat do Telegram, para comandos privados do bot"
+)
+
+OPERADOR_TELEGRAM_STATEMENTS = (
+    # Auto-vínculo (/vincular <cracha>, no privado do bot): mesmo modelo de
+    # confiança que o resto do Gestor já usa para crachá (nenhuma tela pede
+    # senha para apontar com ele). Um chat só pode estar ligado a um crachá
+    # por vez; reenviar /vincular com outro crachá troca o vínculo anterior.
+    "ALTER TABLE operadores_apontamento ADD COLUMN telegram_chat_id TEXT",
+    "CREATE UNIQUE INDEX uq_operadores_apontamento_telegram_chat_id "
+    "ON operadores_apontamento (telegram_chat_id) WHERE telegram_chat_id IS NOT NULL",
+)
+
+
+TELEGRAM_DIGEST_DESCRIPTION = (
+    "controle de idempotência dos resumos automáticos de fábrica no Telegram"
+)
+
+TELEGRAM_DIGEST_STATEMENTS = (
+    # Uma linha por frequência (diario/quinzenal/mensal). O ciclo em segundo
+    # plano roda a cada poucos minutos; sem isto ele reenviaria o mesmo
+    # resumo em todo ciclo dentro da janela de horário configurada.
+    """
+    CREATE TABLE telegram_digest_envios (
+        frequencia TEXT PRIMARY KEY,
+        periodo_fim DATE NOT NULL,
+        enviado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL
+    )
+    """,
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2112,6 +2145,8 @@ MIGRATIONS = {
     35: (CHAMADA_CONTATO_TELEGRAM_DESCRIPTION, CHAMADA_CONTATO_TELEGRAM_STATEMENTS),
     36: (CHAMADA_CONTATO_SETORES_DESCRIPTION, CHAMADA_CONTATO_SETORES_STATEMENTS),
     37: (PARAMETROS_TURNO_DESCRIPTION, PARAMETROS_TURNO_STATEMENTS),
+    38: (OPERADOR_TELEGRAM_DESCRIPTION, OPERADOR_TELEGRAM_STATEMENTS),
+    39: (TELEGRAM_DIGEST_DESCRIPTION, TELEGRAM_DIGEST_STATEMENTS),
 }
 
 
