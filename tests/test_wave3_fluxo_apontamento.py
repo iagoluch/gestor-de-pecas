@@ -288,6 +288,33 @@ class InspecaoTransitoriaTests(unittest.TestCase):
             [row for row in db.first_pieces if row["numero_operacao"] == "20"], []
         )
 
+    def test_inspecao_sem_checklist_nao_duplica_a_quantidade_da_etapa_anterior(self):
+        """Bug real: apontar a INSPECAO com o mesmo lote da etapa anterior
+        não pode somar ao total da OP — quem produziu foi a Solda, a
+        inspeção só marca passagem."""
+
+        self.assertFalse(sector_has_quality("Solda Aço"))
+        db, fluxo = self._cenario(setor_anterior="Solda Aço", recurso_anterior="SOLDA4")
+        rota = fluxo.listar_operacoes("OP-INSP", "Solda Aço", "Estação 1")
+        inspecao = next(row for row in rota if row["descricao_operacao"] == "INSPECAO")
+
+        fluxo.executar(
+            "Início", op="OP-INSP", setor="Solda Aço", recurso="Estação 1", operacao=inspecao
+        )
+        concluido = fluxo.executar(
+            # O operador repete o mesmo número já produzido na etapa
+            # anterior (3), exatamente o cenário que somaria 3+3=6 para um
+            # lote de 3 peças.
+            "Finalizado", op="OP-INSP", setor="Solda Aço", recurso="Estação 1",
+            operacao=inspecao, pecas_boas=3, operadores_cracha=["1"],
+        )
+        self.assertTrue(concluido.ok, concluido.message)
+        inspecao_registrada = next(
+            row for row in db.appointments if row["id"] == concluido.data["id"]
+        )
+        self.assertEqual(inspecao_registrada["quantidade_boa"], 0)
+        self.assertEqual(inspecao_registrada["quantidade_refugo"], 0)
+
     def test_dobra_continua_usando_a_aba_da_qualidade(self):
         """Setor com Qualidade não ganha atalho pelo roteiro do posto."""
 

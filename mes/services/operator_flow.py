@@ -975,6 +975,19 @@ class OperatorFlowService:
             return OperatorFlowResult(
                 False, "Peças boas, refugo e retrabalho não podem ser negativos.", "quantidade_invalida"
             )
+        # A INSPECAO herdada sem checklist (Solda/Pintura hoje — ver
+        # `inspecao_sem_checklist` acima) é apontada pelo posto só para contar
+        # o tempo e seguir a OP; ela não produz peça própria, quem produziu
+        # foi a operação real anterior. Aceitar uma quantidade aqui duplicaria
+        # a peça em qualquer totalizador que some por OP/recurso (o operador
+        # tende a repetir o mesmo número já registrado na etapa anterior — o
+        # cenário que soma 25+25 para um lote de 25 peças). A inspeção real
+        # (setor com Qualidade, fila própria) não passa por aqui com esta
+        # marca e continua registrando a quantidade normalmente.
+        inspecao_marcador = bool((operacao or {}).get("inspecao_sem_checklist"))
+        if inspecao_marcador:
+            boas = 0
+            refugos = 0
         if target == OperatorState.FINISHED:
             if not crachas:
                 return OperatorFlowResult(
@@ -989,7 +1002,7 @@ class OperatorFlowService:
                 str(setor or "").casefold() == "qualidade"
                 and retrabalhos > 0
             )
-            if total_lote <= 0 and not quality_rework_only:
+            if total_lote <= 0 and not quality_rework_only and not inspecao_marcador:
                 return OperatorFlowResult(
                     False,
                     "Informe ao menos uma peça boa ou um refugo.",
