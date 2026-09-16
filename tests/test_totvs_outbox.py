@@ -173,6 +173,39 @@ class OutboxClassificationTests(unittest.TestCase):
         self.assertIs(decision.delivery_class, DeliveryClass.FUNCTIONAL)
         self.assertFalse(decision.retryable)
 
+    def test_colisao_de_id_interno_do_totvs_e_transitoria_nao_funcional(self):
+        # Achado real em 16/09/2026 (teste em lote de 10 OPs): o WSPCP recusa
+        # com ACK Status=ERROR uma colisão de chave única na própria tabela
+        # interna dele (SMO010/MO_IDAPON), sem relação com o dado enviado.
+        # Reenviar tende a gerar um ID novo e ter sucesso — não é rejeição de
+        # negócio como "sem saldo" ou "OP já totalizada".
+        mensagem = (
+            "1 - SMO010: DB error (Insert): -37 File: SMO010 - Error : 2601 "
+            "(23000) (RC=-1) - [Microsoft][ODBC Driver 13 for SQL Server]"
+            "[SQL Server]Cannot insert duplicate key row in object "
+            "'dbo.SMO010' with unique index 'SMO010_UNQ'."
+        )
+        decision = classify_attempt(
+            DeliveryAttempt(http_status=200, ack_status="ERROR", error_message=mensagem),
+            attempts=1,
+        )
+        self.assertIs(decision.status, OutboxStatus.RETRY)
+        self.assertIs(decision.delivery_class, DeliveryClass.TRANSIENT)
+        self.assertTrue(decision.retryable)
+
+    def test_colisao_de_id_interno_para_ao_esgotar_tentativas(self):
+        decision = classify_attempt(
+            DeliveryAttempt(
+                http_status=200,
+                ack_status="ERROR",
+                error_message="SMO010: duplicate key row",
+            ),
+            attempts=12,
+            max_attempts=12,
+        )
+        self.assertIs(decision.status, OutboxStatus.ERROR)
+        self.assertFalse(decision.retryable)
+
     def test_401_e_403_tem_politica_limitada_e_identificada(self):
         for status in (401, 403):
             primeira = classify_attempt(

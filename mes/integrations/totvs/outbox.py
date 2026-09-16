@@ -130,6 +130,21 @@ def _looks_like_authentication(text: str | None) -> bool:
     return any(mark in marker for mark in _AUTHENTICATION_FAULT_MARKS)
 
 
+# Marca observada no TESTE em 16/09/2026, em 3 ocorrências (duas delas sem
+# nenhuma chamada concorrente): o WSPCP recusa com ACK HTTP 200/Status=ERROR
+# uma colisão de chave única na tabela interna dele mesmo (SMO010, gerador de
+# ID de apontamento). Não é rejeição de dado/negócio — é o próprio TOTVS
+# tropeçando no ID que ele gera; reenviar com uma nova tentativa tende a
+# receber um ID diferente e ter sucesso, diferente de "sem saldo" ou "sem
+# empenho", que reenviar nunca resolve.
+_TRANSIENT_DUPLICATE_KEY_MARKS = ("SMO010", "DUPLICATE KEY")
+
+
+def _looks_like_transient_duplicate_key(text: str | None) -> bool:
+    marker = str(text or "").upper()
+    return any(mark in marker for mark in _TRANSIENT_DUPLICATE_KEY_MARKS)
+
+
 def classify_attempt(
     attempt: DeliveryAttempt,
     *,
@@ -157,6 +172,18 @@ def classify_attempt(
 
     ack_status = str(attempt.ack_status or "").strip().upper()
     if ack_status and ack_status != "OK":
+        if _looks_like_transient_duplicate_key(attempt.error_message):
+            # Falha técnica do próprio WSPCP (colisão de ID interno), não
+            # rejeição de dado: repete com o mesmo backoff de indisponibilidade
+            # em vez de travar em ERROR exigindo reprocessamento manual.
+            exhausted = int(attempts) >= int(max_attempts)
+            return DeliveryDecision(
+                delivery_class=DeliveryClass.TRANSIENT,
+                status=OutboxStatus.ERROR if exhausted else OutboxStatus.RETRY,
+                retryable=not exhausted,
+                error_code=attempt.error_code or "totvs_colisao_id_interno",
+                error_message=attempt.error_message,
+            )
         # Rejeição de negócio do Protheus (A680OPTOT, quantidade inválida,
         # falta de saldo, OP/recurso/operação inválidos). Reenviar não muda o
         # resultado; a correção é humana ou de dado.
