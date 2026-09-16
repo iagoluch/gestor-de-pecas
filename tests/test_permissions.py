@@ -36,7 +36,7 @@ class PermissionMatrixTests(unittest.TestCase):
             ("operador_pintura", "Pintura"),
             # Wave 6F — a Solda virou cinco setores com conta por estação.
             ("estacao1aco", "Solda Aço"),
-            ("estacao6alu", "Solda Alumínio"),
+            ("estacao3alu", "Solda Alumínio"),
             ("robo1", "Solda Robô"),
             ("projetos", "Proj. Ferramentaria"),
             ("prototipo", "Protótipo"),

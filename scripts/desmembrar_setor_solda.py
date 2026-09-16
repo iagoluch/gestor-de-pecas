@@ -33,10 +33,15 @@ python scripts/desmembrar_setor_solda.py --senha 1234
 ```
 
 TODO(lançamento em produção): a senha aplicada aqui é de ambiente de TESTE. As
-senhas reais das contas criadas — ``estacao1aco``..``estacao10aco``,
-``estacao1alu``..``estacao6alu``, ``robo1``, ``projetos`` e ``prototipo`` —
+senhas reais das contas criadas — ``estacao1aco``..``estacao6aco``,
+``estacao1alu``..``estacao3alu``, ``robo1``, ``projetos`` e ``prototipo`` —
 precisam ser definidas manualmente no lançamento. O Dev Observatory não possui
 hoje um mecanismo de pendência/card onde registrar esse lembrete.
+
+Atualização 16/09/2026: cadastro real de PCs por estação — 6 na Solda Aço
+(antes 10), 3 na Solda Alumínio (antes 6). A contagem vem só de
+``WELDING_FAMILY_SECTORS`` (``app/core/operator_sectors.py``); este script não
+precisou mudar.
 """
 
 from __future__ import annotations
