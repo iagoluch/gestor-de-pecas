@@ -420,30 +420,35 @@ class OperatorFlowTests(unittest.TestCase):
         ])
         return db, service
 
-    def test_workbench_normal_libera_inspecao_com_confirmacao(self):
-        _db, service = self._roteiro_com_inspecao_e_marco_terminal()
+    def test_inspecao_da_caldeiraria_e_concluida_sozinha_sem_apontamento(self):
+        """Decisão do usuário, 16/09/2026: o recurso físico de inspeção da
+        Caldeiraria não existe mais na fábrica. A etapa INSPECAO do roteiro
+        (numérico, não a aba Qualidade) deixa de ser selecionável pelo posto
+        — o Gestor a trata como sempre concluída, sem apontamento nenhum e
+        sem produção fictícia — e a OP alcança o marco terminal só com a
+        operação real."""
+
+        db, service = self._roteiro_com_inspecao_e_marco_terminal()
         route = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
-        selected = next(row for row in route if row["numero_operacao"] == "40")
-        self.assertTrue(selected["selectable"])
-        self.assertTrue(selected["requires_confirmation"])
+        inspecao = next(row for row in route if row["numero_operacao"] == "40")
+        self.assertEqual(inspecao["visual_status"], "done")
+        self.assertFalse(inspecao["selectable"])
 
-        pending = service.executar(
-            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
-            operacao=selected,
+        real = next(row for row in route if row["numero_operacao"] == "20")
+        service.executar("Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=real)
+        concluido = service.executar(
+            "Finalizado", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=real, pecas_boas=2, operadores_cracha=["1"],
         )
-        self.assertFalse(pending.ok)
-        self.assertIn(
-            pending.code,
-            {"confirmacao_etapa_anterior_obrigatoria", "confirmacao_recurso_obrigatoria"},
-        )
+        self.assertTrue(concluido.ok, concluido.message)
 
-        authorized = service.executar(
-            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
-            operacao=selected, confirmar_etapa_anterior_pendente=True,
-            confirmar_recurso_divergente=True, operadores_cracha=["1"],
+        rota_final = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
+        terminal = next(row for row in rota_final if row["numero_operacao"] == "99")
+        self.assertEqual(terminal["visual_status"], "done")
+        self.assertEqual(
+            [item["numero_operacao"] for item in db.appointments if item.get("op") == "OP-OPERADOR"],
+            ["20"],
         )
-        self.assertTrue(authorized.ok, authorized.message)
-        self.assertEqual(authorized.data["catalogo_operacao_id"], selected["id"])
 
     def test_marco_terminal_nunca_e_apontavel_nem_vira_etapa_atual(self):
         """99 - FINALIZADA é leitura do roteiro, não um posto de trabalho.

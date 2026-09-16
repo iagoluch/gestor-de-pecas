@@ -22,6 +22,19 @@ Habilitar um setor novo no futuro deve ser uma alteração *aqui*, e não um
 # inventar uma seria pior do que deixar a aba indisponível.
 QUALITY_ENABLED_SECTORS = ("Dobra", "Usinagem", "Serra")
 
+# Setores em que a etapa "INSPECAO"/"INSPECAO QUALIDADE" do roteiro (a
+# operação real cadastrada em ``catalogo_operacoes_op``, não a aba Qualidade)
+# nunca é apontada por ninguém: o Gestor conclui essa etapa sozinho assim que
+# a operação real anterior termina e segue para a próxima (decisão do
+# usuário, 16/09/2026 — o recurso físico de inspeção da Caldeiraria não
+# existe mais na fábrica).
+#
+# Isto é independente de ``QUALITY_ENABLED_SECTORS``/``sector_has_quality``:
+# a aba Qualidade, os templates de cota, a primeira peça e a fila do
+# inspetor continuam exatamente como estão para estes três setores. Só o
+# marco de roteiro da INSPECAO passa a ser automático — nada mais muda.
+INSPECTION_STEP_AUTO_SKIP_SECTORS = ("Dobra", "Usinagem", "Serra")
+
 # Assinatura industrial exata da operação de inspeção no ProductionOrder.
 # A chave é ``(ActivityDescription, WorkCenterCode, MachineCode)`` normalizada.
 # Não existe prefixo, semelhança ou fuzzy matching: cada entrada é uma decisão
@@ -82,6 +95,15 @@ def sector_has_quality(sector):
 
     key = _normalized(sector)
     return any(_normalized(name) == key for name in QUALITY_ENABLED_SECTORS if key)
+
+
+def inspection_step_auto_skipped(sector):
+    """Indica se a etapa INSPECAO do roteiro deste setor é concluída sozinha."""
+
+    key = _normalized(sector)
+    return any(
+        _normalized(name) == key for name in INSPECTION_STEP_AUTO_SKIP_SECTORS if key
+    )
 
 
 def is_quality_inspection_signature(

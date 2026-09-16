@@ -16,7 +16,7 @@ from app.core.resource_mapping import (
 )
 from app.core.normalization import limpa_codigo
 from app.core.operator_sectors import sector_display_label
-from app.core.quality import sector_has_quality
+from app.core.quality import inspection_step_auto_skipped, sector_has_quality
 from mes.domain import (
     EventCategory,
     ManufacturingRules,
@@ -92,6 +92,40 @@ class OperatorFlowService:
             for row in rows
             if row.get("corte_concluido") and row.get("id") is not None
         )
+
+        # Setor produtivo que antecede cada etapa. Precisa vir antes de
+        # ``finalized_ids``: é ele que decide (a) quem executa a INSPECAO
+        # herdada quando o setor não possui Qualidade implantada, e (b) se a
+        # etapa INSPECAO da Caldeiraria é concluída sozinha pelo Gestor (ver
+        # abaixo) — nos dois casos o critério é o setor de quem trabalhou na
+        # operação real anterior, não o setor (vazio) da própria INSPECAO.
+        setor_anterior = {}
+        recurso_anterior = {}
+        ultimo_setor = None
+        ultimo_recurso = None
+        for index, row in enumerate(rows):
+            setor_anterior[index] = ultimo_setor
+            recurso_anterior[index] = ultimo_recurso
+            if row.get("tipo_setor") and not row.get("marco_terminal"):
+                ultimo_setor = row.get("tipo_setor")
+                ultimo_recurso = row.get("codigo_recurso") or row.get("recurso")
+
+        # A etapa "INSPECAO"/"INSPECAO QUALIDADE" do roteiro da Caldeiraria
+        # não é mais um processo real da fábrica (substituída pela
+        # conferência da primeira peça — decisão do usuário, 16/09/2026): o
+        # Gestor a trata como sempre concluída, sem apontamento nenhum e sem
+        # produção fictícia, para não travar o avanço da OP. Solda e Pintura
+        # ficam de fora — o processo delas continua diferente (apontada pelo
+        # posto anterior só para contar o tempo, `inspecao_sem_checklist`
+        # abaixo), e nada muda na Qualidade real (cotas, RNC, primeira peça,
+        # fila do inspetor) para nenhum setor.
+        finalized_ids.update(
+            row.get("id")
+            for index, row in enumerate(rows)
+            if row.get("inspecao_qualidade")
+            and row.get("id") is not None
+            and inspection_step_auto_skipped(setor_anterior.get(index))
+        )
         active_ids = {
             row.get("catalogo_operacao_id")
             for row in progress
@@ -158,19 +192,6 @@ class OperatorFlowService:
             if row.get("catalogo_operacao_id") is not None
         }
         setup_disponivel = sector_has_setup(setor)
-
-        # Setor produtivo que antecede cada etapa. É ele que decide quem
-        # executa a INSPECAO quando o setor não possui Qualidade implantada.
-        setor_anterior = {}
-        recurso_anterior = {}
-        ultimo_setor = None
-        ultimo_recurso = None
-        for index, row in enumerate(rows):
-            setor_anterior[index] = ultimo_setor
-            recurso_anterior[index] = ultimo_recurso
-            if row.get("tipo_setor") and not row.get("marco_terminal"):
-                ultimo_setor = row.get("tipo_setor")
-                ultimo_recurso = row.get("codigo_recurso") or row.get("recurso")
 
         for index, row in enumerate(rows):
             operation_progress = next(
