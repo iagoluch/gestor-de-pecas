@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
+import { ChamadaButton } from "../../components/ChamadaButton";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
@@ -630,13 +631,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       ) : null}
       {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => void execute("Parada", { stop_reason_code: code, comment })} /> : null}
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => void confirmFirstPiece(result, note)} /> : null}
-      {dialog?.kind === "finish" ? <FinishDialog context={context} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => void execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
+      {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => void execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><button type="button" className="button button--primary" onClick={() => void execute(dialog.action)}>Confirmar</button></div></OperatorDialog> : null}
       {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => void execute(dialog.action, { badges: [badge], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" })} /> : null}
       {dialog?.kind === "list" ? <CardListDialog title={{ production: "Produção", queue: "Fila de Ordem", history: "Histórico" }[dialog.source]} items={dialog.source === "history" ? historyQuery.data?.items ?? [] : cards.data?.[dialog.source] ?? []} hasMore={dialog.source === "history" && Boolean(historyQuery.data?.has_more)} onCancel={() => setDialog(null)} onSelect={(item) => { selectCard(item); setDialog(null); }} /> : null}
       {dialog?.kind === "gate" ? (
         <SetupQualityDialog
           context={context}
+          sector={sector}
           state={gate.data}
           loading={gate.loading && !gate.data}
           busy={submitting}
@@ -717,6 +719,7 @@ function FirstPieceDialog({
  */
 function SetupQualityDialog({
   context,
+  sector,
   state,
   loading,
   busy,
@@ -726,6 +729,7 @@ function SetupQualityDialog({
   onSaveTemplate,
 }: {
   context: OperationContext;
+  sector: string;
   state?: FirstPieceState | null;
   loading: boolean;
   busy: boolean;
@@ -775,6 +779,13 @@ function SetupQualityDialog({
           <p className="operator-help">{state.message}</p>
           <p className="operator-help">O responsável precisa estar no posto e informar o próprio crachá. Não existe login para ele: a autorização fica registrada com OP, recurso, operador, horário e decisão.</p>
           <label>Crachá do responsável<input value={badge} onChange={(event) => setBadge(event.target.value)} autoFocus /></label>
+          <ChamadaButton
+            inline
+            label="Chamar responsável"
+            sector={sector}
+            defaultReason="Qualidade"
+            defaultComment={responsibleCallComment(context, "Retrabalho da primeira peça bloqueado; é necessária autorização para liberar a OP.")}
+          />
           <label>Observação<textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="O que foi decidido no posto" /></label>
           <div className="operator-dialog__actions">
             <button type="button" onClick={onCancel}>Cancelar</button>
@@ -857,10 +868,19 @@ function SetupQualityDialog({
             </label>
           ) : null}
           {reprovada && destination === "REFUGO" ? (
-            <label>
-              Crachá do responsável que autoriza o refugo
-              <input value={badge} onChange={(event) => setBadge(event.target.value)} />
-            </label>
+            <>
+              <label>
+                Crachá do responsável que autoriza o refugo
+                <input value={badge} onChange={(event) => setBadge(event.target.value)} />
+              </label>
+              <ChamadaButton
+                inline
+                label="Chamar responsável"
+                sector={sector}
+                defaultReason="Qualidade"
+                defaultComment={responsibleCallComment(context, "Primeira peça reprovada com destino Refugo; é necessária autorização para o descarte.")}
+              />
+            </>
           ) : null}
           <label>Observação<textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="O que foi verificado no posto" /></label>
           <div className="operator-dialog__actions">
@@ -967,7 +987,7 @@ function CardListDialog({ title, items, hasMore, onCancel, onSelect }: { title: 
   return <OperatorDialog title={title} size="wide" onCancel={onCancel}>{items.length ? <div className="operator-dialog-card-list">{items.map((item, index) => <OperatorCardView key={`${item.id ?? item.op}-${index}`} item={item} onSelect={onSelect} />)}</div> : <EmptyState title={`Nenhum item em ${title.toLocaleLowerCase("pt-BR")}`} />}{hasMore ? <p className="operator-help">Exibindo os 100 registros mais recentes. Use os filtros dos relatórios para consultas históricas maiores.</p> : null}</OperatorDialog>;
 }
 
-function FinishDialog({ context, operators, onCancel, onConfirm }: { context: OperationContext; operators: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, badges: string[], scrapBadge: string) => void }) {
+function FinishDialog({ context, sector, operators, onCancel, onConfirm }: { context: OperationContext; sector: string; operators: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, badges: string[], scrapBadge: string) => void }) {
   const [good, setGood] = useState("");
   const [scrap, setScrap] = useState("0");
   const [badge, setBadge] = useState("");
@@ -1001,7 +1021,16 @@ function FinishDialog({ context, operators, onCancel, onConfirm }: { context: Op
     </div>
     <div className="operator-quantity-grid"><label>Peças boas<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
     <p className="operator-help">O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado.</p>
-    {scrapRequiresApproval ? <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label> : null}
+    {scrapRequiresApproval ? <>
+      <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>
+      <ChamadaButton
+        inline
+        label="Chamar responsável"
+        sector={sector}
+        defaultReason="Qualidade"
+        defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado na finalização; é necessária autorização para o descarte.`)}
+      />
+    </> : null}
     <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
     {badgeError ? <p className="form-error">{badgeError}</p> : null}
     <div className="operator-badge-list" aria-label="Operadores adicionados">
@@ -1012,6 +1041,10 @@ function FinishDialog({ context, operators, onCancel, onConfirm }: { context: Op
     </div>
     <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><button type="button" className="button button--primary" disabled={!badges.length || Number(good || 0) + Number(scrap || 0) <= 0 || (scrapRequiresApproval && !scrapBadge.trim())} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar finalização</button></div>
   </OperatorDialog>;
+}
+
+function responsibleCallComment(context: OperationContext, situation: string) {
+  return `${situation} OP ${context.op || "não informada"}, operação ${context.operation || "não informada"}, recurso ${context.resource || "não informado"}.`;
 }
 
 function AuthorizationDialog({ context, details, onCancel, onConfirm }: { context: OperationContext; details?: Record<string, unknown>; onCancel: () => void; onConfirm: (badge: string) => void }) {

@@ -16,6 +16,17 @@ interface ChamadaResult {
 type Passo = "form" | "enviando" | "sucesso" | "erro";
 type Variante = "operador" | "gestao";
 
+interface ChamadaButtonProps {
+  variant?: Variante;
+  sector?: string | null;
+  /** Valores contextuais sugeridos pelo posto; continuam editáveis no formulário. */
+  defaultReason?: string;
+  defaultComment?: string;
+  /** Uso dentro de um diálogo operacional, sem o botão flutuante. */
+  inline?: boolean;
+  label?: string;
+}
+
 const DEBOUNCE_MS = 250;
 
 /**
@@ -30,7 +41,14 @@ const DEBOUNCE_MS = 250;
  *   está chamando;
  * - "operador" (padrão): abre a busca vazia e pede o crachá de quem chama.
  */
-export function ChamadaButton({ variant = "operador", sector }: { variant?: Variante; sector?: string | null }) {
+export function ChamadaButton({
+  variant = "operador",
+  sector,
+  defaultReason = "",
+  defaultComment = "",
+  inline = false,
+  label,
+}: ChamadaButtonProps) {
   const gestao = variant === "gestao";
   const [aberto, setAberto] = useState(false);
   const [passo, setPasso] = useState<Passo>("form");
@@ -90,8 +108,8 @@ export function ChamadaButton({ variant = "operador", sector }: { variant?: Vari
     setBusca("");
     setOpcoes([]);
     setContato(null);
-    setMotivo("");
-    setComentario("");
+    setMotivo(defaultReason);
+    setComentario(defaultComment);
     setCracha("");
     setNomeSolicitante("");
     setEmailSolicitante("");
@@ -138,13 +156,13 @@ export function ChamadaButton({ variant = "operador", sector }: { variant?: Vari
     <>
       <button
         type="button"
-        className="chamada-fab"
+        className={inline ? "button chamada-trigger" : "chamada-fab"}
         onClick={abrir}
-        aria-label="Chamar alguém"
-        title="Chamar alguém"
+        aria-label={label ?? "Chamar alguém"}
+        title={label ?? "Chamar alguém"}
       >
         <ChamadaIcon />
-        <span className="chamada-fab__label">Chamar</span>
+        <span className={inline ? undefined : "chamada-fab__label"}>{label ?? "Chamar"}</span>
       </button>
 
       {aberto ? (

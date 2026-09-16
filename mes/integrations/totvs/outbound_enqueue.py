@@ -50,6 +50,12 @@ _QUANTITY_STATES = frozenset({"parcial", "finalizado"})
 # Estados canônicos que podem iniciar a execução no recurso.
 _START_STATES = frozenset({"producao", "setup"})
 
+# Prefixo reservado pelo gerador de OPs da simulação industrial. A guarda é
+# permanente: mesmo que uma execução ligue a outbox por engano, uma ordem SOAK
+# nunca pode virar obrigação para o Protheus. Prefixos adicionais podem ser
+# declarados na configuração para outros cenários sintéticos.
+_RESERVED_SYNTHETIC_ORDER_PREFIXES = ("SOAK",)
+
 
 @dataclass(frozen=True)
 class OutboundEnqueueConfig:
@@ -68,6 +74,7 @@ class OutboundEnqueueConfig:
     stop_reason_codes: dict[str, str] = field(default_factory=dict)
     default_stop_reason_code: str | None = None
     emit_terminal_milestone: bool = True
+    additional_synthetic_order_prefixes: tuple[str, ...] = ()
 
     def resolve_waste_code(self, event: CanonicalExecutionEvent) -> str | None:
         for candidate in (
@@ -104,6 +111,32 @@ def _has_totvs_identity(fact) -> bool:
     return bool(
         str(getattr(fact, "company_id", "") or "").strip()
         and str(getattr(fact, "branch_id", "") or "").strip()
+    )
+
+
+def _is_synthetic_order(fact, config: OutboundEnqueueConfig) -> bool:
+    """Reconhece OPs que jamais podem sair pela integração corporativa.
+
+    A simulação exercita o pipeline inbound canônico e, por isso, seus XMLs
+    carregam ``CompanyId`` e ``BranchId``. Identidade preenchida prova que o
+    contrato foi projetado, mas não prova que a OP existe no Protheus. O prefixo
+    reservado é a fronteira explícita que separa essas ordens das OPs reais.
+    """
+
+    production_order = (
+        str(getattr(fact, "production_order", "") or "").strip().upper()
+    )
+    prefixes = (
+        *_RESERVED_SYNTHETIC_ORDER_PREFIXES,
+        *config.additional_synthetic_order_prefixes,
+    )
+    return bool(
+        production_order
+        and any(
+            production_order.startswith(str(prefix or "").strip().upper())
+            for prefix in prefixes
+            if str(prefix or "").strip()
+        )
     )
 
 
@@ -340,7 +373,11 @@ def plan_execution_event(
     possui sua própria chave determinística.
     """
 
-    if not config.enabled or not _has_totvs_identity(event):
+    if (
+        not config.enabled
+        or not _has_totvs_identity(event)
+        or _is_synthetic_order(event, config)
+    ):
         return []
     requests: list[OutboxEnqueueRequest] = []
     state = str(event.state or "").strip().casefold()
@@ -407,7 +444,7 @@ def plan_terminal_milestone(
 
     if not config.enabled or not config.emit_terminal_milestone:
         return []
-    if not _has_totvs_identity(milestone):
+    if not _has_totvs_identity(milestone) or _is_synthetic_order(milestone, config):
         return []
     if not milestone.execution_completed:
         return []
@@ -480,6 +517,19 @@ def _code_map(env, name: str) -> dict[str, str]:
     return resolved
 
 
+def _prefixes(env, name: str) -> tuple[str, ...]:
+    raw = str(env.get(name) or "").strip()
+    if not raw:
+        return ()
+    return tuple(
+        dict.fromkeys(
+            prefix.strip().upper()
+            for prefix in raw.replace(";", ",").split(",")
+            if prefix.strip()
+        )
+    )
+
+
 def load_outbound_enqueue_config(env=None) -> OutboundEnqueueConfig:
     """Carrega a configuração da outbox a partir do ambiente.
 
@@ -509,6 +559,9 @@ def load_outbound_enqueue_config(env=None) -> OutboundEnqueueConfig:
             environ.get("GESTOR_TOTVS_OUTBOUND_DEFAULT_STOP_REASON_CODE") or ""
         ).strip()
         or None,
+        additional_synthetic_order_prefixes=_prefixes(
+            environ, "GESTOR_TOTVS_OUTBOX_SYNTHETIC_OP_PREFIXES"
+        ),
     )
 
 

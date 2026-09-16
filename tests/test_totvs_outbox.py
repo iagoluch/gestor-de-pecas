@@ -222,6 +222,40 @@ class OutboxPlannerTests(unittest.TestCase):
         evento = canonical_event(company_id="", branch_id="")
         self.assertEqual(plan_execution_event(evento, config=self.CONFIG), [])
 
+    def test_op_sintetica_soak_nao_entra_mesmo_com_identidade_totvs(self):
+        evento = canonical_event(
+            production_order="SOAK1538010001",
+            company_id="01",
+            branch_id="010004",
+        )
+        self.assertEqual(plan_execution_event(evento, config=self.CONFIG), [])
+
+    def test_prefixo_sintetico_adicional_e_configuravel_sem_bloquear_op_real(self):
+        config = load_outbound_enqueue_config(
+            {
+                "GESTOR_TOTVS_OUTBOX_ENABLED": "true",
+                "GESTOR_TOTVS_OUTBOX_SYNTHETIC_OP_PREFIXES": " SIMREAL, teste- ",
+            }
+        )
+        self.assertEqual(
+            plan_execution_event(
+                canonical_event(production_order="simreal0001"), config=config
+            ),
+            [],
+        )
+        self.assertEqual(
+            plan_execution_event(
+                canonical_event(production_order="TESTE-0001"), config=config
+            ),
+            [],
+        )
+        real = plan_execution_event(
+            canonical_event(production_order="A9717101001"), config=config
+        )
+        self.assertEqual(
+            [item.event_type for item in real], [EVENT_PRODUCTION_APPOINTMENT]
+        )
+
     def test_parada_aberta_nao_entra_na_fila(self):
         parada = canonical_event(
             state="parada",
@@ -305,6 +339,10 @@ class OutboxPlannerTests(unittest.TestCase):
         self.assertIn("<ActivityCode>99</ActivityCode>", request.payload_xml)
         self.assertIn("<CloseOperation>true</CloseOperation>", request.payload_xml)
 
+    def test_marco_terminal_sintetico_soak_nao_entra_na_fila(self):
+        pronto = terminal_milestone(production_order="SOAK1538010001")
+        self.assertEqual(plan_terminal_milestone(pronto, config=self.CONFIG), [])
+
     def test_configuracao_vem_do_ambiente_sem_nome_de_banco(self):
         config = load_outbound_enqueue_config(
             {
@@ -316,6 +354,7 @@ class OutboxPlannerTests(unittest.TestCase):
         self.assertTrue(config.enabled)
         self.assertEqual(config.waste_codes, {"QUEBRA": "RP"})
         self.assertEqual(config.default_stop_reason_code, "0018")
+        self.assertEqual(config.additional_synthetic_order_prefixes, ())
         self.assertFalse(load_outbound_enqueue_config({}).enabled)
 
 

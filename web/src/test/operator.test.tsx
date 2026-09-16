@@ -512,6 +512,8 @@ describe("fluxo Web do operador", () => {
     fireEvent.change(within(dialog).getByLabelText("Destino da peça reprovada"), { target: { value: "REFUGO" } });
 
     expect(within(dialog).getByLabelText("Crachá do responsável que autoriza o refugo")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Chamar responsável" })).toBeInTheDocument();
+    // A chamada só avisa: sem o crachá, a autorização continua bloqueada.
     expect(within(dialog).getByRole("button", { name: "Liberar lote" })).toBeDisabled();
   });
 

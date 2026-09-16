@@ -74,6 +74,7 @@ class SimulationConfig:
     ingestao: dict[str, object]
     selecao_postos: dict[str, object]
     checkpoints: tuple[dict[str, str], ...]
+    calendar: dict[str, object]
     run_dir: Path = field(default=RUNS_ROOT)
 
     # ------------------------------------------------------------------
@@ -151,6 +152,7 @@ class SimulationConfig:
             "ingestao": self.ingestao,
             "selecao_postos": self.selecao_postos,
             "checkpoints": [dict(item) for item in self.checkpoints],
+            "calendar": self.calendar,
         }
 
 
@@ -185,7 +187,7 @@ def load_config(
     ops_continuas: int | None = None,
     config_file: Path = CONFIG_FILE,
 ) -> SimulationConfig:
-    raw = json.loads(Path(config_file).read_text(encoding="utf-8"))
+    raw = _load_config_file(Path(config_file))
     if ops_iniciais is not None:
         raw["ingestao"]["lote_inicial"] = max(0, int(ops_iniciais))
     if ops_continuas is not None:
@@ -235,4 +237,28 @@ def load_config(
         ingestao=raw["ingestao"],
         selecao_postos=selecao_postos,
         checkpoints=tuple(raw["checkpoints"]),
+        calendar=dict(raw.get("calendar") or {}),
     )
+
+
+def _merge_config(base: dict, override: dict) -> dict:
+    """Merge a scenario overlay without mutating the reusable base config."""
+
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_config(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _load_config_file(config_file: Path) -> dict:
+    raw = json.loads(config_file.read_text(encoding="utf-8"))
+    base_name = raw.pop("base_config", None)
+    if not base_name:
+        return raw
+    base_file = (config_file.parent / str(base_name)).resolve()
+    if base_file == config_file.resolve():
+        raise ValueError("base_config não pode referenciar o próprio arquivo.")
+    return _merge_config(_load_config_file(base_file), raw)

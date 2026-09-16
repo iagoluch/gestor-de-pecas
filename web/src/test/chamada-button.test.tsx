@@ -106,6 +106,40 @@ describe("botão de chamada — variante operador (padrão)", () => {
     await screen.findByText("Chamada registrada.");
     expect(screen.getByText(/não pôde ser enviado agora/)).toBeInTheDocument();
   });
+
+  it("permite uma chamada contextual ao responsável, filtrada pelo setor e sem dispensar o crachá", async () => {
+    const fetchMock = stubFetch();
+    render(
+      <ChamadaButton
+        inline
+        label="Chamar responsável"
+        sector="Dobra"
+        defaultReason="Qualidade"
+        defaultComment="OP OP-101, operação 20, recurso 1303."
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Chamar responsável" }));
+    await screen.findByText("Fulano", { exact: false });
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/chamadas/contatos?setor=Dobra"))).toBe(true);
+    });
+    expect(screen.getByRole("combobox")).toHaveValue("Qualidade");
+    expect(screen.getByPlaceholderText("Descreva rapidamente o que está acontecendo…")).toHaveValue("OP OP-101, operação 20, recurso 1303.");
+
+    fireEvent.click(screen.getByRole("option", { name: /Fulano/ }));
+    expect(screen.getByRole("button", { name: "Chamar" })).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
+    fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
+    await screen.findByText("Chamada registrada.");
+
+    const chamada = fetchMock.mock.calls.find(([path]) => String(path).endsWith("/chamadas"));
+    expect(JSON.parse(String(chamada?.[1]?.body))).toMatchObject({
+      motivo: "Qualidade",
+      comentario: "OP OP-101, operação 20, recurso 1303.",
+      solicitante_cracha: "0042",
+    });
+  });
 });
 
 describe("botão de chamada — variante gestão", () => {

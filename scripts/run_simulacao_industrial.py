@@ -36,6 +36,12 @@ def parse_args(argv=None) -> argparse.Namespace:
         default=None,
         help="Início virtual ISO 8601 (padrão vem de config/simulacao_industrial.json).",
     )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Arquivo JSON do cenário; pode declarar base_config para herdar a configuração industrial.",
+    )
     parser.add_argument("--api-port", type=int, default=None, help="Porta da API TESTE.")
     parser.add_argument(
         "--observatory-port", type=int, default=None, help="Porta do observatório."
@@ -89,6 +95,7 @@ def main(argv=None) -> int:
         observatory_port=args.observatory_port,
         ops_iniciais=args.ops_iniciais,
         ops_continuas=args.ops_continuas,
+        config_file=args.config or PROJECT_ROOT / "config" / "simulacao_industrial.json",
     )
     runner = SimulationRunner(
         config,

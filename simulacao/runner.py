@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import time
 
+import psycopg
+
 from simulacao import environment, preflight as preflight_mod, provision
 from simulacao.api_client import ApiSession, SessionFactory
 from simulacao.clock import VirtualClock
@@ -52,12 +54,15 @@ PERFIS_SIMULACAO = {
     "sim_usinagem": "operador_usinagem",
     "sim_serra": "operador_serra",
     "sim_pintura": "operador_pintura",
-    "sim_solda01": "estacao1aco",
-    "sim_solda02": "estacao2aco",
-    "sim_solda03": "estacao3aco",
-    "sim_solda04": "estacao4aco",
-    "sim_solda05": "estacao5aco",
-    "sim_solda06": "estacao6aco",
+    "sim_solda_aco1": "estacao1aco",
+    "sim_solda_aco2": "estacao2aco",
+    "sim_solda_aco3": "estacao3aco",
+    "sim_solda_aco4": "estacao4aco",
+    "sim_solda_alu1": "estacao1alu",
+    "sim_solda_alu2": "estacao2alu",
+    "sim_solda_robo": "robo1",
+    "sim_ferramentaria": "projetos",
+    "sim_prototipo": "prototipo",
     "sim_supervisor": "supervisor",
     # O rodízio de 10 s entre Andon e Solda (useTvRotation) só roda no perfil
     # dedicado de TV. Observar o Andon pela sessão de gestão mostrava a tela
@@ -116,6 +121,7 @@ class SimulationRunner:
         self.iniciado_em_real: datetime | None = None
         self._ultima_captura: dict[str, float] = {}
         self.selecao_postos: list[dict] = []
+        self._calendar_snapshot: list[dict] = []
 
     # ------------------------------------------------------------------
     # FASE 1 — PREFLIGHT
@@ -152,6 +158,8 @@ class SimulationRunner:
             self.preflight = resultado
             self._salvar_preflight(resultado)
             return False
+
+        self._preparar_calendario_do_cenario()
 
         # A API sobe só depois que o alvo está provado.
         self.api = environment.iniciar_api(
@@ -224,6 +232,51 @@ class SimulationRunner:
                 severity=SEV_INFO if checagem.ok else (SEV_ERROR if checagem.critico else SEV_WARNING),
                 details={"detalhe": checagem.detalhe, **checagem.dados},
             )
+
+    def _preparar_calendario_do_cenario(self) -> None:
+        """Desliga janelas extras do dia somente quando o cenário as declara.
+
+        O snapshot é persistido antes da alteração e restaurado no ``finally``
+        de ``executar``. Assim o cenário de 15/09 não transforma H1/H2 em uma
+        regra permanente do calendário TESTE.
+        """
+
+        names = tuple(str(name) for name in self.config.calendar.get("disable_shift_names", ()))
+        if not names or self.observer is None or self.telemetry is None:
+            return
+        weekday = self.config.virtual_start.weekday()
+        placeholders = ", ".join("%s" for _ in names)
+        self._calendar_snapshot = self.observer.consultar(
+            f"SELECT id, nome, dia_semana, ativo FROM turnos_produtivos "
+            f"WHERE dia_semana = %s AND nome IN ({placeholders}) ORDER BY id",
+            (weekday, *names),
+        )
+        (self.run_dir / "snapshots").mkdir(exist_ok=True)
+        self.telemetry.salvar_json("snapshots/calendario_turnos.json", self._calendar_snapshot)
+        if not self._calendar_snapshot:
+            return
+        with psycopg.connect(self.observer.dsn) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE turnos_produtivos SET ativo = FALSE WHERE id = ANY(%s)",
+                ([row["id"] for row in self._calendar_snapshot],),
+            )
+        self.telemetry.registrar_evento(
+            action="calendario_cenario_normalizado",
+            result="janelas extras desativadas temporariamente",
+            details={"turnos": self._calendar_snapshot},
+        )
+
+    def _restaurar_calendario_do_cenario(self) -> None:
+        if not self._calendar_snapshot or self.observer is None:
+            return
+        with psycopg.connect(self.observer.dsn) as connection, connection.cursor() as cursor:
+            for row in self._calendar_snapshot:
+                cursor.execute(
+                    "UPDATE turnos_produtivos SET ativo = %s WHERE id = %s",
+                    (bool(row["ativo"]), row["id"]),
+                )
+        if self.telemetry is not None:
+            self.telemetry.salvar_json("snapshots/calendario_restaurado.json", self._calendar_snapshot)
 
     # ------------------------------------------------------------------
     # FASE 2 — START
@@ -1234,4 +1287,5 @@ class SimulationRunner:
                 )
             raise
         finally:
+            self._restaurar_calendario_do_cenario()
             await self.encerrar_infra()
