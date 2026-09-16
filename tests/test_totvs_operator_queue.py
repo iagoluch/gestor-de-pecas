@@ -34,6 +34,7 @@ from app.core.resource_mapping import (
 from app.database.config import load_postgres_config
 from app.database.database import Database
 from mes.integrations.totvs.mapper import TotvsProductionOrderMapper
+from mes.integrations.totvs.outbound_enqueue import OutboundEnqueueConfig
 from mes.integrations.totvs.parser import TotvsMessageParser
 from mes.integrations.totvs.resource_mapping import (
     OFFICIAL_RESOURCE_ALIASES,
@@ -84,7 +85,12 @@ def _isolated_database():
     with psycopg.connect(base.dsn, autocommit=True) as connection:
         connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
     isolated = make_conninfo(base.dsn, options=f"-c search_path={schema}")
-    return Database(isolated), base.dsn, schema
+    # Fila/roteiro/fronteira canônica não é teste de outbound: fica isolado do
+    # que o `.env` local tiver ligado para a integração TOTVS de retorno.
+    database = Database(
+        isolated, totvs_outbox_config=OutboundEnqueueConfig(enabled=False)
+    )
+    return database, base.dsn, schema
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")

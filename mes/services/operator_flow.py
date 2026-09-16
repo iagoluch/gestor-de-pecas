@@ -1016,6 +1016,27 @@ class OperatorFlowService:
                     "Informe ao menos um crachá de operador.",
                     "cracha_obrigatorio",
                 )
+            # O tempo bruto do Gestor é sempre gravado normalmente, mesmo
+            # abaixo do mínimo: esta checagem só existe quando a integração
+            # ativa exige uma duração mínima de segmento (atributo genérico
+            # do banco; este serviço não sabe qual integração é nem por quê).
+            minimo = getattr(self.db, "minimum_appointment_duration_seconds", None)
+            if minimo:
+                inicio_segmento = self.db.inicio_segmento_producao_apontamento(
+                    atual["id"]
+                )
+                if inicio_segmento is not None:
+                    decorrido = (self._now() - inicio_segmento).total_seconds()
+                    if 0 <= decorrido < minimo:
+                        faltam = max(1, int(minimo) - int(decorrido))
+                        return OperatorFlowResult(
+                            False,
+                            f"Aguarde mais {faltam}s antes de finalizar: esta "
+                            "operação ainda não atingiu a duração mínima "
+                            "exigida.",
+                            "duracao_minima_nao_atingida",
+                            {"segundos_restantes": faltam},
+                        )
             total_lote = boas + refugos
             boas_anteriores = int(atual.get("quantidade_boa") or 0)
             previsto = int(atual.get("quantidade") or 0)

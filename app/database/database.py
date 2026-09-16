@@ -190,6 +190,14 @@ class Database(
             if totvs_outbox_config is not None
             else load_outbound_enqueue_config()
         )
+        # Nome genérico de propósito: quem fecha um apontamento (mes/services/
+        # operator_flow.py) não pode conhecer o TOTVS (fronteira travada por
+        # Etapa3FronteiraCanonicaTests), então só enxerga "existe uma duração
+        # mínima exigida, ou não" — nunca o motivo. Hoje o único motivo é a
+        # regra A680HORA (H6_HORAINI == H6_HORAFIM no mesmo minuto).
+        self.minimum_appointment_duration_seconds = (
+            60 if self.totvs_outbox_config.enabled else None
+        )
         self.safe_target = getattr(getattr(pool_manager, "config", None), "safe_target", {})
         if auto_migrate:
             with self.connection() as connection:
@@ -1943,6 +1951,31 @@ class Database(
                     )
             criados.append(item)
         return criados
+
+    def inicio_segmento_producao_apontamento(self, apontamento_id):
+        """Início do segmento produtivo em aberto (último 'producao'/'retrabalho').
+
+        Mesma definição de segmento usada pelo outbound TOTVS
+        (``TotvsOutboundRepositoryMixin``): Setup/Parada abrem um novo
+        segmento ao retomar. Usado para avisar, antes de fechar o
+        apontamento, quando a duração ficaria abaixo do mínimo aceito pelo
+        TOTVS (``A680HORA``).
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT data_hora
+                FROM eventos_apontamento_operador
+                WHERE apontamento_id = %s
+                  AND estado IN ('producao', 'retrabalho')
+                ORDER BY data_hora DESC, id DESC
+                LIMIT 1
+                """,
+                (apontamento_id,),
+            )
+            row = cursor.fetchone()
+        return row["data_hora"] if row else None
 
     def transicionar_apontamento_operador(
         self,
