@@ -90,8 +90,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon e da Solda", () => {
-    expect(managementRoutes).toHaveLength(38);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(38);
+    expect(managementRoutes).toHaveLength(39);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(39);
     // Wave 6D: o acompanhamento gerencial da Solda entra como sub-aba dos
     // Painéis Operacionais, ao lado do Andon, sem aplicação nem navegação
     // paralela. Reorganização 15/09/2026: Andon/Solda/Metas/Pausas
@@ -111,6 +111,10 @@ describe("contrato gerencial Web", () => {
     // Cadastro de usuários (14/09/2026): exclusivo da conta admin, mesma
     // tela de login que os funcionários usam.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Cadastro", path: "/inicio/cadastro", sectionId: "dev" }));
+    // Turnos automáticos (15/09/2026): H1/expediente/H2 e futuros, exclusivo
+    // da conta admin — muda o corte automático de apontamento da fábrica
+    // inteira, não é preferência de gestão comum.
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Turnos", path: "/inicio/turnos", sectionId: "dev" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Confiabilidade", path: "/analises/confiabilidade", sectionId: "analytics" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "IA", path: "/inicio/ia", sectionId: "home" }));
   });

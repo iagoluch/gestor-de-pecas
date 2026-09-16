@@ -31,6 +31,25 @@ class AutomaticPauseRequest(BaseModel):
     ordem: int = Field(default=1, ge=1, le=99)
 
 
+class ShiftParameterRequest(BaseModel):
+    """Turno automático (H1/expediente/H2...), mantido pela tela IagoDev.
+
+    ``tipo='expediente'`` é a janela oficial (só uma por vez); ``hora_extra``
+    são as janelas fora dela — antes (tipo H1, sem corte automático próprio:
+    quem já está trabalhando é protegido pela execução ativa) ou encadeadas
+    depois (tipo H2, H3...: cada uma ganha seu próprio corte automático de
+    fim de turno).
+    """
+
+    id: int | None = None
+    nome: str = Field(min_length=1, max_length=60)
+    tipo: str = Field(pattern="^(expediente|hora_extra)$")
+    hora_inicio: time
+    hora_fim: time
+    ativo: bool = True
+    ordem: int = Field(default=1, ge=1, le=99)
+
+
 class OperatorBadgeRequest(BaseModel):
     """Crachá do chão de fábrica, mantido pela tela dos gestores (Wave 5).
 

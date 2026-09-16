@@ -143,6 +143,7 @@ export const managementSections: ManagementSection[] = [
       { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges" },
       { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users" },
       { label: "Chamadas", path: "/inicio/chamadas", screen: "dev-chamadas" },
+      { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos" },
     ],
   },
 ];

@@ -11,7 +11,12 @@ from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
-from backend.api.schemas.common import AutomaticPauseRequest, OperatorBadgeRequest, UserAccountRequest
+from backend.api.schemas.common import (
+    AutomaticPauseRequest,
+    OperatorBadgeRequest,
+    ShiftParameterRequest,
+    UserAccountRequest,
+)
 from mes.contracts import AnalyticsFilter
 from mes.services.internal_alerts import InternalAlertService
 
@@ -149,6 +154,63 @@ def delete_pause(
     if not database.remover_pausa_automatica(pause_id):
         raise AppError("pause_not_found", "Pausa não encontrada.", status_code=404)
     request.app.state.realtime.publish("automatic_pauses")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Turnos automáticos (H1/expediente/H2 e futuros) — tela IagoDev.
+#
+# Até esta tela, os horários de fim de turno e a janela oficial eram
+# constantes fixas em código (`mes/domain/manufacturing_rules.py`). Exclusivo
+# da conta admin (decisão do usuário, 15/09/2026): mudar esse horário afeta a
+# fábrica inteira, não é uma preferência de gestão comum.
+# ---------------------------------------------------------------------------
+@router.get("/shift-parameters")
+def list_shift_parameters(
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    rows = list(database.listar_parametros_turno(somente_ativos=False) or [])
+    return {"items": rows, "count": len(rows)}
+
+
+@router.post("/shift-parameters", dependencies=[Depends(require_csrf)])
+def save_shift_parameter(
+    payload: ShiftParameterRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    try:
+        row = database.salvar_parametro_turno(
+            nome=payload.nome,
+            tipo=payload.tipo,
+            hora_inicio=payload.hora_inicio,
+            hora_fim=payload.hora_fim,
+            ativo=payload.ativo,
+            ordem=payload.ordem,
+            parametro_id=payload.id,
+        )
+    except ValueError as exc:
+        raise AppError("invalid_shift_parameter", str(exc)) from exc
+    if row is None:
+        raise AppError("shift_parameter_not_found", "Turno não encontrado.", status_code=404)
+    request.app.state.realtime.publish("shift_parameters")
+    return {"ok": True, "item": row}
+
+
+@router.delete("/shift-parameters/{parameter_id}", dependencies=[Depends(require_csrf)])
+def delete_shift_parameter(
+    parameter_id: int,
+    request: Request,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    if not database.remover_parametro_turno(parameter_id):
+        raise AppError(
+            "shift_parameter_not_found", "Turno não encontrado.", status_code=404
+        )
+    request.app.state.realtime.publish("shift_parameters")
     return {"ok": True}
 
 

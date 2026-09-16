@@ -2525,6 +2525,86 @@ class Database(
             )
             return cursor.rowcount > 0
 
+    # ------------------------------------------------------------------
+    # Turnos automáticos (H1/expediente/H2 e futuros) — tela IagoDev.
+    #
+    # Substitui as constantes fixas que viviam em
+    # ``mes/domain/manufacturing_rules.py`` (SHIFT_END_BOUNDARIES,
+    # OFFICIAL_WORK_WINDOW). ``ShiftBoundaryService`` lê esta tabela a cada
+    # ciclo pelo carregador em ``mes/services/shift_parameters.py``.
+    # ------------------------------------------------------------------
+    def listar_parametros_turno(self, *, somente_ativos=False):
+        query = "SELECT * FROM parametros_turno WHERE TRUE"
+        if somente_ativos:
+            query += " AND ativo IS TRUE"
+        query += " ORDER BY ordem, hora_inicio, id"
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(query)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def salvar_parametro_turno(
+        self,
+        *,
+        nome,
+        tipo,
+        hora_inicio,
+        hora_fim,
+        ativo=True,
+        ordem=1,
+        parametro_id=None,
+    ):
+        """Cria ou atualiza um turno. A janela precisa existir de fato."""
+
+        rotulo = str(nome or "").strip()
+        tipo_normalizado = str(tipo or "").strip().casefold()
+        if not rotulo:
+            raise ValueError("Nome do turno é obrigatório.")
+        if tipo_normalizado not in {"expediente", "hora_extra"}:
+            raise ValueError("Tipo do turno deve ser 'expediente' ou 'hora_extra'.")
+        if hora_inicio == hora_fim:
+            raise ValueError("O turno precisa de horário inicial e final distintos.")
+        with self.connection() as connection, connection.cursor() as cursor:
+            if parametro_id is not None:
+                cursor.execute(
+                    """
+                    UPDATE parametros_turno
+                    SET nome = %s, tipo = %s, hora_inicio = %s, hora_fim = %s,
+                        ativo = %s, ordem = %s, atualizado_em = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (
+                        rotulo, tipo_normalizado, hora_inicio, hora_fim,
+                        bool(ativo), int(ordem), int(parametro_id),
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO parametros_turno (
+                        nome, tipo, hora_inicio, hora_fim, ativo, ordem
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (nome) DO UPDATE SET
+                        tipo = EXCLUDED.tipo,
+                        hora_inicio = EXCLUDED.hora_inicio,
+                        hora_fim = EXCLUDED.hora_fim,
+                        ativo = EXCLUDED.ativo,
+                        ordem = EXCLUDED.ordem,
+                        atualizado_em = CURRENT_TIMESTAMP
+                    RETURNING *
+                    """,
+                    (rotulo, tipo_normalizado, hora_inicio, hora_fim, bool(ativo), int(ordem)),
+                )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def remover_parametro_turno(self, parametro_id):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM parametros_turno WHERE id = %s", (int(parametro_id),)
+            )
+            return cursor.rowcount > 0
+
     def listar_recursos_ativos_no_instante(self, data_hora):
         """Recursos com execução operacional ou Corte aberta no instante."""
 
@@ -2697,6 +2777,93 @@ class Database(
                 if state:
                     resumed.append(dict(state))
         return resumed
+
+    def interromper_recursos_ociosos_fim_turno(
+        self,
+        data_hora,
+        *,
+        operador="SISTEMA",
+        motivo="Fim de turno — interrupção programada automática",
+        tipo_interrupcao="fim_turno",
+    ):
+        """Fecha o dia dos recursos que já estavam ociosos no limite de turno.
+
+        ``interromper_apontamento_fim_turno`` só cobre o recurso que tinha uma
+        OP aberta no instante do limite. Na prática a maioria dos recursos já
+        havia encerrado a última OP horas antes e ficou ocioso sem nenhum
+        apontamento aberto para "carregar" a interrupção — sem esta rotina,
+        o estado físico desses recursos não muda: ``eventos_estado_recurso``
+        fica sem linha aberta (ou com uma categoria antiga) e o recurso
+        simplesmente some do Andon em vez de aparecer como "Sem demanda".
+
+        Só entram recursos com histórico físico prévio (``eventos_estado_recurso``);
+        cadastro nunca usado não vira card por conta desta rotina. Recurso com
+        apontamento ou corte em execução no instante fica de fora — quem
+        cobre esse caso é a interrupção específica da OP/nesting, que
+        preserva os dados coletados em vez de fabricar um segundo evento.
+        """
+
+        instante = _period_value(data_hora)
+        if instante is None:
+            raise ValueError("data_hora é obrigatória para o fim de turno.")
+        operador = str(operador or "SISTEMA").strip() or "SISTEMA"
+        motivo = str(motivo or "Fim de turno — interrupção programada automática").strip()
+        tipo_interrupcao = str(tipo_interrupcao or "fim_turno").strip() or "fim_turno"
+        executando = sorted(EXECUTING_APPOINTMENT_STATUSES)
+        changed = []
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (UPPER(e.recurso)) e.recurso, e.tipo_setor
+                FROM eventos_estado_recurso e
+                WHERE e.recurso IS NOT NULL AND e.recurso <> ''
+                  AND e.data_inicio <= %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM eventos_estado_recurso e2
+                      WHERE UPPER(e2.recurso) = UPPER(e.recurso)
+                        AND e2.tipo_interrupcao = %s
+                        AND e2.data_inicio = %s
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM apontamentos_operacionais a
+                      WHERE UPPER(a.maquina) = UPPER(e.recurso)
+                        AND a.status = ANY(%s)
+                        AND a.data_inicio IS NOT NULL AND a.data_inicio <= %s
+                        AND (a.data_fim IS NULL OR a.data_fim > %s)
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM apontamentos_corte c
+                      WHERE UPPER(c.maquina) = UPPER(e.recurso)
+                        AND c.status = 'Em processo'
+                        AND c.data_inicio IS NOT NULL AND c.data_inicio <= %s
+                        AND (c.data_fim IS NULL OR c.data_fim > %s)
+                  )
+                ORDER BY UPPER(e.recurso), e.id DESC
+                """,
+                (
+                    instante, tipo_interrupcao, instante, executando,
+                    instante, instante, instante, instante,
+                ),
+            )
+            candidatos = [dict(row) for row in cursor.fetchall()]
+            for candidato in candidatos:
+                state = self._transicionar_estado_recurso_tx(
+                    cursor,
+                    candidato["recurso"],
+                    "fora_turno",
+                    tipo_setor=candidato.get("tipo_setor"),
+                    operador=operador,
+                    motivo=motivo,
+                    data_hora=instante,
+                    origem="fim_turno_automatico_ocioso",
+                    referencia_origem=None,
+                    planejado=True,
+                    automatico=True,
+                    tipo_interrupcao=tipo_interrupcao,
+                )
+                if state and not state.get("retroativo_ignorado"):
+                    changed.append(dict(state))
+        return changed
 
     def finalizar_fora_turno_automatico(
         self,

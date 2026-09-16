@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -333,6 +333,173 @@ class OvertimeShiftLimitTests(unittest.TestCase):
 
         self.assertEqual(len(db.interrupted), 1)
         self.assertEqual(again["count"], 0)
+
+
+class IdleResourceFake:
+    """Recurso sem OP aberta: a maioria dos casos no dia a dia real.
+
+    Sem `interromper_recursos_ociosos_fim_turno` nenhum dos outros loaders é
+    acionado (não há apontamento nem nesting aberto) e o recurso ficaria sem
+    qualquer evento de fim de turno — o bug relatado pelo usuário.
+    """
+
+    def __init__(self):
+        self.idle_calls = []
+
+    def listar_apontamentos_abertos_no_limite_turno(self, boundary):
+        return []
+
+    def interromper_apontamento_fim_turno(self, *args, **kwargs):
+        raise AssertionError("não deveria ser chamado sem apontamento aberto")
+
+    def listar_cortes_abertos_no_limite_turno(self, boundary):
+        return []
+
+    def interromper_recursos_ociosos_fim_turno(self, boundary, *, operador, motivo, tipo_interrupcao):
+        if any(moment == boundary for moment, *_ in self.idle_calls):
+            return []
+        self.idle_calls.append((boundary, operador, motivo, tipo_interrupcao))
+        return [{
+            "recurso": "Gasparini",
+            "categoria": "fora_turno",
+            "automatico": True,
+            "tipo_interrupcao": tipo_interrupcao,
+            "data_inicio": boundary,
+        }]
+
+
+class IdleResourceShiftLimitTests(unittest.TestCase):
+    """O recurso ocioso (sem OP aberta) também precisa fechar o dia às 17:30/21:30."""
+
+    def test_recurso_ocioso_recebe_fim_de_turno_mesmo_sem_apontamento_aberto(self):
+        db = IdleResourceFake()
+        service = ShiftBoundaryService(db)
+
+        # A janela de recuperação de 24h também alcança o limite anterior
+        # (21:30 de ontem); o que este teste prova é que o de hoje (17:30),
+        # sem nenhum apontamento aberto, também dispara a varredura.
+        result = service.apply_due(datetime(2026, 9, 3, 17, 35))
+
+        boundaries_chamados = [call[0] for call in db.idle_calls]
+        self.assertIn(datetime(2026, 9, 3, 17, 30), boundaries_chamados)
+        self.assertEqual(db.idle_calls[-1][3], "fim_turno")
+        self.assertIn(
+            "Gasparini",
+            [item["recurso"] for item in result["idle_interrupted"]],
+        )
+        self.assertGreaterEqual(result["count"], 1)
+
+    def test_limite_nao_e_reaplicado_ao_mesmo_recurso_ocioso(self):
+        db = IdleResourceFake()
+        service = ShiftBoundaryService(db)
+
+        service.apply_due(datetime(2026, 9, 3, 17, 35))
+        chamadas_apos_primeira_rodada = len(db.idle_calls)
+        again = service.apply_due(datetime(2026, 9, 3, 17, 40))
+
+        self.assertEqual(len(db.idle_calls), chamadas_apos_primeira_rodada)
+        self.assertEqual(again["count"], 0)
+
+
+class ShiftParametersFake:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def listar_parametros_turno(self, *, somente_ativos=False):
+        return [
+            row for row in self._rows
+            if not somente_ativos or row.get("ativo", True)
+        ]
+
+
+def _turno(nome, tipo, inicio, fim, *, ordem=1, ativo=True):
+    return {
+        "nome": nome, "tipo": tipo,
+        "hora_inicio": datetime.strptime(inicio, "%H:%M").time(),
+        "hora_fim": datetime.strptime(fim, "%H:%M").time(),
+        "ordem": ordem, "ativo": ativo,
+    }
+
+
+class ShiftParametersLoaderTests(unittest.TestCase):
+    """A tela IagoDev de turnos vira a fonte real de `ManufacturingRules`."""
+
+    def test_h1_oficial_h2_configurados_reproduzem_os_limites_homologados(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("H1", "hora_extra", "06:00", "08:00", ordem=1),
+            _turno("Oficial", "expediente", "08:00", "17:30", ordem=2),
+            _turno("H2", "hora_extra", "17:30", "21:30", ordem=3),
+        ])
+        rules = load_manufacturing_rules(db)
+
+        self.assertEqual(rules.official_work_window, (time(8, 0), time(17, 30)))
+        self.assertEqual(rules.shift_end_boundaries, (time(17, 30), time(21, 30)))
+        self.assertEqual(rules.overtime_windows, ((time(6, 0), time(8, 0)), (time(17, 30), time(21, 30))))
+
+    def test_mudar_o_horario_na_tela_muda_o_limite_sem_tocar_no_codigo(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("Oficial", "expediente", "07:00", "16:00", ordem=1),
+            _turno("H2", "hora_extra", "16:00", "19:00", ordem=2),
+        ])
+        rules = load_manufacturing_rules(db)
+
+        self.assertEqual(rules.official_work_window, (time(7, 0), time(16, 0)))
+        self.assertEqual(rules.shift_end_boundaries, (time(16, 0), time(19, 0)))
+
+    def test_terceiro_turno_encadeado_apos_o_h2_tambem_vira_limite(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("Oficial", "expediente", "08:00", "17:30", ordem=1),
+            _turno("H2", "hora_extra", "17:30", "21:30", ordem=2),
+            _turno("H3", "hora_extra", "21:30", "23:00", ordem=3),
+        ])
+        rules = load_manufacturing_rules(db)
+
+        self.assertEqual(
+            rules.shift_end_boundaries, (time(17, 30), time(21, 30), time(23, 0))
+        )
+
+    def test_turno_de_hora_extra_antes_do_expediente_nao_ganha_limite_proprio(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("H1", "hora_extra", "06:00", "08:00", ordem=1),
+            _turno("Oficial", "expediente", "08:00", "17:30", ordem=2),
+        ])
+        rules = load_manufacturing_rules(db)
+
+        # H1 não é limite de corte: quem já está trabalhando ali é protegido
+        # pela regra de execução ativa, não por um evento de fim de turno.
+        self.assertEqual(rules.shift_end_boundaries, (time(17, 30),))
+
+    def test_sem_configuracao_ou_configuracao_ambigua_usa_o_padrao_homologado(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        default_rules = ManufacturingRules()
+        self.assertEqual(load_manufacturing_rules(ShiftParametersFake([])).shift_end_boundaries, default_rules.shift_end_boundaries)
+        # Duas linhas "expediente" é configuração quebrada — não dá para
+        # adivinhar qual vale, então cai no padrão em vez de escolher uma.
+        ambigua = ShiftParametersFake([
+            _turno("Oficial", "expediente", "08:00", "17:30", ordem=1),
+            _turno("Turno B", "expediente", "20:00", "05:00", ordem=2),
+        ])
+        self.assertEqual(load_manufacturing_rules(ambigua).official_work_window, default_rules.official_work_window)
+
+    def test_turno_inativo_nao_participa_da_regra(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("Oficial", "expediente", "08:00", "17:30", ordem=1),
+            _turno("H2", "hora_extra", "17:30", "21:30", ordem=2, ativo=False),
+        ])
+        rules = load_manufacturing_rules(db)
+
+        self.assertEqual(rules.shift_end_boundaries, (time(17, 30),))
 
 
 class OutOfShiftInOeeTests(unittest.TestCase):

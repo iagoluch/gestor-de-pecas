@@ -250,6 +250,20 @@ class AndonNoDemandStateTests(unittest.TestCase):
         estados[0]["tem_apontamento_canonico"] = False
         self.assertNotIn("DOBRA1", self.resources(self.snapshot(estados)))
 
+    def test_recurso_ocioso_fechado_automaticamente_continua_visivel(self):
+        # `interromper_recursos_ociosos_fim_turno` fecha o dia de um recurso
+        # que já não tinha OP nem apontamento aberto: `tem_apontamento_canonico`
+        # fica False (não há OP nem evento manual), mas o próprio corte
+        # automático de fim de turno já é motivo suficiente para o card
+        # aparecer como "Sem demanda" — sem isto, a maioria dos recursos some
+        # do Andon em vez de mostrar ausência de demanda.
+        estados = self._sem_demanda()
+        estados[0]["tem_apontamento_canonico"] = False
+        estados[0]["tipo_interrupcao"] = "fim_turno"
+        resources = self.resources(self.snapshot(estados))
+        self.assertIn("DOBRA1", resources)
+        self.assertEqual(resources["DOBRA1"]["state"]["category"], "sem_demanda")
+
 
 if __name__ == "__main__":
     unittest.main()

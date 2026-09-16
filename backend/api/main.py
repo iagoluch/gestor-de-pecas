@@ -65,6 +65,7 @@ from mes.services.industrial_reports import IndustrialReportService
 from mes.services.report_messaging import ReportMessagingService
 from mes.services.report_scheduler import ReportScheduler
 from mes.services.shift_boundary import ShiftBoundaryService
+from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.sigmanest_refresh import SigmaNestRefreshCoordinator
 from mes.services.totvs_outbox_worker import TotvsOutboxWorker
 
@@ -257,6 +258,12 @@ async def _shift_boundary_loop(application: FastAPI) -> None:
                         "TESTE explicitamente esperado."
                     )
                 service = ShiftBoundaryService(database, now_func=clock.now)
+            # Os horários (H1/expediente/H2...) são configuráveis pela tela
+            # IagoDev (`parametros_turno`); recarregar a cada ciclo é o que
+            # torna uma edição efetiva sem reiniciar o processo.
+            service.rules = await asyncio.to_thread(
+                load_manufacturing_rules, service.db
+            )
             result = await asyncio.to_thread(service.apply_due)
             if int(result.get("count") or 0):
                 application.state.realtime.publish("shift_boundary")

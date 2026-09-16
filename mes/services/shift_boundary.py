@@ -178,6 +178,27 @@ class ShiftBoundaryService:
                     if result is not None and result.get("interrupcao_registrada"):
                         cut_interrupted.append(result)
 
+        # Complemento do corte acima: a maioria dos recursos, na maioria dos
+        # dias, já está ociosa (sem OP nem nesting aberto) bem antes do limite
+        # oficial. Sem isto, esses recursos nunca recebem o evento físico de
+        # "fora de turno" e somem do Andon em vez de aparecer como "Sem
+        # demanda" — ver mes/services/andon.py.
+        idle_interrupter = getattr(self.db, "interromper_recursos_ociosos_fim_turno", None)
+        idle_interrupted = []
+        if callable(idle_interrupter):
+            for boundary in boundaries:
+                rows = list(
+                    idle_interrupter(
+                        boundary,
+                        operador=SYSTEM_OPERATOR,
+                        motivo=SHIFT_END_REASON,
+                        tipo_interrupcao=SHIFT_END_INTERRUPTION_TYPE,
+                    )
+                    or []
+                )
+                if rows:
+                    idle_interrupted.extend(rows)
+
         shift_returns = []
         shift_returner = getattr(
             self.db, "finalizar_fora_turno_automatico", None
@@ -222,9 +243,11 @@ class ShiftBoundaryService:
             "checked_at": now,
             "interrupted": interrupted,
             "cut_interrupted": cut_interrupted,
+            "idle_interrupted": idle_interrupted,
             "shift_returns": shift_returns,
             "break_changes": break_changes,
-            "count": len(interrupted) + len(cut_interrupted) + len(shift_returns) + sum(
+            "count": len(interrupted) + len(cut_interrupted) + len(idle_interrupted)
+            + len(shift_returns) + sum(
                 len(item["recursos"]) for item in break_changes
             ),
         }
