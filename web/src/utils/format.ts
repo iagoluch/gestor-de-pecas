@@ -77,3 +77,10 @@ export function humanize(value: string | null | undefined) {
     .replaceAll("_", " ")
     .replace(/(^|[\s/-])(\p{L})/gu, (_match, prefix: string, letter: string) => `${prefix}${letter.toLocaleUpperCase("pt-BR")}`);
 }
+
+/** Nome líquido do recurso, sem alterar o código/cadastro original. */
+export function formatResourceName(value: string | null | undefined) {
+  if (!value) return "Não disponível";
+  const normalized = value.trim().toLocaleLowerCase("pt-BR");
+  return normalized ? `${normalized[0].toLocaleUpperCase("pt-BR")}${normalized.slice(1)}` : "Não disponível";
+}

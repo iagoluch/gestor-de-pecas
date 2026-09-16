@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ResourceRow } from "../types/management";
-import { formatDateTime, formatDuration } from "../utils/format";
+import { formatDateTime, formatDuration, formatResourceName } from "../utils/format";
 import { StatusBadge } from "./StatusBadge";
 
 export function ResourceCard({ resource }: { resource: ResourceRow }) {
@@ -8,7 +8,7 @@ export function ResourceCard({ resource }: { resource: ResourceRow }) {
   return (
     <article className="resource-card">
       <header>
-        <div><strong>{resource.recurso}</strong><span>{resource.setor ?? "Setor não informado"}</span></div>
+        <div><strong>{formatResourceName(resource.recurso_nome ?? resource.recurso)}</strong><span>{resource.setor ?? "Setor não informado"}</span></div>
         <StatusBadge value={resource.categoria ?? resource.codigo_status} />
       </header>
       <dl>
@@ -23,4 +23,3 @@ export function ResourceCard({ resource }: { resource: ResourceRow }) {
     </article>
   );
 }
-

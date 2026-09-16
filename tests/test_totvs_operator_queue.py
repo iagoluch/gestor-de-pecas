@@ -318,6 +318,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
                 {
                     "linha_hash": "linha-1",
                     "codigo_tarefa": codigo_tarefa,
+                    "programa": "PRG-1",
                     "codigo_op": codigo_op,
                     "id_peca": "PECA-1",
                     "setor_destino": "Usinagem",
@@ -417,6 +418,80 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
             [("A9716901001", "20 - USINAGEM")],
         )
         self.assertEqual(self._fila("Usinagem", "Eurostec"), [])
+
+    def test_corte_conclui_por_op_sem_esperar_destaque_ou_outro_plano_da_tarefa(self):
+        rota = [
+            {
+                "numero_operacao": "10", "codigo_recurso": "PLASMA",
+                "descricao_operacao": "CORTE", "tipo_setor": "Corte", "ordem": 1,
+            },
+            {
+                "numero_operacao": "20", "codigo_recurso": "CNC-01",
+                "descricao_operacao": "USINAGEM", "tipo_setor": "Usinagem", "ordem": 2,
+            },
+        ]
+        for codigo_op in ("OP-CORTE-A", "OP-CORTE-B"):
+            self._seed_rota_manual(codigo_op, rota)
+        self.db.publicar_catalogo_sigmanest(
+            tarefas=[{"codigo_tarefa": "TSK-MULTI", "material": "A36", "espessura": 6.35}],
+            programas=[
+                {"codigo_tarefa": "TSK-MULTI", "programa": "PRG-A"},
+                {"codigo_tarefa": "TSK-MULTI", "programa": "PRG-B"},
+            ],
+            ops=[
+                {
+                    "linha_hash": "linha-a", "codigo_tarefa": "TSK-MULTI",
+                    "programa": "PRG-A", "codigo_op": "OP-CORTE-A",
+                    "id_peca": "PECA-A", "setor_destino": "Usinagem", "quantidade": 10,
+                },
+                {
+                    "linha_hash": "linha-b", "codigo_tarefa": "TSK-MULTI",
+                    "programa": "PRG-B", "codigo_op": "OP-CORTE-B",
+                    "id_peca": "PECA-B", "setor_destino": "Usinagem", "quantidade": 10,
+                },
+            ],
+            planos_corte=[
+                {
+                    "plano_hash": "plano-a-1", "codigo_tarefa": "TSK-MULTI",
+                    "programa": "PRG-A", "sequencia_nesting": 1,
+                    "maquina_sigmanest": "MESSER_XPR_300", "data_programa": "2026-08-27",
+                },
+                {
+                    "plano_hash": "plano-a-2", "codigo_tarefa": "TSK-MULTI",
+                    "programa": "PRG-A", "sequencia_nesting": 2,
+                    "maquina_sigmanest": "MESSER_XPR_300", "data_programa": "2026-08-27",
+                },
+                {
+                    "plano_hash": "plano-b-1", "codigo_tarefa": "TSK-MULTI",
+                    "programa": "PRG-B", "sequencia_nesting": 1,
+                    "maquina_sigmanest": "MESSER_XPR_300", "data_programa": "2026-08-27",
+                },
+            ],
+        )
+        tarefa = self.db.materializar_tarefa_catalogo("TSK-MULTI")
+        self.db.atualizar_tarefa_status(tarefa["id"], "Em processo")
+
+        primeiro = self.db.iniciar_apontamento_corte(
+            "plano-a-1", "Plasma TerraBlade 4", "OPERADOR CORTE", "2026-08-01"
+        )
+        self.db.finalizar_apontamento_corte(primeiro["id"], "OPERADOR CORTE")
+        self.assertEqual(self.db.listar_proximas_operacoes_roteiro("Usinagem"), [])
+
+        segundo = self.db.iniciar_apontamento_corte(
+            "plano-a-2", "Plasma TerraBlade 4", "OPERADOR CORTE", "2026-08-01"
+        )
+        self.db.finalizar_apontamento_corte(segundo["id"], "OPERADOR CORTE")
+
+        corte = next(
+            row for row in self.db.listar_roteiro_completo_op("OP-CORTE-A")
+            if row["tipo_setor"] == "Corte"
+        )
+        self.assertTrue(corte["corte_concluido"])
+        self.assertEqual(
+            [row["codigo_op"] for row in self.db.listar_proximas_operacoes_roteiro("Usinagem")],
+            ["OP-CORTE-A"],
+        )
+        self.assertEqual(self.db.buscar_tarefa_por_id(tarefa["id"])["status"], "Em processo")
 
     def test_etapas_nao_apontaveis_nao_viram_fila_nem_finalizam_a_op(self):
         result = self.service.ingest(self._real_payload())

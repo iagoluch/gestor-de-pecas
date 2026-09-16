@@ -1,9 +1,4 @@
-"""Projeção consolidada e somente leitura para o Andon Geral.
-
-O serviço compõe dados já calculados pelos casos de uso canônicos. Ele não
-reclassifica eventos produtivos, não calcula OEE e não consulta uma vez por
-recurso. A ausência de apontamento operacional ativo não produz card.
-"""
+"""Projeção consolidada e somente leitura para o Andon Geral."""
 
 from __future__ import annotations
 
@@ -460,13 +455,6 @@ class AndonService:
         não esconder execução física incompatível nem escolher um vencedor.
         """
 
-        # Decisão do usuário (16/09/2026): o Andon mostra só recurso com
-        # apontamento válido em execução. "Sem demanda" nunca vira card — nem
-        # com apontamento canônico, nem quando o evento físico é o corte
-        # automático de fim de turno (`interromper_recursos_ociosos_fim_turno`
-        # continua fechando o estado físico do recurso ocioso normalmente,
-        # só não é mais exibido aqui). Cadastro, demanda, rota ou OP por si só
-        # também nunca geram card.
         if item.get("sem_demanda"):
             return False
         category = str(item.get("categoria") or "").strip().casefold()

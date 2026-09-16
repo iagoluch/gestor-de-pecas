@@ -58,7 +58,10 @@ def operations_overview(
     _user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
 ):
-    payload = facade.consulta_operacional(filters)
+    payload = facade.consulta_operacional(
+        filters,
+        incluir_recursos_sem_demanda_de_contas=True,
+    )
     resources = list(payload.get("resources", []))
     return {
         "periodo": payload.get("periodo"),
@@ -76,7 +79,10 @@ def resources(
     _user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
 ):
-    payload = facade.consulta_operacional(filters)
+    payload = facade.consulta_operacional(
+        filters,
+        incluir_recursos_sem_demanda_de_contas=True,
+    )
     resources = list(payload.get("resources", []))
     return {
         "periodo": payload.get("periodo"),
@@ -125,7 +131,11 @@ async def stream(
             if await request.is_disconnected():
                 break
             try:
-                snapshot = await asyncio.to_thread(facade.consulta_operacional, filters)
+                snapshot = await asyncio.to_thread(
+                    facade.consulta_operacional,
+                    filters,
+                    incluir_recursos_sem_demanda_de_contas=True,
+                )
                 data = json.dumps(jsonable_encoder(snapshot), ensure_ascii=False, separators=(",", ":"))
                 yield f"event: snapshot\ndata: {data}\n\n"
             except asyncio.CancelledError:

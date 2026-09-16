@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.core.operator_sectors import operator_sector_for_level
 from app.core.resource_mapping import resource_display_name
 from app.database.schema import SCHEMA_VERSION
 from mes.analytics.resource_state import classify_state_row
@@ -262,7 +263,13 @@ class FrontendBackendFacade:
         overview = self.management.get_overview(filters)
         return self.management_insights.explain_kpi(key, filters, overview=overview)
 
-    def consulta_operacional(self, filters: AnalyticsFilter, *, somente_vinculo_operacional=False):
+    def consulta_operacional(
+        self,
+        filters: AnalyticsFilter,
+        *,
+        somente_vinculo_operacional=False,
+        incluir_recursos_sem_demanda_de_contas=False,
+    ):
         now = min(self._now(), filters.fim)
         # Instanciado uma vez por consulta: o serviço já memoiza turnos e
         # exceções por recurso, então a classificação de janela não multiplica
@@ -286,6 +293,27 @@ class FrontendBackendFacade:
             produto=filters.produto,
             operador=filters.operador,
         ) or []) if callable(facts_loader) else []
+
+        account_resources = {}
+        if incluir_recursos_sem_demanda_de_contas:
+            users_loader = getattr(self.db, "listar_usuarios", None)
+            users = list(users_loader() or []) if callable(users_loader) else []
+            for user in users:
+                if not user.get("ativo"):
+                    continue
+                profile = operator_sector_for_level(user.get("nivel"))
+                if profile is None:
+                    continue
+                for resource in profile.resources:
+                    resource = str(resource or "").strip()
+                    if not resource:
+                        continue
+                    account_resources.setdefault(resource.casefold(), (resource, profile.name))
+        account_resource_identities = {
+            identity
+            for resource, _sector in account_resources.values()
+            for identity in (resource.casefold(), resource_display_name(resource).casefold())
+        }
 
         active_by_resource = {}
         for fact in facts:
@@ -369,6 +397,7 @@ class FrontendBackendFacade:
                     or bool(ops_ativas)
                     or not bool(state.get("automatico"))
                 ),
+                "conta_operador_ativa": resource.casefold() in account_resource_identities,
                 "estado_recurso_id": state.get("id"),
                 "recurso": resource,
                 "setor": state.get("tipo_setor"),
@@ -557,10 +586,59 @@ class FrontendBackendFacade:
                 "chapa_corte": cut.get("nome_chapa"),
                 "repeticao_corte": cut.get("repeticao"),
             })
+        if incluir_recursos_sem_demanda_de_contas:
+            present = {
+                identity
+                for item in items
+                for resource in (str(item.get("recurso") or "").strip(),)
+                for identity in (resource.casefold(), resource_display_name(resource).casefold())
+            }
+            for resource, sector in account_resources.values():
+                identities = {resource.casefold(), resource_display_name(resource).casefold()}
+                if identities & present:
+                    continue
+                present.update(identities)
+                items.append({
+                    "estado_recurso_id": None,
+                    "recurso": resource,
+                    "setor": sector,
+                    "categoria": "fila",
+                    "sem_demanda": True,
+                    "codigo_status": None,
+                    "motivo": "Recurso sem demanda no momento.",
+                    "causa_raiz": None,
+                    "inicio": None,
+                    "duracao_segundos": None,
+                    "planejado": None,
+                    "automatico": False,
+                    "tipo_interrupcao": None,
+                    "op_estado": None,
+                    "operacao_estado": None,
+                    "produto_estado": None,
+                    "operador_estado": None,
+                    "ops_ativas": [],
+                    "quantidade_ops_ativas": 0,
+                    "tem_apontamento_canonico": False,
+                    "conta_operador_ativa": True,
+                    "fonte": "contas_operador_ativas",
+                })
         items.sort(key=lambda row: (
             str(row.get("setor") or "").casefold(),
             str(row.get("recurso") or "").casefold(),
         ))
+        # Mantém ``recurso`` como identidade técnica e entrega à apresentação
+        # o nome líquido cadastrado (ou o rótulo oficial já conhecido).
+        catalog_names = {}
+        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+        if callable(catalog_loader):
+            catalog_names = {
+                str(row.get("codigo") or "").strip().casefold(): row.get("nome")
+                for row in (catalog_loader() or [])
+                if str(row.get("codigo") or "").strip()
+            }
+        for item in items:
+            code = str(item.get("recurso") or "").strip()
+            item["recurso_nome"] = resource_display_name(code, catalog_names.get(code.casefold()))
         result["resources"] = items
         result["count"] = len(items)
         if somente_vinculo_operacional:

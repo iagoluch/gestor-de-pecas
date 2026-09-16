@@ -10,7 +10,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { managementRoutes } from "../config/navigation";
 import { FilterProvider, useManagementFilters } from "../filters/FilterContext";
 import { AnalyticsCapacityPage, AnalyticsOeePage, AnalyticsReliabilityPage } from "../pages/analytics/AnalyticsPages";
-import { OperationsResourcesPage } from "../pages/operations/OperationsPages";
+import { OperationsOverviewPage, OperationsResourcesPage } from "../pages/operations/OperationsPages";
 import { ProductionOrdersPage } from "../pages/production/ProductionPages";
 
 afterEach(() => vi.restoreAllMocks());
@@ -367,6 +367,32 @@ const TEXTOS_TECNICOS = [
 ];
 
 describe("KPIs gerenciais da Wave 2", () => {
+  it("na Visão Geral, exibe os recursos de um setor por vez", async () => {
+    vi.stubGlobal("EventSource", class {
+      addEventListener() {}
+      close() {}
+    });
+    vi.stubGlobal("fetch", jsonOnce({
+      periodo: {},
+      agora: "2026-09-16T10:00:00",
+      summary: { resources: 2, active_operations: 0, by_category: {} },
+      resources: [
+        { recurso: "DOBRA1", setor: "Dobra", categoria: "fila", ops_ativas: [], quantidade_ops_ativas: 0 },
+        { recurso: "SOLDA1", setor: "Solda", categoria: "fila", ops_ativas: [], quantidade_ops_ativas: 0 },
+      ],
+    }));
+
+    render(<MemoryRouter><FilterProvider><OperationsOverviewPage /></FilterProvider></MemoryRouter>);
+    const sectorSelect = await screen.findByRole("combobox", { name: "Selecionar setor" });
+    expect(sectorSelect).toHaveValue("Dobra");
+    expect(screen.getByText("DOBRA1")).toBeInTheDocument();
+    expect(screen.queryByText("SOLDA1")).not.toBeInTheDocument();
+
+    fireEvent.change(sectorSelect, { target: { value: "Solda" } });
+    expect(screen.getByText("SOLDA1")).toBeInTheDocument();
+    expect(screen.queryByText("DOBRA1")).not.toBeInTheDocument();
+  });
+
   it("a Consulta Operacional mostra estado e parada, não a fonte do dado", async () => {
     vi.stubGlobal("fetch", jsonOnce({
       periodo: {},

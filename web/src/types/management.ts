@@ -26,6 +26,7 @@ export interface ResourceOperation {
 export interface ResourceRow {
   estado_recurso_id?: number | null;
   recurso: string;
+  recurso_nome?: string | null;
   setor?: string | null;
   categoria?: string | null;
   codigo_status?: string | null;

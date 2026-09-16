@@ -63,6 +63,61 @@ CATALOG_SYNC_LOCK_ID = 874_210_307
 CATALOG_ONLY_RESOURCE_SECTOR = WELDING_STEEL_SECTOR
 
 
+def _corte_concluido_sql(operacao_alias):
+    """SQL da conclusão de Corte por OP, independente do Destaque."""
+
+    return f"""
+        EXISTS (
+            SELECT 1
+            FROM catalogo_sigmanest_ops sig_op
+            JOIN catalogo_sigmanest_planos_corte plano
+              ON plano.codigo_tarefa = sig_op.codigo_tarefa
+             AND plano.ativo = TRUE
+             AND (
+                    plano.programa = sig_op.programa
+                    OR (
+                        sig_op.programa IS NULL
+                        AND 1 = (
+                            SELECT COUNT(DISTINCT legado.programa)
+                            FROM catalogo_sigmanest_planos_corte legado
+                            WHERE legado.codigo_tarefa = sig_op.codigo_tarefa
+                              AND legado.ativo = TRUE
+                        )
+                    )
+             )
+            WHERE sig_op.ativo = TRUE
+              AND UPPER(sig_op.codigo_op) = UPPER({operacao_alias}.codigo_op)
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM catalogo_sigmanest_ops sig_op
+            JOIN catalogo_sigmanest_planos_corte plano
+              ON plano.codigo_tarefa = sig_op.codigo_tarefa
+             AND plano.ativo = TRUE
+             AND (
+                    plano.programa = sig_op.programa
+                    OR (
+                        sig_op.programa IS NULL
+                        AND 1 = (
+                            SELECT COUNT(DISTINCT legado.programa)
+                            FROM catalogo_sigmanest_planos_corte legado
+                            WHERE legado.codigo_tarefa = sig_op.codigo_tarefa
+                              AND legado.ativo = TRUE
+                        )
+                    )
+             )
+            WHERE sig_op.ativo = TRUE
+              AND UPPER(sig_op.codigo_op) = UPPER({operacao_alias}.codigo_op)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM apontamentos_corte corte
+                  WHERE corte.plano_hash = plano.plano_hash
+                    AND corte.status = 'Finalizado'
+              )
+        )
+    """
+
+
 def agora_db():
     """Return the current local timestamp normalized for persistence."""
     return datetime.now().replace(microsecond=0)
@@ -1448,7 +1503,8 @@ class Database(
         """
 
         codigo = limpa_codigo(codigo_op)
-        query = """
+        corte_concluido = _corte_concluido_sql("operacao")
+        query = f"""
             SELECT
                 operacao.*,
                 pcp.quantidade,
@@ -1460,39 +1516,13 @@ class Database(
                 recurso.tipo_setor AS recurso_tipo_setor,
                 CASE
                     WHEN UPPER(operacao.tipo_setor) = 'CORTE' THEN
-                        tarefa.status = 'Finalizado'
-                        AND EXISTS (
-                            SELECT 1
-                            FROM catalogo_sigmanest_planos_corte plano
-                            WHERE plano.codigo_tarefa = tarefa.codigo_tarefa
-                              AND plano.ativo = TRUE
-                        )
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM catalogo_sigmanest_planos_corte plano
-                            WHERE plano.codigo_tarefa = tarefa.codigo_tarefa
-                              AND plano.ativo = TRUE
-                              AND NOT EXISTS (
-                                  SELECT 1
-                                  FROM apontamentos_corte corte
-                                  WHERE corte.plano_hash = plano.plano_hash
-                                    AND corte.status = 'Finalizado'
-                              )
-                        )
+                        {corte_concluido}
                     ELSE FALSE
                 END AS corte_concluido
             FROM catalogo_operacoes_op operacao
             JOIN catalogo_pcp_ops pcp ON pcp.codigo_op = operacao.codigo_op
             LEFT JOIN catalogo_recursos_pcfactory recurso
               ON recurso.codigo = operacao.codigo_recurso
-            LEFT JOIN LATERAL (
-                SELECT item.tarefa_id
-                FROM op_por_tarefa item
-                WHERE item.codigo_op = operacao.codigo_op
-                ORDER BY item.id
-                LIMIT 1
-            ) vinculo ON TRUE
-            LEFT JOIN tarefas tarefa ON tarefa.id = vinculo.tarefa_id
             WHERE operacao.codigo_op = %s
               AND (
                     operacao.ativo IS TRUE
@@ -1516,11 +1546,13 @@ class Database(
         """Projeta a próxima operação liberada de cada OP sem criar apontamento.
 
         O roteiro continua sendo a fonte de verdade. Uma etapa anterior de
-        Corte só é considerada concluída quando todos os nestings ativos foram
-        finalizados e a tarefa passou pelo fim do Destaque.
+        Corte é considerada concluída quando todos os nestings ativos que
+        contêm a OP foram finalizados; o Destaque contabiliza tempo e não
+        participa do avanço do roteiro oficial.
         """
 
-        query = """
+        corte_concluido = _corte_concluido_sql("anterior")
+        query = f"""
             SELECT
                 operacao.*,
                 pcp.quantidade,
@@ -1597,25 +1629,7 @@ class Database(
                         (
                             UPPER(anterior.tipo_setor) = 'CORTE'
                             AND NOT (
-                                tarefa.status = 'Finalizado'
-                                AND EXISTS (
-                                    SELECT 1
-                                    FROM catalogo_sigmanest_planos_corte plano
-                                    WHERE plano.codigo_tarefa = tarefa.codigo_tarefa
-                                      AND plano.ativo = TRUE
-                                )
-                                AND NOT EXISTS (
-                                    SELECT 1
-                                    FROM catalogo_sigmanest_planos_corte plano
-                                    WHERE plano.codigo_tarefa = tarefa.codigo_tarefa
-                                      AND plano.ativo = TRUE
-                                      AND NOT EXISTS (
-                                          SELECT 1
-                                          FROM apontamentos_corte corte
-                                          WHERE corte.plano_hash = plano.plano_hash
-                                            AND corte.status = 'Finalizado'
-                                      )
-                                )
+                                {corte_concluido}
                             )
                         )
                         OR (

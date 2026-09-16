@@ -322,6 +322,8 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .status-badge--info { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 
 .resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.resource-sector-select { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.resource-sector-select select { min-width: 160px; min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface-alt); font: inherit; }
 .resource-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); transition: box-shadow .18s var(--ease); overflow: hidden; }
 .resource-card:hover { box-shadow: var(--shadow-hover); }
 .resource-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--divider); }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
@@ -11,7 +12,7 @@ import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
-import { formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, humanize } from "../../utils/format";
+import { formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
 
 interface ResourceSummary {
   resources: number;
@@ -44,6 +45,7 @@ export function OperationsOverviewPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<OperationsOverview>(`/api/v1/operations/overview?${filters.dailyQuery}`);
   const stream = useOperationsStream(filters.dailyQuery);
+  const [selectedSector, setSelectedSector] = useState("");
   const title = "Consulta Operacional — Visão Geral";
   const subtitle = "Situação física atual dos recursos e OPs associadas no dia corrente, com atualização incremental.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
@@ -52,6 +54,9 @@ export function OperationsOverviewPage() {
   if (!data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><EmptyState /></PageFrame>;
   const resources = stream.snapshot?.resources ?? data.resources;
   const summary: ResourceSummary = data.summary ?? { resources: resources.length, active_operations: 0, by_category: {} };
+  const sectors = [...new Set(resources.map((resource) => resource.setor ?? "Setor não informado"))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const activeSector = sectors.includes(selectedSector) ? selectedSector : sectors[0] ?? "";
+  const sectorResources = resources.filter((resource) => (resource.setor ?? "Setor não informado") === activeSector);
   return (
     <PageFrame
       sectionId="operations"
@@ -67,13 +72,24 @@ export function OperationsOverviewPage() {
         <MetricCard
           label="Maior parada aberta"
           value={summary.longest_stop ? formatDuration(summary.longest_stop.seconds) : "Nenhuma"}
-          detail={summary.longest_stop ? `${summary.longest_stop.resource ?? "Recurso não informado"} — ${summary.longest_stop.reason ?? "motivo não informado"}` : undefined}
+          detail={summary.longest_stop ? `${formatResourceName(summary.longest_stop.resource)} — ${summary.longest_stop.reason ?? "motivo não informado"}` : undefined}
           accent={summary.longest_stop ? "warning" : "success"}
           availability={summary.longest_stop ? "disponivel" : "sem_registros"}
         />
       </div>
-      <SectionCard title="Recursos por estado" className="content-section">
-        {resources.length ? <div className="resource-grid">{resources.slice(0, 12).map((resource) => <ResourceCard key={`${resource.setor}-${resource.recurso}`} resource={resource} />)}</div> : <EmptyState />}
+      <SectionCard
+        title="Recursos por estado"
+        className="content-section"
+        action={sectors.length > 1 ? (
+          <label className="resource-sector-select">
+            <span>Setor</span>
+            <select value={activeSector} onChange={(event) => setSelectedSector(event.target.value)} aria-label="Selecionar setor">
+              {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+            </select>
+          </label>
+        ) : undefined}
+      >
+        {resources.length ? <div className="resource-grid">{sectorResources.map((resource) => <ResourceCard key={`${resource.setor}-${resource.recurso}`} resource={resource} />)}</div> : <EmptyState />}
       </SectionCard>
     </PageFrame>
   );
@@ -99,7 +115,7 @@ export function OperationsResourcesPage() {
         <MetricCard
           label="Maior parada aberta"
           value={data?.summary?.longest_stop ? formatDuration(data.summary.longest_stop.seconds) : "Nenhuma"}
-          detail={data?.summary?.longest_stop ? `${data.summary.longest_stop.resource ?? "Recurso não informado"} — ${data.summary.longest_stop.reason ?? "motivo não informado"}` : `Atualizado em ${formatDateTime(data?.agora)}`}
+          detail={data?.summary?.longest_stop ? `${formatResourceName(data.summary.longest_stop.resource)} — ${data.summary.longest_stop.reason ?? "motivo não informado"}` : `Atualizado em ${formatDateTime(data?.agora)}`}
           accent={data?.summary?.longest_stop ? "warning" : "teal"}
           availability={data?.summary?.longest_stop ? "disponivel" : "sem_registros"}
         />
@@ -109,7 +125,7 @@ export function OperationsResourcesPage() {
           rows={data?.items ?? []}
           rowKey={(row) => row.estado_recurso_id ?? `${row.setor}-${row.recurso}`}
           columns={[
-            { key: "resource", label: "Recurso", render: (row) => <strong>{row.recurso}</strong> },
+            { key: "resource", label: "Recurso", render: (row) => <strong>{formatResourceName(row.recurso_nome ?? row.recurso)}</strong> },
             { key: "sector", label: "Setor", render: (row) => row.setor ?? "Não disponível" },
             { key: "state", label: "Estado", render: (row) => <StatusBadge value={row.categoria ?? row.codigo_status} /> },
             { key: "op", label: "OP", render: (row) => row.ops_ativas[0]?.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.ops_ativas[0].op!)}`}>{row.ops_ativas[0].op}</Link> : "Não disponível" },

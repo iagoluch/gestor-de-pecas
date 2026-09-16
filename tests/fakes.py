@@ -882,10 +882,41 @@ class FakeDatabase:
             ]
         return [dict(row) for row in rows]
 
+    def _corte_concluido(self, codigo_op):
+        code = limpa_codigo(codigo_op)
+        completed = {
+            row.get("plano_hash") for row in self.cut_appointments
+            if row.get("status") == "Finalizado"
+        }
+        linked = []
+        for line in self.sigmanest_ops:
+            if not line.get("ativo", True) or limpa_codigo(line.get("codigo_op")) != code:
+                continue
+            task_plans = [
+                plan for plan in self.cut_plans
+                if plan.get("ativo", True)
+                and plan.get("codigo_tarefa") == line.get("codigo_tarefa")
+            ]
+            programs = {plan.get("programa") for plan in task_plans}
+            linked.extend(
+                plan for plan in task_plans
+                if plan.get("programa") == line.get("programa")
+                or (line.get("programa") is None and len(programs) == 1)
+            )
+        hashes = {plan.get("plano_hash") for plan in linked}
+        return bool(hashes) and hashes <= completed
+
     def listar_roteiro_completo_op(self, codigo_op):
         code = limpa_codigo(codigo_op)
         return [
-            dict(row)
+            {
+                **dict(row),
+                "corte_concluido": (
+                    self._corte_concluido(code)
+                    if str(row.get("tipo_setor") or "").casefold() == "corte"
+                    else False
+                ),
+            }
             for row in sorted(
                 (row for row in self.catalog_operations if row["codigo_op"] == code),
                 key=lambda row: (int(row.get("ordem") or 0), int(row.get("id") or 0)),
@@ -905,11 +936,6 @@ class FakeDatabase:
                     if row["codigo_op"] == code and row.get("ativo", True)
                 ),
                 key=lambda row: (int(row.get("ordem") or 0), int(row.get("id") or 0)),
-            )
-            link = next((row for row in self.ops if row["codigo_op"] == code), None)
-            task = next(
-                (row for row in self.tasks if link and row["id"] == link["tarefa_id"]),
-                None,
             )
             override_keys = []
             for appointment in self.appointments:
@@ -941,22 +967,7 @@ class FakeDatabase:
                 if operation_key < override_boundary:
                     continue
                 if str(operation.get("tipo_setor") or "").casefold() == "corte":
-                    plans = [
-                        row for row in self.cut_plans
-                        if task
-                        and row.get("codigo_tarefa") == task.get("codigo_tarefa")
-                        and row.get("ativo", True)
-                    ]
-                    completed = {
-                        row.get("plano_hash") for row in self.cut_appointments
-                        if row.get("status") == "Finalizado"
-                    }
-                    if (
-                        task
-                        and task.get("status") == "Finalizado"
-                        and plans
-                        and all(row.get("plano_hash") in completed for row in plans)
-                    ):
+                    if self._corte_concluido(code):
                         continue
                     break
                 if any(row.get("status") in active_states for row in appointments):

@@ -3,6 +3,7 @@ import unittest
 
 from mes.contracts import AnalyticsFilter
 from mes.services.andon import AndonService
+from mes.services.frontend_facade import FrontendBackendFacade
 
 
 def metric(value):
@@ -207,7 +208,7 @@ class AndonNoDemandStateTests(unittest.TestCase):
             for resource in sector["resources"]
         }
 
-    def _sem_demanda(self):
+    def _sem_demanda(self, *, source="eventos_estado_recurso", active_account=False):
         return [{
             "recurso": "DOBRA1",
             "setor": "Dobra",
@@ -217,13 +218,19 @@ class AndonNoDemandStateTests(unittest.TestCase):
             "tem_apontamento_canonico": True,
             "classificacao_parada": "planejada",
             "cor_parada": "warning",
+            "fonte": source,
+            "conta_operador_ativa": active_account,
         }]
 
-    def test_recurso_sem_demanda_nunca_vira_card(self):
+    def test_recurso_sem_demanda_de_conta_ativa_nao_vira_card(self):
+        states = self._sem_demanda(source="contas_operador_ativas", active_account=True)
+        self.assertNotIn("DOBRA1", self.resources(self.snapshot(states)))
+
+    def test_recurso_sem_demanda_fisico_nao_vira_card(self):
         self.assertNotIn("DOBRA1", self.resources(self.snapshot(self._sem_demanda())))
 
-    def test_o_resumo_nao_conta_sem_demanda(self):
-        summary = self.snapshot(self._sem_demanda())["summary"]
+    def test_resumo_nao_conta_sem_demanda_de_conta_ativa(self):
+        summary = self.snapshot(self._sem_demanda(source="contas_operador_ativas", active_account=True))["summary"]
         self.assertEqual(summary["no_demand"], 0)
 
     def test_fora_de_turno_sem_a_marca_continua_invisivel(self):
@@ -246,6 +253,38 @@ class AndonNoDemandStateTests(unittest.TestCase):
         estados[0]["tem_apontamento_canonico"] = False
         estados[0]["tipo_interrupcao"] = "fim_turno"
         self.assertNotIn("DOBRA1", self.resources(self.snapshot(estados)))
+
+
+class AccountResourceNoDemandTests(unittest.TestCase):
+    def test_andon_uses_only_resources_of_active_operator_accounts(self):
+        repository = AndonRepositoryFake()
+        repository.listar_estados_recurso_atuais = lambda **_kwargs: []
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: []
+        repository.listar_usuarios = lambda: [
+            {"nivel": "estacao1aco", "ativo": True},
+            {"nivel": "estacao2aco", "ativo": False},
+            {"nivel": "admin", "ativo": True},
+        ]
+        now = datetime(2026, 9, 16, 11, 0)
+        facade = FrontendBackendFacade(repository, now_func=lambda: now)
+        filters = AnalyticsFilter(now, now)
+
+        resources = facade.consulta_operacional(
+            filters,
+            incluir_recursos_sem_demanda_de_contas=True,
+        )["resources"]
+        self.assertEqual(
+            [(item["recurso"], item["setor"], item["fonte"]) for item in resources],
+            [("Estação 1", "Solda Aço", "contas_operador_ativas")],
+        )
+        self.assertEqual(
+            facade.consulta_operacional(
+                filters,
+                somente_vinculo_operacional=True,
+                incluir_recursos_sem_demanda_de_contas=True,
+            )["resources"],
+            [],
+        )
 
 
 if __name__ == "__main__":

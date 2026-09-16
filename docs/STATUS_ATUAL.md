@@ -280,6 +280,39 @@ calendário não presume OP, produção nem outro estado físico. A persistênci
 remove a OP parada somente dessa projeção lógica. Uma fila operacional comum
 dentro do turno continua não significando "sem demanda".
 
+### 2.4 Limpeza controlada de OPs do TESTE (16/09/2026)
+
+O banco `gestor_pecas_test` foi limpo pela rotina transacional
+`scripts/resetar_banco_teste.py`, após simulação e confirmação literal do alvo.
+Foram removidos 71.336 registros de planejamento de OP, execução, Corte,
+Qualidade, outbox e envelopes `ProductionOrder`; usuários, recursos,
+calendários, configurações, mensagens de integração não-OP e schema 37 foram
+preservados. O banco `gestor_pecas` foi verificado exclusivamente em modo
+somente leitura.
+
+### 2.5 Consulta Operacional: recursos sem demanda por conta ativa (16/09/2026)
+
+`Sem demanda` e `Fora de turno` aparecem em **Consulta Operacional → Visão
+geral/Recursos**, somente para recursos configurados nos perfis de contas
+operacionais ativas em `usuarios`. A projeção não consulta o inventário
+inteiro, nem deduz recurso por OP, rota ou demanda; contas inativas e perfis
+sem recurso não geram linha. No TESTE limpo, a conferência real exibiu 34
+recursos. Na Visão Geral, os cartões são exibidos por setor selecionável e
+usam o nome descritivo oficial do cadastro (por exemplo, `DISPEX` aparece como
+`DISPOSITIVO EXPORTAÇÃO`); o código técnico permanece apenas como identidade
+interna. O Andon e o Dev Observatory permanecem restritos a
+apontamentos compatíveis/canônicos, sem misturar disponibilidade cadastrada à
+evidência de execução.
+
+### 2.6 Corte libera a OP independentemente do Destaque (16/09/2026)
+
+Quando todos os nestings ativos que contêm uma OP são finalizados no Corte, a
+etapa oficial `CORTE` dessa OP passa a ser considerada concluída e libera a
+próxima etapa do roteiro. A associação é por OP + programa/nesting; outra OP do
+mesmo agrupamento não bloqueia seu avanço. O Destaque continua sendo uma fila
+operacional independente para contabilizar tempo e não é pré-requisito para o
+avanço do roteiro, mesmo enquanto ainda não possui recurso oficial cadastrado.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Notificação Telegram ao supervisor em rejeição `FUNCTIONAL` do outbox TOTVS
