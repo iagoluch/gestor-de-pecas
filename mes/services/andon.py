@@ -11,7 +11,7 @@ from collections import Counter
 from copy import deepcopy
 
 from app.core.resource_mapping import station_resource_code
-from mes.domain import DataAvailability, EventCategory, SHIFT_END_INTERRUPTION_TYPE
+from mes.domain import DataAvailability, EventCategory
 
 
 #: Leitura explícita de "fora de turno, sem HE e sem ninguém trabalhando".
@@ -460,18 +460,15 @@ class AndonService:
         não esconder execução física incompatível nem escolher um vencedor.
         """
 
-        # Sem demanda só é visível quando existe apontamento canônico — ou
-        # quando o próprio evento físico é o corte automático de fim de turno
-        # (com ou sem OP aberta por baixo: o recurso que já estava ocioso
-        # também recebe esse evento, ver `interromper_recursos_ociosos_fim_turno`).
-        # Sem esta segunda condição a maioria dos recursos, que termina o
-        # último apontamento bem antes do limite oficial, some do Andon em vez
-        # de aparecer como "Sem demanda". Cadastro, demanda, rota ou OP por si
-        # só continuam jamais gerando um card.
+        # Decisão do usuário (16/09/2026): o Andon mostra só recurso com
+        # apontamento válido em execução. "Sem demanda" nunca vira card — nem
+        # com apontamento canônico, nem quando o evento físico é o corte
+        # automático de fim de turno (`interromper_recursos_ociosos_fim_turno`
+        # continua fechando o estado físico do recurso ocioso normalmente,
+        # só não é mais exibido aqui). Cadastro, demanda, rota ou OP por si só
+        # também nunca geram card.
         if item.get("sem_demanda"):
-            return bool(item.get("tem_apontamento_canonico")) or (
-                item.get("tipo_interrupcao") == SHIFT_END_INTERRUPTION_TYPE
-            )
+            return False
         category = str(item.get("categoria") or "").strip().casefold()
         if category in ACTIVE_ANDON_CATEGORIES:
             return True

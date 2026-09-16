@@ -177,11 +177,14 @@ class AndonActiveResourcesTests(unittest.TestCase):
 
 
 class AndonNoDemandStateTests(unittest.TestCase):
-    """"Sem demanda" aparece como estado próprio, e não como parada.
+    """"Sem demanda" nunca vira card no Andon.
 
-    A decisão vem pronta da consulta operacional (``sem_demanda``), que por sua
-    vez pergunta ao domínio. O Andon aqui só precisa provar que respeita o
-    contrato: mostra o recurso, nomeia o estado e não o pinta de parada.
+    Decisão do usuário (16/09/2026): o quadro mostra só recurso com
+    apontamento válido em execução. A decisão de "sem_demanda" continua vindo
+    pronta da consulta operacional (que por sua vez pergunta ao domínio) —
+    o Andon aqui só precisa provar que a esconde sempre, em qualquer
+    variação de origem (OP ativa, evento manual, corte automático de fim de
+    turno).
     """
 
     def setUp(self):
@@ -212,32 +215,16 @@ class AndonNoDemandStateTests(unittest.TestCase):
             "inicio": self.now,
             "sem_demanda": True,
             "tem_apontamento_canonico": True,
-            # Mesmo que a camada abaixo tivesse mandado cor/classificação, o
-            # Andon não pode apresentar ausência de demanda como parada.
             "classificacao_parada": "planejada",
             "cor_parada": "warning",
         }]
 
-    def test_recurso_sem_demanda_continua_visivel_com_estado_proprio(self):
-        resources = self.resources(self.snapshot(self._sem_demanda()))
-        self.assertIn("DOBRA1", resources)
-        self.assertEqual(resources["DOBRA1"]["state"]["category"], "sem_demanda")
-        self.assertEqual(resources["DOBRA1"]["state"]["label"], "Sem demanda")
+    def test_recurso_sem_demanda_nunca_vira_card(self):
+        self.assertNotIn("DOBRA1", self.resources(self.snapshot(self._sem_demanda())))
 
-    def test_sem_demanda_nao_e_parada_planejada_nem_nao_planejada(self):
-        estado = self.resources(self.snapshot(self._sem_demanda()))["DOBRA1"]["state"]
-        self.assertIsNone(estado["stop_classification"])
-        self.assertIsNone(estado["color"])
-
-    def test_o_estado_fisico_persistido_continua_declarado(self):
-        estado = self.resources(self.snapshot(self._sem_demanda()))["DOBRA1"]["state"]
-        self.assertEqual(estado["physical_category"], "fora_turno")
-
-    def test_o_resumo_conta_sem_demanda_separado(self):
+    def test_o_resumo_nao_conta_sem_demanda(self):
         summary = self.snapshot(self._sem_demanda())["summary"]
-        self.assertEqual(summary["no_demand"], 1)
-        self.assertEqual(summary["downtime"], 0)
-        self.assertEqual(summary["out_of_shift"], 0)
+        self.assertEqual(summary["no_demand"], 0)
 
     def test_fora_de_turno_sem_a_marca_continua_invisivel(self):
         # Sem a decisão do domínio nada muda: fora de turno segue fora do Andon.
@@ -245,24 +232,20 @@ class AndonNoDemandStateTests(unittest.TestCase):
         estados[0]["sem_demanda"] = False
         self.assertNotIn("DOBRA1", self.resources(self.snapshot(estados)))
 
-    def test_sem_demanda_sem_apontamento_nao_vira_card_de_inventario(self):
+    def test_sem_demanda_com_apontamento_canonico_continua_invisivel(self):
         estados = self._sem_demanda()
-        estados[0]["tem_apontamento_canonico"] = False
+        estados[0]["tem_apontamento_canonico"] = True
         self.assertNotIn("DOBRA1", self.resources(self.snapshot(estados)))
 
-    def test_recurso_ocioso_fechado_automaticamente_continua_visivel(self):
-        # `interromper_recursos_ociosos_fim_turno` fecha o dia de um recurso
-        # que já não tinha OP nem apontamento aberto: `tem_apontamento_canonico`
-        # fica False (não há OP nem evento manual), mas o próprio corte
-        # automático de fim de turno já é motivo suficiente para o card
-        # aparecer como "Sem demanda" — sem isto, a maioria dos recursos some
-        # do Andon em vez de mostrar ausência de demanda.
+    def test_recurso_ocioso_fechado_automaticamente_continua_invisivel(self):
+        # `interromper_recursos_ociosos_fim_turno` fecha o estado físico de um
+        # recurso que já não tinha OP nem apontamento aberto — o corte
+        # automático de fim de turno continua acontecendo normalmente, só não
+        # é mais exibido aqui.
         estados = self._sem_demanda()
         estados[0]["tem_apontamento_canonico"] = False
         estados[0]["tipo_interrupcao"] = "fim_turno"
-        resources = self.resources(self.snapshot(estados))
-        self.assertIn("DOBRA1", resources)
-        self.assertEqual(resources["DOBRA1"]["state"]["category"], "sem_demanda")
+        self.assertNotIn("DOBRA1", self.resources(self.snapshot(estados)))
 
 
 if __name__ == "__main__":
