@@ -37,6 +37,7 @@ export function useApiQuery<T>(
       activePath.current = null;
       setLoading(false);
       setError(null);
+      setData(null);
       return;
     }
     if (activePath.current !== path) {
