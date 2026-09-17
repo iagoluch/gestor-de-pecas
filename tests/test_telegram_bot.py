@@ -41,6 +41,7 @@ class FormattingTests(unittest.TestCase):
             operator={"nome": "Operador <teste>", "cracha": "42"},
             participations=[{
                 "op": "TESTE-01",
+                "setor": "Pintura",
                 "peca": "PEÇA-01",
                 "descricao": "Descrição <teste>",
                 "etapa_roteiro": "JATO & CORTE",
@@ -53,11 +54,24 @@ class FormattingTests(unittest.TestCase):
         self.assertNotIn("GESTOR DE PEÇAS", view.text)
         self.assertIn("👤", view.text)
         self.assertIn("🧾 OP: <b>TESTE-01</b>", view.text)
+        self.assertIn("Setor: Pintura", view.text)
         self.assertIn("Peça: PEÇA-01", view.text)
         self.assertIn("Descrição: Descrição &lt;teste&gt;", view.text)
         self.assertIn("Etapa roteiro: JATO &amp; CORTE", view.text)
         self.assertIn("Quantidade: 20", view.text)
         self.assertIn("Operador &lt;teste&gt; • Recurso &amp; 01", view.text)
+
+    def test_op_sem_setor_ou_operador_nao_inventa_colunas(self):
+        text = TelegramPresenter().totvs_outbox_error({
+            "production_order": "OP-SEM-CONTEXTO",
+            "payload_context": {"resource": "RECURSO-01"},
+            "last_delivery_class": "technical",
+            "last_error_message": "indisponível",
+        })
+
+        self.assertIn("🧾 OP: <b>OP-SEM-CONTEXTO</b>", text)
+        self.assertNotIn("Setor:", text)
+        self.assertNotIn("Operador", text)
 
 
 class _FakeDb:

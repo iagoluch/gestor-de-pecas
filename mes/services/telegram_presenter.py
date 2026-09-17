@@ -73,6 +73,7 @@ def _op_lines(item: dict, *, operator: str | None = None) -> list[str]:
         return []
     lines = [f"🧾 OP: <b>{html(op)}</b>"]
     fields = (
+        ("Setor", item.get("setor") or item.get("tipo_setor") or item.get("sector")),
         ("Peça", item.get("peca") or item.get("produto_codigo") or item.get("product") or item.get("item_code")),
         ("Descrição", item.get("descricao") or item.get("produto_descricao") or item.get("product_description") or item.get("item_description")),
         ("Etapa roteiro", item.get("etapa_roteiro") or item.get("descricao_operacao") or item.get("operation_description") or item.get("operation") or item.get("terminal_operation")),
@@ -154,11 +155,18 @@ class TelegramPresenter:
             if nesting_id is not None and str(nesting_id).strip():
                 lines.append(f"Nesting: <b>{html(nesting_id)}</b>")
 
+        sector = item.get("setor") or item.get("tipo_setor") or item.get("sector") or "Corte"
+        lines.append(f"Setor: <b>{html(sector)}</b>")
         operator = item.get("operador_fim") or item.get("operador_inicio")
         if operator or machine:
+            context = []
+            if operator:
+                context.append(html(operator))
+            if machine:
+                context.append(html(machine))
             lines.extend([
                 "",
-                " • ".join(html(value) for value in (operator, machine) if value),
+                " • ".join(context),
             ])
         lines.extend(["", _footer("Ocorrido às", now)])
         return "\n".join(lines)

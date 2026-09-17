@@ -57,6 +57,16 @@ class TelegramCutPresenterTests(unittest.TestCase):
         self.assertIn("Nesting: <b>8</b>", text)
         self.assertIn("Próximo nesting iniciado", text)
 
+    def test_setor_aparece_e_operador_some_quando_apontamento_nao_informa(self):
+        text = TelegramPresenter().cut_plan_event(
+            item=_cut_item(operador_inicio=None, operador_fim=None),
+            event="corte_iniciado",
+            now=datetime(2026, 9, 17, 9, 5),
+        )
+
+        self.assertIn("Setor: <b>Corte</b>", text)
+        self.assertNotIn("Operador", text)
+
     def test_sem_tarefa_plano_ou_recurso_nao_inventa_mensagem(self):
         presenter = TelegramPresenter()
         self.assertIsNone(presenter.cut_plan_event(

@@ -412,6 +412,14 @@ notificador e da interface Telegram passaram. A migration foi aplicada no
 TESTE (`gestor_pecas_test`, schema 41) e o backend 8001 foi reiniciado com
 health `ok`, mantendo polling/digest e os destinos setoriais configurados.
 
+### 2.12 Contexto condicional de setor e operador no Telegram (17/09/2026)
+
+Mensagens com OP passaram a incluir `Setor` somente quando o apontamento
+fornece esse campo. O contexto de `Operador` continua condicional: quando não
+há operador real no apontamento, a coluna é omitida em vez de exibir um
+placeholder como "Não encontrado". Eventos de Corte exibem o setor canônico
+`Corte` e também omitem operador quando a execução não o informa.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
