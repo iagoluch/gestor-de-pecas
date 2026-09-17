@@ -139,12 +139,16 @@ export const managementSections: ManagementSection[] = [
     // existem; novas telas de configuração (ex.: parâmetros de integração,
     // feature flags) entram aqui conforme forem criadas — decisão do
     // usuário, 15/09/2026.
+    // "Chamadas" é a exceção: toda conta de gestão chega nela pelo sininho
+    // de notificações pessoal, então não pode ficar marcada como admin-only
+    // (senão o PageFrame mostraria as abas admin da seção para quem não é
+    // admin) — decisão do usuário, 17/09/2026.
     tabs: [
-      { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges" },
-      { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users" },
+      { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges", adminOnly: true },
+      { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users", adminOnly: true },
       { label: "Chamadas", path: "/inicio/chamadas", screen: "dev-chamadas" },
-      { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos" },
-      { label: "Sistema", path: "/inicio/sistema", screen: "dev-sistema" },
+      { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos", adminOnly: true },
+      { label: "Sistema", path: "/inicio/sistema", screen: "dev-sistema", adminOnly: true },
     ],
   },
 ];
