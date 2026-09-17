@@ -99,19 +99,9 @@ TRUNCATE_TABLES = (
 SELECTIVE_TABLE = "totvs_integration_messages"
 SELECTIVE_TRANSACTION = "ProductionOrder"
 
-# A migration 23 acrescentou esta configuração depois da declaração histórica
-# EXPECTED_TABLES. Mantê-la aqui também torna divergências futuras visíveis.
-KNOWN_TABLES = frozenset(EXPECTED_TABLES) | {
-    "pausas_automaticas_setor",
-    # Migrations 23 e 26 acrescentaram tabelas depois da declaração histórica
-    # EXPECTED_TABLES. Mantê-las aqui também torna divergências futuras visíveis.
-    "alertas_internos",
-    "qualidade_primeira_peca",
-    "qualidade_primeira_peca_autorizacoes",
-    # Migration 34 acrescentou esta tabela depois da declaração histórica
-    # EXPECTED_TABLES.
-    "chamada_visualizacoes",
-}
+# O manifesto de migrations é a fonte única para o schema conhecido. O reset
+# compara exatamente essa lista antes de tocar em qualquer dado do TESTE.
+KNOWN_TABLES = frozenset(EXPECTED_TABLES)
 PROTECTED_TABLES = tuple(
     sorted(KNOWN_TABLES - frozenset(TRUNCATE_TABLES) - {SELECTIVE_TABLE})
 )

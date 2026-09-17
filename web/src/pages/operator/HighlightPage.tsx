@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { api, apiErrorMessage } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
-import { operatorErrorMessage, postOperator } from "./OperatorPortalPage";
 
 interface HighlightOperation {
   id: number;
@@ -119,14 +119,14 @@ export function HighlightPage() {
     if (!loadedTask && actionName !== "Parada") return;
     setBusy(true);
     try {
-      const response = await postOperator<{ message: string }>("/api/v1/highlight/actions", { action: actionName, task_code: loadedTask || null, ...extra });
+      const response = await api.post<{ message: string }>("/api/v1/highlight/actions", { action: actionName, task_code: loadedTask || null, ...extra });
       setMessage(response.message);
       setDialog(null);
       if (actionName === "Fim") setPlanoSelecionado(null);
       task.reload();
       queue.reload();
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
     } finally {
       setBusy(false);
     }

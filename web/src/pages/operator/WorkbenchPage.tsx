@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ApiError } from "../../api/client";
+import { api, ApiError, apiErrorMessage } from "../../api/client";
 import { ChamadaButton } from "../../components/ChamadaButton";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
@@ -22,7 +22,6 @@ import {
   previewStatus,
   rangeLabel,
 } from "./QualityInspectionPage";
-import { operatorErrorMessage, postOperator } from "./OperatorPortalPage";
 
 type DialogState =
   | { kind: "stop" }
@@ -165,7 +164,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setSearchedOp(op);
     setRemoteSearch("searching");
     setMessage("Buscando OP no TOTVS...");
-    postOperator<{ sync?: OperationsSync }>(`/api/v1/operator/operations/${encodeURIComponent(op)}/sync?resource=${encodeURIComponent(resource)}`, {})
+    api.post<{ sync?: OperationsSync }>(`/api/v1/operator/operations/${encodeURIComponent(op)}/sync?resource=${encodeURIComponent(resource)}`, {})
       .then((result) => {
         setRemoteSearch("idle");
         if (result.sync?.found) {
@@ -178,7 +177,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       .catch((reason) => {
         setRemoteSearch("idle");
         // O backend já devolve a frase de operador; nada técnico chega aqui.
-        setMessage(operatorErrorMessage(reason));
+        setMessage(apiErrorMessage(reason));
       });
   }, [loadedOp, operations, searchedOp]);
 
@@ -398,9 +397,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setSubmitting(true);
     try {
       if (!firstPiece?.peca_produzida) {
-        await postOperator("/api/v1/operator/first-piece", { ...base, action: "produzida" });
+        await api.post("/api/v1/operator/first-piece", { ...base, action: "produzida" });
       }
-      const response = await postOperator<{ message: string; data?: { liberado?: boolean } }>(
+      const response = await api.post<{ message: string; data?: { liberado?: boolean } }>(
         "/api/v1/operator/first-piece",
         { ...base, action: "inspecionar", result, note: note || null },
       );
@@ -411,7 +410,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       // do backend é a orientação e a OP continua aberta.
       setDialog(response.data?.liberado ? { kind: "finish" } : null);
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
       setDialog(null);
     } finally {
       setSubmitting(false);
@@ -446,7 +445,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     }
     setSubmitting(true);
     try {
-      const response = await postOperator<{ message: string; data?: { liberado?: boolean } }>(
+      const response = await api.post<{ message: string; data?: { liberado?: boolean } }>(
         "/api/v1/operator/first-piece",
         {
           action,
@@ -474,7 +473,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       }
       gate.reload();
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
     } finally {
       setSubmitting(false);
     }
@@ -484,7 +483,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   async function saveChecklistTemplate(produto: string, cotas: DraftDimension[]) {
     setSubmitting(true);
     try {
-      await postOperator("/api/v1/quality/templates", {
+      await api.post("/api/v1/quality/templates", {
         produto,
         cotas: cotas.map((item, index) => ({
           sequencia: index + 1,
@@ -496,7 +495,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       setMessage("Cotas padrão salvas para este produto.");
       gate.reload();
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
     } finally {
       setSubmitting(false);
     }
@@ -513,7 +512,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     }
     setSubmitting(true);
     try {
-      const response = await postOperator<{ message: string; data?: Record<string, unknown> }>("/api/v1/operator/actions", {
+      const response = await api.post<{ message: string; data?: Record<string, unknown> }>("/api/v1/operator/actions", {
         action,
         resource,
         op: stopWithoutOp ? null : String(appointmentForStop?.op ?? loadedOp),
@@ -539,7 +538,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         // orientação ao operador — quem abre o checklist é o botão Setup.
         setMessage(reason.message);
       } else {
-        setMessage(operatorErrorMessage(reason));
+        setMessage(apiErrorMessage(reason));
       }
     } finally {
       setSubmitting(false);

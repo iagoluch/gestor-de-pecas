@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { api, ApiError } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
@@ -48,7 +47,6 @@ function ResourceSelection({ context, onSelect }: { context: OperatorContext; on
     </section>
   );
 }
-
 export function OperatorPortalPage() {
   const context = useApiQuery<OperatorContext>("/api/v1/operator/context");
   const [resource, setResource] = useState<string | null>(null);
@@ -83,12 +81,4 @@ export function OperatorPortalPage() {
         : <WorkbenchPage sector={sector} resource={selectedResource} hasSetup={context.data.has_setup !== false} />}
     </OperatorShell>
   );
-}
-
-export function operatorErrorMessage(reason: unknown) {
-  return reason instanceof ApiError ? reason.message : "Não foi possível concluir a operação.";
-}
-
-export async function postOperator<T>(path: string, payload: unknown): Promise<T> {
-  return api.post<T>(path, payload);
 }

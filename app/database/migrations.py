@@ -47,6 +47,8 @@ EXPECTED_TABLES = (
     "op_por_tarefa",
     "historico",
     "usuarios",
+    "alertas_internos",
+    "chamada_visualizacoes",
     "eventos_sistema",
     "telegram_corte_mensagens",
     "schema_migrations",
@@ -76,6 +78,7 @@ EXPECTED_TABLES = (
     "inconsistencias_dados",
     "intervalos_turno_produtivo",
     "excecoes_calendario_produtivo",
+    "pausas_automaticas_setor",
     "ai_conversations",
     "ai_messages",
     "ai_knowledge",
@@ -90,11 +93,15 @@ EXPECTED_TABLES = (
     "qualidade_templates_produto",
     "qualidade_cotas_template",
     "qualidade_inspecoes",
+    "qualidade_primeira_peca",
+    "qualidade_primeira_peca_autorizacoes",
     "qualidade_rnc",
     "qualidade_pecas_inspecionadas",
     "qualidade_resultados_cota",
     "qualidade_desenhos_produto",
     "parametros_turno",
+    "telegram_chats_descobertos",
+    "telegram_digest_envios",
 )
 
 BASELINE_STATEMENTS = (

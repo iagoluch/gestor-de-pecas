@@ -16,6 +16,10 @@ export class ApiError extends Error {
   }
 }
 
+export function apiErrorMessage(reason: unknown) {
+  return reason instanceof ApiError ? reason.message : "Não foi possível concluir a operação.";
+}
+
 function cookie(name: string): string | undefined {
   return document.cookie
     .split(";")

@@ -1,11 +1,11 @@
 import { FormEvent, useMemo, useState } from "react";
+import { api, apiErrorMessage } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { QualityHistoryItem, QualityQueue, QualityQueueItem, QualitySummary } from "../../types/api";
 import { formatDateTime, formatMeasurement } from "../../utils/format";
-import { operatorErrorMessage, postOperator } from "./OperatorPortalPage";
 import { QualityInspectionPage } from "./QualityInspectionPage";
 
 const SUMMARY_CARDS: { key: keyof QualitySummary; label: string; tone: string }[] = [
@@ -81,13 +81,13 @@ export function QualityPage({ sector }: { sector: string }) {
     setOpening(item.op);
     setNotice("");
     try {
-      const response = await postOperator<{ message: string; data: { id: number } }>(
+      const response = await api.post<{ message: string; data: { id: number } }>(
         "/api/v1/quality/inspections",
         { op: item.op },
       );
       setInspection(response.data.id);
     } catch (reason) {
-      setNotice(operatorErrorMessage(reason));
+      setNotice(apiErrorMessage(reason));
     } finally {
       setOpening("");
     }
@@ -99,7 +99,7 @@ export function QualityPage({ sector }: { sector: string }) {
   async function dispensar(item: QualityQueueItem, badge: string, motivo: string) {
     setNotice("");
     try {
-      const response = await postOperator<{ message: string }>(
+      const response = await api.post<{ message: string }>(
         "/api/v1/quality/inspections/bypass",
         { op: item.op, badges: [badge], motivo: motivo || null },
       );
@@ -107,7 +107,7 @@ export function QualityPage({ sector }: { sector: string }) {
       setBypass(null);
       queue.reload();
     } catch (reason) {
-      setNotice(operatorErrorMessage(reason));
+      setNotice(apiErrorMessage(reason));
     }
   }
 

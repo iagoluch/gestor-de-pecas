@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { api, apiErrorMessage } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { QualityDimension, QualityInspection } from "../../types/api";
 import { formatMeasurement } from "../../utils/format";
-import { operatorErrorMessage, postOperator } from "./OperatorPortalPage";
 
 export type MeasureStatus = "" | "CONFORME" | "NAO_CONFORME";
 interface MeasureState { medida: string; status: MeasureStatus }
@@ -128,12 +128,12 @@ export function QualityInspectionPage({
     }
     setSaving(true);
     try {
-      await postOperator("/api/v1/quality/templates", { produto: data!.produto, cotas: rows });
+      await api.post("/api/v1/quality/templates", { produto: data!.produto, cotas: rows });
       setDrafts(null);
       setMessage("Cotas padrão salvas para este produto.");
       inspection.reload();
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
     } finally {
       setSaving(false);
     }
@@ -144,7 +144,7 @@ export function QualityInspectionPage({
     setSaving(true);
     setMessage("");
     try {
-      const response = await postOperator<{ message: string; code: string }>(
+      const response = await api.post<{ message: string; code: string }>(
         `/api/v1/quality/inspections/${inspectionId}/pieces`,
         {
           numero_peca: piece,
@@ -169,7 +169,7 @@ export function QualityInspectionPage({
       setMessage(response.message);
       inspection.reload();
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
     } finally {
       setSaving(false);
     }

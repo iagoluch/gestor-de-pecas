@@ -66,3 +66,4 @@ docs/evidencias/
 Thumbs.db
 .vscode/
 .idea/
+*.tsbuildinfo

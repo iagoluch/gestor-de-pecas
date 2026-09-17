@@ -174,13 +174,6 @@ export interface OperatorCard extends Record<string, unknown> {
   rework_return?: boolean;
 }
 
-export interface QualityContext {
-  available: boolean;
-  sector: string | null;
-  resources: string[];
-  can_edit_template: boolean;
-}
-
 export interface QualityQueueItem {
   op: string;
   operacao: string;

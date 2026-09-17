@@ -61,7 +61,7 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
                 """
             )
             delete_actions = {row["conname"]: row["confdeltype"] for row in cursor.fetchall()}
-        self.assertTrue(set(EXPECTED_TABLES).issubset(tables))
+        self.assertEqual(set(EXPECTED_TABLES), tables)
         self.assertEqual(versions, 1)
         self.assertIn("idx_apontamento_ativo_op_setor", indexes)
         self.assertIn("idx_historico_data_hora", indexes)

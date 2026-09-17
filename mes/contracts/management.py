@@ -11,13 +11,13 @@ from typing import Any, Optional
 from mes.domain import DataAvailability
 
 
-def _json_value(value: Any):
+def json_value(value: Any):
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, dict):
-        return {key: _json_value(item) for key, item in value.items()}
+        return {key: json_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
+        return [json_value(item) for item in value]
     return value
 
 
@@ -34,7 +34,7 @@ class AnalyticsFilter:
     operador: Optional[str] = None
 
     def to_dict(self):
-        return _json_value(asdict(self))
+        return json_value(asdict(self))
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class MetricValue:
     def to_dict(self):
         data = asdict(self)
         data["availability"] = self.availability.value
-        return _json_value(data)
+        return json_value(data)
 
 
 @dataclass(frozen=True)
@@ -72,4 +72,4 @@ class NestingTiming:
     operador_fim: Optional[str] = None
 
     def to_dict(self):
-        return _json_value(asdict(self))
+        return json_value(asdict(self))

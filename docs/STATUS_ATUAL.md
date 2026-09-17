@@ -432,6 +432,16 @@ Web (`tsc -b` + Vite) concluídos. O teste gerencial amplo continua com duas
 falhas pré-existentes, fora desta alteração: contagem fixa de rotas e expectativa
 do rótulo legado `DOBRA1`.
 
+### 2.14 Primeira onda de refatoração estrutural (17/09/2026)
+
+A auditoria estrutural removeu módulos, arquivos vazios, caches TypeScript,
+dependência Web e contratos sem consumidor comprovado; consolidou a
+serialização dos contratos gerenciais, eliminou o ciclo entre a página-raiz do
+operador e suas páginas filhas, e tornou o manifesto de tabelas a fonte única
+para diagnóstico e reset do TESTE. Nenhuma regra industrial, endpoint, schema
+histórico ou banco REAL foi alterado. O relatório, as métricas de partida e as
+próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

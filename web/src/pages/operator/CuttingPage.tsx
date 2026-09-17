@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api, apiErrorMessage } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
@@ -6,7 +7,6 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
-import { operatorErrorMessage, postOperator } from "./OperatorPortalPage";
 
 /** Uma chapa física do programa: programa + chapa + repetição, vinda do SigmaNEST. */
 interface CuttingSheet {
@@ -180,7 +180,7 @@ export function CuttingPage({ resource }: { resource: string }) {
     setSyncing(true);
     setSyncMessage("Atualizando...");
     try {
-      const response = await postOperator<{ ok: boolean; message?: string }>(
+      const response = await api.post<{ ok: boolean; message?: string }>(
         `/api/v1/cutting/sync?resource=${encodeURIComponent(resource)}`, {},
       );
       const horario = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -209,12 +209,12 @@ export function CuttingPage({ resource }: { resource: string }) {
   async function action(payload: Record<string, unknown>) {
     setBusy(true);
     try {
-      const response = await postOperator<{ message: string }>("/api/v1/cutting/actions", { resource, ...payload });
+      const response = await api.post<{ message: string }>("/api/v1/cutting/actions", { resource, ...payload });
       setMessage(response.message);
       setStopOpen(false);
       queue.reload();
     } catch (reason) {
-      setMessage(operatorErrorMessage(reason));
+      setMessage(apiErrorMessage(reason));
     } finally {
       setBusy(false);
     }

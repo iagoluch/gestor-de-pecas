@@ -6,20 +6,10 @@ desvios e a evidência que sustenta cada leitura.
 """
 
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any, Optional
 
-from mes.contracts.management import MetricValue
-
-
-def _json_value(value: Any):
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    if isinstance(value, dict):
-        return {key: _json_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
-    return value
+from mes.contracts.management import MetricValue, json_value
 
 
 @dataclass(frozen=True)
@@ -41,7 +31,7 @@ class InsightEvidence:
     details: dict = field(default_factory=dict)
 
     def to_dict(self):
-        return _json_value(asdict(self))
+        return json_value(asdict(self))
 
 
 @dataclass(frozen=True)
@@ -71,7 +61,7 @@ class ManagementException:
 
     def to_dict(self):
         data = asdict(self)
-        data["period"] = _json_value(self.period)
+        data["period"] = json_value(self.period)
         data["evidence"] = [item.to_dict() for item in self.evidence]
         return data
 
@@ -96,11 +86,11 @@ class KpiExplanation:
             "key": self.key,
             "label": self.label,
             "metric": self.metric.to_dict(),
-            "period": _json_value(self.period),
-            "components": _json_value(self.components),
-            "largest_impact": _json_value(self.largest_impact),
-            "causes": _json_value(self.causes),
-            "resources": _json_value(self.resources),
+            "period": json_value(self.period),
+            "components": json_value(self.components),
+            "largest_impact": json_value(self.largest_impact),
+            "causes": json_value(self.causes),
+            "resources": json_value(self.resources),
             "evidence": [item.to_dict() for item in self.evidence],
             "calculation_policy": self.calculation_policy,
             "simulation_only": self.simulation_only,
