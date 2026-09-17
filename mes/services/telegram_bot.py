@@ -1,69 +1,39 @@
-"""Comandos privados do bot de fábrica no Telegram, para o funcionário.
-
-Escopo deliberadamente somente-leitura: o bot responde perguntas usando os
-mesmos serviços de domínio da tela (nenhuma regra nova, nenhum cálculo
-duplicado), mas não apoia nenhuma ação — apontar, autorizar refugo, liberar
-primeira peça continuam exclusivos da Tela do Operador. Isso evita reabrir
-identidade/crachá como caminho de escrita a partir de um canal sem os mesmos
-controles (recurso exclusivo, gate de primeira peça, etc.).
-
-O vínculo crachá -> chat (``/vincular``) usa o mesmo modelo de confiança já
-aceito em qualquer apontamento do Gestor: quem digita o crachá é quem
-autoriza. Não há PIN adicional porque não existe em nenhum outro lugar do
-sistema.
-"""
+"""Interface privada, somente leitura, do bot de fábrica no Telegram."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, time as dt_time
 import logging
 
 from mes.contracts import AnalyticsFilter
 from mes.services.frontend_facade import FrontendBackendFacade
-
-
-LOGGER = logging.getLogger(__name__)
-
-AJUDA_TEXTO = (
-    "Comandos do Gestor de Peças:\n"
-    "/vincular <crachá> — liga este chat ao seu crachá\n"
-    "/meustatus — o que você está apontando agora\n"
-    "/fabrica — panorama geral: quem está parado e por quê\n"
-    "/producao — resumo de produção de hoje (peças boas, refugo, OEE)\n"
-    "/paradas — principais motivos de parada de hoje\n"
-    "/ajuda — esta mensagem"
+from mes.services.telegram_digest import canonical_sectors_for_panel
+from mes.services.telegram_intents import parse_telegram_intent
+from mes.services.telegram_presenter import (
+    FRONTS,
+    TelegramPresenter,
+    TelegramView,
+    format_duration,
+    format_percent,
 )
 
 
-def _formatar_duracao(segundos) -> str:
-    total = int(segundos or 0)
-    horas, resto = divmod(total, 3600)
-    minutos = resto // 60
-    if horas:
-        return f"{horas}h{minutos:02d}min"
-    if minutos:
-        return f"{minutos}min"
-    return "menos de 1min"
-
-
-def _formatar_percentual(metrica) -> str:
-    # MetricValue já guarda o valor em escala percentual (0-100, unit="%"),
-    # não em fração 0-1 — ver mes/analytics/oee.py:_percent_metric.
-    valor = (metrica or {}).get("value")
-    if valor is None:
-        return "sem dado"
-    return f"{float(valor):.0f}%"
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class TelegramBotReply:
     chat_id: str
     text: str
+    reply_markup: dict | None = None
+    parse_mode: str = "HTML"
+    message_id: int | None = None
+    callback_query_id: str | None = None
 
 
 class TelegramFactoryBotService:
-    """Roteia comandos recebidos por DM para os serviços de domínio existentes."""
+    """Roteia comandos, callbacks e intenções privadas às consultas existentes."""
 
     def __init__(self, db, *, now_func=None, simulation_mode=False):
         self.db = db
@@ -71,152 +41,268 @@ class TelegramFactoryBotService:
         self.facade = FrontendBackendFacade(
             db, now_func=self._now, simulation_mode=simulation_mode
         )
+        self.presenter = TelegramPresenter()
         self._commands = {
-            "/start": self._cmd_ajuda,
-            "/ajuda": self._cmd_ajuda,
-            "/help": self._cmd_ajuda,
-            "/vincular": self._cmd_vincular,
-            "/meustatus": self._cmd_meustatus,
-            "/fabrica": self._cmd_fabrica,
-            "/producao": self._cmd_producao,
-            "/paradas": self._cmd_paradas,
+            "/start": self._view_home,
+            "/menu": self._view_home,
+            "/ajuda": self._view_help,
+            "/help": self._view_help,
+            "/vincular": self._view_link,
+            "/meustatus": self._view_me,
+            "/fabrica": self._view_factory,
+            "/producao": self._view_production,
+            "/paradas": self._view_stops,
         }
 
-    # ------------------------------------------------------------------
     def handle_update(self, update: dict) -> TelegramBotReply | None:
-        """Processa uma atualização do ``getUpdates``; ``None`` = nada a responder.
+        callback = update.get("callback_query")
+        if callback:
+            return self._handle_callback(callback)
 
-        Só reage a mensagens de texto em conversa privada. O grupo da fábrica
-        é canal de aviso (admin -> todos), não de comando (todos -> bot):
-        misturar os dois sentidos no mesmo chat criaria ruído para quem só
-        quer ver os alertas.
-        """
-
-        message = update.get("message") or {}
+        message = update.get("message") or update.get("channel_post") or {}
         chat = message.get("chat") or {}
-        if str(chat.get("type") or "").strip().casefold() != "private":
+        chat_type = str(chat.get("type") or "").strip().casefold()
+        if chat_type != "private":
+            if chat_type in {"group", "supergroup", "channel"}:
+                self.db.registrar_chat_telegram_descoberto(
+                    chat.get("id"), chat_type, chat.get("title")
+                )
             return None
-        texto = str(message.get("text") or "").strip()
-        if not texto:
-            return None
+        text = str(message.get("text") or "").strip()
         chat_id = str(chat.get("id") or "").strip()
-        if not chat_id:
+        if not text or not chat_id:
             return None
-        comando, _, resto = texto.partition(" ")
-        comando = comando.split("@", 1)[0].casefold()
-        handler = self._commands.get(comando)
-        if handler is None:
-            return TelegramBotReply(chat_id, AJUDA_TEXTO)
-        try:
-            texto_resposta = handler(chat_id, resto.strip())
-        except Exception:
-            LOGGER.exception("Falha ao executar comando %s do bot de fábrica.", comando)
-            texto_resposta = (
-                "Não consegui buscar essa informação agora. Tente de novo em instantes."
-            )
-        return TelegramBotReply(chat_id, texto_resposta)
 
-    # ------------------------------------------------------------------
-    def _operador_do_chat(self, chat_id: str) -> dict | None:
+        command, _, rest = text.partition(" ")
+        command = command.split("@", 1)[0].casefold()
+        try:
+            if command.startswith("/"):
+                handler = self._commands.get(command)
+                view = handler(chat_id, rest.strip()) if handler else self._view_help(chat_id)
+            else:
+                view = self._view_from_intent(chat_id, text)
+        except Exception:
+            LOGGER.exception("Falha ao atender mensagem privada do bot de fábrica.")
+            view = self.presenter.unavailable(retry_callback="gp:home", now=self._now())
+        return self._reply(chat_id, view)
+
+    def _handle_callback(self, callback: dict) -> TelegramBotReply | None:
+        message = callback.get("message") or {}
+        chat = message.get("chat") or {}
+        chat_id = str(chat.get("id") or "").strip()
+        callback_id = str(callback.get("id") or "").strip() or None
+        if str(chat.get("type") or "").strip().casefold() != "private" or not chat_id:
+            return None
+        data = str(callback.get("data") or "").strip()
+        message_id = message.get("message_id")
+        try:
+            view = self._view_from_callback(chat_id, data)
+        except Exception:
+            LOGGER.exception("Falha ao atender callback %s do bot de fábrica.", data)
+            view = self.presenter.unavailable(
+                retry_callback=data if data.startswith("gp:") else "gp:home",
+                now=self._now(),
+            )
+        return self._reply(
+            chat_id,
+            view,
+            message_id=int(message_id) if message_id is not None else None,
+            callback_query_id=callback_id,
+        )
+
+    @staticmethod
+    def _reply(
+        chat_id: str,
+        view: TelegramView,
+        *,
+        message_id: int | None = None,
+        callback_query_id: str | None = None,
+    ) -> TelegramBotReply:
+        return TelegramBotReply(
+            chat_id=chat_id,
+            text=view.text,
+            reply_markup=view.reply_markup,
+            message_id=message_id,
+            callback_query_id=callback_query_id,
+        )
+
+    def _view_from_callback(self, chat_id: str, data: str) -> TelegramView:
+        direct = {
+            "gp:home": self._view_home,
+            "gp:factory": self._view_factory,
+            "gp:production": self._view_production,
+            "gp:stops": self._view_stops,
+            "gp:fronts": self._view_fronts,
+            "gp:me": self._view_me,
+            "gp:help": self._view_help,
+            "gp:link": self._view_link,
+        }
+        if data in direct:
+            return direct[data](chat_id)
+        prefix, separator, front = data.rpartition(":")
+        if separator and front in FRONTS:
+            if prefix == "gp:front":
+                return self._view_front(chat_id, front=front)
+            if prefix == "gp:prod":
+                return self._view_production(chat_id, front=front)
+            if prefix == "gp:stops":
+                return self._view_stops(chat_id, front=front)
+        return self._view_help(chat_id)
+
+    def _view_from_intent(self, chat_id: str, text: str) -> TelegramView:
+        intent = parse_telegram_intent(text)
+        if intent.name == "factory_status":
+            return self._view_factory(chat_id)
+        if intent.name == "production":
+            return self._view_production(chat_id, front=intent.front)
+        if intent.name == "stoppages":
+            return self._view_stops(chat_id, front=intent.front)
+        if intent.name == "front_overview" and intent.front:
+            return self._view_front(chat_id, front=intent.front)
+        if intent.name == "my_status":
+            return self._view_me(chat_id)
+        if intent.name == "link_badge":
+            return self._view_link(chat_id)
+        if intent.name == "help":
+            return self._view_help(chat_id)
+        return self._view_home(chat_id)
+
+    def _period_today(self, *, sector: str | None = None) -> AnalyticsFilter:
+        now = self._now()
+        return AnalyticsFilter(
+            inicio=datetime.combine(now.date(), dt_time.min), fim=now, setor=sector
+        )
+
+    def _operator(self, chat_id: str) -> dict | None:
         return self.db.buscar_operador_por_telegram(chat_id)
 
-    def _cmd_ajuda(self, chat_id: str, _resto: str) -> str:
-        return AJUDA_TEXTO
+    def _snapshot(self) -> dict:
+        return self.facade.andon(self._period_today())
 
-    def _cmd_vincular(self, chat_id: str, resto: str) -> str:
-        cracha = resto.strip()
-        if not cracha:
-            return "Uso: /vincular <seu crachá> (o mesmo número que você usa no posto)."
-        operador = self.db.vincular_telegram_operador(cracha, chat_id)
-        if operador is None:
-            return (
-                f"Crachá {cracha!r} não encontrado ou inativo. Confira o número "
-                "com o supervisor."
-            )
-        return (
-            f"Pronto, {operador['nome']}! Este chat ficou ligado ao crachá "
-            f"{operador['cracha']}. Use /meustatus para ver o que está em produção."
-        )
-
-    def _cmd_meustatus(self, chat_id: str, _resto: str) -> str:
-        operador = self._operador_do_chat(chat_id)
-        if operador is None:
-            return "Você ainda não vinculou seu crachá aqui. Mande /vincular <crachá>."
-        participacoes = self.db.participacoes_ativas_por_cracha(operador["cracha"])
-        if not participacoes:
-            return f"{operador['nome']}, você não tem nenhuma operação em aberto agora."
-        linhas = [f"{operador['nome']}, agora você está em:"]
-        agora = self._now()
-        for item in participacoes:
-            inicio = item.get("data_inicio")
-            decorrido = _formatar_duracao((agora - inicio).total_seconds()) if inicio else "?"
-            linhas.append(
-                f"• OP {item.get('op')} / operação {item.get('numero_operacao')} — "
-                f"{item.get('recurso')} — há {decorrido}"
-            )
-        return "\n".join(linhas)
-
-    def _periodo_hoje(self) -> AnalyticsFilter:
-        agora = self._now()
-        inicio = datetime.combine(agora.date(), dt_time.min)
-        return AnalyticsFilter(inicio=inicio, fim=agora)
-
-    def _cmd_fabrica(self, chat_id: str, _resto: str) -> str:
-        snapshot = self.facade.andon(self._periodo_hoje())
-        resumo = snapshot.get("summary") or {}
-        linhas = [
-            f"Fábrica agora — {resumo.get('resources', 0)} recursos monitorados:",
-            f"🟢 Em produção: {resumo.get('production', 0)}",
-            f"🔴 Parados: {resumo.get('downtime', 0)}",
-            f"🟡 Setup/retrabalho: {resumo.get('setup', 0) + resumo.get('rework', 0)}",
-        ]
-        parados = []
-        for setor in snapshot.get("sectors") or []:
-            for recurso in setor.get("resources") or []:
-                estado = recurso.get("state") or {}
-                if estado.get("category") != "downtime":
+    @staticmethod
+    def _stopped(snapshot: dict, *, front: str | None = None) -> list[dict]:
+        expected = FRONTS[front][1] if front else None
+        rows = []
+        for panel in snapshot.get("sectors") or ():
+            if expected and panel.get("name") != expected:
+                continue
+            for resource in panel.get("resources") or ():
+                state = resource.get("state") or {}
+                if state.get("category") != "parada":
                     continue
-                duracao = _formatar_duracao(estado.get("duration_seconds"))
-                parados.append(
-                    f"• {recurso.get('name')} ({setor.get('name')}) — "
-                    f"{estado.get('display_label') or 'motivo não informado'} — há {duracao}"
-                )
-        if parados:
-            linhas.append("")
-            linhas.append("Parados agora:")
-            linhas.extend(parados[:15])
-            if len(parados) > 15:
-                linhas.append(f"... e mais {len(parados) - 15} recurso(s).")
-        return "\n".join(linhas)
+                rows.append({
+                    "name": resource.get("name") or resource.get("code"),
+                    "reason": state.get("display_label") or state.get("reason"),
+                    "duration_seconds": state.get("duration_seconds"),
+                })
+        return rows
 
-    def _cmd_producao(self, chat_id: str, _resto: str) -> str:
-        filtros = self._periodo_hoje()
-        overview = self.facade.management.get_overview(filtros)
-        qualidade = self.facade.analytics.quality(filtros)
-        kpis = overview.get("kpis") or {}
-        totals = qualidade.get("totals") or {}
-        return (
-            "Produção de hoje:\n"
-            f"Peças boas: {totals.get('boa', 0)}\n"
-            f"Refugo: {totals.get('refugo', 0)}\n"
-            f"Retrabalho: {totals.get('retrabalho', 0)}\n"
-            f"OEE: {_formatar_percentual(kpis.get('oee'))}\n"
-            f"Disponibilidade: {_formatar_percentual(kpis.get('availability'))}\n"
-            f"Performance: {_formatar_percentual(kpis.get('performance'))}\n"
-            f"FTT (qualidade de 1ª): {_formatar_percentual(kpis.get('ftt'))}"
+    @staticmethod
+    def _front_summary(snapshot: dict, front: str) -> dict:
+        expected = FRONTS[front][1]
+        panel = next(
+            (item for item in snapshot.get("sectors") or () if item.get("name") == expected),
+            None,
+        )
+        counts = {"production": 0, "downtime": 0, "setup": 0, "rework": 0}
+        for resource in (panel or {}).get("resources") or ():
+            category = (resource.get("state") or {}).get("category")
+            if category in counts:
+                counts[category] += 1
+        return counts
+
+    def _production_data(self, front: str | None = None) -> dict:
+        sectors = canonical_sectors_for_panel(FRONTS[front][1]) if front else (None,)
+        good = scrap = rework = 0
+        kpis = None
+        for sector in sectors:
+            filters = self._period_today(sector=sector)
+            totals = self.facade.analytics.quality(filters).get("totals")
+            if totals is None:
+                raise ValueError("Resumo de quantidade indisponível.")
+            good += int(totals.get("boa") or 0)
+            scrap += int(totals.get("refugo") or 0)
+            rework += int(totals.get("retrabalho") or 0)
+            if len(sectors) == 1:
+                kpis = self.facade.management.get_overview(filters).get("kpis") or {}
+        return {"good": good, "scrap": scrap, "rework": rework, "kpis": kpis or {}}
+
+    def _downtime_total(self, front: str | None = None) -> float:
+        sectors = canonical_sectors_for_panel(FRONTS[front][1]) if front else (None,)
+        return sum(
+            float(self.facade.analytics.downtimes(self._period_today(sector=sector)).get("total_seconds") or 0)
+            for sector in sectors
         )
 
-    def _cmd_paradas(self, chat_id: str, _resto: str) -> str:
-        filtros = self._periodo_hoje()
-        paradas = self.facade.analytics.downtimes(filtros)
-        motivos = (paradas.get("by_reason") or [])[:8]
-        if not motivos:
-            return "Sem paradas registradas hoje até agora."
-        linhas = ["Principais paradas de hoje:"]
-        for item in motivos:
-            motivo = item.get("motivo") or "Não informado"
-            linhas.append(f"• {motivo} — {_formatar_duracao(item.get('segundos'))}")
-        return "\n".join(linhas)
+    def _view_home(self, chat_id: str, _rest: str = "") -> TelegramView:
+        operator = self._operator(chat_id)
+        snapshot = self._snapshot()
+        production = self._production_data()
+        return self.presenter.menu(
+            name=(operator or {}).get("nome"), linked=operator is not None,
+            summary=snapshot.get("summary") or {}, good=production.get("good"),
+            now=self._now(),
+        )
+
+    def _view_help(self, _chat_id: str, _rest: str = "") -> TelegramView:
+        return self.presenter.help()
+
+    def _view_link(self, chat_id: str, rest: str = "") -> TelegramView:
+        badge = rest.strip()
+        if not badge:
+            return self.presenter.link_badge(now=self._now())
+        operator = self.db.vincular_telegram_operador(badge, chat_id)
+        if operator is None:
+            return self.presenter.link_badge(
+                now=self._now(), message=f"Crachá {badge} não encontrado ou inativo."
+            )
+        return self.presenter.link_badge(
+            now=self._now(), success=True,
+            message=(f"Pronto, {operator.get('nome')}! Este chat foi vinculado ao crachá "
+                     f"{operator.get('cracha')}."),
+        )
+
+    def _view_me(self, chat_id: str, _rest: str = "") -> TelegramView:
+        operator = self._operator(chat_id)
+        participations = self.db.participacoes_ativas_por_cracha(operator["cracha"]) if operator else []
+        return self.presenter.my_status(
+            operator=operator, participations=participations, now=self._now()
+        )
+
+    def _view_factory(self, _chat_id: str, _rest: str = "") -> TelegramView:
+        snapshot = self._snapshot()
+        return self.presenter.factory(
+            summary=snapshot.get("summary") or {}, stopped=self._stopped(snapshot),
+            now=self._now(),
+        )
+
+    def _view_production(self, _chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
+        return self.presenter.production(
+            front=front, data=self._production_data(front), now=self._now()
+        )
+
+    def _view_stops(self, _chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
+        snapshot = self._snapshot()
+        counts = {key: self._front_summary(snapshot, key)["downtime"] for key in FRONTS}
+        counts["all"] = int((snapshot.get("summary") or {}).get("downtime") or 0)
+        return self.presenter.stops(
+            front=front, active=self._stopped(snapshot, front=front),
+            total_seconds=self._downtime_total(front), counts=counts, now=self._now(),
+        )
+
+    def _view_fronts(self, _chat_id: str, _rest: str = "") -> TelegramView:
+        return self.presenter.fronts()
+
+    def _view_front(self, _chat_id: str, *, front: str) -> TelegramView:
+        snapshot = self._snapshot()
+        return self.presenter.front(
+            front=front, summary=self._front_summary(snapshot, front),
+            good=self._production_data(front).get("good"), now=self._now(),
+        )
+
+
+_formatar_duracao = format_duration
+_formatar_percentual = lambda metric: format_percent(metric) or "sem dado"
 
 
 __all__ = ["TelegramBotReply", "TelegramFactoryBotService"]

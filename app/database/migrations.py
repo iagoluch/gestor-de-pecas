@@ -2092,7 +2092,7 @@ TELEGRAM_DIGEST_DESCRIPTION = (
 )
 
 TELEGRAM_DIGEST_STATEMENTS = (
-    # Uma linha por frequência (diario/quinzenal/mensal). O ciclo em segundo
+    # Uma linha por frequência e escopo (ex.: diario, diario:corte). O ciclo em segundo
     # plano roda a cada poucos minutos; sem isto ele reenviaria o mesmo
     # resumo em todo ciclo dentro da janela de horário configurada.
     """
@@ -2100,6 +2100,22 @@ TELEGRAM_DIGEST_STATEMENTS = (
         frequencia TEXT PRIMARY KEY,
         periodo_fim DATE NOT NULL,
         enviado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL
+    )
+    """,
+)
+
+
+TELEGRAM_DISCOVERED_CHATS_DESCRIPTION = (
+    "destinos Telegram descobertos pelo polling do bot de fábrica"
+)
+
+TELEGRAM_DISCOVERED_CHATS_STATEMENTS = (
+    """
+    CREATE TABLE telegram_chats_descobertos (
+        chat_id TEXT PRIMARY KEY,
+        tipo TEXT NOT NULL,
+        titulo TEXT,
+        atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
     """,
 )
@@ -2147,6 +2163,7 @@ MIGRATIONS = {
     37: (PARAMETROS_TURNO_DESCRIPTION, PARAMETROS_TURNO_STATEMENTS),
     38: (OPERADOR_TELEGRAM_DESCRIPTION, OPERADOR_TELEGRAM_STATEMENTS),
     39: (TELEGRAM_DIGEST_DESCRIPTION, TELEGRAM_DIGEST_STATEMENTS),
+    40: (TELEGRAM_DISCOVERED_CHATS_DESCRIPTION, TELEGRAM_DISCOVERED_CHATS_STATEMENTS),
 }
 
 

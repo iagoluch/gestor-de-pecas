@@ -4684,6 +4684,38 @@ class Database(
                 (str(frequencia), periodo_fim, enviado_em),
             )
 
+    def registrar_chat_telegram_descoberto(self, chat_id, tipo, titulo):
+        """Registra grupo/canal visto pelo polling, sem torná-lo destinatário."""
+
+        chat = str(chat_id or "").strip()
+        kind = str(tipo or "").strip().casefold()
+        if not chat or kind not in {"group", "supergroup", "channel"}:
+            return
+        title = str(titulo or "").strip() or None
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO telegram_chats_descobertos (chat_id, tipo, titulo)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (chat_id) DO UPDATE
+                SET tipo = EXCLUDED.tipo,
+                    titulo = EXCLUDED.titulo,
+                    atualizado_em = CURRENT_TIMESTAMP
+                """,
+                (chat, kind, title),
+            )
+
+    def listar_chats_telegram_descobertos(self):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT chat_id, tipo, titulo, atualizado_em
+                FROM telegram_chats_descobertos
+                ORDER BY atualizado_em DESC, chat_id
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def listar_historico_operador(
         self,
         tipo_setor,

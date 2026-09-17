@@ -180,6 +180,7 @@ class WebSettings:
     telegram_bot_polling_enabled: bool = False
     telegram_bot_poll_interval_seconds: int = 3
     telegram_factory_chat_id: str = ""
+    telegram_sector_chat_ids: dict[str, str] = field(default_factory=dict)
     telegram_digest_enabled: bool = False
     telegram_digest_daily_time: str = "18:00"
     telegram_digest_timezone: str = "America/Sao_Paulo"
@@ -560,6 +561,10 @@ class WebSettings:
             ),
             telegram_factory_chat_id=_text_option(
                 env.get("GESTOR_TELEGRAM_FACTORY_CHAT_ID"), default=""
+            ),
+            telegram_sector_chat_ids=_json_string_map(
+                env.get("GESTOR_TELEGRAM_SECTOR_CHAT_IDS"),
+                name="GESTOR_TELEGRAM_SECTOR_CHAT_IDS",
             ),
             telegram_digest_enabled=_as_bool(
                 env.get("GESTOR_TELEGRAM_DIGEST_ENABLED"), default=False

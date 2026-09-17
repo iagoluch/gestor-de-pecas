@@ -17,8 +17,52 @@ import httpx
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
 
+def _telegram_request(
+    *,
+    bot_token: str,
+    method: str,
+    payload: dict,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    """Executa um método da Bot API e só aceita o ACK JSON ``ok=true``."""
+
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+    try:
+        response = httpx.post(url, json=payload, timeout=timeout)
+        if response.status_code >= 400:
+            # Atualizar sem mudança visível já atingiu o estado desejado; não
+            # envie uma segunda mensagem e não polua o chat nesse caso.
+            if method == "editMessageText" and "message is not modified" in response.text.casefold():
+                return True
+            logging.warning(
+                "%s do Telegram recusado (HTTP %s): %s",
+                method,
+                response.status_code,
+                response.text[:300],
+            )
+            return False
+        try:
+            data = response.json()
+        except ValueError:
+            logging.warning("%s do Telegram sem ACK JSON válido.", method)
+            return False
+        if data.get("ok") is not True:
+            logging.warning("%s do Telegram sem ACK da Bot API: %s", method, str(data)[:300])
+            return False
+        return True
+    except httpx.HTTPError:
+        logging.exception("Falha no método %s do Telegram.", method)
+        return False
+
+
 def send_telegram_message(
-    *, bot_token: str, chat_id: str, text: str, timeout: float = DEFAULT_TIMEOUT_SECONDS
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    parse_mode: str | None = None,
+    reply_markup: dict | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> bool:
     """Envia uma mensagem simples via Bot API do Telegram.
 
@@ -27,24 +71,81 @@ def send_telegram_message(
     aviso não saiu, sem derrubar o fluxo que já registrou o fato original.
     """
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    try:
-        response = httpx.post(
-            url,
-            json={"chat_id": chat_id, "text": text},
-            timeout=timeout,
-        )
-        if response.status_code >= 400:
-            logging.warning(
-                "Notificação Telegram recusada (HTTP %s): %s",
-                response.status_code,
-                response.text[:300],
-            )
-            return False
+    payload = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    return _telegram_request(
+        bot_token=bot_token, method="sendMessage", payload=payload, timeout=timeout
+    )
+
+
+def edit_telegram_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    message_id: int,
+    text: str,
+    parse_mode: str | None = None,
+    reply_markup: dict | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    payload = {"chat_id": chat_id, "message_id": int(message_id), "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    return _telegram_request(
+        bot_token=bot_token, method="editMessageText", payload=payload, timeout=timeout
+    )
+
+
+def answer_telegram_callback_query(
+    *,
+    bot_token: str,
+    callback_query_id: str,
+    text: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    payload = {"callback_query_id": callback_query_id}
+    if text:
+        payload["text"] = text
+    return _telegram_request(
+        bot_token=bot_token, method="answerCallbackQuery", payload=payload, timeout=timeout
+    )
+
+
+def deliver_telegram_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    message_id: int | None = None,
+    parse_mode: str | None = None,
+    reply_markup: dict | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    """Edita navegação existente e usa ``sendMessage`` como fallback."""
+
+    if message_id is not None and edit_telegram_message(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        message_id=message_id,
+        text=text,
+        parse_mode=parse_mode,
+        reply_markup=reply_markup,
+        timeout=timeout,
+    ):
         return True
-    except httpx.HTTPError:
-        logging.exception("Falha ao enviar notificação Telegram.")
-        return False
+    return send_telegram_message(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        text=text,
+        parse_mode=parse_mode,
+        reply_markup=reply_markup,
+        timeout=timeout,
+    )
 
 
 def fetch_telegram_updates(
@@ -81,17 +182,9 @@ def fetch_telegram_updates(
 
 
 def _format_outbox_error_message(item: dict) -> str:
-    op = item.get("production_order") or "?"
-    operacao = item.get("operation_code") or "-"
-    codigo = item.get("error_code") or "erro_desconhecido"
-    motivo = str(item.get("error_message") or "").strip() or "sem detalhe do TOTVS"
-    return (
-        "⚠️ Gestor de Peças — apontamento não aceito pelo TOTVS\n"
-        f"OP: {op}\n"
-        f"Operação: {operacao}\n"
-        f"Motivo: {codigo} — {motivo}\n"
-        "Ação necessária: verificar no TOTVS e decidir manualmente."
-    )
+    from mes.services.telegram_presenter import TelegramPresenter
+
+    return TelegramPresenter().totvs_outbox_error(item)
 
 
 def format_chamada_message(chamada: dict) -> str:
@@ -129,7 +222,10 @@ def build_outbox_error_notifier(
 
     def _notify(item: dict) -> None:
         send_telegram_message(
-            bot_token=token, chat_id=chat, text=_format_outbox_error_message(item)
+            bot_token=token,
+            chat_id=chat,
+            text=_format_outbox_error_message(item),
+            parse_mode="HTML",
         )
 
     return _notify
@@ -137,6 +233,9 @@ def build_outbox_error_notifier(
 
 __all__ = [
     "build_outbox_error_notifier",
+    "answer_telegram_callback_query",
+    "deliver_telegram_message",
+    "edit_telegram_message",
     "fetch_telegram_updates",
     "send_telegram_message",
 ]

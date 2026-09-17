@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 15/09/2026.
+**Atualizado em:** 17/09/2026.
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -153,9 +153,9 @@ Notas completas em memória do desenvolvedor; principais decisões fechadas:
   justificaria MSSQL, e MSSQL exigiria licença paga sem benefício técnico).
 - OP fechada no TOTVS via finalização parcial do PCP (rejeição
   `A680OPTOT Operacao ja totalizada`): já não quebra nada tecnicamente
-  (classificada `FUNCTIONAL` no outbox, sem retry infinito). Falta apenas
-  **notificar o supervisor via Telegram** quando isso ocorrer — combinado,
-  ainda **não implementado**.
+  (classificada `FUNCTIONAL` no outbox, sem retry infinito). A notificação ao
+  supervisor foi ligada ao canal Alertas em 16/09/2026 (§2.9); permanece
+  inativa enquanto o worker da outbox estiver desligado no ambiente.
 - Cadastro de filial: piloto roda só na filial 4. Falta implementar: quando o
   TOTVS não mandar `branch_id`, usar `"4"` como padrão em vez de string vazia
   (`app/database/database.py:439`) — **implementado no commit `4a60564`**
@@ -164,8 +164,8 @@ Notas completas em memória do desenvolvedor; principais decisões fechadas:
 - Retry/reconexão TOTVS: já resolvido antes desta reunião (outbox
   transacional + worker em background, backoff 1/2/5/10/30/60min).
 
-**Pendência real restante desta reunião:** notificação Telegram ao supervisor
-quando o outbox cair em rejeição `FUNCTIONAL`. Ainda não implementado.
+**Pendência desta reunião encerrada em 16/09/2026:** rejeições `FUNCTIONAL`
+usam o notifier existente e o destino transversal de Alertas (§2.9).
 
 ### 1.7 Commits mais recentes (não descritos em nenhum relatório datado)
 
@@ -181,8 +181,8 @@ operador acionar alguém — `web/src/components/ChamadaButton.tsx`,
 `backend/api/routers/chamadas.py`; cadastro de usuários gerenciais
 (`web/src/pages/home/UsersPage.tsx`, testado em
 `tests/test_user_management.py`); integração de notificações
-(`mes/integrations/notifications/telegram.py` — possivelmente a base para a
-pendência do Telegram do item 1.6, conferir antes de reimplementar); e o
+(`mes/integrations/notifications/telegram.py` — base efetivamente reutilizada
+para a notificação `FUNCTIONAL` fechada na §2.9); e o
 default de filial TOTVS mencionado acima.
 
 ## 2. Working tree com alterações não commitadas (verificar antes de mexer)
@@ -313,17 +313,97 @@ mesmo agrupamento não bloqueia seu avanço. O Destaque continua sendo uma fila
 operacional independente para contabilizar tempo e não é pré-requisito para o
 avanço do roteiro, mesmo enquanto ainda não possui recurso oficial cadastrado.
 
+### 2.7 Bot de fábrica no Telegram ativado no TESTE (16/09/2026)
+
+O `.env` local do TESTE foi configurado com polling privado e resumos automáticos
+ativos para o grupo `-1003542149782`. O backend da porta 8001 foi reiniciado com
+alvo efetivo comprovado em `gestor_pecas_test` (schema 39); a identidade remota
+confirmada é `@Gestordepecas_bot`. Como o restart ocorreu antes das 18:00 BRT,
+o ciclo de digest não enviou resumo na inicialização (`telegram_digest_envios`
+permaneceu vazio). Os comandos privados aguardam a validação humana de
+`/vincular <cracha>` seguida de `/meustatus` com um crachá real.
+
+### 2.8 Registro de chats Telegram descobertos (16/09/2026)
+
+O polling do bot registra de forma idempotente cada `group`, `supergroup` ou
+`channel` que enviar uma atualização, em `telegram_chats_descobertos` (migration
+40), guardando `chat_id`, tipo e título. O registro não responde nesses chats,
+não habilita comandos fora do privado e não os transforma em destinos de digest.
+Para consultar, usar `Database.listar_chats_telegram_descobertos()` ou uma query
+somente leitura na tabela; publicar uma mensagem/postagem nova depois da
+atualização do backend para o chat ser descoberto.
+
+### 2.9 Roteamento Telegram por frente industrial (16/09/2026)
+
+O digest automático passou a ter cinco destinos sem sobreposição: **Alertas**
+recebe somente o consolidado global; Corte, Solda, Pintura e Caldeiraria recebem
+somente a sua frente. Os escopos são derivados do agrupamento canônico do Andon:
+Caldeiraria = Dobra/Usinagem/Serra e Solda = os cinco setores oficiais de
+`WELDING_SECTOR_NAMES`. Nenhuma equivalência por texto foi criada. A configuração
+local usa `GESTOR_TELEGRAM_SECTOR_CHAT_IDS`; o controle existente em
+`telegram_digest_envios` ganhou chave lógica por frequência + escopo, preservando
+a chave global legada e evitando reenvio pelo scheduler sem migration nova.
+
+As mensagens foram reduzidas a quatro ou cinco linhas. O consolidado e os painéis
+de um setor continuam usando os KPIs canônicos; frentes compostas somam somente
+grandezas aditivas (quantidades e tempos) e não inventam um OEE agregado. A rejeição
+`FUNCTIONAL` do outbox já usa `build_outbox_error_notifier` e agora aponta para
+Alertas (`-1003542149782`). O outbound e seu worker permanecem desligados no
+`.env`, conforme a decisão anterior; portanto esse aviso só roda quando o piloto
+TOTVS for explicitamente reativado.
+
+Validação dirigida: **26 testes aprovados** (`tests.test_telegram_bot` e
+`tests.test_totvs_outbox_notifications`), `py_compile`, `git diff --check`,
+preview somente leitura dos cinco textos e alvo literal
+`current_database() = gestor_pecas_test`, schema 40. O backend 8001 foi reiniciado
+e respondeu `health=ok`. A Bot API confirmou `@Gestordepecas_bot` como
+administrador nos cinco destinos. Depois dessas validações foram enviados
+exatamente **15 cenários marcados TESTE/HOMOLOGAÇÃO** (acompanhamento, alerta
+acionável e desfecho; três por destino), com OP/produto/operador de referências
+existentes no banco TESTE, sem persistir evento produtivo. Resultado externo:
+**15/15 ACKs `ok=true`**.
+
+### 2.10 Interface Telegram privada e padrão visual (17/09/2026)
+
+O bot privado ganhou `/start` e `/menu`, menu inline estável, navegação por
+callbacks diretos (`gp:*`) com edição da mensagem atual, resposta obrigatória ao
+callback e fallback de envio quando a edição não é possível. Os comandos
+existentes e o parser determinístico de linguagem natural convergem nas mesmas
+consultas somente-leitura da `FrontendBackendFacade`; nenhuma regra de produção,
+parada ou OEE foi levada para o Telegram. Corte, Solda, Pintura e Caldeiraria
+continuam derivados do agrupamento canônico do Andon.
+
+A apresentação HTML ficou centralizada em `mes/services/telegram_presenter.py`,
+com escape dos dados dinâmicos, rodapés sem segundos, números pt-BR, estados sem
+dado e teclados com estilo semântico da Bot API. O transporte agora valida ACK
+para `sendMessage`, `editMessageText` e `answerCallbackQuery`; uma edição sem
+alteração é tratada como sucesso para não gerar mensagem duplicada. Grupos e
+canais continuam apenas com descoberta silenciosa e notificações automáticas.
+
+Os digests usam a mesma identidade visual. O destino global local foi movido do
+chat de Alertas para o canal descoberto **🏭 | Fábrica** pela configuração
+`GESTOR_TELEGRAM_FACTORY_CHAT_ID`; o alerta da outbox TOTVS permanece no chat
+separado de Alertas e diferencia rejeição funcional de falha técnica, lendo os
+campos reais persistidos (`last_delivery_class`, `last_error_message` e
+`payload_context`). A lógica e os estados da outbox não mudaram.
+
+Validação dirigida: `current_database() = gestor_pecas_test`, **37 testes
+aprovados** (`tests.test_telegram_bot` e
+`tests.test_totvs_outbox_notifications`), `py_compile` e `git diff --check`.
+Não houve migration nem envio externo nesta alteração. Após o commit, somente o
+backend 8001 foi reiniciado: `health=ok`, schema 40, banco efetivo
+`gestor_pecas_test`, polling e digest ativos, destino global Fábrica e quatro
+destinos setoriais carregados, sem erro no log de startup.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
-1. Notificação Telegram ao supervisor em rejeição `FUNCTIONAL` do outbox TOTVS
-   (§1.6) — não implementado.
-2. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
+1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
    (§1.3) — decisão de chão de fábrica.
-3. Segurança: freio no login principal, IDOR na Qualidade, secrets de sessão
+2. Segurança: freio no login principal, IDOR na Qualidade, secrets de sessão
    ausentes no `.env` (§1.2) — aguardando decisão do usuário.
-4. Breakpoint de 1024px na Solda: manter 1180px ou reverter para 900px?
+3. Breakpoint de 1024px na Solda: manter 1180px ou reverter para 900px?
    (§1.4) — baixo risco, decisão de uso real.
-5. Todas as pendências antigas do `ROADMAP.md` seção 5 (cadastro de recursos,
+4. Todas as pendências antigas do `ROADMAP.md` seção 5 (cadastro de recursos,
    Montagem, ingestão do MODELO da Solda, `prazo_entrega` sem origem, filtro
    de setor em Crachás) continuam abertas — nada disso foi resolvido nesta
    janela.

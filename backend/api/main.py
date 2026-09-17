@@ -60,9 +60,10 @@ from backend.integrations import totvs_soap
 from backend.integrations.sigmanest_sqlserver import SigmaNestSqlServerGateway
 from backend.integrations.totvs_wspcp import TotvsWspcpClient
 from mes.integrations.notifications.telegram import (
+    answer_telegram_callback_query,
     build_outbox_error_notifier,
+    deliver_telegram_message,
     fetch_telegram_updates,
-    send_telegram_message,
 )
 from mes.integrations.totvs.on_demand_gateway import build_order_provisioning_service
 from mes.integrations.totvs.service import build_totvs_ingestion_service
@@ -74,7 +75,10 @@ from mes.services.shift_boundary import ShiftBoundaryService
 from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.sigmanest_refresh import SigmaNestRefreshCoordinator
 from mes.services.telegram_bot import TelegramFactoryBotService
-from mes.services.telegram_digest import TelegramFactoryDigestScheduler
+from mes.services.telegram_digest import (
+    TelegramFactoryDigestScheduler,
+    build_digest_destinations,
+)
 from mes.services.totvs_outbox_worker import TotvsOutboxWorker
 
 
@@ -226,11 +230,20 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
                 offset = int(update.get("update_id", 0)) + 1
                 reply = service.handle_update(update)
                 if reply is not None:
+                    if reply.callback_query_id:
+                        await asyncio.to_thread(
+                            answer_telegram_callback_query,
+                            bot_token=token,
+                            callback_query_id=reply.callback_query_id,
+                        )
                     await asyncio.to_thread(
-                        send_telegram_message,
+                        deliver_telegram_message,
                         bot_token=token,
                         chat_id=reply.chat_id,
                         text=reply.text,
+                        message_id=reply.message_id,
+                        parse_mode=reply.parse_mode,
+                        reply_markup=reply.reply_markup,
                     )
         except asyncio.CancelledError:
             raise
@@ -240,7 +253,7 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
 
 
 async def _telegram_digest_loop(application: FastAPI) -> None:
-    """Resumo diário/quinzenal/mensal para o grupo, um por período fechado."""
+    """Resumo diário/quinzenal/mensal por destino, um por período fechado."""
 
     settings = application.state.settings
     try:
@@ -261,13 +274,17 @@ async def _telegram_digest_loop(application: FastAPI) -> None:
         )
         horario_execucao = day_time(hour=18, minute=0)
     interval = 300
+    destinations = build_digest_destinations(
+        factory_chat_id=settings.telegram_factory_chat_id,
+        sector_chat_ids=settings.telegram_sector_chat_ids,
+    )
     while True:
         try:
             database = application.state.database_manager.get()
             scheduler = TelegramFactoryDigestScheduler(
                 database,
                 bot_token=settings.telegram_bot_token,
-                chat_id=settings.telegram_factory_chat_id,
+                destinations=destinations,
                 run_time=horario_execucao,
                 timezone=fuso,
             )
@@ -276,7 +293,7 @@ async def _telegram_digest_loop(application: FastAPI) -> None:
             if enviados:
                 logging.info(
                     "Resumo(s) de fábrica enviado(s) ao Telegram: %s",
-                    [item.frequency for item in enviados],
+                    [f"{item.frequency}:{item.destination}" for item in enviados],
                 )
         except asyncio.CancelledError:
             raise
@@ -480,7 +497,10 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         if (
             resolved_settings.telegram_configured
             and resolved_settings.telegram_digest_enabled
-            and resolved_settings.telegram_factory_chat_id
+            and (
+                resolved_settings.telegram_factory_chat_id
+                or resolved_settings.telegram_sector_chat_ids
+            )
         ):
             telegram_digest_task = asyncio.create_task(
                 _telegram_digest_loop(_app),
