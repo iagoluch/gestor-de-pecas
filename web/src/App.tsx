@@ -13,6 +13,7 @@ import { ManagementPausesPage } from "./pages/home/PausesPage";
 import { ManagementBadgesPage } from "./pages/home/BadgesPage";
 import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
 import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
+import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
 import { AIPage } from "./pages/AIPage";
 import { OperatorPortalPage } from "./pages/operator/OperatorPortalPage";
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="inicio/crachas" element={<ManagementBadgesPage />} />
         <Route path="inicio/chamadas" element={<ManagementChamadasPage />} />
         <Route path="inicio/turnos" element={<ManagementShiftsPage />} />
+        <Route path="inicio/sistema" element={<ManagementSystemPage />} />
         <Route path="inicio/cadastro" element={<ManagementUsersPage />} />
         <Route path="inicio/ia" element={<AIPage />} />
 

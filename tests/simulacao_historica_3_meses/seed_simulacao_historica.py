@@ -681,7 +681,7 @@ def _insert_appointments(cursor, orders: list[dict], operation_ids: dict[str, in
         [
             (
                 row["op"], row["product"], row["sector"], row["resource"],
-                row["status"], max(row["planned"], row["good"]), row["planned_start"] - timedelta(minutes=15),
+                row["status"], max(row["planned"], row["good"] + row["scrap"]), row["planned_start"] - timedelta(minutes=15),
                 f"Operador Simulação {row['operator_number']:02d}" if row["started"] else None,
                 row["started"],
                 f"Operador Simulação {(row['operator_number'] % 36) + 1:02d}" if row["finished"] else None,

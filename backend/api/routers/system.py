@@ -1,18 +1,30 @@
+import platform
+import shutil
+import subprocess
+import time
+from pathlib import Path
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from typing import Literal
 
 from backend.api.dependencies.auth import (
     get_current_user,
+    require_admin_user,
     require_csrf,
     require_management_user,
 )
+from backend.api.errors import AppError
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.corporate_integration import totvs_production_order_status
 
 
 router = APIRouter(prefix="/system", tags=["Sistema"])
+
+# repo_root/backend/api/routers/system.py -> parents[3] é a raiz do repositório.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+WEB_DIR = REPO_ROOT / "web"
 
 
 class SimulationClockRequest(BaseModel):
@@ -100,6 +112,53 @@ def simulation_clock(
     result = _simulation_clock_payload(settings, clock)
     result["changed"] = changed
     return result
+
+
+@router.post(
+    "/rebuild-frontend",
+    dependencies=[Depends(require_csrf)],
+)
+def rebuild_frontend(_user=Depends(require_admin_user)):
+    """Reconstrói o bundle do frontend (``web/dist``) para publicar alterações de tela.
+
+    Só o build: o backend serve os arquivos estáticos direto da pasta ``dist``
+    a cada request, sem cache, então não é preciso reiniciar o processo do
+    servidor — o que derrubaria quem estiver com o app aberto, operadores
+    incluídos (decisão do usuário, 16/09/2026).
+    """
+
+    npm = shutil.which("npm.cmd" if platform.system() == "Windows" else "npm")
+    if not npm:
+        raise AppError(
+            "npm_nao_encontrado",
+            "npm não foi encontrado no PATH do servidor.",
+            status_code=500,
+        )
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            [npm, "run", "build"],
+            cwd=WEB_DIR,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired:
+        raise AppError(
+            "build_timeout",
+            "O build do frontend não terminou em 3 minutos.",
+            status_code=504,
+        )
+    duration = round(time.monotonic() - started, 1)
+    output = ((result.stdout or "") + (result.stderr or ""))[-4000:]
+    if result.returncode != 0:
+        raise AppError(
+            "build_falhou",
+            "O build do frontend falhou.",
+            status_code=500,
+            details={"output": output},
+        )
+    return {"ok": True, "output": output, "duration_seconds": duration}
 
 
 @router.get("/health")

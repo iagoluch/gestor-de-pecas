@@ -1,6 +1,6 @@
 {
   "common_test": {
-    "dbname": "gestor_pecas_test_simulacao_residencia_20260824",
+    "dbname": "gestor_pecas_test",
     "host": "127.0.0.1",
     "port": "15432",
     "user": "gestor_app"
@@ -136,18 +136,18 @@
       "setup_is_productive": true,
       "simulation_only": true
     },
-    "schema_version": 15,
-    "users_copied": 12
+    "schema_version": 41,
+    "users_copied": 52
   },
   "expected_path": "C:\\Users\\iago.luchtenberg\\Documents\\Sistema - Iago\\Gestor de Peças - Area de Testes\\tests\\simulacao_historica_3_meses\\expected_results.json",
   "target": {
-    "dbname": "gestor_pecas_test_homolog_simulacao_3_meses_20260824",
+    "dbname": "gestor_pecas_test_homolog_simulacao_3_meses_20260917",
     "host": "127.0.0.1",
     "port": "15432",
     "user": "gestor_app"
   },
   "user_source_test": {
-    "dbname": "gestor_pecas_test_simulacao_residencia_20260824",
+    "dbname": "gestor_pecas_test",
     "host": "127.0.0.1",
     "port": "15432",
     "user": "gestor_app"

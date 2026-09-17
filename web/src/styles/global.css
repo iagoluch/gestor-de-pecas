@@ -928,6 +928,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .operator-dialog__actions .operator-danger, .operator-danger { border-color: var(--danger); color: white; background: var(--danger); }
 .operator-quantity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .operator-help { margin: 0; padding: 10px 12px; border-radius: 6px; color: var(--text); background: var(--warning-soft); font-size: 12px; }
+.system-build-log { margin: 12px 0 0; padding: 12px; max-height: 320px; overflow: auto; border-radius: 6px; background: var(--surface-alt); color: var(--text); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
 .stop-reason-field { display: grid; gap: 7px; }
 .stop-reason-field > strong { font-size: 12px; }
 .stop-reason-selected { min-height: 44px; display: flex; align-items: center; padding: 8px 12px; border: 1px solid var(--danger); border-left: 7px solid var(--danger); border-radius: 7px; color: var(--danger-ink); background: var(--danger-soft); font-size: 14px; font-weight: 700; }

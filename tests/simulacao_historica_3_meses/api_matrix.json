@@ -6,217 +6,217 @@
     {
       "path": "/api/v1/system/health",
       "status": 200,
-      "milliseconds": 12.035,
+      "milliseconds": 17.566,
       "bytes": 76
     },
     {
       "path": "/api/v1/system/capabilities",
       "status": 200,
-      "milliseconds": 3.091,
-      "bytes": 1746
+      "milliseconds": 7.408,
+      "bytes": 2664
     },
     {
       "path": "/api/v1/management/overview",
       "status": 200,
-      "milliseconds": 4340.177,
-      "bytes": 609498
+      "milliseconds": 8219.035,
+      "bytes": 612490
     },
     {
       "path": "/api/v1/management/sectors",
       "status": 200,
-      "milliseconds": 4595.506,
-      "bytes": 2516
+      "milliseconds": 8049.489,
+      "bytes": 2977
     },
     {
       "path": "/api/v1/management/alerts",
       "status": 200,
-      "milliseconds": 2712.177,
-      "bytes": 17052
+      "milliseconds": 4054.922,
+      "bytes": 372
     },
     {
       "path": "/api/v1/operations/overview",
       "status": 200,
-      "milliseconds": 908.43,
-      "bytes": 21599
+      "milliseconds": 1931.473,
+      "bytes": 30108
     },
     {
       "path": "/api/v1/operations/resources",
       "status": 200,
-      "milliseconds": 850.933,
-      "bytes": 21504
+      "milliseconds": 2171.725,
+      "bytes": 18786
     },
     {
       "path": "/api/v1/operations/orders",
       "status": 200,
-      "milliseconds": 870.43,
-      "bytes": 17005
+      "milliseconds": 2846.096,
+      "bytes": 19579
     },
     {
       "path": "/api/v1/operations/time",
       "status": 200,
-      "milliseconds": 4694.858,
-      "bytes": 151333
+      "milliseconds": 11378.266,
+      "bytes": 151163
     },
     {
       "path": "/api/v1/orders",
       "status": 200,
-      "milliseconds": 1100.56,
-      "bytes": 18305
+      "milliseconds": 2017.46,
+      "bytes": 21798
     },
     {
       "path": "/api/v1/orders/production",
       "status": 200,
-      "milliseconds": 2560.366,
-      "bytes": 1274284
+      "milliseconds": 6616.158,
+      "bytes": 1284457
     },
     {
       "path": "/api/v1/orders/planned-vs-actual",
       "status": 200,
-      "milliseconds": 1123.678,
-      "bytes": 10821
+      "milliseconds": 2679.149,
+      "bytes": 11997
     },
     {
       "path": "/api/v1/analytics/oee",
       "status": 200,
-      "milliseconds": 4307.784,
-      "bytes": 31433
+      "milliseconds": 8548.936,
+      "bytes": 31929
     },
     {
       "path": "/api/v1/analytics/hours-utilization",
       "status": 200,
-      "milliseconds": 4238.691,
-      "bytes": 151341
+      "milliseconds": 8446.518,
+      "bytes": 151163
     },
     {
       "path": "/api/v1/analytics/downtimes",
       "status": 200,
-      "milliseconds": 946.002,
-      "bytes": 1514686
+      "milliseconds": 1181.007,
+      "bytes": 1521886
     },
     {
       "path": "/api/v1/analytics/setups",
       "status": 200,
-      "milliseconds": 805.586,
-      "bytes": 753607
+      "milliseconds": 926.5,
+      "bytes": 757207
     },
     {
       "path": "/api/v1/analytics/quality",
       "status": 200,
-      "milliseconds": 2438.222,
-      "bytes": 1271870
+      "milliseconds": 3512.384,
+      "bytes": 1282038
     },
     {
       "path": "/api/v1/analytics/standard-vs-actual",
       "status": 200,
-      "milliseconds": 1166.696,
-      "bytes": 820668
+      "milliseconds": 1406.698,
+      "bytes": 824288
     },
     {
       "path": "/api/v1/analytics/chronoanalysis",
       "status": 200,
-      "milliseconds": 1150.966,
+      "milliseconds": 1503.515,
       "bytes": 111609
     },
     {
       "path": "/api/v1/analytics/capacity",
       "status": 200,
-      "milliseconds": 2086.6,
-      "bytes": 11498
+      "milliseconds": 3112.191,
+      "bytes": 12896
     },
     {
       "path": "/api/v1/audit/appointments",
       "status": 200,
-      "milliseconds": 936.161,
-      "bytes": 18305
+      "milliseconds": 1127.441,
+      "bytes": 21798
     },
     {
       "path": "/api/v1/audit",
       "status": 200,
-      "milliseconds": 2629.365,
-      "bytes": 9211
+      "milliseconds": 3329.069,
+      "bytes": 14709
     },
     {
       "path": "/api/v1/audit/reliability",
       "status": 200,
-      "milliseconds": 2599.05,
-      "bytes": 488
+      "milliseconds": 3253.237,
+      "bytes": 487
     },
     {
       "path": "/api/v1/reports/gerencial",
       "status": 200,
-      "milliseconds": 4297.685,
-      "bytes": 609527
+      "milliseconds": 5834.047,
+      "bytes": 612522
     },
     {
       "path": "/api/v1/reports/producao",
       "status": 200,
-      "milliseconds": 2418.009,
-      "bytes": 1274302
+      "milliseconds": 3670.233,
+      "bytes": 1284475
     },
     {
       "path": "/api/v1/reports/perdas",
       "status": 200,
-      "milliseconds": 3337.147,
-      "bytes": 2786766
+      "milliseconds": 5135.084,
+      "bytes": 2804134
     },
     {
       "path": "/api/v1/reports/indicadores",
       "status": 200,
-      "milliseconds": 8877.197,
-      "bytes": 1450397
+      "milliseconds": 13038.543,
+      "bytes": 1463022
     },
     {
       "path": "/api/v1/reports/dados_analiticos",
       "status": 200,
-      "milliseconds": 4633.079,
-      "bytes": 1423208
+      "milliseconds": 6032.185,
+      "bytes": 1661972
     },
     {
       "path": "/api/v1/traceability/orders/SIM3M000001",
       "status": 200,
-      "milliseconds": 102.075,
-      "bytes": 34573
+      "milliseconds": 119.867,
+      "bytes": 37284
     },
     {
       "path": "/api/v1/traceability/nestings",
       "status": 200,
-      "milliseconds": 21.917,
-      "bytes": 12730
+      "milliseconds": 36.514,
+      "bytes": 12608
     }
   ],
   "all_routes_ok": true,
   "months": {
     "6": {
       "status": 200,
-      "good": 286792,
+      "good": 324072,
       "planned": 288480,
       "kpis": {
         "availability": 88.59262329305433,
         "performance": 92.9717485568818,
-        "ftt": 97.64661019257484,
-        "oee": 80.4277153076714
+        "ftt": 97.91168153143354,
+        "oee": 80.64604426078003
       }
     },
     "7": {
       "status": 200,
-      "good": 301542,
+      "good": 340842,
       "planned": 299700,
       "kpis": {
         "availability": 91.4732569414881,
         "performance": 95.85197940250433,
-        "ftt": 98.73544550824481,
-        "oee": 86.57017958756579
+        "ftt": 98.87961845525436,
+        "oee": 86.69658888110811
       }
     },
     "8": {
       "status": 200,
-      "good": 214973,
+      "good": 239133,
       "planned": 222120,
       "kpis": {
-        "availability": 92.57626251718209,
+        "availability": 92.49449655156263,
         "performance": 97.56452800930464,
-        "ftt": 99.27680464027266,
-        "oee": 89.66839199998785
+        "ftt": 99.34939488739047,
+        "oee": 89.6547011070206
       }
     }
   },
