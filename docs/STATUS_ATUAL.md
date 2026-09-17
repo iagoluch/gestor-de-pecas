@@ -420,6 +420,18 @@ há operador real no apontamento, a coluna é omitida em vez de exibir um
 placeholder como "Não encontrado". Eventos de Corte exibem o setor canônico
 `Corte` e também omitem operador quando a execução não o informa.
 
+### 2.13 Filtros gerenciais coerentes com cada fonte (17/09/2026)
+
+A barra de filtros passou a declarar os campos que cada consulta realmente
+aceita. Na rastreabilidade de nestings, somente período e recurso são enviados:
+os demais filtros antes faziam o serviço retornar lista vazia. O período rápido
+aplica imediatamente o rascunho atual, filtros avançados ativos ficam visíveis
+e a interface não oferece mais o filtro de turno, que não era consumido pelas
+fontes gerenciais. Validação dirigida: filtros de simulação **6/6** e build
+Web (`tsc -b` + Vite) concluídos. O teste gerencial amplo continua com duas
+falhas pré-existentes, fora desta alteração: contagem fixa de rotas e expectativa
+do rótulo legado `DOBRA1`.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

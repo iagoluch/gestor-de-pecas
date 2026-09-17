@@ -8,6 +8,7 @@ import { SearchInput } from "../../components/SearchInput";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
+import type { FilterField } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { PagedNestings, TraceabilityResponse } from "../../types/management";
@@ -127,15 +128,23 @@ export function TraceabilityTimelinePage() {
   );
 }
 
+/**
+ * A fonte de nestings é a do Corte: ela só recorta com segurança por período e
+ * máquina (`listar_tempos_nesting_corte`). Enviar setor/OP/operação/produto/
+ * operador não filtra — o serviço devolve lista vazia —, então a tela declara
+ * apenas os campos aplicáveis e monta a query com os mesmos campos.
+ */
+const NESTING_FILTER_FIELDS: FilterField[] = ["resource"];
+
 export function TraceabilityNestingPage() {
   const filters = useManagementFilters();
   const [search, setSearch] = useState("");
   const deferred = useDebouncedValue(search.trim(), 350);
-  const query = useApiQuery<PagedNestings>(`/api/v1/traceability/nestings?${filters.query}&page=1&page_size=200${deferred ? `&search=${encodeURIComponent(deferred)}` : ""}`);
+  const query = useApiQuery<PagedNestings>(`/api/v1/traceability/nestings?${filters.queryFor(NESTING_FILTER_FIELDS)}&page=1&page_size=200${deferred ? `&search=${encodeURIComponent(deferred)}` : ""}`);
   const title = "Rastreabilidade — Lote / Material / Nesting";
   const subtitle = "Cada nesting preserva tempo total e tempo dentro do período filtrado como grandezas distintas.";
-  if (query.loading && !query.data) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}><LoadingState /></PageFrame>;
-  if (query.error) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.loading && !query.data) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}><LoadingState /></PageFrame>;
+  if (query.error) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const nesting = (data?.items ?? []).reduce(
     (acc, row) => ({
@@ -145,7 +154,7 @@ export function TraceabilityNestingPage() {
     { previsto: 0, real: 0 },
   );
   return (
-    <PageFrame sectionId="traceability" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}>
+    <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Nestings no filtro" value={formatNumber(data?.count ?? 0)} />
         <MetricCard label="Tempo previsto" value={formatDuration(nesting.previsto)} accent="primary" />

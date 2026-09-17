@@ -93,12 +93,16 @@ button { cursor: pointer; }
 .page-heading h1 { margin: 0; font-size: 29px; line-height: 1.15; }
 .page-heading p { margin: 5px 0 0; color: var(--muted); font-size: 15px; }
 .page-heading > span { color: var(--muted); font-size: 12px; white-space: nowrap; }
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 10px; padding: 10px 12px; border: 1px solid var(--divider); border-radius: 9px; background: var(--surface-alt); }
-.filter-bar__presets { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
-.filter-bar__presets button { min-height: 28px; padding: 0 10px; color: var(--primary); background: var(--surface); }
-.filter-bar label { display: grid; gap: 4px; color: var(--muted); font-size: 10px; font-weight: 700; }
+/* Barra de filtros: uma linha de controles (presets, período, setor, ações) e,
+   quando aberta, uma segunda linha com os campos de texto livre. */
+.filter-bar { display: grid; gap: 10px; margin: 12px 0 10px; padding: 11px 13px; border: 1px solid var(--divider); border-radius: 9px; background: var(--surface-alt); }
+.filter-bar__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.filter-bar__presets { display: flex; flex-wrap: wrap; align-self: flex-end; gap: 6px; padding-right: 10px; margin-bottom: 1px; border-right: 1px solid var(--divider); }
+.filter-bar__presets button { min-height: 32px; padding: 0 11px; color: var(--primary); background: var(--surface); }
+.filter-bar__presets button:hover, .filter-bar__presets button:focus-visible { border-color: var(--primary); background: var(--primary-soft); outline: none; }
+.filter-bar label { display: grid; gap: 4px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
 .filter-bar input, .filter-bar select { width: 150px; min-height: 34px; padding: 5px 9px; border: 1px solid var(--border); border-radius: 5px; color: var(--text); background: var(--surface); outline: none; }
-.filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); }
+.filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .date-picker { position: relative; display: grid; gap: 4px; }
 .date-picker__label { color: var(--muted); font-size: 10px; font-weight: 700; }
 .filter-bar .date-picker__input { width: 150px; font-variant-numeric: tabular-nums; }
@@ -116,10 +120,15 @@ button { cursor: pointer; }
 .date-picker__day--today:not(.date-picker__day--selected) { color: var(--primary); font-weight: 700; }
 .date-picker__day--selected, .date-picker__day--selected:hover, .date-picker__day--selected:focus-visible { color: white; background: var(--primary); outline: none; }
 .date-picker__day--selected::after { position: absolute; right: 3px; bottom: 3px; width: 0; height: 0; border-bottom: 7px solid white; border-left: 7px solid transparent; content: ""; }
-.filter-bar__advanced { display: none; flex-wrap: wrap; align-items: end; gap: 8px; }
-.filter-bar--expanded .filter-bar__advanced { display: flex; }
+.filter-bar__advanced { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding-top: 10px; border-top: 1px solid var(--divider); animation: fadeIn .12s ease; }
+.filter-bar__actions { display: flex; align-items: flex-end; gap: 8px; margin-left: auto; }
 .filter-bar button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font-size: 12px; font-weight: 700; }
+.filter-bar button:hover, .filter-bar button:focus-visible { border-color: var(--primary); outline: none; }
+.filter-bar__toggle { display: inline-flex; align-items: center; gap: 7px; }
+.filter-bar__badge { min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 5px; border-radius: 9px; color: white; background: var(--primary); font-size: 10px; line-height: 1; }
 .filter-bar__apply { border-color: var(--primary) !important; color: white !important; background: var(--primary) !important; }
+/* "Aplicar" só chama atenção quando existe alteração ainda não aplicada. */
+.filter-bar__apply[data-pending] { box-shadow: 0 0 0 3px var(--primary-soft); }
 .metric-grid { display: grid; gap: 11px; }
 .metric-grid--five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .metric-grid--six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -465,8 +474,12 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
   .metric-grid--five, .metric-grid--four { grid-template-columns: 1fr; }
   .page-heading h1 { font-size: 24px; }
   .page-tab { min-width: 132px; font-size: 12px; }
-  .filter-bar { flex-wrap: nowrap; overflow-x: auto; }
-  .filter-bar label, .filter-bar button, .filter-bar__advanced, .date-picker { flex: 0 0 auto; }
+  .filter-bar label, .filter-bar select, .filter-bar input { width: 100%; }
+  .filter-bar__presets { width: 100%; padding-right: 0; border-right: 0; }
+  .filter-bar__presets button { flex: 1 1 auto; }
+  .filter-bar__actions { width: 100%; margin-left: 0; }
+  .filter-bar__actions button { flex: 1 1 auto; }
+  .filter-bar__advanced label, .date-picker { flex: 1 1 140px; }
   .login-page { border-left: 0; background: var(--bg); }
   .login-card { padding: 26px 20px; }
   .login-card__logo { max-width: 100%; }
@@ -1223,7 +1236,8 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 }
 
 /* Escopo diário nas consultas de situação atual, no lugar do período. */
-.filter-bar__scope { margin: 0; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.filter-bar__scope { display: flex; align-items: center; gap: 7px; min-height: 34px; margin: 0; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.filter-bar__scope::before { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); content: ""; }
 
 @media (max-width: 1680px), (max-height: 960px) {
   .operator-sidebar { padding: 14px; }

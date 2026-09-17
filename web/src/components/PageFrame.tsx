@@ -3,9 +3,10 @@ import { NavLink } from "react-router-dom";
 import { useOptionalAuth } from "../auth/AuthContext";
 import type { ManagementSectionId } from "../config/navigation";
 import { sectionById } from "../config/navigation";
+import type { FilterField } from "../filters/FilterContext";
 import { FilterBar } from "./FilterBar";
 
-export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true }: PropsWithChildren<{
+export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, filterFields }: PropsWithChildren<{
   sectionId: ManagementSectionId;
   title: string;
   subtitle: string;
@@ -13,6 +14,12 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
   filters?: boolean;
   /** Falso nas telas de situação atual, que consultam apenas o dia corrente. */
   period?: boolean;
+  /**
+   * Campos que a fonte da tela realmente recorta. Omitido, a barra mostra
+   * todos; telas com fonte restrita (ex.: nestings do Corte) declaram só os
+   * campos aplicáveis em vez de exibir um filtro sem efeito.
+   */
+  filterFields?: FilterField[];
 }>) {
   const section = sectionById(sectionId);
   const auth = useOptionalAuth();
@@ -34,7 +41,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
           </div>
           {actions}
         </header>
-        {filters ? <FilterBar period={period} /> : null}
+        {filters ? <FilterBar period={period} fields={filterFields} /> : null}
         {children}
       </section>
     </div>

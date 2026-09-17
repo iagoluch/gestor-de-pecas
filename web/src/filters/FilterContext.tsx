@@ -3,12 +3,33 @@ import type { PropsWithChildren } from "react";
 import { LoadingState } from "../components/DataState";
 import { localDate, referenceNow, useReferenceClock } from "../system/ReferenceClock";
 
+/**
+ * Campos de recorte oferecidos pela barra de filtros. Nem toda tela aceita
+ * todos: a fonte do Corte (nestings), por exemplo, só recorta com segurança
+ * por período e recurso. Quem monta a página declara os campos aplicáveis e a
+ * mesma lista serve para desenhar a barra e para montar a query.
+ */
+export type FilterField = "sector" | "resource" | "op" | "operation" | "product" | "operator";
+
+export const ALL_FILTER_FIELDS: FilterField[] = [
+  "sector", "resource", "op", "operation", "product", "operator",
+];
+
+/** Nome do parâmetro aceito pela API para cada campo. */
+const FIELD_PARAM: Record<FilterField, string> = {
+  sector: "setor",
+  resource: "recurso",
+  op: "op",
+  operation: "operacao",
+  product: "produto",
+  operator: "operador",
+};
+
 export interface ManagementFilters {
   startDate: string;
   endDate: string;
   sector: string;
   resource: string;
-  shift: string;
   op: string;
   operation: string;
   product: string;
@@ -24,6 +45,8 @@ interface FilterValue {
    * Telas de situação atual não usam período: elas consultam o valor diário.
    */
   dailyQuery: string;
+  /** Query restrita aos campos que a fonte da tela realmente recorta. */
+  queryFor: (fields: FilterField[]) => string;
   reset: () => void;
 }
 
@@ -38,7 +61,6 @@ export function defaultFilters(reference: Date | null): ManagementFilters {
     endDate: today,
     sector: "",
     resource: "",
-    shift: "",
     op: "",
     operation: "",
     product: "",
@@ -46,21 +68,13 @@ export function defaultFilters(reference: Date | null): ManagementFilters {
   };
 }
 
-function toQuery(filters: ManagementFilters) {
+function toQuery(filters: ManagementFilters, fields: FilterField[] = ALL_FILTER_FIELDS) {
   const query = new URLSearchParams();
   query.set("inicio", `${filters.startDate}T00:00:00`);
   query.set("fim", `${filters.endDate}T23:59:59`);
-  const values = {
-    setor: filters.sector,
-    recurso: filters.resource,
-    turno: filters.shift,
-    op: filters.op,
-    operacao: filters.operation,
-    produto: filters.product,
-    operador: filters.operator,
-  };
-  Object.entries(values).forEach(([key, value]) => {
-    if (value.trim()) query.set(key, value.trim());
+  fields.forEach((field) => {
+    const value = filters[field].trim();
+    if (value) query.set(FIELD_PARAM[field], value);
   });
   return query.toString();
 }
@@ -84,6 +98,7 @@ function ResolvedFilterProvider({ reference, children }: PropsWithChildren<{ ref
       setFilters,
       query: toQuery(filters),
       dailyQuery: toQuery({ ...filters, startDate: today, endDate: today }),
+      queryFor: (fields: FilterField[]) => toQuery(filters, fields),
       reset: () => setFilters(defaultFilters(reference)),
     };
   }, [filters, reference]);
