@@ -4716,6 +4716,39 @@ class Database(
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def obter_mensagem_telegram_corte(self, chat_id, codigo_tarefa, maquina):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT chat_id, codigo_tarefa, maquina, programa, message_id, atualizado_em
+                FROM telegram_corte_mensagens
+                WHERE chat_id = %s AND codigo_tarefa = %s AND maquina = %s
+                """,
+                (str(chat_id), str(codigo_tarefa), str(maquina)),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def registrar_mensagem_telegram_corte(
+        self, chat_id, codigo_tarefa, maquina, programa, message_id
+    ):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO telegram_corte_mensagens
+                    (chat_id, codigo_tarefa, maquina, programa, message_id)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (chat_id, codigo_tarefa, maquina) DO UPDATE
+                SET programa = EXCLUDED.programa,
+                    message_id = EXCLUDED.message_id,
+                    atualizado_em = CURRENT_TIMESTAMP
+                """,
+                (
+                    str(chat_id), str(codigo_tarefa), str(maquina), str(programa),
+                    int(message_id),
+                ),
+            )
+
     def listar_historico_operador(
         self,
         tipo_setor,

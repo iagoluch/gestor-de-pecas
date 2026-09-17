@@ -395,6 +395,23 @@ backend 8001 foi reiniciado: `health=ok`, schema 40, banco efetivo
 `gestor_pecas_test`, polling e digest ativos, destino global Fábrica e quatro
 destinos setoriais carregados, sem erro no log de startup.
 
+### 2.11 Atualização de planos de Corte no Telegram (17/09/2026)
+
+O apontamento canônico de Corte passou a publicar no destino setorial de Corte
+uma mensagem compacta com `Tarefa`, `Plano` e, quando há repetição do mesmo
+plano, `Nesting`. O primeiro apontamento usa `sendMessage`; os apontamentos
+seguintes editam a mesma mensagem com `editMessageText`, mantendo correlação
+idempotente por chat, tarefa e recurso. Se a edição não for possível, o fluxo
+envia uma nova mensagem e atualiza a correlação. A falha do Telegram é isolada
+do apontamento industrial já persistido.
+
+Foi acrescentada a migration 41 (`telegram_corte_mensagens`) e o transporte
+passou a expor o `message_id` confirmado pelo ACK do Telegram. A apresentação
+escapa HTML e mantém o rodapé de evento sem segundos. Testes dirigidos do
+notificador e da interface Telegram passaram. A migration foi aplicada no
+TESTE (`gestor_pecas_test`, schema 41) e o backend 8001 foi reiniciado com
+health `ok`, mantendo polling/digest e os destinos setoriais configurados.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

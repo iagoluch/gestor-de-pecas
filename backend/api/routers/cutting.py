@@ -1,5 +1,7 @@
 """Fila e comandos de Corte, adaptando diretamente o serviço canônico."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, Request
 
 from backend.api.database import get_database
@@ -14,9 +16,11 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.operator import CuttingActionRequest
 from mes.services.cut import CutService
+from mes.services.telegram_cut import build_cut_plan_notifier
 
 
 router = APIRouter(prefix="/cutting", tags=["Corte"])
+LOGGER = logging.getLogger(__name__)
 
 
 def _service(database, user, request=None):
@@ -210,16 +214,35 @@ def action(
         if not payload.plan_hash:
             raise AppError("cutting_plan_required", "Selecione um plano para iniciar.")
         result = service.iniciar(payload.plan_hash, resource)
+        telegram_event = "corte_iniciado"
     elif payload.action == "Parada":
         if not payload.stop_reason_code:
             raise AppError("cutting_stop_reason_required", "Selecione o motivo da parada.")
         result = service.parar(resource, motivo_codigo=payload.stop_reason_code, comentario=payload.comment)
+        telegram_event = None
     elif payload.action == "Retomada":
         result = service.retomar(resource)
+        telegram_event = None
     else:
         if payload.appointment_id is None:
             raise AppError("cutting_appointment_required", "Não foi possível identificar o nesting em processo.")
         result = service.finalizar(payload.appointment_id)
+        telegram_event = (
+            "corte_finalizado"
+            if (result.data or {}).get("status") == "Finalizado"
+            else "corte_nesting_concluido"
+        )
     response = _result(result)
+    if telegram_event:
+        try:
+            notifier = build_cut_plan_notifier(
+                database, request.app.state.settings
+            )
+            if notifier is not None:
+                notifier.notify(result.data or {}, event=telegram_event)
+        except Exception:
+            # O fato industrial já foi persistido; indisponibilidade do canal
+            # nunca pode desfazer nem transformar o apontamento em erro.
+            LOGGER.exception("Falha ao atualizar o apontamento de Corte no Telegram.")
     request.app.state.realtime.publish("cutting_action")
     return response

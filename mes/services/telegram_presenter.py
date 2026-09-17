@@ -115,6 +115,54 @@ def _front_buttons(prefix: str) -> list[list[dict]]:
 
 
 class TelegramPresenter:
+    def cut_plan_event(
+        self, *, item: dict, event: str, now: datetime
+    ) -> str | None:
+        """Apresenta o apontamento físico do Corte sem inventar sua hierarquia."""
+
+        task = str(item.get("codigo_tarefa") or "").strip()
+        program = str(item.get("programa_atual") or item.get("programa") or "").strip()
+        machine = str(item.get("maquina") or "").strip()
+        if not task or not program or not machine:
+            return None
+
+        titles = {
+            "corte_iniciado": ("🟢", "Corte iniciado"),
+            "corte_nesting_concluido": ("🟢", "Próximo nesting iniciado"),
+            "corte_finalizado": ("✅", "Plano concluído"),
+        }
+        icon, title = titles.get(event, ("🔵", "Atualização do Corte"))
+        lines = [f"{icon} <b>{title}</b>", "", f"Tarefa: <b>{html(task)}</b>", f"Plano: <b>{html(program)}</b>"]
+
+        same_program = [
+            nesting for nesting in (item.get("nestings") or [])
+            if str(nesting.get("programa") or "").strip() == program
+        ]
+        if len(same_program) > 1:
+            current = next(
+                (nesting for nesting in same_program if nesting.get("status") == "Em processo"),
+                None,
+            )
+            if current is None:
+                current = max(
+                    same_program,
+                    key=lambda nesting: int(nesting.get("sequencia") or 0),
+                )
+            nesting_id = current.get("repeticao")
+            if nesting_id is None or not str(nesting_id).strip():
+                nesting_id = current.get("sequencia")
+            if nesting_id is not None and str(nesting_id).strip():
+                lines.append(f"Nesting: <b>{html(nesting_id)}</b>")
+
+        operator = item.get("operador_fim") or item.get("operador_inicio")
+        if operator or machine:
+            lines.extend([
+                "",
+                " • ".join(html(value) for value in (operator, machine) if value),
+            ])
+        lines.extend(["", _footer("Ocorrido às", now)])
+        return "\n".join(lines)
+
     def menu(self, *, name, linked: bool, summary: dict, good, now: datetime) -> TelegramView:
         lines = _header("🏠", "Menu principal")
         if name:

@@ -48,6 +48,7 @@ EXPECTED_TABLES = (
     "historico",
     "usuarios",
     "eventos_sistema",
+    "telegram_corte_mensagens",
     "schema_migrations",
     "apontamentos_operacionais",
     "catalogo_pcp_ops",
@@ -2121,6 +2122,25 @@ TELEGRAM_DISCOVERED_CHATS_STATEMENTS = (
 )
 
 
+TELEGRAM_CUT_MESSAGES_DESCRIPTION = (
+    "correlação idempotente da mensagem Telegram com a tarefa ativa do Corte"
+)
+
+TELEGRAM_CUT_MESSAGES_STATEMENTS = (
+    """
+    CREATE TABLE telegram_corte_mensagens (
+        chat_id TEXT NOT NULL,
+        codigo_tarefa TEXT NOT NULL,
+        maquina TEXT NOT NULL,
+        programa TEXT NOT NULL,
+        message_id BIGINT NOT NULL,
+        atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (chat_id, codigo_tarefa, maquina)
+    )
+    """,
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2164,6 +2184,7 @@ MIGRATIONS = {
     38: (OPERADOR_TELEGRAM_DESCRIPTION, OPERADOR_TELEGRAM_STATEMENTS),
     39: (TELEGRAM_DIGEST_DESCRIPTION, TELEGRAM_DIGEST_STATEMENTS),
     40: (TELEGRAM_DISCOVERED_CHATS_DESCRIPTION, TELEGRAM_DISCOVERED_CHATS_STATEMENTS),
+    41: (TELEGRAM_CUT_MESSAGES_DESCRIPTION, TELEGRAM_CUT_MESSAGES_STATEMENTS),
 }
 
 

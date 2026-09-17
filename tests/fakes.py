@@ -68,6 +68,7 @@ class FakeDatabase:
         self.report_schedules = []
         self.messaging_destinations = []
         self.report_deliveries = []
+        self.telegram_cut_messages = []
         self.quality_templates = []
         self.quality_dimensions = []
         self.quality_inspections = []
@@ -146,6 +147,41 @@ class FakeDatabase:
 
     def diagnostico_integridade(self):
         return {"ok": True, "schema_version": SCHEMA_VERSION, "tabelas": {}}
+
+    def obter_mensagem_telegram_corte(self, chat_id, codigo_tarefa, maquina):
+        row = next(
+            (
+                item for item in self.telegram_cut_messages
+                if item["chat_id"] == str(chat_id)
+                and item["codigo_tarefa"] == str(codigo_tarefa)
+                and item["maquina"] == str(maquina)
+            ),
+            None,
+        )
+        return dict(row) if row else None
+
+    def registrar_mensagem_telegram_corte(
+        self, chat_id, codigo_tarefa, maquina, programa, message_id
+    ):
+        current = self.obter_mensagem_telegram_corte(
+            chat_id, codigo_tarefa, maquina
+        )
+        if current:
+            row = next(
+                item for item in self.telegram_cut_messages
+                if item["chat_id"] == current["chat_id"]
+                and item["codigo_tarefa"] == current["codigo_tarefa"]
+                and item["maquina"] == current["maquina"]
+            )
+            row.update(programa=str(programa), message_id=int(message_id))
+            return
+        self.telegram_cut_messages.append({
+            "chat_id": str(chat_id),
+            "codigo_tarefa": str(codigo_tarefa),
+            "maquina": str(maquina),
+            "programa": str(programa),
+            "message_id": int(message_id),
+        })
 
     def criar_usuario(self, nome, senha, nivel="operador_destaque"):
         if self.usuario_existe(nome):

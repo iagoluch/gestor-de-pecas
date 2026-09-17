@@ -17,13 +17,13 @@ import httpx
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
 
-def _telegram_request(
+def _telegram_request_result(
     *,
     bot_token: str,
     method: str,
     payload: dict,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
-) -> bool:
+) -> object | None:
     """Executa um método da Bot API e só aceita o ACK JSON ``ok=true``."""
 
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
@@ -33,26 +33,38 @@ def _telegram_request(
             # Atualizar sem mudança visível já atingiu o estado desejado; não
             # envie uma segunda mensagem e não polua o chat nesse caso.
             if method == "editMessageText" and "message is not modified" in response.text.casefold():
-                return True
+                return {}
             logging.warning(
                 "%s do Telegram recusado (HTTP %s): %s",
                 method,
                 response.status_code,
                 response.text[:300],
             )
-            return False
+            return None
         try:
             data = response.json()
         except ValueError:
             logging.warning("%s do Telegram sem ACK JSON válido.", method)
-            return False
+            return None
         if data.get("ok") is not True:
             logging.warning("%s do Telegram sem ACK da Bot API: %s", method, str(data)[:300])
-            return False
-        return True
+            return None
+        return data.get("result", True)
     except httpx.HTTPError:
         logging.exception("Falha no método %s do Telegram.", method)
-        return False
+        return None
+
+
+def _telegram_request(
+    *,
+    bot_token: str,
+    method: str,
+    payload: dict,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    return _telegram_request_result(
+        bot_token=bot_token, method=method, payload=payload, timeout=timeout
+    ) is not None
 
 
 def send_telegram_message(
@@ -79,6 +91,30 @@ def send_telegram_message(
     return _telegram_request(
         bot_token=bot_token, method="sendMessage", payload=payload, timeout=timeout
     )
+
+
+def send_telegram_message_with_id(
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    parse_mode: str | None = None,
+    reply_markup: dict | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> int | None:
+    """Envia e devolve o ``message_id`` confirmado pela Bot API."""
+
+    payload = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    result = _telegram_request_result(
+        bot_token=bot_token, method="sendMessage", payload=payload, timeout=timeout
+    )
+    if not isinstance(result, dict) or result.get("message_id") is None:
+        return None
+    return int(result["message_id"])
 
 
 def edit_telegram_message(
@@ -238,4 +274,5 @@ __all__ = [
     "edit_telegram_message",
     "fetch_telegram_updates",
     "send_telegram_message",
+    "send_telegram_message_with_id",
 ]
