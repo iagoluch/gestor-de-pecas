@@ -64,7 +64,7 @@ export function ManagementChamadasPage() {
 
   const contatos = useMemo(() => contatosQuery.data?.items ?? [], [contatosQuery.data]);
   const historico = historicoQuery.data?.items ?? [];
-  const title = "IagoDev — Chamadas";
+  const title = "Chamadas";
   const subtitle = isAdmin
     ? "Contatos de quem pode ser chamado e o histórico de chamadas."
     : "Histórico de chamadas do operador e da gestão.";
