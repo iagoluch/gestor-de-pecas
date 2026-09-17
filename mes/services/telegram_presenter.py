@@ -63,7 +63,34 @@ def keyboard(*rows: list[dict]) -> dict:
 
 
 def _header(icon: str, title: str) -> list[str]:
-    return ["🏭 <b>GESTOR DE PEÇAS</b>", f"{icon} <b>{html(title)}</b>", ""]
+    return [f"{icon} <b>{html(title)}</b>", ""]
+
+
+def _op_lines(item: dict, *, operator: str | None = None) -> list[str]:
+    """Render the common OP context without inventing absent fields."""
+    op = item.get("op") or item.get("production_order") or item.get("production_order_number")
+    if not op:
+        return []
+    lines = [f"🧾 OP: <b>{html(op)}</b>"]
+    fields = (
+        ("Peça", item.get("peca") or item.get("produto_codigo") or item.get("product") or item.get("item_code")),
+        ("Descrição", item.get("descricao") or item.get("produto_descricao") or item.get("product_description") or item.get("item_description")),
+        ("Etapa roteiro", item.get("etapa_roteiro") or item.get("descricao_operacao") or item.get("operation_description") or item.get("operation") or item.get("terminal_operation")),
+        ("Quantidade", item.get("quantidade") or item.get("quantity") or item.get("planned_quantity") or item.get("good_quantity")),
+    )
+    for label, value in fields:
+        if value is not None and str(value).strip():
+            lines.append(f"{label}: {html(value)}")
+    operator_value = operator or item.get("operador") or item.get("operator")
+    resource = item.get("recurso") or item.get("resource") or item.get("resource_code")
+    if operator_value or resource:
+        parts = []
+        if operator_value:
+            parts.append(html(operator_value))
+        if resource:
+            parts.append(html(resource))
+        lines.extend(["", " • ".join(parts)])
+    return lines
 
 
 def _footer(label: str, now: datetime) -> str:
@@ -228,10 +255,9 @@ class TelegramPresenter:
         else:
             lines.append("")
             for item in participations:
-                lines.append(f"🧾 OP: <b>{html(item.get('op') or 'Não informada')}</b>")
+                lines.extend(_op_lines(item, operator=operator.get("nome")))
                 if item.get("numero_operacao") is not None:
                     lines.append(f"Operação: <b>{html(item.get('numero_operacao'))}</b>")
-                lines.append(f"⚙️ Recurso: <b>{html(item.get('recurso') or 'Não informado')}</b>")
                 started_at = item.get("data_inicio")
                 if started_at:
                     lines.append(f"⏱️ Em andamento há <b>{format_duration((now - started_at).total_seconds())}</b>")
@@ -275,13 +301,11 @@ class TelegramPresenter:
         now = item.get("last_attempt_at") or item.get("updated_at") or datetime.now()
         if not isinstance(now, datetime):
             now = datetime.now()
-        op = html(item.get("production_order") or "Não informada")
-        resource = html(
-            item.get("resource")
-            or item.get("resource_code")
-            or context.get("resource_code")
-            or "Não informado"
-        )
+        op_context = {
+            **context,
+            "production_order": item.get("production_order"),
+            "resource": item.get("resource") or item.get("resource_code") or context.get("resource_code"),
+        }
         reason = html(
             str(item.get("error_message") or item.get("last_error_message") or "").strip()
             or "Retorno não informado."
@@ -289,7 +313,7 @@ class TelegramPresenter:
         if functional:
             lines = _header("⚠️", "Apontamento rejeitado pelo TOTVS")
             lines.extend([
-                f"🧾 OP: <b>{op}</b>", f"⚙️ Recurso: <b>{resource}</b>", "",
+                *_op_lines(op_context), "",
                 "🔴 <b>Rejeição funcional</b>", "",
                 "O TOTVS recebeu a solicitação, mas não aceitou o apontamento.", "",
                 "<b>Retorno</b>", reason, "", _footer("Ocorrido às", now),
@@ -297,7 +321,7 @@ class TelegramPresenter:
         else:
             lines = _header("🔴", "TOTVS indisponível")
             lines.extend([
-                f"🧾 OP: <b>{op}</b>", f"⚙️ Recurso: <b>{resource}</b>", "",
+                *_op_lines(op_context), "",
                 "🔗 Não foi possível concluir a comunicação com o Protheus.",
                 "🟡 As tentativas automáticas se esgotaram; o evento permanece registrado para tratamento.",
                 "", _footer("Última tentativa às", now),

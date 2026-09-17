@@ -21,6 +21,7 @@ from mes.services.telegram_digest import (
     build_digest_text,
     closed_report_period,
 )
+from mes.services.telegram_presenter import TelegramPresenter
 
 
 class FormattingTests(unittest.TestCase):
@@ -34,6 +35,29 @@ class FormattingTests(unittest.TestCase):
         self.assertEqual(_formatar_percentual({"value": 96.5}), "96,5%")
         self.assertEqual(_formatar_percentual({"value": None}), "sem dado")
         self.assertEqual(_formatar_percentual(None), "sem dado")
+
+    def test_presenter_op_tem_contexto_completo_escapado_e_sem_cabecalho_repetido(self):
+        view = TelegramPresenter().my_status(
+            operator={"nome": "Operador <teste>", "cracha": "42"},
+            participations=[{
+                "op": "TESTE-01",
+                "peca": "PEÇA-01",
+                "descricao": "Descrição <teste>",
+                "etapa_roteiro": "JATO & CORTE",
+                "quantidade": 20,
+                "recurso": "Recurso & 01",
+            }],
+            now=datetime(2026, 9, 17, 8, 4),
+        )
+
+        self.assertNotIn("GESTOR DE PEÇAS", view.text)
+        self.assertIn("👤", view.text)
+        self.assertIn("🧾 OP: <b>TESTE-01</b>", view.text)
+        self.assertIn("Peça: PEÇA-01", view.text)
+        self.assertIn("Descrição: Descrição &lt;teste&gt;", view.text)
+        self.assertIn("Etapa roteiro: JATO &amp; CORTE", view.text)
+        self.assertIn("Quantidade: 20", view.text)
+        self.assertIn("Operador &lt;teste&gt; • Recurso &amp; 01", view.text)
 
 
 class _FakeDb:
