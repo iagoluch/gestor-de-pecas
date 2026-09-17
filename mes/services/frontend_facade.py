@@ -780,6 +780,29 @@ class FrontendBackendFacade:
             },
         }
 
+    def _perdas_canonicas(self, filters: AnalyticsFilter):
+        """Reexpõe a decomposição de perdas já calculada pela visão gerencial.
+
+        Nenhum valor é somado ou derivado aqui: parada planejada, parada não
+        planejada, setup e retrabalho vêm do mesmo consolidado físico usado pelo
+        OEE oficial, junto da decomposição de perdas do indicador.
+        """
+
+        overview = self.management.get_overview(filters)
+        hours = overview.get("hours") or {}
+        return {
+            "downtime_seconds": hours.get("downtime_seconds"),
+            "planned_downtime_seconds": hours.get("planned_downtime_seconds"),
+            "unplanned_downtime_seconds": hours.get("unplanned_downtime_seconds"),
+            "setup_seconds": hours.get("setup_seconds"),
+            "rework_seconds": hours.get("rework_seconds"),
+            "activity_without_op_seconds": hours.get("activity_without_op_seconds"),
+            "out_of_shift_seconds": hours.get("out_of_shift_seconds"),
+            "queue_seconds": hours.get("queue_seconds"),
+            "oee_losses": overview.get("kpi_losses_breakdown") or {},
+            "source": "ManagementService.get_overview",
+        }
+
     def relatorio(self, report_type: str, filters: AnalyticsFilter):
         """Compõe relatórios a partir dos mesmos casos de uso gerenciais."""
 
@@ -787,15 +810,28 @@ class FrontendBackendFacade:
         if key == "gerencial":
             return {"type": key, "overview": self.inicio(filters)}
         if key == "producao":
-            return {"type": key, **self.producao_realizada(filters)}
+            return {
+                "type": key,
+                **self.producao_realizada(filters),
+                # As OPs do período completam o relatório operacional sem que a
+                # apresentação precise reagrupar apontamento por conta própria.
+                "orders": self.ordens_producao(filters),
+            }
         if key == "perdas":
             return {
                 "type": key,
                 "periodo": filters.to_dict(),
                 "paradas": self.analise("paradas", filters),
+                "setup": self.analise("setup", filters),
                 "qualidade": self.analise("qualidade", filters),
+                "tempos": self.analise("tempos", filters),
+                "losses": self._perdas_canonicas(filters),
             }
         if key == "indicadores":
+            # O OEE vem primeiro de propósito: ele abre a janela de prefetch que
+            # calcula o overview canônico uma única vez para todo o relatório.
+            oee = self.analise("oee", filters)
+            overview = self.management.get_overview(filters)
             return {
                 "type": key,
                 "periodo": filters.to_dict(),
@@ -804,7 +840,15 @@ class FrontendBackendFacade:
                     "qualidade": self.analise("qualidade", filters),
                     "capacidade": self.analise("capacidade", filters),
                     "confiabilidade": self.analise("confiabilidade", filters),
-                    "oee": self.analise("oee", filters),
+                    "oee": oee,
+                    # Disponibilidade, performance, FTT e os indicadores por
+                    # recurso já existem no cálculo canônico; expô-los aqui
+                    # evita que qualquer consumidor tente derivá-los.
+                    "kpis": overview.get("kpis") or {},
+                    "kpis_estendidos": overview.get("kpis_estendidos") or {},
+                    "kpi_time_bases": overview.get("kpi_time_bases") or {},
+                    "kpi_contract": overview.get("kpi_contract") or {},
+                    "recursos": overview.get("resource_kpis") or [],
                 },
             }
         if key == "dados_analiticos":

@@ -33,7 +33,15 @@ class CanonicalReportFacade:
                 "ftt": metric(98.4),
             },
             "production": {"good": 120, "scrap": 3, "rework": 2, "ops": 4},
-            "sectors": [{"setor": "Usinagem", "good": 120, "oee": 82.4}],
+            # Mesmas chaves do contrato canônico de ManagementService.get_overview.
+            "sectors": [{
+                "setor": "Usinagem",
+                "producao_boa": 120,
+                "refugo": 3,
+                "retrabalho": 2,
+                "ops": 4,
+                "tempo_produtivo_segundos": 3600.0,
+            }],
             "insights": {"exceptions": [{"title": "Parada registrada"}]},
         }
 
@@ -119,13 +127,17 @@ class IndustrialReportTests(unittest.TestCase):
         self.assertTrue(path.is_file())
         workbook = load_workbook(path, data_only=False)
         try:
+            # Abas em português, painel executivo primeiro e auditoria oculta no fim.
             self.assertEqual(workbook.sheetnames, [
-                "Resumo Executivo", "OEE", "Produção", "OPs", "Paradas", "Setup",
+                "Visão Geral", "Indicadores", "Produção", "OPs", "Paradas", "Setup",
                 "Qualidade", "Recursos", "Setores", "Nestings", "Exceções", "Auditoria",
+                "Dados Técnicos",
             ])
-            self.assertAlmostEqual(workbook["Resumo Executivo"]["A7"].value, 0.824)
-            self.assertEqual(workbook["Resumo Executivo"]["A7"].number_format, "0.0%")
-            self.assertEqual(workbook["Paradas"].freeze_panes, "A5")
+            self.assertEqual(workbook["Dados Técnicos"].sheet_state, "hidden")
+            oee = workbook["Visão Geral"]["A15"]
+            self.assertAlmostEqual(oee.value, 0.824)
+            self.assertEqual(oee.number_format, "[<0.001]0.000%;0.0%")
+            self.assertEqual(workbook["Paradas"].freeze_panes, "A10")
             values = [cell.value for row in workbook["Paradas"].iter_rows() for cell in row]
             self.assertIn("'=2+2", values)
             formulas = [
@@ -179,8 +191,9 @@ class IndustrialReportTests(unittest.TestCase):
         workbook = load_workbook(path, read_only=True)
         try:
             # A seção ainda possui availability e, portanto, é útil; não existe
-            # uma tabela vazia ou planilha padrão sem título.
-            self.assertEqual(workbook.sheetnames, ["Resumo Executivo", "Nestings"])
+            # uma tabela vazia ou planilha padrão sem título. A aba técnica
+            # preserva a rastreabilidade sem aparecer para o gestor.
+            self.assertEqual(workbook.sheetnames, ["Visão Geral", "Nestings", "Dados Técnicos"])
             self.assertNotIn("Sheet", workbook.sheetnames)
         finally:
             workbook.close()

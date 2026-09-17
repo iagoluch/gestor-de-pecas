@@ -31,7 +31,7 @@ const sheetInspection = await workbook.inspect({
   maxChars: 8000,
 });
 const expectedSheets = [
-  "Resumo Executivo", "OEE", "Produção", "OPs", "Paradas", "Setup",
+  "Visão Geral", "Indicadores", "Produção", "OPs", "Paradas", "Setup",
   "Qualidade", "Recursos", "Setores", "Nestings", "Exceções", "Auditoria",
 ];
 const previews = [];
