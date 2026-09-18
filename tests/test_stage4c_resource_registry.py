@@ -366,6 +366,16 @@ class CadastroRealTests(unittest.TestCase):
                 """
             )
         ]
+        if not cls.catalogo:
+            # Esta matriz audita o cadastro REAL sincronizado do TOTVS/
+            # SigmaNEST no banco TESTE compartilhado — dado que só existe lá,
+            # nunca em um banco novo criado por migration (ex.: o container
+            # descartável do CI). Sem cadastro, não há o que auditar.
+            cls.db.close()
+            raise unittest.SkipTest(
+                "catalogo_recursos_pcfactory vazio: requer o banco TESTE real "
+                "com sincronização TOTVS/SigmaNEST, não um banco novo/vazio."
+            )
 
     @classmethod
     def tearDownClass(cls):

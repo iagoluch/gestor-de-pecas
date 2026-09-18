@@ -12,6 +12,7 @@ Duas camadas de prova:
 
 import os
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -856,6 +857,11 @@ class QualityPostgresTests(unittest.TestCase):
                 sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(self.schema))
             )
         self.admin_dsn = base.dsn
+        # Relógio compartilhado por todo o teste: a outbox ligada abaixo ativa
+        # a duração mínima de 60s entre Início e Finalizado (A680HORA), e
+        # avançamos este relógio manualmente para não depender de tempo de
+        # parede real.
+        self.clock = {"now": datetime(2026, 1, 1, 8, 0, 0)}
         # A outbox é ligada explicitamente no schema descartável: é assim que a
         # obrigação outbound fica observável sem depender do .env do workspace.
         self.db = Database(
@@ -891,7 +897,9 @@ class QualityPostgresTests(unittest.TestCase):
                 )
                 """
             )
-        self.service = QualityInspectionService(self.db, "INSPETOR")
+        self.service = QualityInspectionService(
+            self.db, "INSPETOR", now_func=lambda: self.clock["now"]
+        )
 
     def tearDown(self):
         self.db.close()
@@ -906,7 +914,11 @@ class QualityPostgresTests(unittest.TestCase):
             return [dict(row) for row in cursor.fetchall()]
 
     def _concluir_roteiro(self):
-        flow = OperatorFlowService(self.db, "OPERADOR")
+        # A outbox nasce ligada neste schema (ver setUp), o que ativa a
+        # duração mínima de 60s entre Início e Finalizado (A680HORA). O
+        # relógio compartilhado da classe avança o suficiente entre as duas
+        # chamadas para não depender de tempo de parede real no teste.
+        flow = OperatorFlowService(self.db, "OPERADOR", now_func=lambda: self.clock["now"])
         for setor, recurso in (("Corte", "Plasma TerraBlade 4"), ("Usinagem", "Romi D 1000")):
             operacao = next(
                 row for row in self.db.listar_operacoes_para_op(self.OP)
@@ -921,6 +933,7 @@ class QualityPostgresTests(unittest.TestCase):
                 operacao=operacao,
             )
             flow.executar("Início", op=self.OP, setor=setor, recurso=recurso, operacao=operacao)
+            self.clock["now"] += timedelta(seconds=90)
             resultado = flow.executar(
                 "Finalizado",
                 op=self.OP,
@@ -950,6 +963,7 @@ class QualityPostgresTests(unittest.TestCase):
 
         self._concluir_roteiro()
         abertura = self.service.abrir_inspecao(self.OP, "Usinagem")
+        self.clock["now"] += timedelta(seconds=90)
         self.assertTrue(abertura.ok, abertura.message)
 
         # A inspeção usa o MESMO apontamento canônico do operador.
@@ -974,6 +988,7 @@ class QualityPostgresTests(unittest.TestCase):
     def test_cotas_e_rnc_nao_geram_outbound_e_a_conclusao_usa_o_fluxo_canonico(self):
         self._concluir_roteiro()
         abertura = self.service.abrir_inspecao(self.OP, "Usinagem")
+        self.clock["now"] += timedelta(seconds=90)
         inspecao_id = abertura.data["id"]
         self.service.definir_template(
             abertura.data["produto"], _cotas("125,0 ± 0,5")
@@ -1062,12 +1077,15 @@ class QualityPostgresTests(unittest.TestCase):
         anterior = self.db.buscar_operacao_produtiva_anterior(
             self.OP, ordem_inspecao
         )
-        fluxo = OperatorFlowService(self.db, "OPERADOR USINAGEM")
+        fluxo = OperatorFlowService(
+            self.db, "OPERADOR USINAGEM", now_func=lambda: self.clock["now"]
+        )
         iniciado = fluxo.executar(
             "Retrabalho", op=self.OP, setor="Usinagem", recurso="Romi D 1000",
             operacao=anterior,
         )
         self.assertTrue(iniciado.ok, iniciado.message)
+        self.clock["now"] += timedelta(seconds=90)
         concluido = fluxo.executar(
             "Finalizado", op=self.OP, setor="Usinagem", recurso="Romi D 1000",
             operacao=anterior, pecas_boas=1, operadores_cracha=["77"],
@@ -1078,6 +1096,7 @@ class QualityPostgresTests(unittest.TestCase):
         # mesmo apontamento canônico da operação INSPECAO.
         reaberta = self.service.abrir_inspecao(self.OP, "Usinagem")
         self.assertTrue(reaberta.ok, reaberta.message)
+        self.clock["now"] += timedelta(seconds=90)
         final = self.service.registrar_peca(
             reaberta.data["id"],
             numero_peca=1,
@@ -1115,6 +1134,7 @@ class QualityPostgresTests(unittest.TestCase):
 
         self._concluir_roteiro()
         abertura = self.service.abrir_inspecao(self.OP, "Usinagem")
+        self.clock["now"] += timedelta(seconds=90)
         inspecao_id = abertura.data["id"]
         self.service.definir_template(abertura.data["produto"], _cotas("125,0 ± 0,5"))
         total = self.db.buscar_inspecao_qualidade(inspecao_id)["quantidade_total"]
@@ -1185,6 +1205,7 @@ class QualityPostgresTests(unittest.TestCase):
     def test_banco_recusa_unidade_duplicada_e_aprovacao_nao_conforme(self):
         self._concluir_roteiro()
         abertura = self.service.abrir_inspecao(self.OP, "Usinagem")
+        self.clock["now"] += timedelta(seconds=90)
         inspecao_id = abertura.data["id"]
         self.service.definir_template(abertura.data["produto"], _cotas("125,0 ± 0,5"))
         self.service.registrar_peca(

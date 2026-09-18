@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17
         env:
           POSTGRES_DB: gestor_pecas_test
           POSTGRES_USER: gestor
