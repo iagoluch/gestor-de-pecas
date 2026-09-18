@@ -1,0 +1,73 @@
+name: Deploy
+
+# Dispara só por tag de release (ex.: `git tag v1.2.0 && git push --tags`),
+# nunca em push comum na master — decisão do usuário, para não implantar em
+# produção algo que ainda está em teste.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+  deploy:
+    needs: build-frontend
+    # Roda no runner self-hosted instalado NA PRÓPRIA VM: ela fica atrás de
+    # firewall, sem IP público, só com SSH administrativo interno (ver
+    # requisitos de infraestrutura). Um runner self-hosted puxa o job de
+    # dentro para fora, sem precisar abrir porta de entrada nenhuma.
+    #
+    # Pré-requisito (ainda pendente — VM não provisionada): instalar o
+    # runner na VM com a label "gestor-pecas-vm"
+    # (Settings > Actions > Runners > New self-hosted runner no repositório).
+    runs-on: [self-hosted, gestor-pecas-vm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      # Sincroniza o código para o diretório de execução, preservando o
+      # .venv e o .env existentes (nunca sobrescritos pelo deploy).
+      - name: Sincronizar código para /opt/gestor-pecas
+        run: |
+          sudo rsync -a --delete \
+            --exclude ".venv" \
+            --exclude ".git" \
+            --exclude "node_modules" \
+            --exclude "web/node_modules" \
+            ./ /opt/gestor-pecas/
+
+      - name: Instalar dependências Python
+        run: /opt/gestor-pecas/.venv/bin/pip install -r /opt/gestor-pecas/requirements.txt
+
+      # Migrations aplicam automaticamente na inicialização do processo
+      # (auto_migrate em app/database/database.py) — não há passo manual
+      # aqui, só reiniciar o serviço.
+      - name: Reiniciar o serviço
+        run: sudo systemctl restart gestor-pecas.service
+
+      - name: Validar saúde após o restart
+        run: |
+          sleep 3
+          curl -fsS http://127.0.0.1:8000/api/v1/system/health
