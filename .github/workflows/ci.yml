@@ -11,18 +11,18 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: gestor_pecas_ci
+          POSTGRES_DB: gestor_pecas_test
           POSTGRES_USER: gestor
           POSTGRES_PASSWORD: gestor
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U gestor -d gestor_pecas_ci"
+          --health-cmd "pg_isready -U gestor -d gestor_pecas_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 12
     env:
-      TEST_DATABASE_URL: postgresql://gestor:gestor@localhost:5432/gestor_pecas_ci
+      TEST_DATABASE_URL: postgresql://gestor:gestor@localhost:5432/gestor_pecas_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

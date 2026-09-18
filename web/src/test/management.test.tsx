@@ -90,8 +90,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon e da Solda", () => {
-    expect(managementRoutes).toHaveLength(39);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(39);
+    expect(managementRoutes).toHaveLength(40);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(40);
     // Wave 6D: o acompanhamento gerencial da Solda entra como sub-aba dos
     // Painéis Operacionais, ao lado do Andon, sem aplicação nem navegação
     // paralela. Reorganização 15/09/2026: Andon/Solda/Metas/Pausas
@@ -385,12 +385,12 @@ describe("KPIs gerenciais da Wave 2", () => {
     render(<MemoryRouter><FilterProvider><OperationsOverviewPage /></FilterProvider></MemoryRouter>);
     const sectorSelect = await screen.findByRole("combobox", { name: "Selecionar setor" });
     expect(sectorSelect).toHaveValue("Dobra");
-    expect(screen.getByText("DOBRA1")).toBeInTheDocument();
-    expect(screen.queryByText("SOLDA1")).not.toBeInTheDocument();
+    expect(screen.getByText("Dobra1")).toBeInTheDocument();
+    expect(screen.queryByText("Solda1")).not.toBeInTheDocument();
 
     fireEvent.change(sectorSelect, { target: { value: "Solda" } });
-    expect(screen.getByText("SOLDA1")).toBeInTheDocument();
-    expect(screen.queryByText("DOBRA1")).not.toBeInTheDocument();
+    expect(screen.getByText("Solda1")).toBeInTheDocument();
+    expect(screen.queryByText("Dobra1")).not.toBeInTheDocument();
   });
 
   it("a Consulta Operacional mostra estado e parada, não a fonte do dado", async () => {

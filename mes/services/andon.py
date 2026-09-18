@@ -108,9 +108,12 @@ class AndonService:
         self.db = db
         self.simulation_mode = bool(simulation_mode)
 
-    def build_snapshot(self, filters, *, operational, overview):
-        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
-        catalog = list(catalog_loader() or []) if callable(catalog_loader) else []
+    def build_snapshot(self, filters, *, operational, overview, catalogo_recursos=None):
+        if catalogo_recursos is None:
+            catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+            catalog = list(catalog_loader() or []) if callable(catalog_loader) else []
+        else:
+            catalog = list(catalogo_recursos)
 
         resources = {}
         exact_code_aliases = {}

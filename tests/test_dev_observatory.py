@@ -319,7 +319,7 @@ class DevObservatoryApiTests(unittest.TestCase):
         resposta = self.client.get("/api/v1/dev-observatory/viewports?env=test")
         self.assertEqual(resposta.status_code, 200, resposta.text)
         payload = resposta.json()
-        self.assertEqual(payload["source"], "FrontendBackendFacade.consulta_operacional")
+        self.assertEqual(payload["source"], "FrontendBackendFacade.consulta_operacional(vinculo_operacional)")
         self.assertFalse(payload["read_only"])
         self.assertIn("items", payload)
 

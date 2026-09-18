@@ -269,6 +269,7 @@ class FrontendBackendFacade:
         *,
         somente_vinculo_operacional=False,
         incluir_recursos_sem_demanda_de_contas=False,
+        catalogo_recursos=None,
     ):
         now = min(self._now(), filters.fim)
         # Instanciado uma vez por consulta: o serviço já memoiza turnos e
@@ -629,11 +630,13 @@ class FrontendBackendFacade:
         # Mantém ``recurso`` como identidade técnica e entrega à apresentação
         # o nome líquido cadastrado (ou o rótulo oficial já conhecido).
         catalog_names = {}
-        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
-        if callable(catalog_loader):
+        if catalogo_recursos is None:
+            catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+            catalogo_recursos = catalog_loader() if callable(catalog_loader) else None
+        if catalogo_recursos:
             catalog_names = {
                 str(row.get("codigo") or "").strip().casefold(): row.get("nome")
-                for row in (catalog_loader() or [])
+                for row in catalogo_recursos
                 if str(row.get("codigo") or "").strip()
             }
         for item in items:
@@ -654,7 +657,12 @@ class FrontendBackendFacade:
     def andon(self, filters: AnalyticsFilter):
         """Entrega um snapshot fabril único sem mover cálculos para a Web."""
 
-        operational = self.consulta_operacional(filters)
+        # Buscado uma única vez: consulta_operacional() e o AndonService usam
+        # o mesmo catálogo para nomear recursos; sem isso o snapshot do Andon
+        # duplicava a consulta ao PCFACTORY a cada atualização da TV.
+        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+        catalogo_recursos = list(catalog_loader() or []) if callable(catalog_loader) else []
+        operational = self.consulta_operacional(filters, catalogo_recursos=catalogo_recursos)
         # O Andon usa apenas o resumo consolidado. Não carregar o dashboard de
         # exceções aqui preserva a projeção única da TV e evita consultas extras.
         overview = self.inicio(filters, include_insights=False)
@@ -662,6 +670,7 @@ class FrontendBackendFacade:
             filters,
             operational=operational,
             overview=overview,
+            catalogo_recursos=catalogo_recursos,
         )
 
     def solda_gerencial(self):

@@ -42,7 +42,7 @@ class SeedDadosFicticiosTest(unittest.TestCase):
             destination_after_cut(
                 [_route(10, "LASER", "Corte"), _route(20, "SOLDA4", "Solda")]
             ),
-            "Solda",
+            "Soldagem",
         )
 
     def test_recursos_de_usinagem_usam_os_cinco_nomes_publicos_das_telas(self):
