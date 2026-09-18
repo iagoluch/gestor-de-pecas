@@ -25,6 +25,7 @@ playwright-report/
 test-results/
 .test_dbs/
 output/
+outputs/
 tmp/
 backups/test/*.dump
 
@@ -60,6 +61,13 @@ web/dist/
 web/node_modules/
 _quarentena_revisar/
 docs/evidencias/
+
+# Fontes/segredos do Protheus e dados reais de integração — nunca neste repo Python
+fontes/
+protheus/
+integracao_totvs_referencia/
+data/
+config/simulacao_*.json
 
 # OS/editor
 .DS_Store
