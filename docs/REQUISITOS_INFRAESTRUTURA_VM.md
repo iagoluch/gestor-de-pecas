@@ -135,7 +135,7 @@ Ordem sugerida, do zero até o primeiro deploy automático funcionando:
 - [ ] **Pedir a VM** para a TI com as specs da §2 (recomendado: 8 vCPU / 16 GB / 200 GB SSD) e §4 (IP fixo, DNS interno, portas).
 - [ ] **Instalar o sistema base**: Ubuntu Server 26.04 LTS, NTP, firewall (liberar só 443/80 públicas e 22 restrita à rede administrativa).
 - [ ] **Instalar dependências de sistema**: Python 3.14, PostgreSQL 17, Nginx, Microsoft ODBC Driver 18, unixODBC.
-- [ ] **Criar o PostgreSQL de produção**: banco + usuário dedicado (nunca reaproveitar credencial de homologação — ver achado de segurança de 18/09/2026 sobre credencial exposta).
+- [ ] **Criar o PostgreSQL de produção**: banco + usuário dedicado
 - [ ] **Criar estrutura da aplicação**: usuário de serviço `gestor-pecas` (não-root), `/opt/gestor-pecas`, `.venv` próprio, `/etc/gestor-pecas/gestor.env` com as credenciais reais (banco, TOTVS, Telegram, `GESTOR_WEB_SESSION_SECRET`, `GESTOR_DEVOBS_SESSION_SECRET`, `GESTOR_WEB_SERVE_STATIC=true`).
 - [ ] **Criar o serviço systemd** `gestor-pecas.service` (referência em §7) e o site do Nginx com HTTPS (certificado corporativo) fazendo proxy para `127.0.0.1:8000`.
 - [ ] **Registrar o runner self-hosted do GitHub Actions na VM**: Settings → Actions → Runners → *New self-hosted runner*, label `gestor-pecas-vm`. O runner precisa conseguir: `sudo rsync`, `sudo systemctl restart gestor-pecas.service` e `curl 127.0.0.1:8000` sem senha interativa (sudoers dedicado, não o usuário do serviço).
@@ -143,7 +143,3 @@ Ordem sugerida, do zero até o primeiro deploy automático funcionando:
 - [ ] **Disparar a primeira tag**: `git tag v1.0.0 && git push --tags` — confirma que o pipeline builda e implanta sozinho.
 - [ ] **Configurar backup do PostgreSQL** (diário + cópia externa) e os alertas de monitoramento da §6.
 - [ ] **Confirmar rollback**: trocar a tag/versão do serviço, nunca limpar banco ou reescrever produção (regra já vale para o processo manual, continua valendo com o pipeline).
-
-Pendências que dependem de decisão do usuário, não de infraestrutura:
-- Rotacionar a senha do SQL Server do TOTVS (`sql_ppi`) usada em homologação — decidiu não rotacionar por ora (ambiente descartável); reavaliar antes de ir para produção real.
-- As 3 pendências abertas da auditoria de segurança de 14/09/2026 (freio no login principal, IDOR na Qualidade, session secrets ausentes no `.env`) — resolver antes ou durante este provisionamento, já que a VM de produção é o ambiente onde elas importam de fato.
