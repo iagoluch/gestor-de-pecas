@@ -23,6 +23,11 @@ jobs:
           --health-retries 12
     env:
       TEST_DATABASE_URL: postgresql://gestor:gestor@localhost:5432/gestor_pecas_test
+      # O runner do GitHub Actions usa UTC como fuso do sistema; a aplicação
+      # fixa a sessão PostgreSQL em America/Sao_Paulo (ver connection.py).
+      # Sem isto, datetime.now() do Python (UTC) e LOCALTIMESTAMP do Postgres
+      # (America/Sao_Paulo) ficam 3h divergentes.
+      TZ: America/Sao_Paulo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
