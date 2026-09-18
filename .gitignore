@@ -68,3 +68,9 @@ desktop.ini
 .vscode/
 .idea/
 *.tsbuildinfo
+
+# Caches locais de ferramentas (Postman, upload temporário, worktrees de agente)
+.postman/
+postman/
+.tmp.driveupload/
+.claude/worktrees/
