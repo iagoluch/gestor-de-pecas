@@ -86,7 +86,7 @@ class PostgresPoolManager:
                 )
                 try:
                     connection.rollback()
-                except Exception:
+                except Exception:  # nosec B110 -- best-effort: a falha original já foi logada acima; nada mais a fazer se o rollback também falhar
                     pass
 
         statement_timeout_ms = int(getattr(self.config, "statement_timeout_ms", 0) or 0)
@@ -107,7 +107,7 @@ class PostgresPoolManager:
                 )
                 try:
                     connection.rollback()
-                except Exception:
+                except Exception:  # nosec B110 -- best-effort: a falha original já foi logada acima; nada mais a fazer se o rollback também falhar
                     pass
 
     def open(self):

@@ -238,7 +238,7 @@ class TotvsWspcpClient:
             raise TotvsIntegrationError(
                 f"Mecanismo de autenticação WSPCP não suportado: {mode!r}."
             )
-        if not username or password is None or password == "":
+        if not username or password is None or password == "":  # nosec B105 -- validação de presença, não senha hardcoded
             raise TotvsIntegrationError(
                 "Autenticação Basic do WSPCP exige usuário e senha no .env."
             )

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from xml.etree.ElementTree import ParseError
-from xml.sax.saxutils import escape
+from xml.etree.ElementTree import ParseError  # nosec B405 -- só o tipo de exceção; parse real usa defusedxml (SafeElementTree) abaixo
+from xml.sax.saxutils import escape  # nosec B406 -- só escape() de string, não faz parse de XML
 
 from defusedxml import ElementTree as SafeElementTree
 from defusedxml.common import DefusedXmlException

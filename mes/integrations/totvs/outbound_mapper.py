@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5
-from xml.etree import ElementTree as ET
+from xml.etree import ElementTree as ET  # nosec B405 -- só construção de XML de saída (Element/SubElement), nunca parse de XML de entrada não confiável
 
 from mes.integrations.totvs.errors import TotvsContractError
 from mes.integrations.totvs.outbound_models import (

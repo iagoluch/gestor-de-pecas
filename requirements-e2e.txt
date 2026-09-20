@@ -1,0 +1,11 @@
+# Dependências de teste E2E (Playwright), separadas de requirements.txt de
+# propósito: não são runtime, e instalar o navegador Chromium é pesado -
+# só quem for rodar tests/poc_playwright_smoke.py (local ou via
+# .github/workflows/e2e.yml) precisa disto.
+#
+# Setup local:
+#   pip install -r requirements.txt -r requirements-e2e.txt
+#   python -m playwright install chromium
+#   python -m pytest tests/poc_playwright_smoke.py -v
+playwright==1.62.0
+pytest-playwright==0.9.0

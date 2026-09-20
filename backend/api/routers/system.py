@@ -1,6 +1,6 @@
 import platform
 import shutil
-import subprocess
+import subprocess  # nosec B404 -- usado só com lista fixa de args, sem shell, ver uso abaixo
 import time
 from pathlib import Path
 from typing import Literal
@@ -136,7 +136,7 @@ def rebuild_frontend(_user=Depends(require_admin_user)):
         )
     started = time.monotonic()
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 -- lista fixa de args (sem shell=True), npm resolvido via shutil.which, nenhum input do usuário chega aqui
             [npm, "run", "build"],
             cwd=WEB_DIR,
             capture_output=True,

@@ -122,7 +122,7 @@ class TotvsOutboxRepositoryMixin:
             )
             ON CONFLICT ON CONSTRAINT uq_totvs_outbox_idempotency_key DO NOTHING
             RETURNING {OUTBOX_COLUMNS}
-            """,
+            """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
             {
                 "event_type": str(request.event_type),
                 "aggregate_type": str(request.aggregate_type),
@@ -168,7 +168,7 @@ class TotvsOutboxRepositoryMixin:
                 ORDER BY lease_expires_at, id
                 LIMIT %(limit)s
                 FOR UPDATE SKIP LOCKED
-                """,
+                """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
                 {"now": instante, "limit": int(limit)},
             )
             abandonados = [_outbox_row(row) for row in cursor.fetchall()]
@@ -192,7 +192,7 @@ class TotvsOutboxRepositoryMixin:
                         updated_at = %(now)s
                     WHERE id = %(id)s
                     RETURNING {OUTBOX_COLUMNS}
-                    """,
+                    """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
                     {
                         "id": item["id"],
                         "status": destino.value,
@@ -262,7 +262,7 @@ class TotvsOutboxRepositoryMixin:
                 FROM elegiveis e
                 WHERE o.id = e.id
                 RETURNING {OUTBOX_COLUMNS_ALIASED}
-                """,
+                """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
                 {
                     "now": instante,
                     "batch": max(1, int(batch_size)),
@@ -328,7 +328,7 @@ class TotvsOutboxRepositoryMixin:
                     updated_at = %(now)s
                 WHERE id = %(id)s
                 RETURNING {OUTBOX_COLUMNS}
-                """,
+                """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
                 {
                     "id": int(outbox_id),
                     "status": final,
@@ -401,7 +401,7 @@ class TotvsOutboxRepositoryMixin:
                     updated_at = %(now)s
                 WHERE id = %(id)s AND status = 'ERROR' AND payload_xml IS NOT NULL
                 RETURNING {OUTBOX_COLUMNS}
-                """,
+                """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
                 {
                     "id": int(outbox_id),
                     "now": instante,
@@ -447,7 +447,7 @@ class TotvsOutboxRepositoryMixin:
                     updated_at = %(now)s
                 WHERE id = %(id)s AND status = 'ERROR' AND payload_xml IS NULL
                 RETURNING {OUTBOX_COLUMNS}
-                """,
+                """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
                 {
                     "id": int(outbox_id),
                     "payload": str(payload_xml),
@@ -464,7 +464,7 @@ class TotvsOutboxRepositoryMixin:
     def buscar_item_outbound_totvs(self, outbox_id: int):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                f"SELECT {OUTBOX_COLUMNS} FROM totvs_outbox WHERE id = %s",
+                f"SELECT {OUTBOX_COLUMNS} FROM totvs_outbox WHERE id = %s",  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo
                 (int(outbox_id),),
             )
             return _outbox_row(cursor.fetchone())
@@ -478,7 +478,7 @@ class TotvsOutboxRepositoryMixin:
         ausência dela.
         """
 
-        query = f"SELECT {OUTBOX_COLUMNS} FROM totvs_outbox WHERE idempotency_key = %s"
+        query = f"SELECT {OUTBOX_COLUMNS} FROM totvs_outbox WHERE idempotency_key = %s"  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo
         if cursor is not None:
             cursor.execute(query, (str(idempotency_key),))
             return _outbox_row(cursor.fetchone())
@@ -489,7 +489,7 @@ class TotvsOutboxRepositoryMixin:
     def listar_itens_outbound_totvs(
         self, *, status=None, production_order=None, limit: int = 100
     ):
-        query = f"SELECT {OUTBOX_COLUMNS} FROM totvs_outbox WHERE TRUE"
+        query = f"SELECT {OUTBOX_COLUMNS} FROM totvs_outbox WHERE TRUE"  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo
         params: list = []
         if status:
             values = [status] if isinstance(status, (str, OutboxStatus)) else list(status)

@@ -18,3 +18,9 @@ groq>=1.6,<2
 # O produto importa pyodbc sob demanda: sem ele o Gestor sobe normalmente e
 # apenas a sincronização do Corte fica indisponível.
 pyodbc>=5.1,<6
+
+# --- Ferramentas de segurança do CI (job "security" em ci.yml), não runtime ---
+# Pinadas exatas (não faixa) de propósito: Dependabot abre PR quando sair uma
+# nova versão, em vez de a CI silenciosamente pegar uma versão nova sozinha.
+bandit==1.9.4
+pip-audit==2.10.1

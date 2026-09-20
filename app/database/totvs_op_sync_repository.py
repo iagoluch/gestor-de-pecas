@@ -112,7 +112,7 @@ class TotvsOpSyncRepositoryMixin:
                 ) VALUES (%s, 'PENDING', 1, %s, %s)
                 ON CONFLICT (codigo_op) DO NOTHING
                 RETURNING {SYNC_REQUEST_COLUMNS}
-                """,
+                """,  # nosec B608 -- colunas fixas no texto, valores via %s
                 (codigo, agora, agora),
             )
             row = cursor.fetchone()
@@ -125,7 +125,7 @@ class TotvsOpSyncRepositoryMixin:
                   FROM totvs_op_sync_requests
                  WHERE codigo_op = %s
                  FOR UPDATE
-                """,
+                """,  # nosec B608 -- SYNC_REQUEST_COLUMNS é constante do módulo, valores via %s
                 (codigo,),
             )
             current = cursor.fetchone()
@@ -159,7 +159,7 @@ class TotvsOpSyncRepositoryMixin:
                        error_message = NULL
                  WHERE id = %s
                 RETURNING {SYNC_REQUEST_COLUMNS}
-                """,
+                """,  # nosec B608 -- SYNC_REQUEST_COLUMNS é constante do módulo, valores via %s
                 (agora, agora, current["id"]),
             )
             return {"role": "leader", **dict(cursor.fetchone())}
@@ -256,7 +256,7 @@ class TotvsOpSyncRepositoryMixin:
                 SELECT {SYNC_REQUEST_COLUMNS}
                   FROM totvs_op_sync_requests
                  WHERE codigo_op = %s
-                """,
+                """,  # nosec B608 -- SYNC_REQUEST_COLUMNS é constante do módulo, valores via %s
                 (codigo,),
             )
             row = cursor.fetchone()

@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # GitHub Actions — todas pinadas por SHA; Dependabot abre PR quando sair
+  # uma versão nova, mantendo o SHA atualizado sem depender de tag mutável.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Backend Python (inclui bandit/pip-audit, ver requirements.txt).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Frontend.
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+
+  # Imagem do Postgres usada em compose.yaml (dev local). A imagem de
+  # gitleaks usada no CI é `docker run` inline num workflow, não um
+  # Dockerfile/compose — o ecossistema "docker" do Dependabot não a
+  # rastreia; atualizar essa manualmente de tempos em tempos (ver
+  # comentário no job "security" de ci.yml).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

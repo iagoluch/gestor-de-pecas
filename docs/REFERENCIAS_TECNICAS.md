@@ -79,8 +79,8 @@ Investigação no código confirmou: `mes/integrations/totvs/outbox.py` já impl
 
 - **Playwright CLI (`pytest-playwright`)** — **instalado nesta rodada**, POC em `tests/poc_playwright_smoke.py`. Recomendação confirmada: CLI > MCP para este caso de uso (~4x menos tokens medidos).
 - **`react-window`** — **PREPARAR ADOÇÃO FUTURA**. O bug histórico de "despejar catálogo inteiro" já foi corrigido (memória do projeto). Gatilho objetivo: nova tela com lista/tabela de mais de ~500-1000 linhas sem paginação.
-- **`schemathesis`** — ainda não testado na prática nesta rodada (ficou para a próxima iteração); continua classificado TESTAR, já com o caminho claro (FastAPI expõe OpenAPI automaticamente, rodar contra um endpoint não-crítico primeiro).
-- **`testcontainers-python`** — ainda não testado na prática nesta rodada; continua classificado TESTAR.
+- **`schemathesis`** — **testado de verdade** (rodada 3): 106 operações, 496 casos gerados contra o preview visual. Achou 1 bug real (`GET /api/v1/audit/appointments` retorna 500 em vez de 422 para data extrema). Adicionado a `requirements-e2e.txt`; não incorporado ao CI ainda (precisa curar a lista de status codes esperados por endpoint primeiro, senão os 401/503 esperados quebrariam o build por ruído).
+- **`testcontainers-python`** — **REJEITADO** (rodada 3), com evidência: `TEST_DATABASE_URL` já é convenção madura e documentada, usada em toda a suíte, com Postgres real via `services.postgres` no CI e `compose.yaml` localmente. Nenhuma lacuna real identificada.
 
 ## Segurança — CI (feito nesta rodada)
 

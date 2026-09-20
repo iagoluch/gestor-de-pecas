@@ -1,8 +1,18 @@
 name: CI
 
+# Roda em push normal (branches) e PR. Tags v* são excluídas daqui de
+# propósito: deploy.yml chama este workflow via workflow_call para tags,
+# então rodar de novo pelo trigger `push` duplicaria a validação no mesmo
+# ref (mesmo commit sendo validado duas vezes em paralelo).
 on:
   push:
+    tags-ignore:
+      - "v*"
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   backend:
@@ -51,6 +61,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test
+      - name: npm audit (dependências com CVE conhecida, alta/crítica)
+        # Roda sempre, mesmo se um passo anterior falhar, para o sinal de
+        # segurança não ficar escondido atrás de uma falha de build/teste.
+        if: always()
+        run: npm audit --audit-level=high
 
   security:
     runs-on: ubuntu-latest
@@ -59,19 +74,20 @@ jobs:
         with:
           fetch-depth: 0
       - name: gitleaks (secret scanning, inclui histórico de commits)
-        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 detect --source=/repo --config=/repo/.gitleaks.toml -v --redact
+        # Pin por digest (reproduzível) — o gitleaks não é rastreado pelo
+        # Dependabot (ecossistema docker do Dependabot só cobre Dockerfile/
+        # compose, não `docker run` inline em workflow); atualizar a versão
+        # e o digest manualmente de tempos em tempos.
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f detect --source=/repo --config=/repo/.gitleaks.toml -v --redact
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.14"
+      - run: pip install -r requirements.txt
       - name: pip-audit (dependências com CVE conhecida)
-        run: |
-          pip install pip-audit
-          pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt
       - name: bandit (padrões inseguros no código Python)
-        # Informativo por ora: primeira rodada encontrou ~44 avisos, quase todos
-        # B608 (f-string em SQL) sobre listas de colunas constantes, não input
-        # de usuário — falso positivo provável. Não falha o build ainda; depois
-        # de triagem (marcar os reais com #nosec ou corrigir), trocar para gate.
-        run: |
-          pip install bandit
-          bandit -r backend mes app -ll || true
+        # Bloqueante: os 44 achados da auditoria de 20/09/2026 foram todos
+        # triados (ver docs/CLAUDE_CODE_SETUP.md) — reais corrigidos, falsos
+        # positivos suprimidos localmente com #nosec + comentário. Qualquer
+        # achado NOVO passa a falhar o build de propósito.
+        run: bandit -r backend mes app -ll

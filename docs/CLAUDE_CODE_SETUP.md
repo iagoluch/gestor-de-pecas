@@ -1,6 +1,6 @@
 # Setup do Claude Code — Gestor de Peças
 
-Auditoria em 20/09/2026 (duas rodadas na mesma data: levantamento inicial + rodada de decisão/execução). Este documento existe para que qualquer pessoa (ou sessão futura de Claude Code) entenda o que está ativo neste ambiente, por quê, e o que fica de fora de propósito.
+Auditoria em 20/09/2026, três rodadas na mesma data: (1) levantamento inicial, (2) decisão/execução, (3) fechamento com validação prática de cada item (CI real, bandit 100% triado, benchmark do headroom, Playwright/Schemathesis testados de verdade). Este documento existe para que qualquer pessoa (ou sessão futura de Claude Code) entenda o que está ativo neste ambiente, por quê, e o que fica de fora de propósito.
 
 ## Escopo desta máquina
 
@@ -17,10 +17,37 @@ Tudo abaixo é local a esta máquina Windows (`iago.luchtenberg`), configurado e
 | Servidor | O que faz | Rodada 1 | Rodada 2 |
 |---|---|---|---|
 | `headroom` | Comprime tool outputs/logs antes de chegarem ao modelo | Instalado | MANTIDO — sem evidência de problema, baixo overhead, benefício claro (compressão de contexto) |
-| `omniroute` | Gateway de roteamento para 350+ provedores de IA | Instalado | **REMOVIDO/DESABILITADO** — ver seção própria abaixo |
+| `omniroute` | Gateway de roteamento para 350+ provedores de IA | Instalado, depois removido, depois **restaurado** | MANTER EM AVALIAÇÃO — ver seção própria abaixo |
 | `plugin:pg:pg-aiguide` | Documentação/boas práticas PostgreSQL via busca semântica (TigerData, hospedado) | Instalado | MANTIDO — hospedado (sem processo local), Apache-2.0, uso justificado |
 
-### OmniRoute — decisão de desabilitar (rodada 2)
+### OmniRoute — reavaliado e restaurado (rodada 3)
+
+A decisão de remover na rodada 2 foi precipitada: "39 requisições / $0" media 1-2 dias de instalação, não uma janela real de avaliação. Corrigido — classificação passa a ser **MANTER EM AVALIAÇÃO** (nem removido, nem obrigatório).
+
+**Segurança reconfirmada nesta rodada:**
+- Escuta só em `127.0.0.1:20128` (confirmado via `netstat`) — nenhuma interface exposta à rede.
+- Rodando a partir de `~/.omniroute-run` (diretório neutro), não do diretório do projeto — sem risco de recarregar o `.env` do Gestor.
+- Senha do dashboard já trocada da padrão (`CHANGEME`).
+- **Pendente de reverificação manual**: o toggle "Cloud OmniRoute" (relay para a nuvem do fabricante) — não encontrei endpoint de API para checar o estado programaticamente sem gastar mais tempo; confirme em `http://localhost:20128` → Endpoints → "Cloud OmniRoute" que está desativado, se ainda não confirmou.
+
+**Como ativar:**
+```bash
+# 1. Subir o servidor (de um diretório NEUTRO, nunca da raiz do projeto):
+cd ~/.omniroute-run && OMNIROUTE_SERVER_HOST=127.0.0.1 omniroute serve
+# 2. Registrar o MCP (uma vez, escopo CLI):
+claude mcp add --transport http --scope user omniroute http://localhost:20128/api/mcp/stream \
+  --header "Authorization: Bearer <chave-de-gerenciamento-do-dashboard>"
+```
+
+**Como desativar:**
+```bash
+claude mcp remove omniroute --scope user
+# e finalizar o processo node do omniroute (verificar com: netstat -ano | grep 20128)
+```
+
+**Critério real de decisão daqui para frente** (não mais "quantas requisições teve"): usar por pelo menos algumas tarefas reais e então avaliar — permite modelos/provedores que agregam algo? reduz custo? melhora alguma tarefa? adiciona latência/instabilidade perceptível? é mais útil que Claude Code direto? Só depois disso decidir entre MANTER, USO SOB DEMANDA ou REMOVER — não antes.
+
+### OmniRoute — decisão original de desabilitar (rodada 2, revertida na rodada 3)
 
 **Investigação concreta feita nesta rodada:** `omniroute cost` e `omniroute usage` mostraram **39 requisições desde a instalação, 0 tokens de entrada/saída, $0,00 de custo** — ou seja, nenhum uso real além dos meus próprios testes de smoke test (auth, handshake MCP). Comparação benefício vs. custo:
 
@@ -84,6 +111,65 @@ Investigação concreta no código: `mes/integrations/totvs/outbox.py` já imple
 
 Validado que continua funcionando: `graphify explain`/`graphify query` responderam corretamente durante esta auditoria (ex.: consulta usada para checar resiliência da integração TOTVS). Nenhuma ferramenta redundante de code search/RAG foi instalada — o Graphify já cobre essa necessidade, conforme decisão da rodada 1.
 
+## Rodada 3 — fechamento com validação prática
+
+### CI como gate real do deploy
+`deploy.yml` agora chama `ci.yml` via `workflow_call` (job `validate`) antes de `build-frontend`/`deploy`. `ci.yml` passou a ignorar pushes de tag no seu próprio trigger (`tags-ignore: ["v*"]`) para não rodar em duplicidade no mesmo commit. Validado: `python3 -c "import yaml; ..."` confirma sintaxe válida nos dois arquivos.
+
+### Least privilege do GITHUB_TOKEN
+`permissions: contents: read` no topo de `ci.yml` e `deploy.yml` (nenhum job precisa de mais que isso — não há criação de release/tag/comentário).
+
+### Supply chain — hardening final
+- gitleaks pinado por **digest** (`@sha256:c00b6bd0...`), não só tag.
+- bandit/pip-audit movidos para `requirements.txt` com versão exata (`bandit==1.9.4`, `pip-audit==2.10.1`) — rastreáveis pelo Dependabot.
+- `.github/dependabot.yml` criado: `github-actions`, `pip` (raiz), `npm` (`/web`), `docker` (raiz, cobre `compose.yaml`). Limitação documentada: o Dependabot não rastreia a imagem do gitleaks (é `docker run` inline num workflow, não um Dockerfile/compose) — atualização dela continua manual.
+
+### Segurança do frontend
+`npm audit --audit-level=high` adicionado ao job `frontend` do CI (roda sempre, mesmo se build/teste falhar antes, via `if: always()`).
+
+### Bandit — os 44 achados, 100% triados (não em massa)
+Todos os 44 revisados individualmente lendo o código real (não presumido): 32× B608 (SQL via f-string — em **todos os casos**, os nomes de coluna/tabela vêm de constantes do módulo ou de allowlist por dict, valores reais sempre via `%s`/`%(...)s`), 3× B105 (nomes de variável/chave contendo "password", nenhum valor hardcoded), 2× B110 (`except: pass` de limpeza best-effort após falha já logada), 2× B404/B603 (subprocess com lista fixa de args, sem shell, path resolvido via `shutil.which`), 3× B405/B406 (XML de entrada usa `defusedxml`; os imports de `xml.etree`/`xml.sax.saxutils` flagados são só para tipo de exceção ou construção/escape de XML de saída, nunca parse de XML não confiável). Todos suprimidos com `# nosec BXXX -- <motivo>` localizado na linha exata (para strings multi-linha, na linha de fechamento do `"""`, único lugar onde o bandit realmente lê o comentário — validado empiricamente antes de aplicar em massa). CI confirmado rodando limpo: `bandit -r backend mes app -ll` → **exit code 0, "No issues identified", 44 disabled**. `|| true` removido — agora é bloqueante de verdade.
+
+### Graphify — portabilidade corrigida
+`.claude/settings.json`: caminho absoluto (`C:/Users/iago.luchtenberg/.local/bin/graphify.EXE`) trocado por `graphify` bare (resolve via PATH em qualquer máquina que tenha o `uv tool install graphifyy` feito). Testado: `echo '...' | graphify hook-guard search` funciona via PATH.
+
+O hook de rebuild deixou de viver só em `.git/hooks/` (não versionado): movido para `scripts/graphify-rebuild.sh` (rastreado no git), com `scripts/setup-dev-hooks.sh` — instalador pequeno e idempotente que qualquer clone novo roda uma vez (`sh scripts/setup-dev-hooks.sh`) para religar o gatilho de post-commit sem sobrescrever o auto-push já existente. Testado duas vezes: idempotência (rodar de novo diz "já estava instalado, nada a fazer") e simulação de clone novo (sem hook prévio) em `$HOME/hook_test_repo` temporário, removido depois.
+
+### Playwright — decisão firme: ADOTADO (não é mais POC)
+- `requirements-e2e.txt` criado (`playwright==1.62.0`, `pytest-playwright==0.9.0`), separado do `requirements.txt` de propósito (pesado, só quem roda E2E precisa).
+- Teste renomeado de `poc_playwright_smoke.py` para `tests/test_e2e_smoke.py` (sem `@pytest.mark.skip` — não é mais POC), confirmado que `unittest discover` do CI principal não tenta rodá-lo (é estilo pytest com fixture, `unittest` não encontra `TestCase` nenhuma ali — testado, "Ran 0 tests... NO TESTS RAN", zero risco de quebrar o CI principal).
+- `.github/workflows/e2e.yml` criado: `workflow_dispatch` (sob demanda, não bloqueia CI/deploy), instala `requirements-e2e.txt`, `playwright install --with-deps chromium`, sobe o preview visual, roda o teste.
+- **Validado de ponta a ponta duas vezes nesta rodada**, com o gotcha real documentado: no Windows, usar o Python do `.venv` do projeto (`./.venv/Scripts/python.exe`), não um `python3` solto no PATH que pode não ter as libs do projeto instaladas.
+
+### Schemathesis — testado de verdade, achou bug real
+Instalado (`schemathesis==4.27.5`), rodado contra `http://127.0.0.1:8010/api/openapi.json` (preview visual, self-contained, sem banco real) com `--max-examples=20`: **106 operações testadas, 496 casos gerados**.
+
+**Achado real e concreto**: `GET /api/v1/audit/appointments?fim=0263-10-17T17:14:48Z` retorna **500 Internal Server Error** em vez de 422 — o parâmetro de data `fim` não valida limites plausíveis antes de processar, e uma data extrema (ano 0263, gerada pelo fuzzing) derruba a rotina em vez de ser rejeitada como entrada inválida. **Não corrigido nesta rodada** (regra de negócio, fora do escopo desta auditoria de infraestrutura) — reportado para correção futura.
+
+Outros achados: 102 operações só retornaram 401 (autenticação não configurada no teste — esperado), 2× 503 em `/PcfIntegService` ("Receptor SOAP TOTVS desabilitado por configuração" — comportamento esperado no ambiente de preview, não é bug), 130 "undocumented status code" e 43 "unsupported methods" são majoritariamente ruído de schema (OpenAPI não documenta todo código de erro possível) e fuzzing de métodos HTTP fora da superfície real da API.
+
+**Decisão**: valor real comprovado (achou 1 bug genuíno). Adicionado a `requirements-e2e.txt` junto com Playwright, comando documentado. **Não incorporado ao CI ainda** — precisaria de curadoria da lista de status codes esperados por endpoint antes de virar gate (senão o 503 esperado do SOAP desligado e os 401 de autenticação quebrariam o build por ruído, não por bug real).
+
+### Testcontainers — rejeitado com evidência
+Confirmado por grep: o projeto já tem uma convenção madura e documentada (`TEST_DATABASE_URL`, citada no README, usada em toda a suíte de testes de integração) apontando para Postgres real — via `services.postgres` no CI e `compose.yaml` (porta 15432) localmente. `testcontainers-python` resolveria o mesmo problema de forma paralela e redundante, sem nenhuma lacuna real identificada. **REJEITADO — infraestrutura de CI/dev já cobre o problema.**
+
+### Headroom — benchmark real (biblioteca Python, não CLI)
+Usando `headroom.compress()` diretamente (ambiente isolado do `uv tool`, `~/AppData/Roaming/uv/tools/headroom-ai/`) contra dados reais deste projeto:
+
+| Cenário | Tokens antes | Tokens depois | Redução | Latência | Fidelidade |
+|---|---|---|---|---|---|
+| JSON estruturado grande (saída do bandit, 63KB) | 24.175 | 1.411 | **94,2%** | 2,3s | Preservada (verificado sem o erro de metodologia da 1ª tentativa) |
+| Leitura de arquivo de código (`database.py`, 256KB) | 52.998 | 52.998 | **0%** | 0,9s | N/A |
+
+**Achado importante não óbvio**: para `tool_result` de leitura de código-fonte (`Read`), o headroom aplica `router:excluded:tool` — **exclui esse tipo de conteúdo da compressão por padrão**, presumivelmente para nunca arriscar alterar código que o agente vai usar. Isso significa que o ganho real de tokens numa sessão típica de desenvolvimento (onde grande parte do volume é leitura de arquivos de código, não saída de comandos/JSON) é bem menor do que a redução de 94% sugere isoladamente — o benefício concentra-se em saídas de ferramentas tipo Bash/grep/logs/JSON, não em leitura de arquivos.
+
+**Decisão**: MANTER — ganho real e mensurável existe (para o tipo certo de conteúdo), sem perda de fidelidade detectada, latência aceitável (segundos, não dezenas de segundos). Ressalva documentada acima sobre onde o ganho realmente se aplica.
+
+### Context7 skill — smoke test real
+Skill descoberta pelo Claude Code (`Skill(context7)` funcionou). Executado o fluxo real: `context7.sh search "fastapi"` → `context7.sh docs "/websites/fastapi_tiangolo" "dependency injection with default values" "code"` → retornou documentação atual e citável (exemplos de `Depends()`, `Query()` com link para `fastapi.tiangolo.com`), sem precisar de `CONTEXT7_API_KEY`.
+
+**Achado real durante o teste**: a skill declara depender de `curl` e `jq`, mas **`jq` não estava instalado nesta máquina** — a skill falhava silenciosamente sem isso. Corrigido: `jq` baixado direto do release oficial (`jqlang/jq`) para `~/.local/bin/jq.exe`, sem precisar de admin (chocolatey também travou por falta de permissão, mesmo problema do gitleaks/graphify anteriores).
+
 ## Tabela: Componente | Antes | Ação | Depois | Motivo
 
 | Componente | Antes | Ação | Depois | Motivo |
@@ -91,13 +177,15 @@ Validado que continua funcionando: `graphify explain`/`graphify query` responder
 | Skills `*-automation` (Composio) | 832 instaladas, 0 uso | REMOVER (rodada 1) | Removidas | 0 uso real, stack proprietário fora do catálogo |
 | `graphify` | — | INSTALAR (rodada 1) | Mantido, validado funcionando (rodada 2) | Grafo de código funcional, sem redundância |
 | `headroom` (MCP) | — | INSTALAR (rodada 1) | Mantido (rodada 2) | Benefício claro, baixo overhead |
-| `omniroute` (MCP) | — | INSTALAR (rodada 1) | **REMOVIDO** (rodada 2) | 0 uso real comprovado (39 req/$0), superfície de ataque real, overhead de processo persistente |
+| `omniroute` (MCP) | — | INSTALAR (rodada 1) → REMOVIDO (rodada 2, precipitado) → **RESTAURADO** (rodada 3) | MANTER EM AVALIAÇÃO | Remoção na rodada 2 media só 1-2 dias de instalação, não uso real; segurança reconfirmada (loopback, dir neutro), critério de decisão futura documentado |
 | `pg-aiguide` (plugin) | — | INSTALAR (rodada 1) | Mantido (rodada 2) | Hospedado, Apache-2.0, uso justificado |
 | `context7` (skill) | — | — | **INSTALADO** (rodada 2) | Substitui MCP permanente por fração do custo de contexto |
 | Sistema "Brain" (hooks) | Ativo em toda mensagem | INVESTIGAR (rodada 1) | **Hooks removidos** (rodada 2) | `decisions/` vazio após semanas de uso — redundante com auto-memória nativa, confirmado com evidência |
 | GitHub Actions (tags) | `@v4`/`@v5` mutáveis | AUDITAR (rodada 1) | **Pinadas por SHA** (rodada 2) | Risco de supply-chain real e documentado, correção segura sem mudar versão |
 | Segurança no CI | Inexistente | AVALIAR ferramentas | **gitleaks + pip-audit (bloqueantes) + bandit (informativo)** adicionados e testados localmente | Cobertura de alto retorno/baixo custo, validada antes de commitar |
-| Playwright | Não instalado | AVALIAR CLI vs MCP | **pytest-playwright instalado + POC criada**; binário do Chromium pendente (ambiente) | CLI vence MCP em custo de contexto (~4x), confirmado por medição |
+| Playwright | Não instalado | AVALIAR CLI vs MCP → **ADOTAR** (rodada 3) | Dependência reproduzível (`requirements-e2e.txt`), teste renomeado (não é mais POC), workflow `e2e.yml` dedicado, validado 2x de ponta a ponta | CLI vence MCP em custo de contexto (~4x), confirmado por medição |
+| Schemathesis | Não instalado | TESTAR (rodada 2) → **TESTADO de verdade** (rodada 3) | Achou bug real (500 em data extrema); em `requirements-e2e.txt`, não incorporado ao CI ainda (precisa curar status codes esperados) | Valor comprovado, não hipotético |
+| testcontainers-python | — | AVALIAR com ceticismo (rodada 3) | **REJEITADO** com evidência (`TEST_DATABASE_URL` já é convenção madura) | CI/dev já cobrem o problema |
 | ADVPL/TLPP skills oficiais | — | INVESTIGAR conteúdo | Lido e avaliado; **não instalado aqui** (repo errado) | Só faria sentido no repositório ADVPL/TLPP separado |
 | `pybreaker`/`backon` | — | AVALIAR se já resolvido | **JÁ RESOLVIDO internamente** (outbox.py) | Retry/backoff determinístico já implementado; circuit breaker fica como adoção futura condicional |
 | Config MCP CLI vs app desktop | Desconhecido | INVESTIGAR (rodada 1) | Investigado até o limite seguro; **sem solução aplicada** (rodada 2) | Nenhuma config documentada localizável com segurança para editar sem risco ao app |

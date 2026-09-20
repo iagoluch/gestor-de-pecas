@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
-from xml.sax.saxutils import escape, quoteattr
+from xml.sax.saxutils import escape, quoteattr  # nosec B406 -- só escape/quoteattr de string na construção de XML de saída, não faz parse
 
 from mes.integrations.totvs.models import TotvsMessageMetadata
 

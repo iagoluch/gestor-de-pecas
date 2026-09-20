@@ -75,7 +75,7 @@ def _dsn_from_pg_environment(environ=None):
         "port": "PGPORT",
         "dbname": "PGDATABASE",
         "user": "PGUSER",
-        "password": "PGPASSWORD",
+        "password": "PGPASSWORD",  # nosec B105 -- nome da env var, não senha literal
         "sslmode": "PGSSLMODE",
     }
     for key, env_name in mapping.items():

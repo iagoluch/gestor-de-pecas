@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from xml.etree.ElementTree import ParseError
+from xml.etree.ElementTree import ParseError  # nosec B405 -- só o tipo de exceção; parse real usa defusedxml (SafeElementTree) abaixo
 
 from defusedxml import ElementTree as SafeElementTree
 from defusedxml.common import DefusedXmlException

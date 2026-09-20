@@ -48,7 +48,7 @@ from mes.domain import (
 )
 
 
-PASSWORD_SCHEME = "pbkdf2_sha256"
+PASSWORD_SCHEME = "pbkdf2_sha256"  # nosec B105 -- identificador de algoritmo de hash, não senha
 PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
@@ -115,7 +115,7 @@ def _corte_concluido_sql(operacao_alias):
                     AND corte.status = 'Finalizado'
               )
         )
-    """
+    """  # nosec B608 -- operacao_alias só recebe literais fixos ("operacao"/"anterior") nos 2 call sites
 
 
 def agora_db():
@@ -559,7 +559,7 @@ class Database(
                     recurso = EXCLUDED.recurso,
                     ativo = TRUE,
                     sincronizado_em = EXCLUDED.sincronizado_em
-                """
+                """  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
             )
             cursor.execute(
                 """
@@ -1110,7 +1110,7 @@ class Database(
                   -- auditoria; apenas sai da fila ativa.
                   AND p.sigmanest_comp_date IS NULL
                   {machine_clause}
-                """,
+                """,  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
                 [cutoff.date(), *machine_params],
             )
             waiting = [dict(row) for row in cursor.fetchall()]
@@ -1545,7 +1545,7 @@ class Database(
                     )
               )
             ORDER BY operacao.ordem, operacao.id
-        """
+        """  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, (codigo,))
             return [dict(row) for row in cursor.fetchall()]
@@ -1651,7 +1651,7 @@ class Database(
                         )
                     )
               )
-        """
+        """  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
         params = []
         if tipo_setor:
             query += " AND UPPER(operacao.tipo_setor) = UPPER(%s)"
@@ -4184,7 +4184,7 @@ class Database(
               ON r.sessao_recurso_id = s.id{join_clause}
             WHERE s.data_inicio < %s
               AND COALESCE(s.data_fim, %s) > %s
-        """
+        """  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
         params = list(join_params) + [end, end, start]
         if setor:
             query += " AND UPPER(COALESCE(s.tipo_setor, '')) = UPPER(%s)"
@@ -4499,7 +4499,7 @@ class Database(
         )
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE catalogo_operacoes_op SET tempo_medio_segundos = %s"
+                "UPDATE catalogo_operacoes_op SET tempo_medio_segundos = %s"  # nosec B608 -- condicao é ternária entre 2 fragmentos SQL constantes, valores reais via %s
                 " WHERE codigo_op = %s AND marco_terminal IS FALSE" + condicao,
                 (segundos, codigo),
             )
@@ -4815,7 +4815,7 @@ class Database(
         timestamp_field = fields.get(status)
         with self.connection() as connection, connection.cursor() as cursor:
             if timestamp_field:
-                query = f"UPDATE tarefas SET status = %s, {timestamp_field} = %s WHERE id = %s"
+                query = f"UPDATE tarefas SET status = %s, {timestamp_field} = %s WHERE id = %s"  # nosec B608 -- timestamp_field só pode ser um dos 3 valores fixos do dict `fields` (allowlist), nunca o `status` bruto
                 cursor.execute(query, (status, agora_db(), tarefa_id))
             else:
                 cursor.execute("UPDATE tarefas SET status = %s WHERE id = %s", (status, tarefa_id))
@@ -4853,7 +4853,7 @@ class Database(
                 SET status = %s, {timestamp_field} = %s
                 WHERE id = %s AND {status_clause}
                 RETURNING id, codigo_tarefa, status
-                """,
+                """,  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
                 params,
             )
             tarefa = cursor.fetchone()
@@ -5461,7 +5461,7 @@ class Database(
     def get_current_ops(
         self, setor_filter=None, search=None, maquinas_dobra=None, maquinas_usinagem=None, maquinas_serra=None
     ):
-        query = self._latest_movements_cte() + " SELECT * FROM latest h"
+        query = self._latest_movements_cte() + " SELECT * FROM latest h"  # nosec B608 -- ambos os lados são texto SQL constante, sem interpolação de variável
         where, params = [], []
         if setor_filter:
             normalized = setor_filter.upper()
@@ -5507,7 +5507,7 @@ class Database(
             FROM latest
             WHERE setor = ANY(%s)
             ORDER BY data_hora DESC, id DESC
-        """
+        """  # nosec B608 -- concatenação de texto SQL constante (CTE fixa), sem interpolação de variável
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, (list(setores),))
             return [dict(row) for row in cursor.fetchall()]
@@ -5655,7 +5655,7 @@ class Database(
             tarefas_abertas = int(cursor.fetchone()["total"])
             cursor.execute(
                 self._latest_movements_cte()
-                + "SELECT setor, COUNT(*) AS qtd FROM latest GROUP BY setor"
+                + "SELECT setor, COUNT(*) AS qtd FROM latest GROUP BY setor"  # nosec B608 -- ambos os lados são texto SQL constante, sem interpolação de variável
             )
             mapa = {row["setor"] or "": int(row["qtd"]) for row in cursor.fetchall()}
         dobra = mapa.get("Aguardando Dobra", 0) + sum(mapa.get(item, 0) for item in (maquinas_dobra or []))
@@ -5699,7 +5699,7 @@ class Database(
         query = self._latest_movements_cte() + """
             SELECT COALESCE(setor, '') AS setor, COUNT(*) AS qtd
             FROM latest GROUP BY COALESCE(setor, '') ORDER BY qtd DESC
-        """
+        """  # nosec B608 -- concatenação de texto SQL constante (CTE fixa), sem interpolação de variável
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query)
             return [(row["setor"], int(row["qtd"])) for row in cursor.fetchall()]

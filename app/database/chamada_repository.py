@@ -20,7 +20,7 @@ class ChamadaRepositoryMixin:
         """
 
         colunas = "*" if completo else _COLUNAS_CONTATO_BUSCA
-        query = f"SELECT {colunas} FROM chamada_contatos"
+        query = f"SELECT {colunas} FROM chamada_contatos"  # nosec B608 -- colunas vem só de "*" ou constante do módulo, nunca de input do usuário
         condicoes = []
         parametros = []
         if somente_ativos:
@@ -106,7 +106,7 @@ class ChamadaRepositoryMixin:
 
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                f"SELECT {_COLUNAS_CONTATO_BUSCA} FROM chamada_contatos "
+                f"SELECT {_COLUNAS_CONTATO_BUSCA} FROM chamada_contatos "  # nosec B608 -- lista de colunas é constante do módulo
                 "WHERE padrao_gestao = TRUE AND ativo = TRUE LIMIT 1"
             )
             row = cursor.fetchone()

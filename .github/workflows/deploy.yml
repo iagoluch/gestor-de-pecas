@@ -8,8 +8,21 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
+  # Gate real: chama o CI (backend + frontend + security) como workflow
+  # reutilizável para o MESMO commit da tag, uma única vez (ci.yml ignora
+  # pushes de tag no próprio trigger `push`, então não roda em duplicidade).
+  # Nenhum job de deploy abaixo inicia sem isto ter passado.
+  validate:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build-frontend:
+    needs: validate
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -29,7 +42,7 @@ jobs:
           path: web/dist
 
   deploy:
-    needs: build-frontend
+    needs: [validate, build-frontend]
     # Roda no runner self-hosted instalado NA PRÓPRIA VM: ela fica atrás de
     # firewall, sem IP público, só com SSH administrativo interno (ver
     # requisitos de infraestrutura). Um runner self-hosted puxa o job de

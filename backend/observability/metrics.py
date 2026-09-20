@@ -126,7 +126,7 @@ def collect_postgres_metrics(database, *, include_table_counts: bool = True) -> 
         if include_table_counts:
             for table in TRACKED_TABLES:
                 try:
-                    cursor.execute(f'SELECT COUNT(*) AS n FROM "{table}"')
+                    cursor.execute(f'SELECT COUNT(*) AS n FROM "{table}"')  # nosec B608 -- table vem só de TRACKED_TABLES, tupla constante do módulo
                     table_counts[table] = int(cursor.fetchone()["n"])
                 except Exception:
                     connection.rollback()

@@ -856,7 +856,7 @@ class QualityRepositoryMixin:
                       )
                     GROUP BY s.id, s.quantidade_total
                 ) inspecao
-                """.replace("{_SETOR_ORIGEM_SQL}", self._SETOR_ORIGEM_SQL),
+                """.replace("{_SETOR_ORIGEM_SQL}", self._SETOR_ORIGEM_SQL),  # nosec B608 -- string SQL sem interpolação de variável (não é nem f-string)
                 {"setor": setor, "setor_origem": setor_origem},
             )
             return _as_dict(cursor.fetchone()) or {}
@@ -950,7 +950,7 @@ class QualityRepositoryMixin:
                 WHERE {' AND '.join(clauses)}
                 ORDER BY p.registrada_em DESC, p.id DESC
                 LIMIT %(limite)s OFFSET %(deslocamento)s
-                """,
+                """,  # nosec B608 -- colunas vêm de constante do módulo, valores via %(...)s
                 params,
             )
             return _rows(cursor)

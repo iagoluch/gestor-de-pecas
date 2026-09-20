@@ -91,3 +91,6 @@ app/graphify-out/
 web/graphify-out/
 tests/graphify-out/
 docs/graphify-out/
+
+# cache local do schemathesis (testes E2E sob demanda)
+.schemathesis/
