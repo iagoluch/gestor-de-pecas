@@ -1,0 +1,17 @@
+title = "gitleaks config — Gestor de Peças"
+
+# Herda o conjunto de regras padrão do gitleaks e só adiciona exceções
+# específicas e já verificadas manualmente (ver docs/CLAUDE_CODE_SETUP.md,
+# auditoria de 20/09/2026). Qualquer achado novo deve ser tratado como
+# potencialmente real até prova em contrário.
+[extend]
+useDefault = true
+
+[allowlist]
+regexes = [
+  # Placeholder literal em documentação, não credencial real.
+  '''USUARIO:SENHA''',
+  # Segredos de teste com nome explícito indicando fixture, não produção.
+  '''segredo-de-teste-com-tamanho-suficiente-123456''',
+  '''devobs-secret-that-is-long-enough-for-signatures-123456''',
+]
