@@ -82,3 +82,12 @@ desktop.ini
 postman/
 .tmp.driveupload/
 .claude/worktrees/
+
+# graphify knowledge graph (regenerated automatically by .git/hooks/graphify-rebuild.sh)
+graphify-out/
+mes/graphify-out/
+backend/graphify-out/
+app/graphify-out/
+web/graphify-out/
+tests/graphify-out/
+docs/graphify-out/
