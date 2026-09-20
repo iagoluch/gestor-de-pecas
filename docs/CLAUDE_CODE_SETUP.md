@@ -1,6 +1,6 @@
 # Setup do Claude Code — Gestor de Peças
 
-Auditoria em 20/09/2026, três rodadas na mesma data: (1) levantamento inicial, (2) decisão/execução, (3) fechamento com validação prática de cada item (CI real, bandit 100% triado, benchmark do headroom, Playwright/Schemathesis testados de verdade). Este documento existe para que qualquer pessoa (ou sessão futura de Claude Code) entenda o que está ativo neste ambiente, por quê, e o que fica de fora de propósito.
+Auditoria em 20/09/2026, quatro rodadas na mesma data: (1) levantamento inicial, (2) decisão/execução, (3) fechamento com validação prática de cada item (CI real, bandit 100% triado, benchmark do headroom, Playwright/Schemathesis testados de verdade), (4) limpeza de dependências dev/runtime, registro do bug do Schemathesis, inspeção real de código dos MES externos e do repositório ADVPL/TLPP. Este documento existe para que qualquer pessoa (ou sessão futura de Claude Code) entenda o que está ativo neste ambiente, por quê, e o que fica de fora de propósito.
 
 ## Escopo desta máquina
 
@@ -81,11 +81,11 @@ Não instalado: Ruff (o projeto não usa nenhum linter hoje; introduzir Ruff ser
 
 Avaliado e instalado em `~/.claude/skills/context7/`. Licença `(MIT AND CC-BY-SA-4.0)`, sem chave de API (usa a API REST pública do Context7 via `curl`+`jq`), ativa sob demanda (skill, não MCP permanente). Substitui a necessidade do MCP `context7` permanente pela mesma função com fração do custo de contexto — confirma a preferência CLI/skill > MCP permanente já adotada no projeto.
 
-### Playwright (rodada 2 — configurado, POC parcial)
+### Playwright (ADOTADO desde a rodada 3 — não é mais POC)
 
 **Adotado desde a rodada 3** (não é mais POC) — ver seção "Playwright — decisão firme: ADOTADO" abaixo. `tests/test_e2e_smoke.py` (sem skip), `requirements-dev.txt`, workflow `e2e.yml` próprio.
 
-**Testado e validado de ponta a ponta**: Chromium baixado (191.8 MB, precisou de 3 tentativas por disputa de lock de arquivo `__dirlock` durante download concorrente — resolvido), teste rodado com `python -m pytest tests/poc_playwright_smoke.py -v` contra o preview real (`gestor-preview-visual`, porta 8010) → **1 passed em 2.10s**. Teste fica marcado `@pytest.mark.skip` no repositório (não roda em CI automaticamente ainda — decisão de incorporar à suíte principal fica para o time, não foi feita nesta auditoria).
+**Testado e validado de ponta a ponta**: Chromium baixado (191.8 MB, precisou de 3 tentativas por disputa de lock de arquivo `__dirlock` durante download concorrente — resolvido), teste rodado com `python -m pytest tests/test_e2e_smoke.py -v` contra o preview real (`gestor-preview-visual`, porta 8010) → **1 passed em 2.10s** (rodado 2x). Estado atual: sem `@pytest.mark.skip`, roda sob demanda via `.github/workflows/e2e.yml` (`workflow_dispatch`) — não faz parte do CI principal (`ci.yml`) nem bloqueia o deploy.
 
 Confirmada a recomendação da pesquisa anterior: usar Playwright via CLI/pytest (não via MCP `playwright-mcp`) para testes automatizados — ~4x menos tokens medidos, sem degradação em sessões longas.
 
@@ -182,7 +182,7 @@ Skill descoberta pelo Claude Code (`Skill(context7)` funcionou). Executado o flu
 | `context7` (skill) | — | — | **INSTALADO** (rodada 2) | Substitui MCP permanente por fração do custo de contexto |
 | Sistema "Brain" (hooks) | Ativo em toda mensagem | INVESTIGAR (rodada 1) | **Hooks removidos** (rodada 2) | `decisions/` vazio após semanas de uso — redundante com auto-memória nativa, confirmado com evidência |
 | GitHub Actions (tags) | `@v4`/`@v5` mutáveis | AUDITAR (rodada 1) | **Pinadas por SHA** (rodada 2) | Risco de supply-chain real e documentado, correção segura sem mudar versão |
-| Segurança no CI | Inexistente | AVALIAR ferramentas | **gitleaks + pip-audit (bloqueantes) + bandit (informativo)** adicionados e testados localmente | Cobertura de alto retorno/baixo custo, validada antes de commitar |
+| Segurança no CI | Inexistente | AVALIAR ferramentas → triar bandit (rodada 3) | **gitleaks + pip-audit + bandit, os 3 bloqueantes**, 44 achados do bandit 100% triados e suprimidos com `#nosec` | Cobertura de alto retorno/baixo custo, validada antes de commitar |
 | Playwright | Não instalado | AVALIAR CLI vs MCP → **ADOTAR** (rodada 3) | Dependência reproduzível (`requirements-dev.txt`), teste renomeado (não é mais POC), workflow `e2e.yml` dedicado, validado 2x de ponta a ponta | CLI vence MCP em custo de contexto (~4x), confirmado por medição |
 | Schemathesis | Não instalado | TESTAR (rodada 2) → **TESTADO de verdade** (rodada 3) | Achou bug real (500 em data extrema); em `requirements-dev.txt`, não incorporado ao CI ainda (precisa curar status codes esperados) | Valor comprovado, não hipotético |
 | testcontainers-python | — | AVALIAR com ceticismo (rodada 3) | **REJEITADO** com evidência (`TEST_DATABASE_URL` já é convenção madura) | CI/dev já cobrem o problema |

@@ -90,7 +90,7 @@ Investigação no código confirmou: `mes/integrations/totvs/outbox.py` já impl
 
 ## Frontend / Testes
 
-- **Playwright CLI (`pytest-playwright`)** — **instalado nesta rodada**, POC em `tests/poc_playwright_smoke.py`. Recomendação confirmada: CLI > MCP para este caso de uso (~4x menos tokens medidos).
+- **Playwright CLI (`pytest-playwright`)** — **ADOTADO** (não é mais POC), `tests/test_e2e_smoke.py`, `requirements-dev.txt`, workflow `e2e.yml` próprio. Recomendação confirmada: CLI > MCP para este caso de uso (~4x menos tokens medidos).
 - **`react-window`** — **PREPARAR ADOÇÃO FUTURA**. O bug histórico de "despejar catálogo inteiro" já foi corrigido (memória do projeto). Gatilho objetivo: nova tela com lista/tabela de mais de ~500-1000 linhas sem paginação.
 - **`schemathesis`** — **testado de verdade** (rodada 3): 106 operações, 496 casos gerados contra o preview visual. Achou 1 bug real (`GET /api/v1/audit/appointments` retorna 500 em vez de 422 para data extrema). Adicionado a `requirements-dev.txt`; não incorporado ao CI ainda (precisa curar a lista de status codes esperados por endpoint primeiro, senão os 401/503 esperados quebrariam o build por ruído).
 - **`testcontainers-python`** — **REJEITADO** (rodada 3), com evidência: `TEST_DATABASE_URL` já é convenção madura e documentada, usada em toda a suíte, com Postgres real via `services.postgres` no CI e `compose.yaml` localmente. Nenhuma lacuna real identificada.
@@ -100,7 +100,7 @@ Investigação no código confirmou: `mes/integrations/totvs/outbox.py` já impl
 Ver detalhes de execução/teste em `docs/CLAUDE_CODE_SETUP.md`. Resumo:
 - **gitleaks**: instalado no CI, testado, allowlist criada para 3 falsos positivos confirmados, bloqueante.
 - **pip-audit**: instalado no CI, testado (0 vulnerabilidades hoje), bloqueante.
-- **bandit**: instalado no CI, testado (44 avisos, maioria falso-positivo provável em SQL de coluna constante), **informativo** até triagem manual.
+- **bandit**: instalado no CI, **bloqueante** — os 44 avisos foram todos triados individualmente (falsos positivos comprovados, SQL de coluna constante) e suprimidos com `#nosec` documentado (rodada 3).
 - **semgrep**: ver tabela de obrigatórios acima — ACOMPANHAR, candidato a preencher a lacuna de SAST no frontend JS/TS.
 - GitHub Actions pinadas por SHA — feito.
 
@@ -110,15 +110,17 @@ Ver detalhes de execução/teste em `docs/CLAUDE_CODE_SETUP.md`. Resumo:
 - **`anthropics/claude-plugins-official`** (plugin `claude-code-setup`) — não executado nesta rodada; é a via recomendada para a próxima auditoria em vez de garimpar catálogos de terceiros.
 - Catálogos "tudo em um" (`davila7/claude-code-templates` etc.) — mantido o alerta da rodada 1: usar só como índice, nunca instalar em massa via curl.
 
-## Top descobertas (consolidado das duas rodadas, sem ranking)
+## Top descobertas (consolidado das quatro rodadas, sem ranking)
 
-1. **Superfície MCP completa do próprio domínio (ideia do eryxon-flow)** — se o Gestor já usa MCP em outros contextos, expor OP/operação/apontamento como tools MCP nativas do próprio backend é o achado mais estrutural desta rodada.
-2. **OmniRoute removido com dados concretos** — 39 requisições, $0 de uso real, decisão de desabilitar baseada em evidência, não em achismo.
+1. **Superfície MCP completa do próprio domínio (ideia do eryxon-flow)** — se o Gestor já usa MCP em outros contextos, expor OP/operação/apontamento como tools MCP nativas do próprio backend é o achado mais estrutural.
+2. **OmniRoute: remoção precipitada, revertida com critério melhor** — a decisão inicial de remover (39 requisições, $0 de uso) media 1-2 dias de instalação, não uso real; restaurado e classificado MANTER EM AVALIAÇÃO, com critério objetivo documentado para decidir depois de uso real.
 3. **Brain removido com evidência** — `decisions/` vazio após semanas rodando em toda mensagem confirma redundância real com a auto-memória nativa.
 4. **GitHub Actions pinadas por SHA** — risco de supply-chain real corrigido, sem mudar comportamento (mesma versão major).
 5. **gitleaks encontrou candidatos reais** (todos falsos positivos confirmados, não descartados sem checar) — validou que o processo de triagem funciona antes de confiar no gate.
 6. **Retry/backoff já resolvido internamente** — evitou adicionar dependência (`backon`) para substituir código que já funciona bem.
 7. **context7-skill substitui o MCP permanente** — mesmo ganho, fração do custo de contexto, consistente com a preferência CLI/skill > MCP.
-8. **totvs/engpro-advpl-tlpp-skills** — qualidade real confirmada por leitura de 5 SKILL.md, mas correto identificar que pertence ao repositório errado (ADVPL separado), não instalado aqui por precisão de escopo.
-9. **Playwright CLI configurado com POC real** — decisão de arquitetura de testes com caminho de adoção concreto, não só recomendação.
+8. **totvs/engpro-advpl-tlpp-skills** — qualidade real confirmada por leitura de 5 SKILL.md; já instaladas no repositório ADVPL separado correto, mas sem fonte `.prw`/`.tlpp` real para testar contra (bloqueio documentado).
+9. **Playwright ADOTADO, não é mais POC** — `requirements-dev.txt`, `tests/test_e2e_smoke.py`, workflow `e2e.yml` dedicado, validado 2x de ponta a ponta.
 10. **pg_partman e react-window preparados para adoção futura com gatilho objetivo**, não instalados preventivamente sem evidência de necessidade — evita dependência sem propósito.
+11. **Bandit 100% triado, bloqueante de verdade** — os 44 achados originais foram todos revisados individualmente e suprimidos com `#nosec` documentado; `|| true` removido do CI.
+12. **Schemathesis achou um bug real** — 500 em vez de 422 em `/api/v1/audit/appointments` para data extrema; registrado em `docs/STATUS_ATUAL.md`, mantido em `requirements-dev.txt`.
