@@ -73,7 +73,7 @@ claude mcp remove omniroute --scope user
 Adicionado job `security` em `.github/workflows/ci.yml`:
 - **gitleaks** (`zricethezav/gitleaks:v8.30.1` via Docker, escaneando histórico completo de commits) — **testado localmente antes de commitar**: achou 4 candidatos, todos confirmados como falsos positivos (dois segredos de teste com nome explícito de fixture, um placeholder literal `"USUARIO:SENHA"` em `protheus/README.md`). Allowlist criada em `.gitleaks.toml` para esses 3 padrões específicos; re-testado após a allowlist e confirmado **"no leaks found"**, exit code 0. É bloqueante (falha o build se achar algo novo).
 - **pip-audit** — testado localmente, **0 vulnerabilidades** nas dependências atuais. Bloqueante.
-- **bandit** — testado localmente contra `backend`, `mes`, `app` (45.461 linhas escaneadas): 44 avisos, quase todos B608 (SQL via f-string) sobre nomes de coluna constantes (`{OUTBOX_COLUMNS}`), não input de usuário — falso positivo provável, mas não triado item a item. **Informativo por ora** (`|| true`, não quebra o build) até alguém revisar os 44 achados e marcar os reais com `#nosec` ou corrigir; depois disso, trocar para bloqueante.
+- **bandit** — 44 avisos encontrados, **todos triados individualmente e suprimidos com `#nosec` documentado** (ver seção "Bandit — os 44 achados, 100% triados" abaixo). Bloqueante desde a rodada 3, sem `|| true`.
 
 Não instalado: Ruff (o projeto não usa nenhum linter hoje; introduzir Ruff seria uma decisão maior que "segurança", fora do escopo desta auditoria — bandit é a ferramenta cirúrgica certa aqui, sem se comprometer com um linter completo).
 
@@ -83,7 +83,7 @@ Avaliado e instalado em `~/.claude/skills/context7/`. Licença `(MIT AND CC-BY-S
 
 ### Playwright (rodada 2 — configurado, POC parcial)
 
-`pytest-playwright` instalado (`pip install pytest-playwright`, versão 1.62.0/0.9.0). POC criada em `tests/poc_playwright_smoke.py` (marcada `@pytest.mark.skip`, não faz parte da suíte principal ainda) testando que a página inicial do preview visual (`http://127.0.0.1:8010`, servidor já existente do projeto: `gestor-preview-visual`) carrega e retorna o título correto.
+**Adotado desde a rodada 3** (não é mais POC) — ver seção "Playwright — decisão firme: ADOTADO" abaixo. `tests/test_e2e_smoke.py` (sem skip), `requirements-dev.txt`, workflow `e2e.yml` próprio.
 
 **Testado e validado de ponta a ponta**: Chromium baixado (191.8 MB, precisou de 3 tentativas por disputa de lock de arquivo `__dirlock` durante download concorrente — resolvido), teste rodado com `python -m pytest tests/poc_playwright_smoke.py -v` contra o preview real (`gestor-preview-visual`, porta 8010) → **1 passed em 2.10s**. Teste fica marcado `@pytest.mark.skip` no repositório (não roda em CI automaticamente ainda — decisão de incorporar à suíte principal fica para o time, não foi feita nesta auditoria).
 
@@ -136,9 +136,9 @@ Todos os 44 revisados individualmente lendo o código real (não presumido): 32�
 O hook de rebuild deixou de viver só em `.git/hooks/` (não versionado): movido para `scripts/graphify-rebuild.sh` (rastreado no git), com `scripts/setup-dev-hooks.sh` — instalador pequeno e idempotente que qualquer clone novo roda uma vez (`sh scripts/setup-dev-hooks.sh`) para religar o gatilho de post-commit sem sobrescrever o auto-push já existente. Testado duas vezes: idempotência (rodar de novo diz "já estava instalado, nada a fazer") e simulação de clone novo (sem hook prévio) em `$HOME/hook_test_repo` temporário, removido depois.
 
 ### Playwright — decisão firme: ADOTADO (não é mais POC)
-- `requirements-e2e.txt` criado (`playwright==1.62.0`, `pytest-playwright==0.9.0`), separado do `requirements.txt` de propósito (pesado, só quem roda E2E precisa).
+- `requirements-dev.txt` criado (`playwright==1.62.0`, `pytest-playwright==0.9.0`), separado do `requirements.txt` de propósito (pesado, só quem roda E2E precisa).
 - Teste renomeado de `poc_playwright_smoke.py` para `tests/test_e2e_smoke.py` (sem `@pytest.mark.skip` — não é mais POC), confirmado que `unittest discover` do CI principal não tenta rodá-lo (é estilo pytest com fixture, `unittest` não encontra `TestCase` nenhuma ali — testado, "Ran 0 tests... NO TESTS RAN", zero risco de quebrar o CI principal).
-- `.github/workflows/e2e.yml` criado: `workflow_dispatch` (sob demanda, não bloqueia CI/deploy), instala `requirements-e2e.txt`, `playwright install --with-deps chromium`, sobe o preview visual, roda o teste.
+- `.github/workflows/e2e.yml` criado: `workflow_dispatch` (sob demanda, não bloqueia CI/deploy), instala `requirements-dev.txt`, `playwright install --with-deps chromium`, sobe o preview visual, roda o teste.
 - **Validado de ponta a ponta duas vezes nesta rodada**, com o gotcha real documentado: no Windows, usar o Python do `.venv` do projeto (`./.venv/Scripts/python.exe`), não um `python3` solto no PATH que pode não ter as libs do projeto instaladas.
 
 ### Schemathesis — testado de verdade, achou bug real
@@ -148,7 +148,7 @@ Instalado (`schemathesis==4.27.5`), rodado contra `http://127.0.0.1:8010/api/ope
 
 Outros achados: 102 operações só retornaram 401 (autenticação não configurada no teste — esperado), 2× 503 em `/PcfIntegService` ("Receptor SOAP TOTVS desabilitado por configuração" — comportamento esperado no ambiente de preview, não é bug), 130 "undocumented status code" e 43 "unsupported methods" são majoritariamente ruído de schema (OpenAPI não documenta todo código de erro possível) e fuzzing de métodos HTTP fora da superfície real da API.
 
-**Decisão**: valor real comprovado (achou 1 bug genuíno). Adicionado a `requirements-e2e.txt` junto com Playwright, comando documentado. **Não incorporado ao CI ainda** — precisaria de curadoria da lista de status codes esperados por endpoint antes de virar gate (senão o 503 esperado do SOAP desligado e os 401 de autenticação quebrariam o build por ruído, não por bug real).
+**Decisão**: valor real comprovado (achou 1 bug genuíno). Adicionado a `requirements-dev.txt` junto com Playwright, comando documentado. **Não incorporado ao CI ainda** — precisaria de curadoria da lista de status codes esperados por endpoint antes de virar gate (senão o 503 esperado do SOAP desligado e os 401 de autenticação quebrariam o build por ruído, não por bug real).
 
 ### Testcontainers — rejeitado com evidência
 Confirmado por grep: o projeto já tem uma convenção madura e documentada (`TEST_DATABASE_URL`, citada no README, usada em toda a suíte de testes de integração) apontando para Postgres real — via `services.postgres` no CI e `compose.yaml` (porta 15432) localmente. `testcontainers-python` resolveria o mesmo problema de forma paralela e redundante, sem nenhuma lacuna real identificada. **REJEITADO — infraestrutura de CI/dev já cobre o problema.**
@@ -183,8 +183,8 @@ Skill descoberta pelo Claude Code (`Skill(context7)` funcionou). Executado o flu
 | Sistema "Brain" (hooks) | Ativo em toda mensagem | INVESTIGAR (rodada 1) | **Hooks removidos** (rodada 2) | `decisions/` vazio após semanas de uso — redundante com auto-memória nativa, confirmado com evidência |
 | GitHub Actions (tags) | `@v4`/`@v5` mutáveis | AUDITAR (rodada 1) | **Pinadas por SHA** (rodada 2) | Risco de supply-chain real e documentado, correção segura sem mudar versão |
 | Segurança no CI | Inexistente | AVALIAR ferramentas | **gitleaks + pip-audit (bloqueantes) + bandit (informativo)** adicionados e testados localmente | Cobertura de alto retorno/baixo custo, validada antes de commitar |
-| Playwright | Não instalado | AVALIAR CLI vs MCP → **ADOTAR** (rodada 3) | Dependência reproduzível (`requirements-e2e.txt`), teste renomeado (não é mais POC), workflow `e2e.yml` dedicado, validado 2x de ponta a ponta | CLI vence MCP em custo de contexto (~4x), confirmado por medição |
-| Schemathesis | Não instalado | TESTAR (rodada 2) → **TESTADO de verdade** (rodada 3) | Achou bug real (500 em data extrema); em `requirements-e2e.txt`, não incorporado ao CI ainda (precisa curar status codes esperados) | Valor comprovado, não hipotético |
+| Playwright | Não instalado | AVALIAR CLI vs MCP → **ADOTAR** (rodada 3) | Dependência reproduzível (`requirements-dev.txt`), teste renomeado (não é mais POC), workflow `e2e.yml` dedicado, validado 2x de ponta a ponta | CLI vence MCP em custo de contexto (~4x), confirmado por medição |
+| Schemathesis | Não instalado | TESTAR (rodada 2) → **TESTADO de verdade** (rodada 3) | Achou bug real (500 em data extrema); em `requirements-dev.txt`, não incorporado ao CI ainda (precisa curar status codes esperados) | Valor comprovado, não hipotético |
 | testcontainers-python | — | AVALIAR com ceticismo (rodada 3) | **REJEITADO** com evidência (`TEST_DATABASE_URL` já é convenção madura) | CI/dev já cobrem o problema |
 | ADVPL/TLPP skills oficiais | — | INVESTIGAR conteúdo | Lido e avaliado; **não instalado aqui** (repo errado) | Só faria sentido no repositório ADVPL/TLPP separado |
 | `pybreaker`/`backon` | — | AVALIAR se já resolvido | **JÁ RESOLVIDO internamente** (outbox.py) | Retry/backoff determinístico já implementado; circuit breaker fica como adoção futura condicional |

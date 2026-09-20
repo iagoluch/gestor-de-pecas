@@ -1,0 +1,20 @@
+# Dependências de desenvolvimento/CI (segurança + testes) — nunca runtime.
+# Instalar junto com requirements.txt só quem for rodar essas ferramentas
+# localmente; o CI já instala os dois nos jobs certos (ver ci.yml/e2e.yml).
+#
+# Setup local completo:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   python -m playwright install chromium   # só se for rodar tests/test_e2e_smoke.py
+
+# --- Segurança (job "security" em ci.yml) ---
+# Pinadas exatas (não faixa) de propósito: Dependabot abre PR quando sair uma
+# nova versão, em vez de a CI silenciosamente pegar uma versão nova sozinha.
+bandit==1.9.4
+pip-audit==2.10.1
+
+# --- Testes E2E (job "e2e" em e2e.yml, sob demanda) ---
+playwright==1.62.0
+pytest-playwright==0.9.0
+
+# --- Fuzzing de contrato de API (uso manual, ainda não incorporado ao CI) ---
+schemathesis==4.27.5

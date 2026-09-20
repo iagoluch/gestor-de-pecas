@@ -454,6 +454,14 @@ próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
    Montagem, ingestão do MODELO da Solda, `prazo_entrega` sem origem, filtro
    de setor em Crachás) continuam abertas — nada disso foi resolvido nesta
    janela.
+5. **Bug real encontrado por fuzzing (Schemathesis, auditoria Claude Code de
+   20/09/2026):** `GET /api/v1/audit/appointments` retorna `500 Internal
+   Server Error` em vez de `422` quando o parâmetro de data `fim` recebe uma
+   data implausível (ex.: ano 0263) — o endpoint não valida limites
+   plausíveis antes de processar. Reproduzir com:
+   `curl 'http://127.0.0.1:8010/api/v1/audit/appointments?fim=0263-10-17T17%3A14%3A48Z'`
+   contra o preview visual. Não corrigido — fora do escopo daquela auditoria
+   (infraestrutura de CI/dev, não regra de negócio).
 
 ## 4. O que NÃO fazer (reforço das regras já em `AGENTS.md`)
 

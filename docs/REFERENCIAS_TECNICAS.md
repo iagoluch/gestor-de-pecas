@@ -1,6 +1,6 @@
 # Referências Técnicas — Pesquisa Externa
 
-Duas rodadas na mesma data (20/09/2026): levantamento amplo + rodada de decisão/execução sobre os achados. Curado — não é catálogo de todos os links avaliados, mas todos os **repositórios obrigatórios** pedidos pela rodada 2 aparecem aqui com decisão explícita, mesmo os rejeitados.
+Quatro rodadas na mesma data (20/09/2026): levantamento amplo → decisão/execução → fechamento com validação prática → inspeção real de código dos MES + ADVPL/TLPP. Curado — não é catálogo de todos os links avaliados, mas todos os **repositórios obrigatórios** pedidos aparecem aqui com decisão explícita, mesmo os rejeitados.
 
 ## Repositórios obrigatórios (rodada 2) — nenhum descartado silenciosamente
 
@@ -18,12 +18,21 @@ Duas rodadas na mesma data (20/09/2026): levantamento amplo + rodada de decisão
 | `modelcontextprotocol/modelcontextprotocol` | REFERÊNCIA | Especificação do protocolo em si, sem ação — usado indiretamente por todo MCP já configurado |
 | `modelcontextprotocol/inspector` | ACOMPANHAR | Ferramenta de debug de servidores MCP; útil só se formos desenvolver um MCP próprio (ex.: expor o domínio do Gestor via MCP, ver ideia do eryxon-flow abaixo) |
 | `upstash/context7` | **REJEITADO em favor de `netresearch/context7-skill`** | Mesma função como skill sob demanda, fração do custo de contexto do MCP permanente — **instalado o substituto, não o MCP** |
-| `microsoft/playwright` | **INSTALAR AGORA — feito** | `pytest-playwright` instalado, POC criada (ver `docs/CLAUDE_CODE_SETUP.md`) |
+| `microsoft/playwright` | **ADOTADO** (não é mais POC) | `requirements-dev.txt`, `tests/test_e2e_smoke.py`, workflow `e2e.yml` próprio (ver `docs/CLAUDE_CODE_SETUP.md`) |
 | `microsoft/playwright-mcp` | ACOMPANHAR (não adotado para CI) | ~4x mais tokens que a CLI em teste medido; reservado só para exploração visual pontual |
 | `timescale/pg-aiguide` | **INSTALADO** (rodada 1, mantido) | Plugin Claude Code ativo, hospedado, Apache-2.0 |
 | `gitleaks/gitleaks` | **INSTALADO no CI — feito** | Testado localmente, achou 4 falsos positivos, allowlist criada, agora bloqueante e limpo |
 | `semgrep/semgrep` | ACOMPANHAR | `bandit` já cobre padrões de segurança Python; semgrep teria valor incremental cobrindo o frontend JS/TS (bandit não cobre) — não instalado agora para não empilhar 2 SAST de uma vez sem triagem, mas é o candidato natural para preencher essa lacuna depois |
 | `snyk/agent-scan` | IGNORAR | Não é scanner de dependências (SCA) — é scanner de segurança para agentes de IA/MCP instalados na máquina; nome engana, não resolve o problema que buscávamos |
+
+## MES / Manufatura — inspeção real de código (rodada 4, clone temporário + leitura direta)
+
+Clone temporário (`--depth 1`, fora do projeto, removido depois) e leitura direta de models/migrations/plugins — não só README:
+
+- **point85/mes-ai**: módulos de domínio alinhados a ISA-95 (`data_collection`, `inventory`, `material`, `operations`, `performance`, `physical_model`, `product_def`, `quality`, `uom`, `wip`). `performance/models.py` modela `Reason` como **árvore hierárquica auto-referenciada** (`parent_id` → `reasons.id`) com campo `oee_bucket` em cada nó — motivos de parada se classificam automaticamente no bucket de OEE certo pela posição na árvore. Também usa **"gêmeo mock" para cada conector real** (`plugins/system/opcua_equipment` + `mock_equipment`, `sap_s4hana_erp` + `sap_erp_simulator`) — toda integração externa tem simulador equivalente.
+- **SheetMetalConnect/eryxon-flow**: achado de maior valor prático — migration real `20260525120000_audit_triggers_non_fatal.sql` documenta um **incidente P0 real**: trigger de audit log com FK `NOT NULL` para `tenants`, uma referência órfã derrubava a transação de negócio inteira (login/exclusão de usuário) com 500, travando todos os usuários. Correção: `EXCEPTION WHEN ... THEN RAISE WARNING` no INSERT do audit log — log de auditoria vira best-effort por design, nunca aborta a operação real. **Lição direta**: se o Gestor tiver trigger de auditoria no banco com FK obrigatória, vale confirmar que ele não pode derrubar a transação principal.
+- **Mes-Open/OpenMes**: extensibilidade via traits Laravel (`Concerns/HasCustomFields`, `Concerns/HasModuleRelations`) — conceitual, stack diferente, não aplicável diretamente.
+- **point85/OEE-Designer**: mesma árvore hierárquica de motivos de parada (`ReasonNode.java`) — reforça que é padrão validado por dois projetos independentes.
 
 ## Eryxon Flow — comparação de cobertura funcional (investigação aprofundada, rodada 2)
 
@@ -45,7 +54,11 @@ Não virou backlog — é referência de padrões, não lista de tarefas.
 
 ## ADVPL/TLPP — skills oficiais e analisador (investigado a fundo, rodada 2)
 
-### `totvs/engpro-advpl-tlpp-skills` — TESTAR no repositório ADVPL separado
+### Bloqueio confirmado (rodada 4) — repositório ADVPL localizado, sem fonte para testar
+
+Repositório localizado: `C:\Users\iago.luchtenberg\Documents\Sistema - Iago\Protheus-AdvPL\`. As skills oficiais **já estavam instaladas** ali (`.agents/skills/`, de sessão anterior a esta auditoria) — nada a instalar de novo. **Bloqueio real**: o repositório não contém nenhum arquivo `.prw`/`.tlpp`/`.prx` (confirmado por busca direta) — não há código ADVPL real para testar uma skill contra, nem fonte para rodar o `advpl-tlpp-code-analyzer`. Também não é um repositório git ainda (sem `.git/`). Parado aqui conforme instruído — nada instalado "só para cumprir checklist".
+
+### `totvs/engpro-advpl-tlpp-skills` — já instaladas no repo ADVPL separado (não testadas por falta de fonte real)
 
 Conteúdo real lido e verificado (não apenas o README): 20 skills específicas de ADVPL/TLPP (`advpl-to-tlpp-migration`, `code-review` com ~800-900 linhas de checklist real incluindo SQL injection em `DbSelectArea` e proibição de acesso direto a tabelas `SX*`, `mvc-generator`, `advpl-tlpp-sdd` com a regra real "todo arquivo gerado por IA é UTF-8, mas o compilador RDMake requer CP-1252 — conversão obrigatória antes de compilar", `context-map`) + 14 skills genéricas redundantes (ignorar, já cobertas por skills equivalentes já instaladas).
 
@@ -79,7 +92,7 @@ Investigação no código confirmou: `mes/integrations/totvs/outbox.py` já impl
 
 - **Playwright CLI (`pytest-playwright`)** — **instalado nesta rodada**, POC em `tests/poc_playwright_smoke.py`. Recomendação confirmada: CLI > MCP para este caso de uso (~4x menos tokens medidos).
 - **`react-window`** — **PREPARAR ADOÇÃO FUTURA**. O bug histórico de "despejar catálogo inteiro" já foi corrigido (memória do projeto). Gatilho objetivo: nova tela com lista/tabela de mais de ~500-1000 linhas sem paginação.
-- **`schemathesis`** — **testado de verdade** (rodada 3): 106 operações, 496 casos gerados contra o preview visual. Achou 1 bug real (`GET /api/v1/audit/appointments` retorna 500 em vez de 422 para data extrema). Adicionado a `requirements-e2e.txt`; não incorporado ao CI ainda (precisa curar a lista de status codes esperados por endpoint primeiro, senão os 401/503 esperados quebrariam o build por ruído).
+- **`schemathesis`** — **testado de verdade** (rodada 3): 106 operações, 496 casos gerados contra o preview visual. Achou 1 bug real (`GET /api/v1/audit/appointments` retorna 500 em vez de 422 para data extrema). Adicionado a `requirements-dev.txt`; não incorporado ao CI ainda (precisa curar a lista de status codes esperados por endpoint primeiro, senão os 401/503 esperados quebrariam o build por ruído).
 - **`testcontainers-python`** — **REJEITADO** (rodada 3), com evidência: `TEST_DATABASE_URL` já é convenção madura e documentada, usada em toda a suíte, com Postgres real via `services.postgres` no CI e `compose.yaml` localmente. Nenhuma lacuna real identificada.
 
 ## Segurança — CI (feito nesta rodada)
