@@ -319,7 +319,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     || (canPoint
       && !["Em processo", "Setup", "Retrabalho"].includes(currentStatus)
       && !firstPiece?.bloqueio_ativo);
-  const canSetup = canPoint && currentStatus !== "Setup" && !firstPiece?.setup_registrado;
+  // Setup mede a preparação de uma OP já em execução. Sem Início ainda não há
+  // apontamento operacional a que esse tempo possa pertencer.
+  const canSetup = canPoint
+    && ["Em processo", "Parada", "Retrabalho"].includes(currentStatus)
+    && !firstPiece?.setup_registrado;
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
     operation: String(activeCard.operation ?? activeCard.numero_operacao ?? ""),

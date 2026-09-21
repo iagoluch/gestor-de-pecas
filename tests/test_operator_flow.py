@@ -147,19 +147,34 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(rework.data["codigo_status_recurso"], "0040")
         self.assertEqual(db.operator_events[-1]["codigo_status_recurso"], "0040")
 
-    def test_fila_pode_ir_diretamente_para_setup_ou_retrabalho(self):
-        for action, expected_status in (("Setup", "Setup"), ("Retrabalho", "Retrabalho")):
-            with self.subTest(action=action):
-                db, service, operation = self._service()
-                result = service.executar(
-                    action,
-                    op="OP-OPERADOR",
-                    setor="Dobra",
-                    recurso="1303",
-                    operacao=operation,
-                )
-                self.assertTrue(result.ok, result.message)
-                self.assertEqual(result.data["status"], expected_status)
+    def test_setup_exige_inicio_da_op(self):
+        _db, service, operation = self._service()
+
+        result = service.executar(
+            "Setup",
+            op="OP-OPERADOR",
+            setor="Dobra",
+            recurso="1303",
+            operacao=operation,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, "setup_exige_inicio")
+        self.assertEqual(result.data["estado_atual"], "fila")
+
+    def test_fila_pode_ir_diretamente_para_retrabalho(self):
+        _db, service, operation = self._service()
+
+        result = service.executar(
+            "Retrabalho",
+            op="OP-OPERADOR",
+            setor="Dobra",
+            recurso="1303",
+            operacao=operation,
+        )
+
+        self.assertTrue(result.ok, result.message)
+        self.assertEqual(result.data["status"], "Retrabalho")
 
     def test_setup_nao_esta_disponivel_para_pintura_ou_solda(self):
         for sector in ("Pintura", "Solda Aço", "Protótipo"):

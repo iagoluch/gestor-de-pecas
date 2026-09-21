@@ -35,7 +35,6 @@ ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
     OperatorState.QUEUED: (
         OperatorState.PRODUCTION,
         OperatorState.STOPPED,
-        OperatorState.SETUP,
         OperatorState.REWORK,
     ),
     OperatorState.PRODUCTION: (
@@ -226,6 +225,13 @@ def explain_invalid_transition(
         return InvalidTransition(
             "retorno_incompativel",
             f"Só é possível retornar de um setup; o apontamento está {label}.",
+            source,
+            requested,
+        )
+    if source == OperatorState.QUEUED and parsed_action == OperatorAction.SETUP:
+        return InvalidTransition(
+            "setup_exige_inicio",
+            "Inicie a OP antes de apontar o Setup.",
             source,
             requested,
         )

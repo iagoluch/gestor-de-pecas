@@ -59,11 +59,10 @@ class OperatorStateMachineTests(unittest.TestCase):
             **extra,
         )
 
-    def test_op_aberta_aceita_as_quatro_entradas_validadas(self):
+    def test_op_aberta_exige_inicio_antes_do_setup(self):
         cases = (
             ("Início", "Em processo", {}),
             ("Parada", "Parada", {"motivo_codigo": "0029"}),
-            ("Setup", "Setup", {}),
             ("Retrabalho", "Retrabalho", {}),
         )
         for action, expected, extra in cases:
@@ -72,6 +71,11 @@ class OperatorStateMachineTests(unittest.TestCase):
                 result = self._execute(service, operation, action, **extra)
                 self.assertTrue(result.ok, result.message)
                 self.assertEqual(result.data["status"], expected)
+
+        _database, service, operation = self._service()
+        setup = self._execute(service, operation, "Setup")
+        self.assertFalse(setup.ok)
+        self.assertEqual(setup.code, "setup_exige_inicio")
 
     def test_retrabalho_parada_retomar_retorna_ao_retrabalho(self):
         database, service, operation = self._service()
@@ -109,6 +113,7 @@ class OperatorStateMachineTests(unittest.TestCase):
         for action, expected in (("Início", "Em processo"), ("Retrabalho", "Retrabalho")):
             with self.subTest(action=action):
                 _database, service, operation = self._service()
+                self.assertTrue(self._execute(service, operation, "Início").ok)
                 self.assertTrue(self._execute(service, operation, "Setup").ok)
                 result = self._execute(service, operation, action)
                 self.assertTrue(result.ok, result.message)
@@ -127,6 +132,7 @@ class OperatorStateMachineTests(unittest.TestCase):
 
     def test_transicoes_sao_uma_definicao_de_dominio(self):
         self.assertTrue(can_transition(OperatorState.QUEUED, OperatorState.STOPPED))
+        self.assertFalse(can_transition(OperatorState.QUEUED, OperatorState.SETUP))
         self.assertTrue(can_transition(OperatorState.REWORK, OperatorState.STOPPED))
         self.assertTrue(can_transition(OperatorState.REWORK, OperatorState.SETUP))
         self.assertFalse(can_transition(OperatorState.REWORK, OperatorState.PRODUCTION))

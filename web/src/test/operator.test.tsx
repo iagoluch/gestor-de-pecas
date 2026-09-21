@@ -150,7 +150,7 @@ describe("fluxo Web do operador", () => {
     expect(container.querySelectorAll(".operator-route__item--done")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Iniciar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Parada" })).not.toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "20 - DOBRA — Próxima" }));
@@ -524,9 +524,8 @@ describe("fluxo Web do operador", () => {
 
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeDisabled();
 
-    // O bloqueio é refletido diretamente no controle; o Setup continua sendo
-    // o único ponto de entrada para liberar a primeira peça.
-    expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
+    // Sem início não existe apontamento que possa receber o Setup.
+    expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Finalizar produção" })).not.toBeInTheDocument();
   });

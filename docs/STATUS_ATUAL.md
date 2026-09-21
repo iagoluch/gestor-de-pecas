@@ -482,6 +482,9 @@ próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
   transação estreita. Catálogo, sincronização inbound e os 16 apontamentos de
   Corte finalizados vinculados às duas OPs foram preservados; `CORTE` continua
   concluído e Dobra volta a ser a próxima etapa elegível.
+- Setup passou a exigir o `Início` prévio da mesma OP. O bloqueio é canônico
+  (`setup_exige_inicio`, HTTP 409), e o botão do posto permanece desabilitado
+  enquanto não houver apontamento ativo; não é apenas uma restrição visual.
 
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 

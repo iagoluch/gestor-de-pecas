@@ -967,6 +967,13 @@ class OperatorFlowService:
                 "operacao_ativa_diferente",
                 dict(conflito),
             )
+        if atual is None and requested_action == OperatorAction.SETUP:
+            return OperatorFlowResult(
+                False,
+                "Inicie a OP antes de apontar o Setup.",
+                "setup_exige_inicio",
+                {"op": codigo, "estado_atual": OperatorState.QUEUED.value},
+            )
         target = resolve_operator_action(requested_action, OperatorState.QUEUED)
         if atual is None and target in {
             OperatorState.PRODUCTION,
