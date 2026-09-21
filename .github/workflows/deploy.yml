@@ -43,15 +43,19 @@ jobs:
 
   deploy:
     needs: [validate, build-frontend]
-    # Roda no runner self-hosted instalado NA PRÓPRIA VM: ela fica atrás de
-    # firewall, sem IP público, só com SSH administrativo interno (ver
-    # requisitos de infraestrutura). Um runner self-hosted puxa o job de
-    # dentro para fora, sem precisar abrir porta de entrada nenhuma.
+    # Roda no runner self-hosted instalado NA PRÓPRIA VM (Windows Server
+    # 2025 — decisão da infra, 21/09/2026): ela fica atrás de firewall, sem
+    # IP público, só com RDP/administração interna (ver requisitos de
+    # infraestrutura). Um runner self-hosted puxa o job de dentro para
+    # fora, sem precisar abrir porta de entrada nenhuma.
     #
     # Pré-requisito (ainda pendente — VM não provisionada): instalar o
-    # runner na VM com a label "gestor-pecas-vm"
-    # (Settings > Actions > Runners > New self-hosted runner no repositório).
-    runs-on: [self-hosted, gestor-pecas-vm]
+    # runner do GitHub Actions para Windows na VM com a label
+    # "gestor-pecas-vm" (Settings > Actions > Runners > New self-hosted
+    # runner no repositório, escolhendo Windows).
+    runs-on: [self-hosted, Windows, gestor-pecas-vm]
+    env:
+      APP_DIR: C:\gestor-pecas
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -62,25 +66,31 @@ jobs:
 
       # Sincroniza o código para o diretório de execução, preservando o
       # .venv e o .env existentes (nunca sobrescritos pelo deploy).
-      - name: Sincronizar código para /opt/gestor-pecas
+      # Códigos de saída do robocopy 0–7 são sucesso (arquivos copiados/
+      # já iguais); só >=8 é falha real.
+      - name: Sincronizar código para ${{ env.APP_DIR }}
+        shell: pwsh
         run: |
-          sudo rsync -a --delete \
-            --exclude ".venv" \
-            --exclude ".git" \
-            --exclude "node_modules" \
-            --exclude "web/node_modules" \
-            ./ /opt/gestor-pecas/
+          robocopy . "${env:APP_DIR}" /MIR /XD .venv .git node_modules "web\node_modules"
+          if ($LASTEXITCODE -ge 8) { exit 1 }
 
       - name: Instalar dependências Python
-        run: /opt/gestor-pecas/.venv/bin/pip install -r /opt/gestor-pecas/requirements.txt
+        shell: pwsh
+        run: |
+          & "${env:APP_DIR}\.venv\Scripts\pip.exe" install -r "${env:APP_DIR}\requirements.txt"
 
       # Migrations aplicam automaticamente na inicialização do processo
       # (auto_migrate em app/database/database.py) — não há passo manual
-      # aqui, só reiniciar o serviço.
+      # aqui, só reiniciar o serviço. O serviço "gestor-pecas" é registrado
+      # via NSSM (nssm.cc), que expõe o processo uvicorn como um Serviço do
+      # Windows comum — por isso basta Restart-Service.
       - name: Reiniciar o serviço
-        run: sudo systemctl restart gestor-pecas.service
+        shell: pwsh
+        run: Restart-Service -Name gestor-pecas
 
       - name: Validar saúde após o restart
+        shell: pwsh
         run: |
-          sleep 3
-          curl -fsS http://127.0.0.1:8000/api/v1/system/health
+          Start-Sleep -Seconds 3
+          $resposta = Invoke-WebRequest -Uri http://127.0.0.1:8000/api/v1/system/health -UseBasicParsing
+          if ($resposta.StatusCode -ne 200) { exit 1 }
