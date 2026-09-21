@@ -153,15 +153,16 @@ class CanonicalPhysicalSourceTests(unittest.TestCase):
         simulated = ManagementService(SimulationRepo(), simulation_mode=True).get_overview(self.filters)
         self.assertEqual(result["kpis"], simulated["kpis"])
         simulation = simulated["simulation"]
-        # A fila de 10 min continua medida e publicada, mas fora da base
-        # disponível: ela não é tempo em que o recurso deixou de produzir
-        # tendo trabalho atribuído.
+        # A fila física sem OP é publicada como recurso sem demanda e continua
+        # fora da base disponível.
         self.assertAlmostEqual(simulation["time_bases"]["available_seconds"], 4800)
         self.assertAlmostEqual(simulation["time_bases"]["worked_seconds"], 4200)
         self.assertAlmostEqual(simulation["time_bases"]["standard_run_seconds"], 900)
         self.assertAlmostEqual(simulation["time_bases"]["supporting_productive_seconds"], 600)
-        self.assertAlmostEqual(simulation["time_bases"]["queue_seconds"], 600)
-        self.assertAlmostEqual(result["hours"]["queue_seconds"], 600)
+        self.assertAlmostEqual(simulation["time_bases"]["queue_seconds"], 0)
+        self.assertAlmostEqual(simulation["time_bases"]["no_demand_seconds"], 600)
+        self.assertAlmostEqual(result["hours"]["queue_seconds"], 0)
+        self.assertAlmostEqual(result["hours"]["no_demand_seconds"], 600)
         self.assertAlmostEqual(result["kpis"]["availability"]["value"], 4200 / 4800 * 100)
         self.assertAlmostEqual(result["kpis"]["performance"]["value"], 1500 / 4200 * 100)
         self.assertEqual(result["kpis"]["ftt"]["value"], 100)

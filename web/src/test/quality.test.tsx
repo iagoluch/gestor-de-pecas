@@ -331,9 +331,11 @@ describe("apontamento peça a peça", () => {
     expect(screen.queryByRole("textbox", { name: /unidade/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /unidade/i })).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Padrão da cota 1"), { target: { value: "125,0 ± 0,5" } });
+    fireEvent.change(screen.getByLabelText("Padrão nominal da cota 1"), { target: { value: "125,0" } });
+    fireEvent.change(screen.getByLabelText("Tolerância da cota 1"), { target: { value: "0,5" } });
     fireEvent.click(screen.getByRole("button", { name: "+ Adicionar cota" }));
-    fireEvent.change(screen.getByLabelText("Padrão da cota 2"), { target: { value: "80,0 ± 0,5" } });
+    fireEvent.change(screen.getByLabelText("Padrão nominal da cota 2"), { target: { value: "80,0" } });
+    fireEvent.change(screen.getByLabelText("Tolerância da cota 2"), { target: { value: "0,5" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar cotas do produto" }));
 
     await waitFor(() => {

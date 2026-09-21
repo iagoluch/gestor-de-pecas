@@ -231,14 +231,12 @@ class ManufacturingRules:
         return cls.is_operational_window(kind)
 
     @staticmethod
-    def state_is_no_demand(*, category=None, interruption_type=None) -> bool:
+    def state_is_no_demand(*, category=None, interruption_type=None, operation=None) -> bool:
         """Decide se um estado físico persistido significa ausência de demanda.
 
-        Ao abrir o turno oficial o scheduler encerra o ``fora_turno`` e grava
-        uma ``fila`` sem OP marcada com ``retorno_turno_sem_demanda``. Essa
-        origem explícita é a única fila que significa ausência de demanda: uma
-        fila operacional comum (operador aguardando com OP aberta) continua
-        sendo fila e não pode ser lida como recurso sem trabalho.
+        ``fila`` sem OP significa recurso sem demanda, independentemente da
+        origem que criou o estado. Uma fila vinculada a OP continua fila: a
+        presença da ordem é evidência de demanda e não pode ser apagada.
 
         Fonte única desta decisão. A análise usa esta função para derivar
         ``EventCategory.NO_DEMAND`` e o Andon usa ``resource_has_no_demand``,
@@ -249,10 +247,10 @@ class ManufacturingRules:
             category.value if isinstance(category, EventCategory) else str(category or "")
         ).strip()
         if value == EventCategory.NO_DEMAND.value:
-            return True
+            return not str(operation or "").strip()
         return (
             value == EventCategory.QUEUE.value
-            and str(interruption_type or "").strip() == SHIFT_START_NO_DEMAND_TYPE
+            and not str(operation or "").strip()
         )
 
     @classmethod
@@ -263,8 +261,9 @@ class ManufacturingRules:
         window_kind,
         active_operations=0,
         explicit_shift_return=False,
+        operation=None,
     ) -> bool:
-        """Recurso fora de turno, sem HE e sem ninguém trabalhando nele.
+        """Decide se o recurso sem OP deve ser exibido como sem demanda.
 
         Este é o complemento explícito da regra já existente ``fora de turno
         sem hora extra não vira parada não planejada``: além de não contar como
@@ -284,13 +283,15 @@ class ManufacturingRules:
         # execução sumiria do Andon.
         if int(active_operations or 0) > 0:
             return False
-        # Ao abrir o turno oficial, o scheduler encerra o estado físico
-        # ``fora_turno`` e grava uma fila sem OP. Essa origem explícita é a
-        # única fila dentro do turno que significa ausência de demanda; uma
-        # fila operacional comum continua sem essa interpretação.
+        if cls.state_is_no_demand(category=category, operation=operation):
+            return True
+        # Compatibilidade com o marcador criado na abertura do turno. A regra
+        # principal já cobre qualquer fila sem OP, mesmo sem esse marcador.
         if explicit_shift_return:
             return cls.state_is_no_demand(
-                category=category, interruption_type=SHIFT_START_NO_DEMAND_TYPE
+                category=category,
+                interruption_type=SHIFT_START_NO_DEMAND_TYPE,
+                operation=operation,
             )
         if cls.is_operational_window(window_kind):
             return False

@@ -185,7 +185,6 @@ class ManagementInsightsService:
                 ("rework", "Retrabalho", "rework_seconds"),
                 ("activity_without_op", "Atividade sem OP", "activity_without_op_seconds"),
                 ("downtime", "Paradas", "downtime_seconds"),
-                ("queue", "Fila / espera", "queue_seconds"),
                 ("no_demand", "Recurso sem demanda", "no_demand_seconds"),
                 ("out_of_shift", "Fora do turno", "out_of_shift_seconds"),
             )

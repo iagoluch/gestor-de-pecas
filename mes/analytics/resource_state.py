@@ -45,10 +45,8 @@ def physical_state_category(row) -> EventCategory:
     """Categoria analítica de um estado físico persistido.
 
     ``sem_demanda`` não existe na base: é derivada aqui, uma única vez, a
-    partir da ``fila`` gravada pelo retorno do turno. Sem essa derivação o
-    tempo de recurso sem demanda entrava na base temporal do OEE como fila
-    (esmagando a Disponibilidade) e desaparecia do rollup por setor, que só
-    publica buckets nomeados.
+    partir de toda ``fila`` sem OP. Assim Andon, análises e exportações usam a
+    mesma verdade sem depender do processo que gravou o estado físico.
     """
 
     row = dict(row or {})
@@ -57,7 +55,9 @@ def physical_state_category(row) -> EventCategory:
     except ValueError:
         return EventCategory.UNKNOWN
     if ManufacturingRules.state_is_no_demand(
-        category=category, interruption_type=row.get("tipo_interrupcao")
+        category=category,
+        interruption_type=row.get("tipo_interrupcao"),
+        operation=row.get("op"),
     ):
         return EventCategory.NO_DEMAND
     return category

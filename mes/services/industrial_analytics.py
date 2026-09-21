@@ -540,7 +540,6 @@ class IndustrialAnalyticsService:
                 "reason": "Nenhum recurso habilitado no filtro selecionado.",
             }
 
-        effective_end = min(filters.fim, self._now())
         calendar = CalendarService(self.db)
         breakdown = self.time_breakdown(filters)
         by_resource = {
@@ -568,7 +567,12 @@ class IndustrialAnalyticsService:
             item = dict(raw)
             code = str(item.get("codigo") or item.get("nome") or "").strip()
             key = code.casefold()
-            summary = calendar.period_summary(code, filters.inicio, effective_end)
+            # Capacidade é a disponibilidade PLANEJADA no período selecionado,
+            # não um cronômetro de disponibilidade já transcorrida. Usar
+            # ``agora`` como fim fazia cada segundo ser somado uma vez por
+            # recurso com calendário; no total da fábrica, poucos segundos
+            # reais viravam vários minutos e a tela publicava um valor móvel.
+            summary = calendar.period_summary(code, filters.inicio, filters.fim)
             available = summary.get("tempo_disponivel_segundos")
             time_row = by_resource.get(key, {})
             # Carga = tempo físico em que o recurso esteve ocupado. Setup e

@@ -96,9 +96,15 @@ class NoDemandCategoryTests(unittest.TestCase):
             EventCategory.NO_DEMAND,
         )
 
-    def test_fila_operacional_comum_continua_fila(self):
+    def test_fila_sem_op_vira_sem_demanda_independentemente_da_origem(self):
         self.assertIs(
             physical_state_category({"categoria": "fila"}),
+            EventCategory.NO_DEMAND,
+        )
+
+    def test_fila_vinculada_a_op_nao_e_reclassificada(self):
+        self.assertIs(
+            physical_state_category({"categoria": "fila", "op": "OP-123"}),
             EventCategory.QUEUE,
         )
 
@@ -119,8 +125,13 @@ class NoDemandCategoryTests(unittest.TestCase):
                 category=EventCategory.QUEUE, interruption_type=SHIFT_START_NO_DEMAND_TYPE
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             ManufacturingRules.state_is_no_demand(category=EventCategory.QUEUE)
+        )
+        self.assertFalse(
+            ManufacturingRules.state_is_no_demand(
+                category=EventCategory.QUEUE, operation="OP-123"
+            )
         )
 
 
@@ -164,6 +175,7 @@ class NoDemandRollupTests(unittest.TestCase):
 
         self.assertAlmostEqual(itens["Recurso sem demanda"], 8.5 * 3600)
         self.assertAlmostEqual(itens["Fora do turno"], 8 * 3600)
+        self.assertNotIn("Fila / espera", itens)
 
 
 if __name__ == "__main__":

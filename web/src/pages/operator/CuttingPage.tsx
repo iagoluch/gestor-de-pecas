@@ -39,7 +39,7 @@ interface CuttingOp {
   setor_destino?: string | null;
 }
 
-/** Um plano/nesting da tarefa: a unidade de corte. */
+/** Um plano da tarefa. Nesting só existe quando o plano repete a chapa. */
 interface CuttingPlan {
   programa?: string;
   ordem?: number;
@@ -125,6 +125,37 @@ function planosDaTarefa(item: CuttingRow): CuttingPlan[] {
   });
 }
 
+function planoTemRepeticao(plano?: CuttingPlan) {
+  return Number(plano?.chapas_total ?? plano?.chapas?.length ?? 0) > 1;
+}
+
+function planoAtivo(item?: CuttingRow) {
+  if (!item) return undefined;
+  const planos = planosDaTarefa(item);
+  return planos.find((plano) => (
+    plano.estado === "EM CORTE"
+    || Number(plano.chapas_em_corte ?? 0) > 0
+    || plano.chapas?.some((chapa) => chapa.status === "Em processo")
+    || (item.programa_atual && plano.programa === item.programa_atual)
+  ));
+}
+
+function progressoCorteAtivo(item: CuttingRow) {
+  const planos = planosDaTarefa(item);
+  const ativo = planoAtivo(item);
+  if (!ativo) return null;
+  if (!planoTemRepeticao(ativo)) {
+    const indice = Math.max(0, planos.indexOf(ativo)) + 1;
+    return `Plano ${indice}/${planos.length}`;
+  }
+  const chapas = ativo.chapas ?? [];
+  const emProcesso = chapas.findIndex((chapa) => chapa.status === "Em processo");
+  const atual = emProcesso >= 0
+    ? emProcesso + 1
+    : Math.min(Number(ativo.chapas_cortadas ?? 0) + 1, Number(ativo.chapas_total ?? chapas.length));
+  return `Nesting ${atual}/${ativo.chapas_total ?? chapas.length}`;
+}
+
 function slug(value: string) {
   return value
     .toLowerCase()
@@ -171,6 +202,7 @@ export function CuttingPage({ resource }: { resource: string }) {
   const reasons = useApiQuery<{ items: StopReason[] }>("/api/v1/operator/stop-reasons");
   const history = useApiQuery<HistoryResponse>(historyOpen ? `/api/v1/cutting/history?resource=${encodeURIComponent(resource)}&status=Finalizado` : null);
   const active = queue.data?.items.find((item) => item.status === "Em processo");
+  const activePlan = planoAtivo(active);
   const stopped = queue.data?.resource_state?.categoria === "parada";
   const sync = queue.data?.sync;
 
@@ -243,7 +275,7 @@ export function CuttingPage({ resource }: { resource: string }) {
               nesting em processo também precisa de saída pela tela. */}
           {stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Retomada" })}>Retomar corte</button> : null}
           {!stopped ? <button type="button" className="button operator-danger" disabled={busy} onClick={() => setStopOpen(true)}>Registrar parada</button> : null}
-          {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>Finalizar nesting</button> : null}
+          {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>{planoTemRepeticao(activePlan) ? "Finalizar nesting" : "Finalizar plano"}</button> : null}
         </div>
       </div>
       {stopped ? <p className="operator-notice operator-notice--error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</p> : null}
@@ -357,12 +389,12 @@ function CuttingTaskCard({ item, busy, collapsed, onToggle, onStart }: {
           ) : null}
         </div>
       )}
-      {item.status === "Em processo" ? <p>Chapa atual: <strong>{item.nesting_atual ?? 1} de {item.quantidade_chapas ?? item.nesting_count ?? 1}</strong></p> : null}
+      {item.status === "Em processo" && progressoCorteAtivo(item) ? <p>Em execução: <strong>{progressoCorteAtivo(item)}</strong></p> : null}
     </article>
   );
 }
 
-/** Um plano/nesting: suas OPs, seus produtos e suas chapas reais. */
+/** Um plano: suas OPs, seus produtos e suas chapas físicas. */
 function CuttingPlanBlock({ plano, busy, podeIniciar, onStart }: { plano: CuttingPlan; busy: boolean; podeIniciar: boolean; onStart: (planHash?: string) => void }) {
   const estado = plano.estado ?? PLAN_STATE_WAITING_CUT;
   const aguardando = plano.plano_hashes_aguardando?.[0];

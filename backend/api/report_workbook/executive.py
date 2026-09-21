@@ -840,7 +840,6 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
                 Column("parada", "Parada", "duration"),
                 Column("setup", "Setup", "duration"),
                 Column("retrabalho", "Retrabalho", "duration"),
-                Column("fila", "Fila / espera", "duration"),
                 Column("sem_demanda", "Recurso sem demanda", "duration"),
                 Column("fora_turno", "Fora de turno", "duration"),
                 Column("producao", "Produção", "duration"),

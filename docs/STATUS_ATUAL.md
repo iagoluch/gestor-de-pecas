@@ -442,6 +442,20 @@ para diagnóstico e reset do TESTE. Nenhuma regra industrial, endpoint, schema
 histórico ou banco REAL foi alterado. O relatório, as métricas de partida e as
 próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
 
+### 2.15 Correções de tempo, Corte, Destaque e ausência de demanda (21/09/2026)
+
+- Capacidade planejada deixou de usar o segundo corrente como fim do período;
+  a soma da fábrica não transforma mais segundos reais em vários minutos.
+- A tela de Corte chama de plano a unidade sem repetição (`Plano 1/18` e
+  `Finalizar plano`) e reserva nesting para repetição real da chapa no plano.
+- A fila do Destaque foi confirmada no TESTE para a tarefa `T3609`: planos do
+  Laser Ensis entram e Plasma continua excluído. A tela agora lista primeiro
+  somente planos já cortados, aponta início/parada/retomada/fim por plano e
+  consome o read model canônico devolvido pela mutação para atualizar os botões.
+- Toda fila física sem OP é projetada centralmente como `Recurso sem demanda`;
+  fila vinculada a OP não é reclassificada. A categoria `Fila / espera` saiu
+  das composições, insights e planilhas gerenciais.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

@@ -177,7 +177,6 @@ class FrontendBackendFacade:
             ("Paradas", "downtime_seconds"),
             ("Retrabalho", "rework_seconds"),
             ("Atividade sem OP", "activity_without_op_seconds"),
-            ("Fila / espera", "queue_seconds"),
             ("Recurso sem demanda", "no_demand_seconds"),
             ("Fora do turno", "out_of_shift_seconds"),
         )
@@ -389,6 +388,7 @@ class FrontendBackendFacade:
                     ),
                     active_operations=len(ops_ativas),
                     explicit_shift_return=explicit_shift_return,
+                    operation=state.get("op"),
                 ),
                 # A visão de posto só publica execução registrada. Uma OP,
                 # rota, demanda ou elegibilidade não substitui apontamento.

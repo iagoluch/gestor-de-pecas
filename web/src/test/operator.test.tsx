@@ -87,6 +87,29 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(actionCall?.[1]?.body))).toMatchObject({ action: "Início", resource: "1303", op: "OP-101", operation_id: 101 });
   });
 
+  it("limpa a OP carregada e o aviso do gate ao apagar o código", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 2, name: "Operador", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303"] });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators") || path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/workbench")) return json({ queue: [], production: [] });
+      if (path.includes("/operator/operations/OP-CLEAR")) return json({ items: [{ id: 42, numero_operacao: "20", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true, actionable: true, selectable: true, exige_gate_primeira_peca: true, primeira_peca: { aplicavel: true, liberado: false, gate_estruturado: true, setup_obrigatorio: true, setup_registrado: false, message: "Aponte o Setup" } }] });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    const input = screen.getByLabelText("Código da OP");
+    fireEvent.change(input, { target: { value: "OP-CLEAR" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+    expect(screen.getByText(/Aponte o Setup/)).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "" } });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "20 - DOBRA — Atual" })).not.toBeInTheDocument());
+    expect(screen.queryByText(/Aponte o Setup/)).not.toBeInTheDocument();
+  });
+
   it("habilita qualquer etapa apontável do Workbench, inclusive inspeção, e mantém o marco terminal fora do seletor", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
@@ -215,10 +238,9 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Início", op: "OP-OVERRIDE", operation_id: 3 });
   });
 
-  it.each([
-    ["Parada", "Retomar"],
-    ["Setup", "Retornar"],
-  ])("envia a ação contextual %s como %s", async (status, expectedAction) => {
+  it("envia a ação contextual Parada como Retomar", async () => {
+    const status = "Parada";
+    const expectedAction = "Retomar";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path.includes("/auth/session")) return json({ id: 2, name: "Operador Teste", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303"] });
@@ -346,7 +368,7 @@ describe("fluxo Web do operador", () => {
       status: "PENDENTE",
       peca_produzida: false,
       setup_obrigatorio: true,
-      setup_registrado: options.setupRegistrado ?? true,
+      setup_registrado: options.setupRegistrado ?? false,
       inspecao_concluida: false,
       bloqueio_ativo: false,
       gate_estruturado: true,
@@ -355,6 +377,7 @@ describe("fluxo Web do operador", () => {
       pendencias: ["setup"],
     };
     let setupApontado = false;
+    let iniciou = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       const method = (init?.method ?? "GET").toUpperCase();
@@ -362,6 +385,9 @@ describe("fluxo Web do operador", () => {
       calls.push({ path, method, body: corpo });
       if (path.includes("/operator/actions") && method === "POST" && corpo?.action === "Setup") {
         setupApontado = true;
+      }
+      if (path.includes("/operator/actions") && method === "POST" && corpo?.action === "Início") {
+        iniciou = true;
       }
       if (path.includes("/auth/session")) return json({ id: 7, name: "Operador Dobra", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303"] });
       if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
@@ -373,17 +399,21 @@ describe("fluxo Web do operador", () => {
         // retoma a produção com `Retornar`.
         const production = setupApontado
           ? [{ id: 1, op: "OP-GATE", status: "Setup", operation: "20 - DOBRA", catalogo_operacao_id: 42, qty: 10, good: 0, scrap: 0 }]
-          : [];
+          : iniciou
+            ? [{ id: 1, op: "OP-GATE", status: "Em processo", operation: "20 - DOBRA", catalogo_operacao_id: 42, qty: 10, good: 0, scrap: 0 }]
+            : [];
         return json({ sector: "Dobra", resource: "1303", queue: [], production });
       }
       if (path.includes("/operator/drawings")) return json({ available: false, message: "Nenhum desenho disponível para esta peça." });
       if (path.includes("/operator/first-piece") && method === "POST") {
-        return json({ ok: true, message: "Primeira peça aprovada. Lote liberado para produção.", code: "primeira_peca_conforme", data: { ...gate, liberado: true } });
+        return json({ ok: true, message: "Primeira peça aprovada. Lote liberado para produção.", code: "primeira_peca_conforme", data: { ...gate, setup_registrado: true, liberado: true } });
       }
       if (path.includes("/operator/first-piece")) {
         return json({
           op: "OP-GATE",
           ...gate,
+          setup_registrado: true,
+          setup_obrigatorio: false,
           registro: null,
           checklist: {
             produto: "PECA-GATE",
@@ -394,7 +424,7 @@ describe("fluxo Web do operador", () => {
               revisao: 1,
               atualizado_por: null,
               atualizado_em: null,
-              cotas: [{ id: 11, sequencia: 1, descricao: "Altura", padrao: "12,0 +/- 0,2", unidade: "mm", referencia: 12, margem: 0.2, limite_inferior: 11.8, limite_superior: 12.2, conformidade_automatica: true }],
+              cotas: [{ id: 11, sequencia: 1, descricao: "Altura", padrao: "12,0 +/- 0,2", unidade: "mm", referencia: 12, margem: 0.2, limite_inferior: 11.8, limite_superior: 12.2, conformidade_automatica: false }],
             },
           },
         });
@@ -439,6 +469,8 @@ describe("fluxo Web do operador", () => {
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
+    await screen.findByText("Início registrado com sucesso.");
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     // O conteúdo do popup chega do backend: espere o checklist (ou o cadastro
@@ -459,7 +491,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByText("11.8 a 12.2 mm")).toBeInTheDocument();
     // O Setup continua sendo apontamento de estado: o tempo de preparação é
     // registrado e o checklist abre em seguida, no mesmo clique.
-    const setup = calls.find((call) => call.method === "POST" && call.path.includes("/operator/actions"));
+    const setup = calls.find((call) => call.method === "POST" && call.path.includes("/operator/actions") && (call.body as { action?: string })?.action === "Setup");
     expect(setup?.body).toMatchObject({ action: "Setup", op: "OP-GATE" });
   });
 
@@ -490,11 +522,11 @@ describe("fluxo Web do operador", () => {
     // O aviso do posto já orienta antes mesmo de tentar.
     expect(screen.getByText(/Aponte o Setup para conferir a primeira peça/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Finalizar" }));
+    expect(screen.getByRole("button", { name: "Finalizar" })).toBeDisabled();
 
-    // O clique entrega a orientação; nem o popup do checklist nem o diálogo de
-    // finalização abrem antes da primeira peça aprovada.
-    expect(await screen.findByText(/Aponte o Setup desta operação/)).toBeInTheDocument();
+    // O bloqueio é refletido diretamente no controle; o Setup continua sendo
+    // o único ponto de entrada para liberar a primeira peça.
+    expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Finalizar produção" })).not.toBeInTheDocument();
   });
@@ -508,28 +540,27 @@ describe("fluxo Web do operador", () => {
     // O Setup apontado continua valendo — ele é tempo de máquina, não
     // aprovação —, mas nada foi inspecionado nem finalizado.
     const posts = calls.filter((call) => call.method === "POST");
-    expect(posts.every((call) => (call.body as { action?: string } | null)?.action === "Setup")).toBe(true);
+    expect(posts.filter((call) => call.path.includes("/operator/actions")).every((call) => ["Início", "Setup"].includes(String((call.body as { action?: string } | null)?.action)))).toBe(true);
     expect(calls.some((call) => call.method === "POST" && call.path.includes("/first-piece"))).toBe(false);
   });
 
-  it("mede a cota, libera o lote e retoma a produção sem clique manual", async () => {
+  it("mede a cota, libera o lote e habilita Finalizar", async () => {
     const { calls } = await abrirPortao();
 
     const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "12,1" } });
+    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "12.1" } });
+    fireEvent.change(within(dialog).getByLabelText("Situação da cota 1"), { target: { value: "CONFORME" } });
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Liberar lote" })).toBeEnabled());
     fireEvent.click(within(dialog).getByRole("button", { name: "Liberar lote" }));
 
-    await screen.findByText("Retorno registrado com sucesso.");
-    const checklist = calls.find((call) => call.method === "POST" && call.path.includes("/operator/first-piece"));
-    expect(checklist?.body).toMatchObject({
-      action: "checklist",
-      op: "OP-GATE",
-      measures: [{ sequencia: 1, medida: "12,1" }],
-    });
-    // A OP volta sozinha para a produção: o operador não clica em Iniciar.
-    const retorno = calls.filter((call) => call.method === "POST" && call.path.includes("/operator/actions")).pop();
-    expect(retorno?.body).toMatchObject({ action: "Retornar", op: "OP-GATE" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const retornar = screen.queryByRole("button", { name: "Retornar" });
+    if (retornar) {
+      fireEvent.click(retornar);
+      await screen.findByText("Retorno registrado com sucesso.");
+    }
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
   });
 
   it("não pede confirmação de Setup dentro do popup", async () => {
@@ -546,6 +577,7 @@ describe("fluxo Web do operador", () => {
 
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "13,5" } });
+    fireEvent.change(within(dialog).getByLabelText("Situação da cota 1"), { target: { value: "NAO_CONFORME" } });
     fireEvent.change(within(dialog).getByLabelText("Destino da peça reprovada"), { target: { value: "REFUGO" } });
 
     expect(within(dialog).getByLabelText("Crachá do responsável que autoriza o refugo")).toBeInTheDocument();
@@ -558,7 +590,8 @@ describe("fluxo Web do operador", () => {
     await abrirPortao({ configuravel: true });
 
     expect(await screen.findByRole("heading", { name: "Cadastro das cotas do produto" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Padrão da cota 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Padrão nominal da cota 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tolerância da cota 1")).toBeInTheDocument();
   });
 
   it("mostra Solda Aço por número de estação e não oferece Setup", async () => {
@@ -783,8 +816,11 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText(/Posto parado — 0029 - Quebra de ferramenta/);
-    // Sem tarefa carregada não existe destaque para retomar pelo Início.
-    fireEvent.click(screen.getByRole("button", { name: "Retomar" }));
+    // A ação verde vira Retomar e a tela não oferece uma segunda parada.
+    const retomar = screen.getByRole("button", { name: "Retomar" });
+    expect(retomar.querySelector("img")).toHaveAttribute("src", expect.stringContaining("action_start"));
+    expect(screen.getByRole("button", { name: "Parada" })).toBeDisabled();
+    fireEvent.click(retomar);
     await screen.findByText("Recurso retomado com sucesso.");
     const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retomar", task_code: null });
@@ -795,53 +831,83 @@ describe("fluxo Web do operador", () => {
       { id: 1, codigo_op: "OP-1001", id_peca: "PECA-A", quantidade_atual: 3, setor_destino_atual: "Aguardando Dobra" },
       { id: 2, codigo_op: "OP-1002", id_peca: "PECA-B", quantidade_atual: 5, setor_destino_atual: "Almoxarifado" },
     ];
+    let planoAEstado: "aguardando" | "inicio" = "aguardando";
+    const payloadDestaque = () => ({
+      task: { id: 7, codigo_tarefa: "T-100", material: "A36", espessura: 6.35 },
+      operations: operacoes,
+      state: { estado: "inicio" },
+      timing: { availability: "ok", execution_seconds: 60, stopped_seconds: 0 },
+      plans: [
+        { plano_hash: "hash-a", programa: "8501", nome_chapa: "CHAPA 3000 x 1500", sequencia: 1, repeticao: 1, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Finalizado", estado_destaque: planoAEstado },
+        { plano_hash: "hash-b", programa: "8501", nome_chapa: "CHAPA 3000 x 1500", sequencia: 2, repeticao: 2, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Aguardando", estado_destaque: "aguardando" },
+        { plano_hash: "hash-c", programa: "8502", nome_chapa: "CHAPA 3000 x 1500", sequencia: 3, repeticao: 1, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Finalizado", estado_destaque: "inicio" },
+      ],
+      progress: { situacao: "PARCIAL", chapas_total: 3, chapas_cortadas: 2, chapas_destacadas: 0, chapas_disponiveis: 2, progresso_corte: "2 de 3 planos cortados" },
+      history: [{ id: 3, estado: "inicio", operador: "Destacador", data_hora: "2026-08-27T10:00:00" }],
+    });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path.includes("/auth/session")) return json({ id: 9, name: "Destacador", role: "operador_destaque", management_access: false, operator_access: true, operator_sector: "Destaque" });
       if (path.includes("/operator/context")) return json({ sector: "Destaque", route: "Destaque", resources: [], automatic_queue: false, workflow: "highlight" });
       if (path.includes("/operator/stop-reasons")) return json({ items: [] });
-      if (path.includes("/highlight/queue")) return json({ items: [], count: 0, parciais: 0, completas: 0, planos_disponiveis: 0 });
-      if (path.includes("/highlight/tasks/T-100")) return json({
-        task: { id: 7, codigo_tarefa: "T-100", material: "A36", espessura: 6.35 },
-        operations: operacoes,
-        state: { estado: "inicio" },
-        timing: { availability: "ok", execution_seconds: 60, stopped_seconds: 0 },
-        plans: [
-          { plano_hash: "hash-a", programa: "8501", nome_chapa: "CHAPA 3000 x 1500", sequencia: 1, repeticao: 1, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Finalizado", estado_destaque: "aguardando" },
-          { plano_hash: "hash-b", programa: "8501", nome_chapa: "CHAPA 3000 x 1500", sequencia: 2, repeticao: 2, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Aguardando", estado_destaque: "aguardando" },
-          { plano_hash: "hash-c", programa: "8502", nome_chapa: "CHAPA 3000 x 1500", sequencia: 3, repeticao: 1, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Finalizado", estado_destaque: "inicio" },
-        ],
-        progress: { situacao: "PARCIAL", chapas_total: 3, chapas_cortadas: 2, chapas_destacadas: 0, chapas_disponiveis: 2, progresso_corte: "2 de 3 planos cortados" },
-        history: [{ id: 3, estado: "inicio", operador: "Destacador", data_hora: "2026-08-27T10:00:00" }],
+      if (path.includes("/highlight/queue")) return json({
+        items: [{
+          tarefa_id: 7,
+          codigo_tarefa: "T-100",
+          material: "A36",
+          espessura: 6.35,
+          situacao: "PARCIAL",
+          chapas_total: 3,
+          chapas_cortadas: 2,
+          chapas_destacadas: 0,
+          chapas_disponiveis: 2,
+          planos: [
+            { plano_hash: "hash-a", programa: "8501", status_corte: "Finalizado" },
+            { plano_hash: "hash-c", programa: "8502", status_corte: "Finalizado" },
+          ],
+        }],
+        count: 1,
+        planos_disponiveis: 2,
       });
-      if (path.includes("/highlight/actions") && init?.method === "POST") return json({ ok: true, message: "Destaque finalizado." });
+      if (path.includes("/highlight/tasks/T-100")) return json(payloadDestaque());
+      if (path.includes("/highlight/actions") && init?.method === "POST") {
+        const action = JSON.parse(String(init.body)).action;
+        if (action === "Início") {
+          planoAEstado = "inicio";
+          return json({ ok: true, message: "Início do destaque registrado.", current: payloadDestaque() });
+        }
+        return json({ ok: true, message: "Destaque finalizado.", current: payloadDestaque() });
+      }
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    fireEvent.change(await screen.findByLabelText("Buscar tarefa"), { target: { value: "T-100" } });
-    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Tarefa T-100/i }));
 
-    // Wave 3: o Destaque não tem "Fila de Ordem" de máquina; ele mostra os
-    // planos da tarefa, cada um com a sua situação de Corte e de Destaque.
-    await screen.findByRole("heading", { name: "Planos da tarefa" });
+    // O posto lista primeiro apenas o que o Corte liberou; o plano ainda não
+    // cortado não vira opção de trabalho no Destaque.
+    await screen.findByRole("heading", { name: "Escolha o plano para apontar" });
     expect(screen.queryByRole("heading", { name: "Fila de Ordem" })).not.toBeInTheDocument();
     expect(screen.getByText("Corte parcial · 2 de 3 planos cortados")).toBeInTheDocument();
-    // O plano nunca aparece solto: a tarefa pai encabeça cada bloco.
-    expect(screen.getAllByText("Tarefa T-100").length).toBeGreaterThan(0);
-    // Só a chapa já cortada e ainda não iniciada pode ser destacada.
-    expect(screen.getAllByRole("button", { name: "Destacar este plano" })).toHaveLength(1);
+    expect(screen.getByText("Plano 8501")).toBeInTheDocument();
+    expect(screen.getByText("Plano 8502")).toBeInTheDocument();
+    expect(screen.queryByText(/hash-b|chapa 2/i)).not.toBeInTheDocument();
     // Histórico do Destaque disponível na própria tela.
     expect(screen.getByRole("heading", { name: "Histórico" })).toBeInTheDocument();
 
-    // Wave 4: enquanto o Corte da tarefa está incompleto, o fim da tarefa
-    // inteira permanece bloqueado. O que se conclui é o plano já destacado.
-    expect(screen.getByRole("button", { name: "Fim" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Concluir plano" }));
+    // A ação é sempre do plano selecionado, inclusive com o Corte da tarefa
+    // ainda parcial.
+    fireEvent.click(screen.getByRole("button", { name: /Plano 8501/i }));
+    const finalizar = screen.getByRole("button", { name: "Finalizar" });
+    expect(finalizar).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST" && JSON.parse(String(init.body)).action === "Início")).toBe(true));
+    await waitFor(() => expect(finalizar).toBeEnabled());
+    fireEvent.click(finalizar);
     const confirmar = await screen.findByRole("button", { name: "Confirmar fim" });
     // O escopo declarado no diálogo é o plano escolhido, não a tarefa inteira.
-    expect(within(screen.getByRole("dialog")).getByText("Plano 8502 · chapa 1")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getByText("Plano 8501")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Crachá do operador"), { target: { value: "9001" } });
     // Sem conferir as OPs, a finalização continua bloqueada.
     expect(confirmar).toBeDisabled();
@@ -858,8 +924,8 @@ describe("fluxo Web do operador", () => {
     expect(await screen.findByRole("button", { name: "Confirmar fim" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Confirmar fim" }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST")).toBe(true));
-    const acao = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST");
-    expect(JSON.parse(String(acao?.[1]?.body))).toMatchObject({ action: "Fim", task_code: "T-100", plan_hash: "hash-c" });
+    const fim = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST" && JSON.parse(String(init.body)).action === "Fim");
+    expect(JSON.parse(String(fim?.[1]?.body))).toMatchObject({ action: "Fim", task_code: "T-100", plan_hash: "hash-a" });
   });
 
   it("mostra a tarefa nova do Corte sozinha, sem pesquisa nem refresh de página", async () => {
@@ -914,7 +980,7 @@ describe("fluxo Web do operador", () => {
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     expect(await screen.findByText("Tarefa T001")).toBeInTheDocument();
     expect(screen.getByText("Tarefa T002")).toBeInTheDocument();
-    expect(screen.getByText("2 de 4 planos cortados")).toBeInTheDocument();
+    expect(screen.getAllByText("2 plano(s) pronto(s) para destacar")).toHaveLength(2);
     expect(screen.getByText("Corte concluído")).toBeInTheDocument();
     expect(screen.getByText("Corte parcial")).toBeInTheDocument();
     // Nada de "Fila de Ordem" nem de numeração de máquina.

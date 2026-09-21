@@ -18,6 +18,7 @@ import type {
 import { formatDateTime } from "../../utils/format";
 import {
   type DraftDimension,
+  formatDraftStandard,
   TemplateEditor,
   previewStatus,
   rangeLabel,
@@ -117,7 +118,7 @@ function OperatorCardView({ item, onSelect, selected = false }: { item: Operator
 }
 
 function CardSection({ title, items, emptyTitle, onSelect, onMore, selectedKey, className = "" }: { title: string; items: OperatorCard[]; emptyTitle: string; onSelect: (item: OperatorCard) => void; onMore: () => void; selectedKey: string; className?: string }) {
-  return <section className={className}><header><h2>{title}</h2><div className="operator-card-heading-actions"><span>{items.length}</span><button type="button" onClick={onMore}>Ver mais</button></div></header><div className="operator-card-list">{items.length ? items.slice(0, 2).map((item, index) => <OperatorCardView key={`${item.id ?? item.op}-${index}`} item={item} selected={cardKey(item) === selectedKey} onSelect={onSelect} />) : <EmptyState title={emptyTitle} />}</div></section>;
+  return <section className={className}><header><h2>{title}</h2><div className="operator-card-heading-actions"><span>{items.length}</span><button type="button" onClick={onMore}>Ver mais</button></div></header><div className="operator-card-list">{items.length ? items.slice(0, 2).map((item) => <OperatorCardView key={cardKey(item)} item={item} selected={cardKey(item) === selectedKey} onSelect={onSelect} />) : <EmptyState title={emptyTitle} />}</div></section>;
 }
 
 export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: string; resource: string; hasSetup?: boolean }) {
@@ -147,12 +148,17 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // Wave 6B — o portão Setup/Qualidade é lido só quando o popup abre. Fora
   // dele o roteiro já traz o estado que a tela precisa.
   const [gateOperationKey, setGateOperationKey] = useState("");
+  // Mantém a liberação confirmada imediatamente após a aprovação. O próximo
+  // snapshot do roteiro normalmente traz esse estado, mas a tela não pode
+  // deixar o operador preso ao snapshot anterior enquanto ele é atualizado.
+  const [releasedGateKey, setReleasedGateKey] = useState("");
   const gate = useApiQuery<FirstPieceState>(gateOperationKey || null);
 
   // Uma OP nova por digitação: a busca remota anterior não vale para outra OP.
   useEffect(() => {
     setRemoteSearch("idle");
     setSearchedOp("");
+    setReleasedGateKey("");
   }, [loadedOp]);
 
   // A OP não está no Gestor, mas pode existir no TOTVS. Pede UMA vez por OP:
@@ -218,7 +224,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       if (String(item.op ?? "").trim() !== loadedOp) return false;
       const selectedId = selected?.id ?? selected?.catalogo_operacao_id;
       const cardId = item.catalogo_operacao_id ?? item.id;
-      if (selectedId != null && cardId != null) return selectedId === cardId;
+      if (selectedId != null && cardId != null) return String(selectedId) === String(cardId);
       return String(item.numero_operacao ?? item.operation ?? "").includes(String(selected?.numero_operacao ?? selected?.codigo ?? ""));
     });
   }, [cards.data, historyQuery.data, loadedOp, selected]);
@@ -266,10 +272,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // Wave 5: quem decide se Finalizar pode ser oferecido é o backend. A tela
   // apenas lê `pode_finalizar` e explica o motivo com a frase que veio de lá.
   const firstPiece: FirstPieceGate | undefined = selected?.primeira_peca;
+  const selectedOperationKey = routeStepKey(selected);
+  const gateReleasedLocally = Boolean(
+    selectedOperationKey && releasedGateKey === `${loadedOp}::${selectedOperationKey}`,
+  );
   // Wave 6B: o portão Setup/Qualidade é do **Finalizar**. Quem diz isso é o
   // backend (`exige_gate_primeira_peca` e o código da pendência); a tela não
   // conhece a lista de setores nem recalcula o portão. Iniciar é livre.
-  const gateRequired = Boolean(
+  const gateRequired = !gateReleasedLocally && Boolean(
     selected?.exige_gate_primeira_peca
       ?? (firstPiece?.gate_estruturado && !firstPiece?.liberado),
   );
@@ -284,10 +294,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   );
   // O Finalizar continua clicável com o portão pendente: o clique é que
   // entrega a orientação ao operador, em vez de um botão morto.
-  const canFinish = canPoint
-    && ((selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired);
+  const setupConcluido = gateReleasedLocally || !firstPiece?.setup_obrigatorio || firstPiece.setup_registrado;
+  const canFinish = canPoint && setupConcluido
+    && (gateReleasedLocally || (selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired);
   const canStart = resumeWithoutOp
-    || (canPoint && currentStatus !== "Retrabalho" && !firstPiece?.bloqueio_ativo);
+    || (canPoint
+      && !["Em processo", "Setup", "Retrabalho"].includes(currentStatus)
+      && !firstPiece?.bloqueio_ativo);
+  const canSetup = canPoint && currentStatus !== "Setup" && !firstPiece?.setup_registrado;
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
     operation: String(activeCard.operation ?? activeCard.numero_operacao ?? ""),
@@ -336,6 +350,15 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     }
     if (normalized !== loadedOp) setRouteSelection(null);
     setLoadedOp(normalized);
+  }
+
+  function handleOpChange(value: string) {
+    setOp(value);
+    if (value.trim()) return;
+    setLoadedOp("");
+    setRouteSelection(null);
+    setGateOperationKey("");
+    setMessage("Produção e fila atualizadas.");
   }
 
   function selectCard(item: OperatorCard) {
@@ -471,6 +494,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       // que o próximo snapshot do roteiro apague o retorno do lote liberado.
       const operationKey = routeStepKey(selected);
       if (operationKey) setRouteSelection({ op: loadedOp, operationKey });
+      if (response.data?.liberado && operationKey) {
+        setReleasedGateKey(`${loadedOp}::${operationKey}`);
+      }
       operations.reload();
       cards.reload();
       if (response.data?.liberado) {
@@ -498,7 +524,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         cotas: cotas.map((item, index) => ({
           sequencia: index + 1,
           descricao: item.descricao.trim() || null,
-          padrao: item.padrao.trim(),
+          padrao: formatDraftStandard(item),
           unidade: "mm",
         })),
       });
@@ -563,7 +589,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       <div className="operator-workbench__top">
         <div className="operator-workbench__main">
       <form className="operator-op-form" onSubmit={loadOperations}>
-        <label>Código da OP<input value={op} onChange={(event) => setOp(event.target.value)} placeholder="Digite ou escaneie a OP" autoFocus /></label>
+        <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" autoFocus /></label>
         <button type="submit">Carregar roteiro</button>
       </form>
       {(operations.data?.items?.length ?? 0) > 0 ? (
@@ -609,11 +635,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => void execute(startAction)}><img src={assets.operator.actions.start} alt="" /><span>{startLabel}</span></button>
         <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>
-        {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canPoint} onClick={() => void setupAppointment()}><img src={assets.operator.actions.setup} alt="" /><span>Setup</span></button> : null}
+        {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} onClick={() => void setupAppointment()}><img src={assets.operator.actions.setup} alt="" /><span>Setup</span></button> : null}
         <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => setDialog({ kind: "confirm", action: "Retrabalho" })}><img src={assets.operator.actions.rework} alt="" /><span>Retrabalho</span></button>
       </div>
       {canPoint && gateRequired ? (
-        <p className="operator-help">
+        <p className="operator-help operator-gate-notice">
           {firstPiece?.bloqueio_ativo
             ? firstPiece.message
             : "Aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."}
@@ -761,7 +787,7 @@ function SetupQualityDialog({
   const [note, setNote] = useState("");
   const [badge, setBadge] = useState("");
   const [drafts, setDrafts] = useState<DraftDimension[]>([
-    { sequencia: 1, descricao: "", padrao: "" },
+    { sequencia: 1, descricao: "", nominal: "", tolerancia: "" },
   ]);
 
   const cotas: QualityDimension[] = state?.checklist?.template?.cotas ?? [];
@@ -935,26 +961,19 @@ function SetupQualityDialog({
 function DrawingCard({ op, loading, data, onOpen }: { op: string; loading: boolean; data?: OperatorDrawing | null; onOpen: () => void }) {
   const disponivel = Boolean(data?.available);
   return (
-    <section className="operator-side-card operator-drawing-card" aria-label="Desenho da peça">
-      <header><h2>PDF</h2></header>
-      {!op ? (
-        <p>Informe a OP para ver o desenho.</p>
-      ) : loading && !data ? (
-        <p>Procurando o desenho…</p>
-      ) : disponivel ? (
-        <>
-          <strong>Desenho disponível</strong>
-          <small>{data?.filename}</small>
-          {data?.modified_at ? <small>Atualizado em {formatDateTime(data.modified_at)}</small> : null}
-          {(data?.candidate_count ?? 0) > 1 ? <small>{data?.candidate_count} arquivos da peça; exibindo o mais recente.</small> : null}
-          <div className="operator-side-card__actions">
-            <button type="button" className="button button--primary" onClick={onOpen}>Abrir visualização</button>
-          </div>
-        </>
-      ) : (
-        <p>{data?.message ?? "Nenhum desenho disponível para esta peça."}</p>
-      )}
-    </section>
+    <div className="operator-drawing-card" aria-label="Desenho da peça">
+      <button
+        type="button"
+        className={`operator-drawing-button${disponivel ? " is-available" : ""}`}
+        disabled={!disponivel}
+        title={disponivel ? `Abrir PDF${data?.filename ? ` — ${data.filename}` : ""}` : (data?.message ?? "Nenhum PDF disponível para esta peça.")}
+        aria-label={disponivel ? "Abrir desenho PDF" : "PDF indisponível"}
+        onClick={onOpen}
+      >
+        <span aria-hidden="true">PDF</span><span aria-hidden="true">↗</span>
+      </button>
+      {!op || (loading && !data) ? <span className="operator-drawing-hint">{!op ? "Informe a OP para ver o PDF." : "Procurando o PDF…"}</span> : null}
+    </div>
   );
 }
 

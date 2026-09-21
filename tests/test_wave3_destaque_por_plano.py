@@ -139,6 +139,43 @@ class DestaquePorPlanoTests(unittest.TestCase):
         self.assertEqual(tarefa["chapas_destacadas"], 1)
         self.assertEqual(tarefa["chapas_disponiveis"], 1)
 
+    def test_parada_e_retomada_preservam_o_escopo_do_plano(self):
+        self._cortar("A")
+        self.assertTrue(
+            self.destaque.registrar_destacando(
+                self.tarefa_id, "T001", plano_hash="hash-A"
+            ).ok
+        )
+
+        parada = self.destaque.registrar_parada_destaque(
+            self.tarefa_id,
+            "T001",
+            motivo_codigo="0029",
+            plano_hash="hash-A",
+        )
+        self.assertTrue(parada.ok, parada.message)
+        self.assertEqual(
+            self.destaque.estado_destaque(
+                self.tarefa_id, plano_hash="hash-A"
+            )["estado"],
+            "parada",
+        )
+        # A parada do plano não cria um estado paralelo no escopo da tarefa.
+        self.assertNotEqual(
+            self.destaque.estado_destaque(self.tarefa_id)["estado"], "parada"
+        )
+
+        retomada = self.destaque.registrar_destacando(
+            self.tarefa_id, "T001", plano_hash="hash-A"
+        )
+        self.assertTrue(retomada.ok, retomada.message)
+        self.assertEqual(
+            self.destaque.estado_destaque(
+                self.tarefa_id, plano_hash="hash-A"
+            )["estado"],
+            "retomada",
+        )
+
     def test_tarefa_vira_completa_quando_todas_as_chapas_sao_cortadas(self):
         for letra in self.CHAPAS:
             self._cortar(letra)

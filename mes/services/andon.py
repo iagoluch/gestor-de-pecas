@@ -22,7 +22,7 @@ NO_DEMAND_STATE = EventCategory.NO_DEMAND.value
 
 
 STATE_LABELS = {
-    NO_DEMAND_STATE: "Sem demanda",
+    NO_DEMAND_STATE: "Recurso sem demanda",
     EventCategory.QUEUE.value: "Fila",
     EventCategory.PRODUCTION.value: "Produção",
     EventCategory.DOWNTIME.value: "Parada",
@@ -547,7 +547,7 @@ class AndonService:
         status_code = item.get("codigo_status")
         if category == NO_DEMAND_STATE:
             display_label = STATE_LABELS[NO_DEMAND_STATE]
-            reason = "Fora de turno, sem hora extra e sem trabalho em execução."
+            reason = "Recurso sem OP e sem trabalho em execução."
         elif category == EventCategory.DOWNTIME.value:
             display_label = str(reason or "Motivo não informado").strip()
             prefix = f"{str(status_code or '').strip()} - "

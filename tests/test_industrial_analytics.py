@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import unittest
 
 from mes.analytics.physical_time import PhysicalInputSegment, consolidate_physical_time
@@ -508,6 +508,27 @@ class CapacityTests(unittest.TestCase):
 
         self.assertEqual(result["bottleneck_resource"], "DOBRA1")
         self.assertAlmostEqual(result["utilizacao_percentual"], 50.0)
+
+    def test_capacidade_planejada_nao_avanca_com_os_segundos_do_relogio(self):
+        repo = _CapacityRepo([], com_calendario=("DOBRA1", "DOBRA2"))
+        inicio_turno = datetime(2026, 8, 19, 8, 0)
+
+        antes = IndustrialAnalyticsService(
+            repo, now_func=lambda: inicio_turno + timedelta(seconds=1)
+        ).capacity_configuration(self.filters)
+        depois = IndustrialAnalyticsService(
+            repo, now_func=lambda: inicio_turno + timedelta(seconds=59)
+        ).capacity_configuration(self.filters)
+
+        # O filtro cobre o dia inteiro: a capacidade é o turno planejado de
+        # 8 h para cada recurso, independentemente do segundo da consulta.
+        # Caso o relógio fosse usado como fim, o total da fábrica avançaria um
+        # segundo por recurso e os minutos exibidos saltariam artificialmente.
+        self.assertEqual(antes["total_capacity_seconds"], 16 * 3600)
+        self.assertEqual(depois["total_capacity_seconds"], 16 * 3600)
+        self.assertEqual(
+            antes["total_capacity_seconds"], depois["total_capacity_seconds"]
+        )
 
     def test_sem_calendario_algum_a_capacidade_permanece_nao_configurada(self):
         repo = _CapacityRepo([], com_calendario=())

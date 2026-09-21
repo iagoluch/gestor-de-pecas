@@ -216,6 +216,62 @@ describe("hierarquia da tela de Corte", () => {
     await screen.findByText("Nesting iniciado.");
   });
 
+  it("trata uma chapa sem repetição como plano, inclusive no progresso e na finalização", async () => {
+    const planos = Array.from({ length: 18 }, (_, index) => ({
+      ...PLANO_002,
+      programa: String(index + 1).padStart(3, "0"),
+      ordem: index + 1,
+      estado: index === 0 ? "EM CORTE" : "AGUARDANDO CORTE",
+      chapas_cortadas: 0,
+      chapas_em_corte: index === 0 ? 1 : 0,
+      chapas_aguardando: index === 0 ? 0 : 1,
+      plano_hash: `h-${index + 1}`,
+      chapas: [{
+        ...PLANO_002.chapas[0],
+        plano_hash: `h-${index + 1}`,
+        programa: String(index + 1).padStart(3, "0"),
+        status: index === 0 ? "Em processo" : "Aguardando",
+      }],
+    }));
+    stubQueue([{
+      ...TAREFA,
+      status: "Em processo",
+      programa_atual: "001",
+      planos_count: 18,
+      planos,
+      apontamento_ids_em_processo: [77],
+    }]);
+    renderCorte();
+
+    expect(await screen.findByText("Plano 1/18")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finalizar plano" })).toBeEnabled();
+    expect(screen.queryByText(/Nesting 1\/18/i)).not.toBeInTheDocument();
+  });
+
+  it("usa nesting somente quando há repetição real da chapa no mesmo plano", async () => {
+    const repetido = {
+      ...PLANO_001,
+      estado: "EM CORTE",
+      chapas_em_corte: 1,
+      chapas_aguardando: 1,
+      chapas: [
+        { ...PLANO_001.chapas[0], status: "Em processo" },
+        PLANO_001.chapas[1],
+      ],
+    };
+    stubQueue([{
+      ...TAREFA,
+      status: "Em processo",
+      programa_atual: "001",
+      planos: [repetido, PLANO_002],
+      apontamento_ids_em_processo: [78],
+    }]);
+    renderCorte();
+
+    expect(await screen.findByText("Nesting 1/2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finalizar nesting" })).toBeEnabled();
+  });
+
   it("apresenta várias tarefas, cada uma com seus próprios planos", async () => {
     const outra = {
       ...TAREFA,

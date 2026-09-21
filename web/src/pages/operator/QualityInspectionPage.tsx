@@ -38,7 +38,11 @@ export function rangeLabel(cota: QualityDimension): string {
 }
 type PieceResult = "" | "APROVADA" | "RETRABALHO" | "REFUGO";
 
-export interface DraftDimension { sequencia: number; descricao: string; padrao: string }
+export interface DraftDimension { sequencia: number; descricao: string; nominal: string; tolerancia: string }
+
+export function formatDraftStandard(item: DraftDimension): string {
+  return `${item.nominal.trim()} ± ${item.tolerancia.trim()}`;
+}
 interface OperatorBadge { cracha: string; nome: string; ativo?: boolean }
 
 const RESULTS: { value: Exclude<PieceResult, "">; label: string; tone: string }[] = [
@@ -97,7 +101,7 @@ export function QualityInspectionPage({
   // Produto sem cotas cadastradas abre direto no cadastro, sem piscar o
   // checklist vazio. A primeira cota já vem montada, como manda a regra.
   const cadastrandoCotas = !data.template;
-  const rascunhos = drafts ?? [{ sequencia: 1, descricao: "", padrao: "" }];
+  const rascunhos = drafts ?? [{ sequencia: 1, descricao: "", nominal: "", tolerancia: "" }];
 
   const statusDaCota = (cota: QualityDimension): MeasureStatus => {
     const state = measures[cota.sequencia];
@@ -116,16 +120,16 @@ export function QualityInspectionPage({
   const canSave = allFilled && result !== "" && (!hasNonConforming || Boolean(rnc)) && !saving;
 
   async function saveTemplate() {
+    if (rascunhos.some((item) => !item.nominal.trim() || !item.tolerancia.trim())) {
+      setMessage("Informe o padrão e a tolerância de todas as cotas antes de salvar.");
+      return;
+    }
     const rows = rascunhos.map((item, index) => ({
       sequencia: index + 1,
       descricao: item.descricao.trim() || null,
-      padrao: item.padrao.trim(),
+      padrao: formatDraftStandard(item),
       unidade: "mm",
     }));
-    if (rows.some((row) => !row.padrao)) {
-      setMessage("Informe o padrão de todas as cotas antes de salvar.");
-      return;
-    }
     setSaving(true);
     try {
       await api.post("/api/v1/quality/templates", { produto: data!.produto, cotas: rows });
@@ -391,7 +395,13 @@ export function TemplateEditor({
           <fieldset key={index}>
             <legend>Cota {index + 1}</legend>
             <label>Descrição (opcional)<input value={item.descricao} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, descricao: event.target.value } : row))} /></label>
-            <label>Padrão<input aria-label={`Padrão da cota ${index + 1}`} placeholder="125,0 ± 0,5" value={item.padrao} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, padrao: event.target.value } : row))} /></label>
+            <label>Padrão
+              <span className="insp-tolerance-input">
+                <input aria-label={`Padrão nominal da cota ${index + 1}`} placeholder="125,0" value={item.nominal} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, nominal: event.target.value } : row))} />
+                <span aria-hidden="true">±</span>
+                <input aria-label={`Tolerância da cota ${index + 1}`} placeholder="0,5" value={item.tolerancia} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, tolerancia: event.target.value } : row))} />
+              </span>
+            </label>
             <div className="insp-fixed-unit"><span>Unidade</span><strong>mm</strong></div>
             {drafts.length > 1 ? <button type="button" className="insp-remove" onClick={() => onChange(drafts.filter((_row, position) => position !== index))}>Remover</button> : null}
           </fieldset>
@@ -400,7 +410,7 @@ export function TemplateEditor({
       <button
         type="button"
         className="insp-add"
-        onClick={() => onChange([...drafts, { sequencia: drafts.length + 1, descricao: "", padrao: "" }])}
+        onClick={() => onChange([...drafts, { sequencia: drafts.length + 1, descricao: "", nominal: "", tolerancia: "" }])}
       >
         + Adicionar cota
       </button>

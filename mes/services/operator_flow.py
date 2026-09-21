@@ -486,12 +486,12 @@ class OperatorFlowService:
         )
 
     def retomar_recurso_sem_op(self, *, setor, recurso):
-        """Encerra a parada física registrada sem OP e devolve o recurso à fila.
+        """Encerra a parada sem OP e devolve o recurso ao estado sem demanda.
 
         Simétrico de ``registrar_parada_recurso``: sem OP não existe apontamento
         para retomar, então a retomada é do próprio recurso. O destino é
-        ``fila`` — máquina disponível e sem demanda apontada —, o mesmo estado
-        que o retorno de turno sem demanda já usa.
+        A persistência continua usando ``fila`` por compatibilidade de schema;
+        a regra central projeta toda fila sem OP como recurso sem demanda.
         """
 
         state_service = ResourceStateService(self.db, self.operador)

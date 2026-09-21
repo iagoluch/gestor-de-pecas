@@ -275,6 +275,7 @@ class ProductionService:
         *,
         motivo_codigo,
         comentario=None,
+        plano_hash=None,
     ):
         if not tarefa_id:
             return ProductionResult(False, "Nenhuma tarefa carregada.", code="sem_tarefa")
@@ -294,10 +295,10 @@ class ProductionService:
         )
         if status_row is None:
             return ProductionResult(False, motivo_or_error, code="motivo_parada_invalido")
-        if self.estado_destaque(tarefa_id).get("estado") not in {"inicio", "retomada"}:
+        if self.estado_destaque(tarefa_id, plano_hash).get("estado") not in {"inicio", "retomada"}:
             return ProductionResult(
                 False,
-                "A tarefa precisa estar em execução para registrar uma parada.",
+                "O destaque precisa estar em execução para registrar uma parada.",
                 code="status_invalido",
                 data=tarefa,
             )
@@ -309,6 +310,7 @@ class ProductionService:
             motivo=motivo_or_error,
             comentario=str(comentario or "").strip() or None,
             data_hora=self._now(),
+            plano_hash=plano_hash,
         )
         if not atualizado:
             return ProductionResult(

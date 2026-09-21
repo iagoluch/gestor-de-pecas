@@ -79,12 +79,20 @@ def _task_payload(database, service, task_code, *, operador=None):
             ),
             None,
         )
+    # A tela operacional recebe somente chapas realmente liberadas pelo Corte.
+    # O grupo completo continua sendo usado no backend para progresso e para
+    # decidir quando a tarefa inteira terminou; plano aguardando Corte não é
+    # opção de trabalho do operador do Destaque.
+    planos_liberados = [
+        plano for plano in (grupo or {}).get("planos", [])
+        if plano.get("status_corte") == "Finalizado"
+    ]
     return {
         "task": task,
         "operations": ops,
         # Planos da tarefa com situação de Corte e de Destaque, já consolidados
         # pelo backend. É isto que substitui a antiga "Fila de Ordem".
-        "plans": (grupo or {}).get("planos", []),
+        "plans": planos_liberados,
         "progress": {
             "situacao": (grupo or {}).get("situacao"),
             "chapas_total": (grupo or {}).get("chapas_total"),
@@ -195,12 +203,21 @@ def action(
             task_row["id"], task_row["codigo_tarefa"], plano_hash=payload.plan_hash
         )
     elif payload.action == "Parada":
-        if current and current["state"].get("estado") in {"inicio", "retomada"}:
+        plano_em_execucao = next(
+            (
+                plano for plano in (current or {}).get("plans", [])
+                if str(plano.get("plano_hash") or "") == str(payload.plan_hash or "")
+                and plano.get("estado_destaque") in {"inicio", "retomada"}
+            ),
+            None,
+        )
+        if current and (plano_em_execucao or current["state"].get("estado") in {"inicio", "retomada"}):
             result = service.registrar_parada_destaque(
                 task_row["id"],
                 task_row["codigo_tarefa"],
                 motivo_codigo=payload.stop_reason_code,
                 comentario=payload.comment,
+                plano_hash=payload.plan_hash,
             )
         else:
             result = OperatorFlowService(

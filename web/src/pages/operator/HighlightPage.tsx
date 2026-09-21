@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, apiErrorMessage } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
+import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
@@ -93,10 +94,25 @@ const ESTADO_LABEL: Record<string, string> = {
   aguardando: "Aguardando",
 };
 
+function planoTemRepeticao(plano: HighlightPlan, planos: HighlightPlan[]) {
+  const programa = String(plano.programa ?? "").trim();
+  return Boolean(
+    programa
+    && planos.filter((item) => String(item.programa ?? "").trim() === programa).length > 1
+  );
+}
+
+function rotuloPlano(plano: HighlightPlan, planos: HighlightPlan[]) {
+  const programa = plano.programa ?? "—";
+  return planoTemRepeticao(plano, planos)
+    ? `Nesting ${plano.repeticao ?? plano.sequencia ?? "—"} do plano ${programa}`
+    : `Plano ${programa}`;
+}
+
 export function HighlightPage() {
-  const [taskCode, setTaskCode] = useState("");
+  const [filterText, setFilterText] = useState("");
   const [loadedTask, setLoadedTask] = useState("");
-  const [message, setMessage] = useState("Busque uma tarefa para iniciar o Destaque.");
+  const [message, setMessage] = useState("Selecione uma tarefa e um plano liberado pelo Corte.");
   const [dialog, setDialog] = useState<"stop" | "finish" | "history" | null>(null);
   const [busy, setBusy] = useState(false);
   const task = useApiQuery<HighlightPayload>(loadedTask ? `/api/v1/highlight/tasks/${encodeURIComponent(loadedTask)}` : null);
@@ -110,20 +126,6 @@ export function HighlightPage() {
     if (task.data) setMessage(`Tarefa ${task.data.task.codigo_tarefa} carregada.`);
   }, [task.data?.task.codigo_tarefa]);
 
-  function search(event: FormEvent) {
-    event.preventDefault();
-    const value = taskCode.trim().toUpperCase();
-    if (!value) return;
-    setLoadedTask(value);
-  }
-
-  function clearSearch() {
-    setTaskCode("");
-    setLoadedTask("");
-    setPlanoSelecionado(null);
-    setMessage("Filtro removido. Todas as tarefas liberadas estão visíveis.");
-  }
-
   async function action(actionName: "Início" | "Parada" | "Retomar" | "Fim", extra: Record<string, unknown> = {}) {
     // Parada e retomada do posto correm sem tarefa: elas atuam no estado
     // físico do Destaque, não no destaque de uma tarefa.
@@ -131,15 +133,19 @@ export function HighlightPage() {
     if (!loadedTask && !semTarefa) return;
     setBusy(true);
     try {
-      const response = await api.post<{ message: string }>("/api/v1/highlight/actions", {
+      const response = await api.post<{ message: string; current?: HighlightPayload }>("/api/v1/highlight/actions", {
         action: actionName,
         task_code: actionName === "Retomar" ? null : loadedTask || null,
         ...extra,
       });
       setMessage(response.message);
+      if (response.current) task.replaceData(response.current);
       setDialog(null);
       if (actionName === "Fim") setPlanoSelecionado(null);
-      task.reload();
+      // A resposta da mutação já traz o read model recalculado. O reload fica
+      // como reconciliação quando o endpoint não tem uma tarefa em escopo
+      // (parada/retomada do posto) ou em backends antigos.
+      if (!response.current) task.reload();
       queue.reload();
     } catch (reason) {
       setMessage(apiErrorMessage(reason));
@@ -148,17 +154,44 @@ export function HighlightPage() {
     }
   }
 
-  const state = task.data?.state.estado;
-  const plans = task.data?.plans ?? [];
+  // Defesa de apresentação: mesmo que um backend antigo devolva a hierarquia
+  // completa, o posto do Destaque nunca oferece plano ainda não cortado.
+  const plans = useMemo(
+    () => (task.data?.plans ?? []).filter((plano) => plano.status_corte === "Finalizado"),
+    [task.data?.plans],
+  );
   const progress = task.data?.progress;
   const history = task.data?.history ?? [];
   const queueItems = queue.data?.items ?? [];
-  const filter = taskCode.trim().toLocaleUpperCase("pt-BR");
+  const filter = filterText.trim().toLocaleUpperCase("pt-BR");
   const filteredQueueItems = filter
-    ? queueItems.filter((item) => item.codigo_tarefa.toLocaleUpperCase("pt-BR").includes(filter))
+    ? queueItems.filter((item) => (
+      item.codigo_tarefa.toLocaleUpperCase("pt-BR").includes(filter)
+      || String(item.material ?? "").toLocaleUpperCase("pt-BR").includes(filter)
+      || item.planos.some((plano) => (
+        plano.status_corte === "Finalizado"
+        && String(plano.programa ?? "").toLocaleUpperCase("pt-BR").includes(filter)
+      ))
+    ))
     : queueItems;
-  const wholeTaskReady = progress?.situacao === "COMPLETA"
-    && Number(progress?.chapas_disponiveis ?? 0) > 0;
+  const selectedPlan = planoSelecionado
+    ? plans.find((plano) => plano.plano_hash === planoSelecionado.plano_hash) ?? null
+    : null;
+  const selectedState = selectedPlan?.estado_destaque ?? "aguardando";
+  const selectedRunning = ["inicio", "retomada"].includes(selectedState);
+  const selectedPaused = selectedState === "parada";
+
+  useEffect(() => {
+    setPlanoSelecionado((current) => {
+      if (current) {
+        const updated = plans.find((plano) => plano.plano_hash === current.plano_hash);
+        if (updated) return updated;
+      }
+      return plans.find((plano) => ["inicio", "retomada", "parada"].includes(plano.estado_destaque ?? ""))
+        ?? plans.find((plano) => plano.estado_destaque === "aguardando")
+        ?? null;
+    });
+  }, [plans]);
   // Parada registrada sem tarefa: não existe destaque para retomar pelo
   // Início, então a retomada é do próprio posto.
   const resourceState = queue.data?.resource_state;
@@ -167,31 +200,62 @@ export function HighlightPage() {
   );
   return (
     <section className="highlight-page">
-      <form className="highlight-search" onSubmit={search}>
-        <label>Buscar tarefa<input value={taskCode} onChange={(event) => setTaskCode(event.target.value)} placeholder="Código da tarefa" autoFocus /></label>
-        <button type="submit" className="button button--primary">Buscar</button>
-        {taskCode || loadedTask ? <button type="button" className="button" onClick={clearSearch}>Limpar filtro</button> : null}
-      </form>
+      <div className="highlight-search">
+        <label>Filtrar tarefas liberadas<input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Tarefa, plano ou material" autoFocus /></label>
+        {filterText ? <button type="button" className="button" onClick={() => setFilterText("")}>Limpar filtro</button> : null}
+      </div>
+      <p className="operator-notice" role="status">{message}</p>
+      {filteredQueueItems.length ? (
+        <div className="highlight-queue" aria-label="Tarefas liberadas pelo Corte">
+          {filteredQueueItems.map((item) => (
+            <button
+              type="button"
+              key={item.tarefa_id}
+              aria-pressed={loadedTask === item.codigo_tarefa}
+              className={`highlight-queue__task highlight-queue__task--${(item.situacao ?? "PARCIAL").toLowerCase()}${loadedTask === item.codigo_tarefa ? " is-selected" : ""}`}
+              onClick={() => {
+                setLoadedTask(item.codigo_tarefa);
+                setPlanoSelecionado(null);
+              }}
+            >
+              <header>
+                <strong>Tarefa {item.codigo_tarefa}</strong>
+                <span className="operator-state">{item.situacao === "COMPLETA" ? "Corte concluído" : "Corte parcial"}</span>
+              </header>
+              <small>{item.chapas_disponiveis ?? 0} plano(s) pronto(s) para destacar</small>
+              <small>{item.material ?? "Material não informado"} · {item.espessura ?? "—"} mm</small>
+            </button>
+          ))}
+        </div>
+      ) : !task.data ? <EmptyState title={filter ? "Nenhuma tarefa corresponde ao filtro" : "Nenhuma tarefa liberada pelo Corte"} detail={filter ? "Limpe o filtro para restaurar a lista completa." : "Assim que um plano do Laser Ensis for concluído, ele aparece aqui."} /> : null}
       <div className="highlight-actions">
-        <button type="button" className="operator-action operator-action--start" disabled={!task.data || busy || !wholeTaskReady || !["aguardando", "parada"].includes(state ?? "")} onClick={() => { setPlanoSelecionado(null); void action("Início"); }}><span>Início</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || state === "parada"} onClick={() => setDialog("stop")}><span>Parada</span></button>
-        {stoppedWithoutTask ? <button type="button" className="operator-action operator-action--start" disabled={busy} onClick={() => void action("Retomar")}><span>Retomar</span></button> : null}
-        <button type="button" className="operator-action operator-action--finish" disabled={!task.data || busy || !wholeTaskReady || !["inicio", "retomada"].includes(state ?? "")} onClick={() => { setPlanoSelecionado(null); setDialog("finish"); }}><span>Fim</span></button>
+        <button
+          type="button"
+          className="operator-action operator-action--start"
+          disabled={busy || (!stoppedWithoutTask && (!selectedPlan || !["aguardando", "parada"].includes(selectedState)))}
+          onClick={() => stoppedWithoutTask
+            ? void action("Retomar")
+            : void action("Início", { plan_hash: selectedPlan?.plano_hash })}
+        >
+          <img src={assets.operator.actions.start} alt="" />
+          <span>{stoppedWithoutTask || selectedPaused ? "Retomar" : "Iniciar"}</span>
+        </button>
+        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || selectedPaused || (selectedPlan ? !selectedRunning : false)} onClick={() => setDialog("stop")}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
+        <button type="button" className="operator-action operator-action--finish" disabled={!selectedPlan || busy || !selectedRunning} onClick={() => setDialog("finish")}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>
       </div>
       {stoppedWithoutTask ? (
         <p className="operator-notice operator-notice--error">
           Posto parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
         </p>
       ) : null}
-      <p className="operator-notice" role="status">{message}</p>
       {task.loading && loadedTask ? <LoadingState label="Carregando tarefa…" /> : task.error ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (
         <div className="highlight-detail">
-          <header><div><small>Tarefa</small><h2>{task.data.task.codigo_tarefa}</h2></div><span className="operator-state">{ESTADO_LABEL[state ?? "aguardando"]}</span></header>
-          <dl className="highlight-metrics"><div><dt>Material</dt><dd>{task.data.task.material ?? "Não informado"}</dd></div><div><dt>Espessura</dt><dd>{task.data.task.espessura ?? "Não informada"}</dd></div><div><dt>Tempo em execução</dt><dd>{formatDuration(task.data.timing.execution_seconds)}</dd></div><div><dt>Tempo parado</dt><dd>{formatDuration(task.data.timing.stopped_seconds)}</dd></div><div><dt>Estado desde</dt><dd>{formatDateTime(task.data.timing.state_since)}</dd></div><div><dt>Início</dt><dd>{formatDateTime(task.data.timing.started_at)}</dd></div></dl>
+          <header><div><small>Tarefa selecionada</small><h2>{task.data.task.codigo_tarefa}</h2></div><span className="operator-state">{plans.length} plano(s) liberado(s)</span></header>
+          <dl className="highlight-metrics"><div><dt>Material</dt><dd>{task.data.task.material ?? "Não informado"}</dd></div><div><dt>Espessura</dt><dd>{task.data.task.espessura ?? "Não informada"}</dd></div><div><dt>Tempo em destaque</dt><dd>{formatDuration(task.data.timing.execution_seconds)}</dd></div></dl>
 
           <section className="highlight-block">
             <header>
-              <h3>Planos da tarefa</h3>
+              <h3>Escolha o plano para apontar</h3>
               <span>
                 {progress?.situacao === "COMPLETA" ? "Corte concluído" : "Corte parcial"}
                 {progress?.progresso_corte ? ` · ${progress.progresso_corte}` : ""}
@@ -200,56 +264,33 @@ export function HighlightPage() {
             {plans.length ? (
               <div className="highlight-plans">
                 {plans.map((plano) => {
-                  const cortado = plano.status_corte === "Finalizado";
                   const destacado = plano.estado_destaque === "fim";
                   return (
-                    <article
+                    <button
+                      type="button"
                       key={plano.plano_hash}
-                      className={`highlight-plan highlight-plan--${destacado ? "destacado" : cortado ? "disponivel" : "aguardando"}${planoSelecionado?.plano_hash === plano.plano_hash ? " highlight-plan--selecionado" : ""}`}
+                      aria-pressed={selectedPlan?.plano_hash === plano.plano_hash}
+                      disabled={busy}
+                      className={`highlight-plan highlight-plan--${destacado ? "destacado" : "disponivel"}${selectedPlan?.plano_hash === plano.plano_hash ? " highlight-plan--selecionado" : ""}`}
+                      onClick={() => setPlanoSelecionado(plano)}
                     >
                       <header>
-                        {/* O plano nunca aparece solto: a tarefa pai encabeça o bloco. */}
-                        <small>Tarefa {task.data?.task.codigo_tarefa}</small>
-                        {/* Chapas repetidas do mesmo programa só se distinguem
-                            pela repetição: ela precisa ficar no título. */}
-                        <strong>Plano {plano.programa ?? "—"}{plano.repeticao ? ` · chapa ${plano.repeticao}` : ""}</strong>
+                        <small>{selectedPlan?.plano_hash === plano.plano_hash ? "Selecionado" : "Toque para selecionar"}</small>
+                        <strong>{rotuloPlano(plano, plans)}</strong>
                       </header>
                       <dl>
                         <div><dt>Chapa</dt><dd>{plano.nome_chapa ?? "—"}</dd></div>
                         <div><dt>Máquina</dt><dd>{plano.maquina ?? "—"}</dd></div>
                         <div><dt>Peças</dt><dd>{plano.quantidade_processo ?? 0}</dd></div>
-                        <div><dt>Corte</dt><dd>{plano.status_corte ?? "Aguardando"}</dd></div>
+                        <div><dt>Liberado em</dt><dd>{formatDateTime(plano.cortada_em)}</dd></div>
                       </dl>
                       <span className="operator-state">{PLANO_DESTAQUE_LABEL[plano.estado_destaque ?? "aguardando"]}</span>
-                      {cortado && !destacado && ["aguardando", "parada"].includes(plano.estado_destaque ?? "aguardando") ? (
-                        <button
-                          type="button"
-                          className="button button--primary"
-                          disabled={busy}
-                          onClick={() => {
-                            setPlanoSelecionado(plano);
-                            void action("Início", { plan_hash: plano.plano_hash });
-                          }}
-                        >
-                          {plano.estado_destaque === "parada" ? "Retomar plano" : "Destacar este plano"}
-                        </button>
-                      ) : null}
-                      {cortado && !destacado && ["inicio", "retomada"].includes(plano.estado_destaque ?? "") ? (
-                        <button type="button" className="button" disabled={busy} onClick={() => { setPlanoSelecionado(plano); setDialog("finish"); }}>
-                          Concluir plano
-                        </button>
-                      ) : null}
                       {destacado ? <small>Concluído por {plano.destaque_operador ?? "—"} em {formatDateTime(plano.destaque_em)}</small> : null}
-                    </article>
+                    </button>
                   );
                 })}
               </div>
-            ) : <EmptyState title="Nenhum plano cortado ainda" detail="Assim que o Corte concluir uma chapa, ela aparece aqui." />}
-          </section>
-
-          <section className="highlight-block">
-            <header><h3>OPs da tarefa</h3><span>{task.data.operations.length}</span></header>
-            <div className="table-scroll"><table><thead><tr><th>OP</th><th>Peça</th><th>Quantidade</th><th>Destino</th></tr></thead><tbody>{task.data.operations.map((row) => <tr key={row.id}><td>{row.codigo_op}</td><td>{row.id_peca ?? "—"}</td><td>{row.quantidade_atual ?? row.quantidade_original ?? 0}</td><td>{row.setor_destino_atual ?? "—"}</td></tr>)}</tbody></table></div>
+            ) : <EmptyState title="Nenhum plano liberado" detail="Somente planos concluídos no Laser Ensis aparecem para apontamento." />}
           </section>
 
           <section className="highlight-block">
@@ -258,28 +299,8 @@ export function HighlightPage() {
           </section>
         </div>
       ) : null}
-      {filteredQueueItems.length ? (
-        <div className="highlight-queue">
-          {filteredQueueItems.map((item) => (
-            <button
-              type="button"
-              key={item.tarefa_id}
-              className={`highlight-queue__task highlight-queue__task--${(item.situacao ?? "PARCIAL").toLowerCase()}`}
-              onClick={() => { setTaskCode(item.codigo_tarefa); setLoadedTask(item.codigo_tarefa); }}
-            >
-              <header>
-                <strong>Tarefa {item.codigo_tarefa}</strong>
-                <span className="operator-state">{item.situacao === "COMPLETA" ? "Corte concluído" : "Corte parcial"}</span>
-              </header>
-              <small>{item.progresso_corte}</small>
-              <small>{item.chapas_disponiveis ?? 0} plano(s) disponível(is) para destaque · {item.chapas_destacadas ?? 0} já destacado(s)</small>
-              <small>{item.material ?? "Material não informado"} · {item.espessura ?? "—"} mm</small>
-            </button>
-          ))}
-        </div>
-      ) : !task.data ? <EmptyState title={filter ? "Nenhuma tarefa corresponde ao filtro" : "Nenhuma tarefa liberada pelo Corte"} detail={filter ? "Limpe o filtro para restaurar a lista completa." : "Assim que uma chapa for concluída no Corte, a tarefa aparece aqui."} /> : null}
-      {dialog === "stop" ? <HighlightStopDialog taskCode={loadedTask || "—"} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => void action("Parada", { stop_reason_code: code, comment })} /> : null}
-      {dialog === "finish" ? <HighlightFinishDialog taskCode={loadedTask} plano={planoSelecionado} operations={task.data?.operations ?? []} onCancel={() => { setDialog(null); setPlanoSelecionado(null); }} onConfirm={(badge) => void action("Fim", { badge, plan_hash: planoSelecionado?.plano_hash ?? null })} /> : null}
+      {dialog === "stop" ? <HighlightStopDialog taskCode={loadedTask || "—"} planLabel={selectedRunning && selectedPlan ? rotuloPlano(selectedPlan, plans) : undefined} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => void action("Parada", { stop_reason_code: code, comment, plan_hash: selectedRunning ? selectedPlan?.plano_hash : null })} /> : null}
+      {dialog === "finish" ? <HighlightFinishDialog taskCode={loadedTask} planLabel={selectedPlan ? rotuloPlano(selectedPlan, plans) : undefined} operations={task.data?.operations ?? []} onCancel={() => setDialog(null)} onConfirm={(badge) => void action("Fim", { badge, plan_hash: selectedPlan?.plano_hash ?? null })} /> : null}
       {dialog === "history" ? <OperatorDialog title="Histórico do Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{loadedTask || "—"}</strong></span></div>} onCancel={() => setDialog(null)}>{history.length ? <HighlightHistoryTable rows={[...history].reverse()} /> : <EmptyState title="Sem eventos registrados" />}</OperatorDialog> : null}
     </section>
   );
@@ -306,9 +327,9 @@ function HighlightHistoryTable({ rows }: { rows: HighlightHistoryRow[] }) {
   );
 }
 
-function HighlightStopDialog({ taskCode, reasons, onCancel, onConfirm }: { taskCode: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => void }) {
+function HighlightStopDialog({ taskCode, planLabel, reasons, onCancel, onConfirm }: { taskCode: string; planLabel?: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => void }) {
   const [code, setCode] = useState(""); const [comment, setComment] = useState(""); const selected = reasons.find((reason) => reason.codigo === code);
-  return <OperatorDialog title="Parar Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span></div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><button type="button" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</button></div></OperatorDialog>;
+  return <OperatorDialog title="Parar Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span>{planLabel ? <span><small>Plano</small><strong>{planLabel}</strong></span> : null}</div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><button type="button" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</button></div></OperatorDialog>;
 }
 
 /**
@@ -316,7 +337,7 @@ function HighlightStopDialog({ taskCode, reasons, onCancel, onConfirm }: { taskC
  * não altera a regra canônica de finalização, que continua encerrando a tarefa
  * inteira no backend.
  */
-function HighlightFinishDialog({ taskCode, plano, operations, onCancel, onConfirm }: { taskCode: string; plano?: HighlightPlan | null; operations: HighlightOperation[]; onCancel: () => void; onConfirm: (badge: string) => void }) {
+function HighlightFinishDialog({ taskCode, planLabel, operations, onCancel, onConfirm }: { taskCode: string; planLabel?: string; operations: HighlightOperation[]; onCancel: () => void; onConfirm: (badge: string) => void }) {
   const [badge, setBadge] = useState("");
   const [search, setSearch] = useState("");
   const [checked, setChecked] = useState<number[]>([]);
@@ -340,7 +361,7 @@ function HighlightFinishDialog({ taskCode, plano, operations, onCancel, onConfir
     <OperatorDialog
       title="Finalizar Destaque"
       size="wide"
-      context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span><span><small>Escopo</small><strong>{plano ? `Plano ${plano.programa ?? "—"}${plano.repeticao ? ` · chapa ${plano.repeticao}` : ""}` : "Tarefa completa"}</strong></span><span><small>Conferidas</small><strong>{checked.length} de {operations.length}</strong></span></div>}
+      context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span><span><small>Escopo</small><strong>{planLabel ?? "Plano selecionado"}</strong></span><span><small>Conferidas</small><strong>{checked.length} de {operations.length}</strong></span></div>}
       onCancel={onCancel}
     >
       <p>Confira cada OP separada antes de encerrar o Destaque desta tarefa.</p>

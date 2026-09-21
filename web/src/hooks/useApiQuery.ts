@@ -24,6 +24,16 @@ export function useApiQuery<T>(
     setGeneration((value) => value + 1);
   }, []);
 
+  // Algumas mutações devolvem o read model canônico já recalculado na mesma
+  // transação. Publicá-lo evita manter a tela no estado anterior enquanto o
+  // GET de invalidação é agendado, sem inventar uma transição no frontend.
+  const replaceData = useCallback((value: T) => {
+    hasData.current = true;
+    setData(value);
+    setError(null);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     if (!path) return undefined;
     return subscribeRealtime(reload, { ignoreLiveTick: options.ignoreLiveTick });
@@ -78,5 +88,5 @@ export function useApiQuery<T>(
     return () => controller.abort();
   }, [path, generation]);
 
-  return { data, error, loading, reload };
+  return { data, error, loading, reload, replaceData };
 }
