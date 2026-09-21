@@ -1,6 +1,6 @@
 """Fluxo operacional de Destaque por tarefa."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
 from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, require_operator_user
@@ -13,6 +13,7 @@ from mes.services.cut import CutService
 from mes.services.production import ProductionService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.task_lookup import TarefaLookupService
+from mes.services.telegram_alerts import schedule_resource_stop_alert
 
 
 router = APIRouter(prefix="/highlight", tags=["Destaque"])
@@ -150,6 +151,7 @@ def task(
 def action(
     payload: HighlightActionRequest,
     request: Request,
+    background: BackgroundTasks,
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
@@ -201,6 +203,15 @@ def action(
         )
     if not result.ok:
         raise AppError(result.code or "highlight_action_failed", result.message, status_code=409, details=result.data)
+    if payload.action == "Parada":
+        # O Destaque é um posto único: a linha devolvida identifica a tarefa,
+        # o nome do posto vem do próprio setor.
+        parada = dict(result.data or {})
+        parada.setdefault("maquina", "Destaque")
+        parada.setdefault("setor", "Destaque")
+        if payload.task_code:
+            parada.setdefault("codigo_tarefa", payload.task_code)
+        schedule_resource_stop_alert(background, request.app.state.settings, parada)
     request.app.state.realtime.publish("highlight_action")
     response = {
         "ok": True,

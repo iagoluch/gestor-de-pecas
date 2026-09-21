@@ -782,6 +782,7 @@ function SetupQualityDialog({
             inline
             label="Chamar responsável"
             sector={sector}
+            resource={context.resource}
             defaultReason="Qualidade"
             defaultComment={responsibleCallComment(context, "Retrabalho da primeira peça bloqueado; é necessária autorização para liberar a OP.")}
           />
@@ -876,6 +877,7 @@ function SetupQualityDialog({
                 inline
                 label="Chamar responsável"
                 sector={sector}
+                resource={context.resource}
                 defaultReason="Qualidade"
                 defaultComment={responsibleCallComment(context, "Primeira peça reprovada com destino Refugo; é necessária autorização para o descarte.")}
               />
@@ -1026,6 +1028,7 @@ function FinishDialog({ context, sector, operators, onCancel, onConfirm }: { con
         inline
         label="Chamar responsável"
         sector={sector}
+        resource={context.resource}
         defaultReason="Qualidade"
         defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado na finalização; é necessária autorização para o descarte.`)}
       />

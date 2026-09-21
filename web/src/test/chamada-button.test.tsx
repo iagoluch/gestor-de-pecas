@@ -25,7 +25,7 @@ function stubFetch(overrides: Record<string, unknown> = {}) {
     }
     if (path.includes("/chamadas/contatos")) return json({ items: CONTATOS });
     if (path.includes("/chamadas") && !path.includes("admin")) {
-      return json(overrides.callResponse ?? { ok: true, telegram_enviado: true, item: {} });
+      return json(overrides.callResponse ?? { ok: true, telegram_agendado: true, item: {} });
     }
     return json({ code: "not_found", message: "Não encontrado" }, 404);
   });
@@ -81,15 +81,15 @@ describe("botão de chamada — variante operador (padrão)", () => {
     expect(screen.getByRole("button", { name: "Chamar" })).toBeEnabled();
   });
 
-  it("envia o crachá junto da chamada e mostra se o aviso saiu pelo Telegram", async () => {
-    const fetchMock = stubFetch({ callResponse: { ok: true, telegram_enviado: true, item: {} } });
+  it("envia o crachá junto da chamada e mostra que o aviso está a caminho", async () => {
+    const fetchMock = stubFetch({ callResponse: { ok: true, telegram_agendado: true, item: {} } });
     render(<ChamadaButton />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await selecionarFulanoEMotivo("Manutenção");
     fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
     fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
     await screen.findByText("Chamada registrada.");
-    expect(screen.getByText("O aviso foi enviado pelo Telegram.")).toBeInTheDocument();
+    expect(screen.getByText("O aviso está sendo enviado pelo Telegram.")).toBeInTheDocument();
 
     const chamada = fetchMock.mock.calls.find(([path]) => String(path).endsWith("/chamadas"));
     const body = JSON.parse(String(chamada?.[1]?.body));
@@ -97,7 +97,7 @@ describe("botão de chamada — variante operador (padrão)", () => {
   });
 
   it("avisa quando a chamada foi registrada mas o Telegram não pôde ser enviado", async () => {
-    stubFetch({ callResponse: { ok: true, telegram_enviado: false, item: {} } });
+    stubFetch({ callResponse: { ok: true, telegram_agendado: false, item: {} } });
     render(<ChamadaButton />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await selecionarFulanoEMotivo("Qualidade");
@@ -180,7 +180,7 @@ describe("botão de chamada — variante gestão", () => {
   });
 
   it("envia nome e e-mail digitados em vez de crachá", async () => {
-    const fetchMock = stubFetch({ callResponse: { ok: true, telegram_enviado: true, item: {} } });
+    const fetchMock = stubFetch({ callResponse: { ok: true, telegram_agendado: true, item: {} } });
     render(<ChamadaButton variant="gestao" />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await selecionarFulanoEMotivo("Manutenção");

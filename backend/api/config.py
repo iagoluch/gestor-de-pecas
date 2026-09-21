@@ -169,9 +169,11 @@ class WebSettings:
     # configurado em ``telegram_bot_token``; só falta o chat do supervisor. Sem
     # chat_id configurado, o worker segue exatamente como antes — sem aviso.
     totvs_outbox_telegram_chat_id: str = ""
-    # Botão de chamada (operador e gestão). Mesmo bot de ``telegram_bot_token``;
-    # sem este chat configurado, a chamada continua sendo registrada no banco,
-    # só não sai o aviso — nunca falha silenciosamente sem deixar rastro.
+    # Chat mestre de alerta: botão de chamada (operador e gestão) e parada de
+    # recurso registrada no posto (decisão do usuário, 21/09/2026). Mesmo bot de
+    # ``telegram_bot_token``; sem este chat configurado, a chamada continua
+    # sendo registrada no banco e a parada continua sendo apontada — só não sai
+    # o aviso, nunca falha silenciosamente sem deixar rastro.
     chamada_telegram_chat_id: str = ""
     # Bot de fábrica no Telegram: comandos privados (crachá -> chat) e
     # resumos automáticos pro grupo. Mesmo bot/token de ``telegram_bot_token``;

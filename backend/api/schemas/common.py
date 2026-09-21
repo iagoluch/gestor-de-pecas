@@ -107,6 +107,9 @@ class ChamadaRequest(BaseModel):
     contato_id: int
     motivo: str = Field(min_length=1, max_length=60)
     comentario: str = Field(min_length=1, max_length=500)
+    #: Posto de onde a chamada partiu. A OP/peça em andamento não vem da tela:
+    #: o endpoint resolve pelo apontamento ativo desta máquina.
+    recurso: str | None = Field(default=None, max_length=120)
     solicitante_cracha: str | None = Field(default=None, max_length=40)
     solicitante_nome_manual: str | None = Field(default=None, max_length=120)
     solicitante_email: str | None = Field(default=None, max_length=160)

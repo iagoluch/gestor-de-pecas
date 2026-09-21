@@ -98,6 +98,58 @@ def _footer(label: str, now: datetime) -> str:
     return f"🕐 <b>{label} {now:%H:%M}</b>"
 
 
+def _first(item: dict, *keys):
+    """Primeiro valor preenchido entre apelidos equivalentes do mesmo campo."""
+
+    for key in keys:
+        value = (item or {}).get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _station_lines(item: dict) -> list[str]:
+    """Identifica o posto do fato: máquina, OP e peça, sem inventar ausentes.
+
+    Os apelidos cobrem as três origens que alimentam estes avisos sem
+    normalização intermediária: apontamento operacional, estado físico do
+    recurso (``eventos_estado_recurso``) e fila do Corte.
+    """
+
+    fields = (
+        ("Máquina", _first(item, "maquina", "recurso", "resource", "codigo_recurso")),
+        ("Setor", _first(item, "setor", "tipo_setor", "sector")),
+        ("OP", _first(item, "op", "codigo_op", "production_order")),
+        # No Corte a identidade do trabalho é a tarefa, não a OP.
+        ("Tarefa", _first(item, "codigo_tarefa")),
+        ("Operação", _first(item, "numero_operacao", "operation")),
+        ("Peça", _first(item, "produto_codigo", "peca", "product")),
+        ("Descrição", _first(item, "produto_descricao", "descricao", "description")),
+    )
+    return [f"{label}: <b>{html(value)}</b>" for label, value in fields if value]
+
+
+def _timestamp_lines(now: datetime) -> list[str]:
+    """Data e hora explícitas: quem recebe o aviso no celular precisa das duas."""
+
+    return [f"📅 Data: <b>{now:%d/%m/%Y}</b>", f"🕐 Hora: <b>{now:%H:%M}</b>"]
+
+
+def _chamada_solicitante(item: dict) -> str:
+    """Quem apertou o botão: o login do posto é compartilhado, o crachá não."""
+
+    nome = _first(item, "solicitante_nome") or "Não identificado"
+    nivel = _first(item, "solicitante_nivel")
+    partes = [f"{nome} ({nivel})" if nivel else nome]
+    cracha = _first(item, "solicitante_cracha")
+    if cracha:
+        partes.append(f"crachá {cracha}")
+    email = _first(item, "solicitante_email")
+    if email:
+        partes.append(email)
+    return " — ".join(partes)
+
+
 def _home_button() -> dict:
     return button("🏠 Menu", "gp:home", "primary")
 
@@ -345,6 +397,49 @@ class TelegramPresenter:
         return TelegramView("\n".join(lines), keyboard([
             button("🔄 Tentar novamente", retry_callback, "primary"), _home_button()
         ]))
+
+    def chamada(self, item: dict, *, now: datetime) -> str:
+        """Botão de chamada do posto, no mesmo formato dos avisos automáticos."""
+
+        lines = _header("📣", "Chamada do posto")
+        station = _station_lines(item)
+        if station:
+            lines.extend([*station, ""])
+        contato = _first(item, "contato_nome")
+        if contato:
+            funcao = _first(item, "contato_funcao")
+            lines.append(
+                f"Para: <b>{html(contato)}</b>"
+                + (f" ({html(funcao)})" if funcao else "")
+            )
+        lines.append(
+            f"Motivo: <b>{html(_first(item, 'motivo') or 'Não informado')}</b>"
+        )
+        comentario = _first(item, "comentario")
+        if comentario:
+            lines.append(f"Comentário: {html(comentario)}")
+        lines.append(f"Solicitado por: {html(_chamada_solicitante(item))}")
+        lines.extend(["", *_timestamp_lines(now)])
+        return "\n".join(lines)
+
+    def resource_stop(self, item: dict, *, now: datetime) -> str:
+        """Parada de recurso registrada no posto, avisada no chat mestre."""
+
+        lines = _header("🔴", "Parada registrada")
+        station = _station_lines(item)
+        if station:
+            lines.extend([*station, ""])
+        lines.append(
+            f"🔧 Motivo: <b>{html(_first(item, 'motivo', 'motivo_parada') or 'Não informado')}</b>"
+        )
+        comentario = _first(item, "comentario", "comment")
+        if comentario:
+            lines.append(f"Comentário: {html(comentario)}")
+        operador = _first(item, "operador", "operador_inicio", "operator")
+        if operador:
+            lines.append(f"Operador: {html(operador)}")
+        lines.extend(["", *_timestamp_lines(now)])
+        return "\n".join(lines)
 
     def totvs_outbox_error(self, item: dict) -> str:
         context = item.get("payload_context") or {}
