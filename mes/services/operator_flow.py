@@ -267,6 +267,18 @@ class OperatorFlowService:
                 setor_herdado if inspecao_sem_qualidade else row.get("recurso_tipo_setor")
             )
             row["inspecao_sem_checklist"] = inspecao_sem_qualidade
+            # Decisão do usuário, 21/09/2026: a etapa INSPECAO da Caldeiraria
+            # (Dobra/Usinagem/Serra) continua concluída sozinha no backend —
+            # nada muda no roteiro real — mas deixa de aparecer no roteiro
+            # visual do operador, que só mostrava um item morto (sempre
+            # "Concluída", nunca selecionável). Solda/Pintura continuam
+            # aparecendo: lá a INSPECAO é apontada de verdade pelo posto
+            # anterior (`inspecao_sem_checklist`).
+            row["inspecao_auto_concluida"] = bool(
+                row.get("inspecao_qualidade")
+                and setor_herdado
+                and inspection_step_auto_skipped(setor_herdado)
+            )
             row["setor_efetivo"] = setor_efetivo
             row["recurso_efetivo"] = recurso_efetivo
             pointable = bool(

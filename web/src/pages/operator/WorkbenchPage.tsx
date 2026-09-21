@@ -569,6 +569,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {(operations.data?.items?.length ?? 0) > 0 ? (
         <ol className="operator-route" aria-label="Roteiro completo da OP">
           {(operations.data?.items ?? []).map((item, index) => {
+            if (item.inspecao_auto_concluida) return null;
             const selectable = isSelectable(item);
             const chosen = index === operationIndex;
             return (
