@@ -11,6 +11,23 @@ from fastapi import Query, Request
 from backend.api.errors import AppError
 from mes.contracts import AnalyticsFilter
 
+# Fora desse intervalo a data não representa um período de negócio real
+# (o sistema não tem histórico antes disso nem opera no futuro distante).
+# Sem esse limite, uma data extrema como ano 0263 passava pelas checagens de
+# "fim > início" e "período <= 366 dias" e só quebrava na consulta ao banco,
+# virando 500 em vez de ser rejeitada como entrada inválida.
+_MIN_VALID_YEAR = 2000
+_MAX_YEARS_IN_FUTURE = 1
+
+
+def _reject_implausible_date(value: datetime, current: datetime) -> None:
+    if value.year < _MIN_VALID_YEAR or value.year > current.year + _MAX_YEARS_IN_FUTURE:
+        raise AppError(
+            "invalid_date",
+            "A data informada está fora do intervalo permitido.",
+            status_code=422,
+        )
+
 
 def analytics_filter(
     request: Request,
@@ -26,6 +43,10 @@ def analytics_filter(
 ) -> AnalyticsFilter:
     clock = getattr(request.app.state, "clock", None)
     current = clock.now() if clock is not None else datetime.now().replace(microsecond=0)
+    if fim is not None:
+        _reject_implausible_date(fim, current)
+    if inicio is not None:
+        _reject_implausible_date(inicio, current)
     end = fim or current
     settings = getattr(request.app.state, "settings", None)
     simulation_now = current if getattr(settings, "simulation_mode", False) else None

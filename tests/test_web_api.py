@@ -726,6 +726,15 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page.json()["page"]["page_size"], 10)
 
+    def test_data_implausivel_rejeitada_sem_500(self):
+        self.login_manager()
+        response = self.client.get(
+            "/api/v1/audit/appointments",
+            params={"fim": "0263-10-17T17:14:48"},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["code"], "invalid_date")
+
     def test_logout_exige_csrf_e_expira_cookies(self):
         self.login_manager()
         denied = self.client.post("/api/v1/auth/logout")
