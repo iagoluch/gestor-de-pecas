@@ -463,6 +463,24 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(stopped.json()["code"], "parada_recurso_sem_op")
         self.assertIsNone(stopped.json()["data"].get("op"))
 
+        # A parada sem OP precisa ter retomada sem OP: sem ela o recurso ficava
+        # travado, porque nenhuma outra ação é aceita sem informar uma OP.
+        workbench = self.client.get("/api/v1/operator/workbench?resource=2204")
+        self.assertEqual(workbench.status_code, 200, workbench.text)
+        self.assertEqual(workbench.json()["resource_state"]["categoria"], "parada")
+
+        resumed = self.client.post(
+            "/api/v1/operator/actions",
+            headers=self.csrf(),
+            json={"action": "Retomar", "resource": "2204"},
+        )
+        self.assertEqual(resumed.status_code, 200, resumed.text)
+        self.assertEqual(resumed.json()["code"], "retomada_recurso_sem_op")
+        self.assertEqual(
+            self.client.get("/api/v1/operator/workbench?resource=2204").json()["resource_state"]["categoria"],
+            "fila",
+        )
+
     def test_backend_rejeita_transicao_invalida_sem_depender_do_frontend(self):
         self.login_operator()
         base = {
@@ -647,6 +665,47 @@ class WebApiTests(unittest.TestCase):
         )
         self.assertEqual(finished.status_code, 200, finished.text)
         self.assertEqual(self.db.buscar_tarefa_por_codigo("T-WEB")["status"], "Finalizado")
+
+    def test_destaque_retoma_parada_registrada_sem_tarefa(self):
+        """A parada sem tarefa é do posto — e precisa de retomada sem tarefa.
+
+        Sem ela o Destaque ficava parado para sempre: toda ação exigia uma
+        tarefa que a parada física não possui.
+        """
+
+        self.login_operator("Operador Destaque Web", "senha-destaque")
+        stopped = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Parada", "stop_reason_code": "0029"},
+        )
+        self.assertEqual(stopped.status_code, 200, stopped.text)
+        self.assertEqual(stopped.json()["code"], "parada_recurso_sem_op")
+        self.assertEqual(
+            self.client.get("/api/v1/highlight/queue").json()["resource_state"]["categoria"],
+            "parada",
+        )
+
+        # A tarefa parada continua sendo retomada pelo Início do destaque.
+        escopo_invalido = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Retomar", "task_code": "T-WEB"},
+        )
+        self.assertEqual(escopo_invalido.status_code, 409, escopo_invalido.text)
+        self.assertEqual(escopo_invalido.json()["code"], "highlight_resume_task_scoped")
+
+        resumed = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Retomar"},
+        )
+        self.assertEqual(resumed.status_code, 200, resumed.text)
+        self.assertEqual(resumed.json()["code"], "retomada_recurso_sem_op")
+        self.assertEqual(
+            self.client.get("/api/v1/highlight/queue").json()["resource_state"]["categoria"],
+            "fila",
+        )
 
     def test_solda_bloqueia_estacao_ocupada_tambem_no_servidor(self):
         self.login_operator("Soldador Web A", "senha-solda-a")

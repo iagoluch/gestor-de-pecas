@@ -251,7 +251,15 @@ def workbench(
         raise AppError("operator_workflow_mismatch", "Use a fila automática do Corte.", status_code=409)
     service = _service(database, user, request)
     cards = service.listar_cartoes(sector.name, resource)
-    return {"sector": sector.name, "resource": resource, **cards}
+    # O estado físico do recurso não cabe nos cards: uma parada registrada sem
+    # OP não tem apontamento e, sem ele, a tela não teria como oferecer a
+    # retomada. Mesmo contrato já usado pela fila do Corte.
+    return {
+        "sector": sector.name,
+        "resource": resource,
+        "resource_state": service.estado_recurso(resource),
+        **cards,
+    }
 
 
 @router.get("/history")
@@ -532,6 +540,15 @@ def execute_action(
             background, request.app.state.settings, response.get("data") or {}
         )
         request.app.state.realtime.publish("operator_stop_without_op")
+        return response
+    # Retomada simétrica: a parada sem OP é do recurso, não de um apontamento.
+    # Sem este caminho o posto ficava travado em parada — não havia OP para
+    # informar e toda ação caía em `operator_op_required`.
+    if payload.action == "Retomar" and not payload.op:
+        response = _raise_result(
+            service.retomar_recurso_sem_op(setor=sector.name, recurso=resource)
+        )
+        request.app.state.realtime.publish("operator_action")
         return response
     if not payload.op:
         raise AppError(

@@ -23,6 +23,7 @@ def _require_highlight(user):
     sector = sector_for_user(user)
     if sector.name != "Destaque":
         raise AppError("highlight_access_denied", "O perfil não possui acesso ao Destaque.", status_code=403)
+    return sector
 
 
 def _cutting_queue(database, operador, codigo_tarefa):
@@ -114,7 +115,7 @@ def queue(
     da sua tarefa, nunca solto, e a contagem de chapas vem do SigmaNEST.
     """
 
-    _require_highlight(user)
+    sector = _require_highlight(user)
     itens = [
         item for item in (database.listar_fila_destaque(limite=10000) or [])
         if int(item.get("chapas_disponiveis") or 0) > 0
@@ -123,6 +124,10 @@ def queue(
     return {
         "items": itens,
         "count": len(itens),
+        # A parada registrada sem tarefa é do posto, não da tarefa: sem o
+        # estado físico aqui a tela não teria como oferecer a retomada — a
+        # consulta de tarefa nem é feita quando nenhuma está carregada.
+        "resource_state": OperatorFlowService(database, user.name).estado_recurso(sector.name),
         "parciais": sum(1 for item in itens if item.get("situacao") == "PARCIAL"),
         "completas": sum(1 for item in itens if item.get("situacao") == "COMPLETA"),
         "planos_disponiveis": sum(
@@ -155,10 +160,27 @@ def action(
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
-    _require_highlight(user)
+    sector = _require_highlight(user)
     service = ProductionService(database, user.name, now_func=request_now_func(request))
     if payload.action == "Parada" and not payload.stop_reason_code:
         raise AppError("highlight_stop_reason_required", "Selecione o motivo da parada.")
+    # Retomada simétrica da parada sem tarefa: ela é do posto, e exigir uma
+    # tarefa aqui deixava o Destaque parado para sempre. A tarefa parada
+    # continua sendo retomada pelo Início, que é a transição do destaque.
+    if payload.action == "Retomar":
+        if payload.task_code:
+            raise AppError(
+                "highlight_resume_task_scoped",
+                "Esta tarefa é retomada pelo Início do destaque.",
+                status_code=409,
+            )
+        result = OperatorFlowService(
+            database, user.name, now_func=request_now_func(request)
+        ).retomar_recurso_sem_op(setor=sector.name, recurso=sector.name)
+        if not result.ok:
+            raise AppError(result.code or "highlight_action_failed", result.message, status_code=409, details=result.data)
+        request.app.state.realtime.publish("highlight_action")
+        return {"ok": True, "message": result.message, "code": result.code, "data": result.data}
     if not payload.task_code and payload.action != "Parada":
         raise AppError("highlight_task_required", "Busque uma tarefa antes de continuar.", status_code=409)
 

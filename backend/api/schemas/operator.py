@@ -87,7 +87,10 @@ class HighlightActionRequest(BaseModel):
     plan_hash: str | None = None
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    action: Literal["Início", "Parada", "Fim"]
+    # "Retomar" é a retomada física do posto após uma parada registrada sem
+    # tarefa. A retomada do destaque de uma tarefa parada continua sendo
+    # "Início" (``registrar_destacando`` aceita o estado ``parada``).
+    action: Literal["Início", "Parada", "Retomar", "Fim"]
     task_code: str | None = Field(default=None, min_length=1, max_length=80)
     stop_reason_code: str | None = Field(default=None, max_length=40)
     comment: str | None = Field(default=None, max_length=1000)

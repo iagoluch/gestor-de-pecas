@@ -68,6 +68,15 @@ interface HighlightPayload {
   history?: HighlightHistoryRow[];
 }
 
+/** Estado físico do posto. A parada sem tarefa vive aqui, não na tarefa. */
+interface HighlightResourceState { categoria?: string; motivo?: string; op?: string | null }
+interface HighlightQueueResponse {
+  items: HighlightQueueTask[];
+  count: number;
+  planos_disponiveis: number;
+  resource_state?: HighlightResourceState | null;
+}
+
 const PLANO_DESTAQUE_LABEL: Record<string, string> = {
   aguardando: "Aguardando destaque",
   inicio: "Destaque em execução",
@@ -94,7 +103,7 @@ export function HighlightPage() {
   const reasons = useApiQuery<{ items: StopReason[] }>("/api/v1/operator/stop-reasons");
   // A tela do Destaque não tem fila numerada de máquina: ela mostra as
   // tarefas cujo Corte já liberou pelo menos uma chapa.
-  const queue = useApiQuery<{ items: HighlightQueueTask[]; count: number; planos_disponiveis: number }>("/api/v1/highlight/queue");
+  const queue = useApiQuery<HighlightQueueResponse>("/api/v1/highlight/queue");
   const [planoSelecionado, setPlanoSelecionado] = useState<HighlightPlan | null>(null);
 
   useEffect(() => {
@@ -115,11 +124,18 @@ export function HighlightPage() {
     setMessage("Filtro removido. Todas as tarefas liberadas estão visíveis.");
   }
 
-  async function action(actionName: "Início" | "Parada" | "Fim", extra: Record<string, unknown> = {}) {
-    if (!loadedTask && actionName !== "Parada") return;
+  async function action(actionName: "Início" | "Parada" | "Retomar" | "Fim", extra: Record<string, unknown> = {}) {
+    // Parada e retomada do posto correm sem tarefa: elas atuam no estado
+    // físico do Destaque, não no destaque de uma tarefa.
+    const semTarefa = actionName === "Parada" || actionName === "Retomar";
+    if (!loadedTask && !semTarefa) return;
     setBusy(true);
     try {
-      const response = await api.post<{ message: string }>("/api/v1/highlight/actions", { action: actionName, task_code: loadedTask || null, ...extra });
+      const response = await api.post<{ message: string }>("/api/v1/highlight/actions", {
+        action: actionName,
+        task_code: actionName === "Retomar" ? null : loadedTask || null,
+        ...extra,
+      });
       setMessage(response.message);
       setDialog(null);
       if (actionName === "Fim") setPlanoSelecionado(null);
@@ -143,6 +159,12 @@ export function HighlightPage() {
     : queueItems;
   const wholeTaskReady = progress?.situacao === "COMPLETA"
     && Number(progress?.chapas_disponiveis ?? 0) > 0;
+  // Parada registrada sem tarefa: não existe destaque para retomar pelo
+  // Início, então a retomada é do próprio posto.
+  const resourceState = queue.data?.resource_state;
+  const stoppedWithoutTask = Boolean(
+    resourceState?.categoria === "parada" && !String(resourceState?.op ?? "").trim(),
+  );
   return (
     <section className="highlight-page">
       <form className="highlight-search" onSubmit={search}>
@@ -152,9 +174,15 @@ export function HighlightPage() {
       </form>
       <div className="highlight-actions">
         <button type="button" className="operator-action operator-action--start" disabled={!task.data || busy || !wholeTaskReady || !["aguardando", "parada"].includes(state ?? "")} onClick={() => { setPlanoSelecionado(null); void action("Início"); }}><span>Início</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={busy || state === "parada"} onClick={() => setDialog("stop")}><span>Parada</span></button>
+        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || state === "parada"} onClick={() => setDialog("stop")}><span>Parada</span></button>
+        {stoppedWithoutTask ? <button type="button" className="operator-action operator-action--start" disabled={busy} onClick={() => void action("Retomar")}><span>Retomar</span></button> : null}
         <button type="button" className="operator-action operator-action--finish" disabled={!task.data || busy || !wholeTaskReady || !["inicio", "retomada"].includes(state ?? "")} onClick={() => { setPlanoSelecionado(null); setDialog("finish"); }}><span>Fim</span></button>
       </div>
+      {stoppedWithoutTask ? (
+        <p className="operator-notice operator-notice--error">
+          Posto parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
+        </p>
+      ) : null}
       <p className="operator-notice" role="status">{message}</p>
       {task.loading && loadedTask ? <LoadingState label="Carregando tarefa…" /> : task.error ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (
         <div className="highlight-detail">
