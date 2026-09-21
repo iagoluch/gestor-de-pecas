@@ -265,6 +265,12 @@ describe("fluxo Web do operador", () => {
     // Cada nesting vive dentro do seu plano; o tempo continua individual.
     expect(await screen.findByText("P-01")).toBeInTheDocument();
     expect(screen.getByText("P-02")).toBeInTheDocument();
+    // Cada plano também chega recolhido — abre os dois para ver as chapas.
+    for (const plano of ["P-01", "P-02"]) {
+      const toggle = screen.getByText(plano).closest(".cutting-plan__toggle");
+      if (!toggle) throw new Error(`toggle do plano ${plano} não encontrado`);
+      fireEvent.click(toggle);
+    }
     expect(screen.getByRole("cell", { name: "00:02:00" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "00:00:45" })).toBeInTheDocument();
   });

@@ -120,6 +120,16 @@ function expandirTarefa(codigo: string) {
   fireEvent.click(toggle);
 }
 
+// Cada plano também chega recolhido (decisão do usuário, 21/09/2026): OPs,
+// produtos e chapas só aparecem depois de abrir o próprio plano.
+function expandirPlano(programa: string) {
+  const bloco = planoDe(programa);
+  const toggle = bloco.querySelector<HTMLButtonElement>(".cutting-plan__toggle");
+  if (!toggle) throw new Error(`toggle do plano ${programa} não encontrado`);
+  fireEvent.click(toggle);
+  return bloco;
+}
+
 describe("hierarquia da tela de Corte", () => {
   it("renderiza tarefa, planos, OPs e produtos sem abrir outra tela", async () => {
     stubQueue([TAREFA]);
@@ -130,13 +140,13 @@ describe("hierarquia da tela de Corte", () => {
     expect(screen.getByText("001")).toBeInTheDocument();
     expect(screen.getByText("002")).toBeInTheDocument();
 
-    const plano001 = planoDe("001");
+    const plano001 = expandirPlano("001");
     expect(within(plano001).getByText("OP 1079689C001")).toBeInTheDocument();
     expect(within(plano001).getByText("PNT001 — PRODUTO A")).toBeInTheDocument();
     expect(within(plano001).getByText("OP 1079689C002")).toBeInTheDocument();
     // A OP do plano 002 não vaza para o plano 001.
     expect(within(plano001).queryByText("OP 1079689C003")).not.toBeInTheDocument();
-    expect(within(planoDe("002")).getByText("OP 1079689C003")).toBeInTheDocument();
+    expect(within(expandirPlano("002")).getByText("OP 1079689C003")).toBeInTheDocument();
   });
 
   it("recolhe e expande a tarefa mantendo o resumo visível", async () => {
@@ -175,11 +185,12 @@ describe("hierarquia da tela de Corte", () => {
 
     await screen.findByRole("heading", { name: "ZZT4503" });
     expandirTarefa("ZZT4503");
-    const plano001 = planoDe("001");
+    const plano001 = expandirPlano("001");
     expect(within(plano001).getByText("0 de 2")).toBeInTheDocument();
     expect(within(plano001).getByText("1, 2")).toBeInTheDocument();
-    expect(within(plano001).getAllByRole("row")).toHaveLength(3);
-    expect(within(planoDe("002")).getByText("1 de 1")).toBeInTheDocument();
+    // 1 cabeçalho da lista de OPs + 2 linhas da tabela de chapas (thead + tbody).
+    expect(within(plano001).getAllByRole("row")).toHaveLength(4);
+    expect(within(expandirPlano("002")).getByText("1 de 1")).toBeInTheDocument();
   });
 
   it("seleciona o plano ao iniciar o corte, com o mesmo comando de sempre", async () => {
@@ -219,7 +230,7 @@ describe("hierarquia da tela de Corte", () => {
     expect(screen.getByRole("heading", { name: "ZZT4504" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { expanded: false })).toHaveLength(2);
     expandirTarefa("ZZT4504");
-    expect(within(planoDe("010")).getByText("OP 1079689C010")).toBeInTheDocument();
+    expect(within(expandirPlano("010")).getByText("OP 1079689C010")).toBeInTheDocument();
   });
 
   it("informa carregamento, fila vazia e erro", async () => {
@@ -272,7 +283,7 @@ describe("hierarquia da tela de Corte", () => {
 
     await screen.findByRole("heading", { name: "ZZT-ANTIGA" });
     expandirTarefa("ZZT-ANTIGA");
-    expect(within(planoDe("700")).getByText("Nenhuma OP vinculada a este plano.")).toBeInTheDocument();
+    expect(within(expandirPlano("700")).getByText("Nenhuma OP vinculada a este plano.")).toBeInTheDocument();
     expect(planoDe("701")).toBeInTheDocument();
   });
 });
