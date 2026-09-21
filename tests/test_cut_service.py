@@ -152,9 +152,25 @@ class CutServiceTests(unittest.TestCase):
         self.assertTrue(no_task.ok)
         self.assertEqual(no_task.data["estado_recurso"]["categoria"], "parada")
 
+        resumed = self.service.retomar("Laser Ensis 3015")
+        self.assertTrue(resumed.ok)
+        self.assertEqual(resumed.data["status"], "Sem nesting ativo")
+        self.assertEqual(
+            self.db.buscar_estado_recurso_atual("Laser Ensis 3015")["categoria"],
+            "fila",
+        )
+
         invalid = self.service.parar("Plasma TerraBlade 4", motivo_codigo="1005")
         self.assertFalse(invalid.ok)
         self.assertEqual(invalid.code, "motivo_invalido")
+
+    def test_pausa_programada_manual_preserva_classificacao_do_catalogo(self):
+        stopped = self.service.parar("Laser Ensis 3015", motivo_codigo="0009")
+
+        self.assertTrue(stopped.ok)
+        state = self.db.buscar_estado_recurso_atual("Laser Ensis 3015")
+        self.assertTrue(state["planejado"])
+        self.assertFalse(state["automatico"])
 
     def test_duplo_inicio_e_dupla_finalizacao_sao_bloqueados(self):
         started = self.service.iniciar("hash-corte-1", "Laser Ensis 3015")

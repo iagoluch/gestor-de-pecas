@@ -3836,22 +3836,28 @@ class Database(
         reference_time=None,
     ):
         query = """
-            SELECT *
-            FROM eventos_estado_recurso
-            WHERE data_fim IS NULL
+            SELECT e.*,
+                   s.nome AS status_nome,
+                   s.grupo_codigo AS status_grupo_codigo,
+                   s.grupo_nome AS status_grupo_nome,
+                   s.planejado AS status_planejado
+            FROM eventos_estado_recurso e
+            LEFT JOIN catalogo_status_recursos s
+                   ON s.codigo = e.codigo_status_recurso
+            WHERE e.data_fim IS NULL
         """
         params = []
         reference = _period_value(reference_time)
         if reference is not None:
-            query += " AND data_inicio <= %s"
+            query += " AND e.data_inicio <= %s"
             params.append(reference)
         if setor:
-            query += " AND UPPER(COALESCE(tipo_setor, '')) = UPPER(%s)"
+            query += " AND UPPER(COALESCE(e.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())
         if recurso:
-            query += " AND UPPER(recurso) = UPPER(%s)"
+            query += " AND UPPER(e.recurso) = UPPER(%s)"
             params.append(str(recurso).strip())
-        query += " ORDER BY COALESCE(tipo_setor, ''), recurso, data_inicio"
+        query += " ORDER BY COALESCE(e.tipo_setor, ''), e.recurso, e.data_inicio"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]

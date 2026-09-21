@@ -469,6 +469,20 @@ próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
   sem comando produtivo. A classificação de falhas HTTP do TOTVS também foi
   consolidada em um único módulo compartilhado pelos três gateways.
 
+### 2.17 Estados de recurso e reset localizado de OPs (21/09/2026)
+
+- A leitura do estado atual carrega novamente a taxonomia do motivo do catálogo.
+  Assim, a pausa `0009 — PAUSA PARA CAFÉ` (grupo `0002 — PARADA PROGRAMADA`)
+  permanece planejada mesmo quando lançada manualmente; não reduz OEE.
+- A projeção do Andon consolida o código técnico e o nome do posto como uma só
+  máquina (`LASER1`/`Laser Ensis 3015`), e recursos sem OP são classificados
+  centralmente como `Recurso sem demanda`, nunca como uma fila operacional.
+- No TESTE, `PCMITL01001` e `PCMIDN01017` voltaram ao ponto inicial de Dobra:
+  execução, quantidade, primeira peça, alertas e histórico foram removidos em
+  transação estreita. Catálogo, sincronização inbound e os 16 apontamentos de
+  Corte finalizados vinculados às duas OPs foram preservados; `CORTE` continua
+  concluído e Dobra volta a ser a próxima etapa elegível.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

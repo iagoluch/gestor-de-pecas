@@ -138,6 +138,13 @@ class FakeDatabase:
                 "retrabalho": False, "requer_comentario": False,
                 "retorno_automatico": True,
             },
+            {
+                "codigo": "0009", "nome": "Pausa para café",
+                "grupo_codigo": "0002", "grupo_nome": "PARADA PROGRAMADA",
+                "habilitado": True, "oculto": False, "setup": False,
+                "retrabalho": False, "requer_comentario": False,
+                "planejado": True,
+            },
         ]
         self.closed = False
         self._ids = Counter()

@@ -101,6 +101,25 @@ class AndonActiveResourcesTests(unittest.TestCase):
         self.assertNotIn("LASER1", self.resources(after))
         self.assertEqual(after["resource_count"], before["resource_count"] - 1)
 
+    def test_alias_do_posto_e_codigo_do_catalogo_formam_um_so_recurso(self):
+        states = [
+            {
+                "recurso": "LASER1", "setor": "Corte", "categoria": "fila",
+                "sem_demanda": True, "inicio": self.now,
+            },
+            {
+                "recurso": "Laser Ensis 3015", "setor": "Corte", "categoria": "parada",
+                "codigo_status": "0009", "motivo": "0009 - Pausa para café",
+                "classificacao_parada": "planejada", "inicio": self.now,
+            },
+        ]
+
+        resources = self.resources(self.snapshot(states))
+
+        self.assertEqual(list(resources), ["LASER1"])
+        self.assertEqual(resources["LASER1"]["state"]["category"], "parada")
+        self.assertEqual(resources["LASER1"]["state"]["stop_classification"], "planejada")
+
     def test_paineis_e_grupos_sao_estaveis_e_canonicos(self):
         snapshot = self.snapshot()
         self.assertEqual(

@@ -170,7 +170,10 @@ class CutService:
             comentario=str(comentario or "").strip() or None,
             origem="corte_parada_manual",
             referencia_origem=f"nesting:{active_id}" if active_id is not None else None,
-            planejado=False,
+            # A origem é manual, mas a classificação é a do motivo canônico.
+            # Ex.: 0009 (pausa para café) pertence ao grupo 0002 e permanece
+            # parada programada; "manual" não pode apagar essa regra.
+            planejado=status.get("planejado"),
             automatico=False,
             tipo_interrupcao="manual",
             data_hora=self._now(),
