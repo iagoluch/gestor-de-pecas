@@ -21,6 +21,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/typecheck-ts.sh",
+            "timeout": 60,
+            "statusMessage": "Type-checking TypeScript (tsc -b)..."
+          }
+        ]
+      }
     ]
   }
 }
