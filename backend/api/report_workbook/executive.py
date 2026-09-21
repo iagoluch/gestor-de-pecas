@@ -226,6 +226,9 @@ SECTOR_COLUMNS = (
     Column("tempo_setup_segundos", "Tempo de setup", "duration"),
     Column("tempo_parada_segundos", "Tempo de parada", "duration"),
     Column("tempo_retrabalho_segundos", "Tempo de retrabalho", "duration"),
+    # Recurso em turno sem trabalho atribuído. Fica explícito aqui porque é o
+    # tempo que antes desaparecia da leitura por setor.
+    Column("tempo_sem_demanda_segundos", "Recurso sem demanda", "duration"),
     Column("tempo_produtivo_segundos", "Tempo produtivo", "duration"),
 )
 
@@ -274,7 +277,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     perdas_oee = _dict(overview.get("kpi_losses_breakdown"))
 
     painel = ReportSheet(workbook.create_sheet(OVERVIEW_SHEET))
-    aba_setores = ReportSheet(workbook.create_sheet("Setores"), width=10)
+    aba_setores = ReportSheet(workbook.create_sheet("Setores"), width=len(SECTOR_COLUMNS))
     aba_recursos = ReportSheet(workbook.create_sheet("Recursos"), width=9)
     aba_perdas = ReportSheet(workbook.create_sheet("Perdas"), width=8)
     series = _series_sheet(workbook)
@@ -315,6 +318,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     aba_perdas.header("Perdas do período", filters, generated_at=generated_at)
     perdas_linhas = [
         {"componente": "Fora de turno", "segundos": perdas_oee.get("fora_de_turno_segundos")},
+        {"componente": "Recurso sem demanda", "segundos": perdas_oee.get("sem_demanda_segundos")},
         {"componente": "Parada planejada", "segundos": perdas_oee.get("parada_planejada_segundos")},
         {"componente": "Parada não planejada", "segundos": perdas_oee.get("parada_nao_planejada_segundos")},
         {"componente": "Ritmo (performance)", "segundos": perdas_oee.get("ritmo_segundos")},
@@ -503,8 +507,9 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     painel.row = max(painel.row, ancora)
     if itens_composicao:
         painel.notice(
-            "“Fila / espera” é o tempo físico em que o recurso permaneceu disponível sem execução de OP. "
-            "Ele domina a composição em períodos com poucos apontamentos e não representa parada registrada.",
+            "“Recurso sem demanda” é o tempo em que o recurso esteve em turno sem trabalho atribuído: "
+            "não é parada registrada nem tempo fora de turno, e por isso não entra na base do OEE. "
+            "Ele domina a composição em períodos com poucos apontamentos.",
             tone="muted",
         )
     _finish(painel)
@@ -836,6 +841,7 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
                 Column("setup", "Setup", "duration"),
                 Column("retrabalho", "Retrabalho", "duration"),
                 Column("fila", "Fila / espera", "duration"),
+                Column("sem_demanda", "Recurso sem demanda", "duration"),
                 Column("fora_turno", "Fora de turno", "duration"),
                 Column("producao", "Produção", "duration"),
             ),
@@ -931,6 +937,7 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
         )
         painel.facts([
             ("Fora de turno", duration_text(perdas_oee.get("fora_de_turno_segundos"))),
+            ("Recurso sem demanda", duration_text(perdas_oee.get("sem_demanda_segundos"))),
             ("Parada planejada", duration_text(perdas_oee.get("parada_planejada_segundos"))),
             ("Parada não planejada", duration_text(perdas_oee.get("parada_nao_planejada_segundos"))),
             ("Ritmo (performance)", duration_text(perdas_oee.get("ritmo_segundos"))),

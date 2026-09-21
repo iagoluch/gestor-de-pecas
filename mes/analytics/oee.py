@@ -53,7 +53,8 @@ def oee_seconds_by_category(
     intervalo cadastrado do turno já sai da disponibilidade do calendário.
     Parada não planejada permanece e continua penalizando a Disponibilidade.
 
-    ``fora_turno`` já não participa do cálculo e permanece fora aqui também.
+    ``fora_turno``, ``fila`` e ``sem_demanda`` já não participam do cálculo e
+    permanecem fora aqui também.
     """
 
     base = {
@@ -78,8 +79,14 @@ def calculate_oee(
     """Aplica exatamente a regra oficial vigente do Gestor de Peças.
 
     Setup, retrabalho e atividade sem OP permanecem tempo produtivo de apoio.
-    Fila integra o tempo disponível, mas não o tempo operacional. Quantidade
-    boa, refugo e retrabalho continuam grandezas separadas.
+    Quantidade boa, refugo e retrabalho continuam grandezas separadas.
+
+    Recurso sem demanda e fila **não** compõem o tempo disponível. O recurso
+    sem trabalho atribuído não tinha o que produzir: contá-lo como
+    disponibilidade transformava um dia inteiro de ausência de demanda em
+    perda de Disponibilidade (≈0,1% com produção real registrada) e derrubava
+    o OEE junto. Assim como ``fora_turno``, essas grandezas ficam fora da
+    fórmula e continuam publicadas em ``time_bases`` para leitura gerencial.
     """
 
     def seconds(category: EventCategory) -> float:
@@ -93,10 +100,11 @@ def calculate_oee(
             EventCategory.REWORK,
             EventCategory.ACTIVITY_WITHOUT_OP,
             EventCategory.DOWNTIME,
-            EventCategory.QUEUE,
             EventCategory.UNKNOWN,
         )
     )
+    no_demand_seconds = seconds(EventCategory.NO_DEMAND)
+    queue_seconds = seconds(EventCategory.QUEUE)
     worked_seconds = sum(
         seconds(category)
         for category in (
@@ -106,7 +114,10 @@ def calculate_oee(
             EventCategory.ACTIVITY_WITHOUT_OP,
         )
     )
-    operational_seconds = max(0.0, available_seconds - seconds(EventCategory.QUEUE))
+    # Fila e ausência de demanda já saíram da base disponível, então o tempo
+    # operacional coincide com ela. A chave permanece porque Utilização,
+    # Produtividade e AE são publicados a partir destas bases.
+    operational_seconds = available_seconds
     productive_gross_seconds = seconds(EventCategory.PRODUCTION)
     supporting_productive_seconds = sum(
         seconds(category)
@@ -190,6 +201,10 @@ def calculate_oee(
             "performance_difference_seconds": productive_net_seconds - worked_seconds,
             "standard_run_seconds": max(0.0, float(standard_run_seconds or 0.0)),
             "supporting_productive_seconds": supporting_productive_seconds,
+            # Fora da fórmula, dentro do relatório: o tempo sem demanda é o
+            # bucket que o gestor precisa ver separado de fora de turno.
+            "no_demand_seconds": no_demand_seconds,
+            "queue_seconds": queue_seconds,
         },
     )
 

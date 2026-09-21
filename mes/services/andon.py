@@ -11,12 +11,14 @@ from mes.domain import DataAvailability, EventCategory
 
 #: Leitura explícita de "fora de turno, sem HE e sem ninguém trabalhando".
 #:
-#: Não é uma categoria física nova: o evento persistido continua sendo o do
-#: ``EventCategory``. É o nome que o Andon dá a essa combinação, decidida pelo
+#: Não é um estado persistido: o evento gravado continua sendo ``fila`` ou
+#: ``fora_turno``. É o nome que o Andon dá a essa combinação, decidida pelo
 #: domínio (``ManufacturingRules.resource_has_no_demand``) e entregue pronta
 #: pela consulta operacional. Existe para não confundir ausência de demanda com
-#: parada (planejada ou não) nem com ociosidade dentro do turno.
-NO_DEMAND_STATE = "sem_demanda"
+#: parada (planejada ou não) nem com ociosidade dentro do turno. Usa a mesma
+#: identidade da categoria analítica, para que Andon e relatórios nomeiem a
+#: ausência de demanda exatamente igual.
+NO_DEMAND_STATE = EventCategory.NO_DEMAND.value
 
 
 STATE_LABELS = {

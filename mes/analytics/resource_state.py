@@ -41,6 +41,28 @@ def classify_state_row(row) -> "object | None":
     )
 
 
+def physical_state_category(row) -> EventCategory:
+    """Categoria analítica de um estado físico persistido.
+
+    ``sem_demanda`` não existe na base: é derivada aqui, uma única vez, a
+    partir da ``fila`` gravada pelo retorno do turno. Sem essa derivação o
+    tempo de recurso sem demanda entrava na base temporal do OEE como fila
+    (esmagando a Disponibilidade) e desaparecia do rollup por setor, que só
+    publica buckets nomeados.
+    """
+
+    row = dict(row or {})
+    try:
+        category = EventCategory(str(row.get("categoria") or ""))
+    except ValueError:
+        return EventCategory.UNKNOWN
+    if ManufacturingRules.state_is_no_demand(
+        category=category, interruption_type=row.get("tipo_interrupcao")
+    ):
+        return EventCategory.NO_DEMAND
+    return category
+
+
 def build_physical_state_inputs(rows, *, inicio: datetime, fim: datetime):
     inputs = []
     for raw in rows or ():
@@ -53,10 +75,7 @@ def build_physical_state_inputs(rows, *, inicio: datetime, fim: datetime):
         end = min(end, fim)
         if end <= start:
             continue
-        try:
-            category = EventCategory(str(row.get("categoria") or ""))
-        except ValueError:
-            category = EventCategory.UNKNOWN
+        category = physical_state_category(row)
         inputs.append(PhysicalInputSegment(
             resource=str(row.get("recurso") or "Não informado").strip() or "Não informado",
             sector=str(row.get("tipo_setor") or "Não informado").strip() or "Não informado",
