@@ -1361,6 +1361,79 @@ class Database(
         except UniqueViolation:
             return None
 
+    def listar_planos_corte_legado_sem_apontamento(self):
+        """Nestings de Corte concluídos no SigmaNEST antes da implantação do
+        MES: já têm ``sigmanest_comp_date`` preenchido e nunca tiveram
+        nenhum apontamento no Gestor. Um plano com qualquer apontamento --
+        mesmo 'Em processo' -- não aparece aqui: já entrou no fluxo normal
+        do operador e segue por ele.
+        """
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT p.plano_hash, p.codigo_tarefa, p.programa, p.nome_chapa,
+                       p.sequencia_nesting, t.material, t.espessura,
+                       p.maquina_sigmanest, p.quantidade_processo,
+                       p.tempo_previsto_segundos, p.data_programa, p.area_usada,
+                       p.fracao_sucata, p.sigmanest_comp_date
+                FROM catalogo_sigmanest_planos_corte p
+                JOIN catalogo_sigmanest_tarefas t
+                  ON t.codigo_tarefa = p.codigo_tarefa AND t.ativo IS TRUE
+                LEFT JOIN apontamentos_corte a ON a.plano_hash = p.plano_hash
+                WHERE p.ativo IS TRUE
+                  AND p.sigmanest_comp_date IS NOT NULL
+                  AND a.id IS NULL
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def concluir_apontamento_corte_legado(self, plano_hash, *, maquina, operador, momento):
+        """Cria diretamente um apontamento_corte 'Finalizado' para um nesting
+        que nunca passou pelo fluxo do operador -- concluído no SigmaNEST
+        antes de o MES existir, então não há um início real no Gestor para
+        registrar nem estado de recurso ao vivo para transicionar.
+        """
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT p.*, t.material, t.espessura
+                FROM catalogo_sigmanest_planos_corte p
+                JOIN catalogo_sigmanest_tarefas t
+                  ON t.codigo_tarefa = p.codigo_tarefa AND t.ativo IS TRUE
+                WHERE p.plano_hash = %s AND p.ativo IS TRUE
+                FOR SHARE
+                """,
+                (str(plano_hash).strip(),),
+            )
+            plan = cursor.fetchone()
+            if not plan:
+                return None
+            cursor.execute(
+                """
+                INSERT INTO apontamentos_corte (
+                    plano_hash, codigo_tarefa, programa, nome_chapa, sequencia_nesting,
+                    material, espessura, maquina, maquina_sigmanest, quantidade_processo,
+                    tempo_previsto_segundos, data_programa, area_usada, fracao_sucata,
+                    status, operador_inicio, data_inicio, operador_fim, data_fim
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    'Finalizado', %s, %s, %s, %s
+                )
+                ON CONFLICT (plano_hash) DO NOTHING
+                RETURNING *
+                """,
+                (
+                    plan["plano_hash"], plan["codigo_tarefa"], plan["programa"],
+                    plan.get("nome_chapa"), plan["sequencia_nesting"], plan.get("material"),
+                    plan.get("espessura"), str(maquina).strip(), plan["maquina_sigmanest"],
+                    plan["quantidade_processo"], plan.get("tempo_previsto_segundos"),
+                    plan.get("data_programa"), plan.get("area_usada"),
+                    plan.get("fracao_sucata"), operador, momento, operador, momento,
+                ),
+            )
+            created = cursor.fetchone()
+            return dict(created) if created else None
+
     def listar_apontamentos_corte(
         self, inicio=None, fim=None, maquina=None, status=None, search=None, agora=None
     ):

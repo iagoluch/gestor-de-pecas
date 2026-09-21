@@ -1,8 +1,13 @@
 """Sincronização SigmaNEST → catálogo canônico de Corte do Gestor.
 
 Fronteira: este serviço lê planejamento por um gateway somente leitura e o
-projeta nas tabelas que a fila de Corte **já consome**. Ele não cria OP, não
-cria apontamento e não conhece SQL do SigmaNEST.
+projeta nas tabelas que a fila de Corte **já consome**. Ele não cria OP nem
+conhece SQL do SigmaNEST. Ele cria apontamento em um único caso, explícito:
+um nesting que o SigmaNEST já reportou concluído (``sigmanest_comp_date``)
+e que nunca teve nenhum apontamento no Gestor -- ou seja, é anterior à
+implantação do MES naquele posto. Qualquer nesting que já tenha um
+apontamento (mesmo 'Em processo') já está no fluxo do operador e este
+serviço nunca o toca.
 
 ```text
 SigmaNestPlanningGateway (read-only)
@@ -24,9 +29,16 @@ import logging
 
 from app.core.normalization import limpa_codigo
 from mes.integrations.sigmanest.gateway import SigmaNestPlanningService
+from mes.services.cut import CutService
 
 
 DEFAULT_OVERLAP_DAYS = 7
+
+# Rótulo do operador nos apontamentos de Corte criados automaticamente para
+# nestings concluídos no SigmaNEST antes da implantação do MES -- nunca um
+# operador real, para ficar óbvio na auditoria/histórico que a origem foi
+# esta reconciliação e não um apontamento manual.
+OPERADOR_CORTE_LEGADO = "SigmaNEST (pré-MES)"
 
 
 def _linha_hash(codigo_tarefa: str, programa: str, codigo_op: str, id_peca: str) -> str:
@@ -86,6 +98,7 @@ class SigmaNestSyncResult:
     ordens_correlacionadas: int = 0
     ordens_sem_op_no_gestor: tuple[str, ...] = field(default_factory=tuple)
     nestings_concluidos_na_origem: int = 0
+    nestings_legado_concluidos: int = 0
     projetado: dict = field(default_factory=dict)
     # Diagnóstico da janela efetivamente consultada (Wave 3). Serve para
     # auditar a leitura incremental sem expor nada disso ao operador.
@@ -147,6 +160,7 @@ class SigmaNestSyncResult:
             "ordens_correlacionadas": self.ordens_correlacionadas,
             "ordens_sem_op_no_gestor": len(self.ordens_sem_op_no_gestor),
             "nestings_concluidos_na_origem": self.nestings_concluidos_na_origem,
+            "nestings_legado_concluidos": self.nestings_legado_concluidos,
             "assinatura": self.assinatura,
         }
 
@@ -209,6 +223,28 @@ class SigmaNestSyncService:
                 for linha in cursor.fetchall()
             }
         return tarefas, planos
+
+    def _concluir_corte_legado_sem_apontamento(self) -> int:
+        """Finaliza automaticamente nestings concluídos no SigmaNEST antes da
+        implantação do MES: sem nenhum apontamento no Gestor até agora.
+
+        Tarefas que já têm um apontamento -- mesmo 'Em processo' -- não são
+        candidatas (ver ``listar_planos_corte_legado_sem_apontamento``) e
+        seguem exclusivamente o fluxo normal do operador.
+        """
+
+        pendentes = self.db.listar_planos_corte_legado_sem_apontamento()
+        concluidos = 0
+        for plano in pendentes:
+            criado = self.db.concluir_apontamento_corte_legado(
+                plano["plano_hash"],
+                maquina=CutService.machine_display(plano["maquina_sigmanest"]),
+                operador=OPERADOR_CORTE_LEGADO,
+                momento=plano["sigmanest_comp_date"],
+            )
+            if criado:
+                concluidos += 1
+        return concluidos
 
     @staticmethod
     def _chave_plano(codigo_tarefa, programa, nome_chapa, repeat_id) -> str:
@@ -338,6 +374,7 @@ class SigmaNestSyncService:
             planos_corte=planos_projetados,
             sincronizado_em=self._now().replace(microsecond=0),
         )
+        nestings_legado_concluidos = self._concluir_corte_legado_sem_apontamento()
 
         concluido_em = self._now()
         chaves_projetadas = {
@@ -373,6 +410,7 @@ class SigmaNestSyncService:
             ordens_correlacionadas=len(correlacoes),
             ordens_sem_op_no_gestor=desconhecidas,
             nestings_concluidos_na_origem=concluidos,
+            nestings_legado_concluidos=nestings_legado_concluidos,
             projetado=projetado,
         )
         logging.info("Sincronização SigmaNEST concluída: %s", resultado.resumo())
