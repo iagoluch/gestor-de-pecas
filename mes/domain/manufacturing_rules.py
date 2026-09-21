@@ -172,7 +172,7 @@ class ManufacturingRules:
         """Classificação produtiva aprovada pela Manufatura.
 
         Produção, Setup e Atividade sem OP são produtivos. Parada, Retrabalho,
-        Fila e Fora de turno não são produtivos.
+        Fila, Recurso sem demanda e Fora de turno não são produtivos.
         """
 
         category = EventCategory(category)
@@ -230,6 +230,31 @@ class ManufacturingRules:
 
         return cls.is_operational_window(kind)
 
+    @staticmethod
+    def state_is_no_demand(*, category=None, interruption_type=None) -> bool:
+        """Decide se um estado físico persistido significa ausência de demanda.
+
+        Ao abrir o turno oficial o scheduler encerra o ``fora_turno`` e grava
+        uma ``fila`` sem OP marcada com ``retorno_turno_sem_demanda``. Essa
+        origem explícita é a única fila que significa ausência de demanda: uma
+        fila operacional comum (operador aguardando com OP aberta) continua
+        sendo fila e não pode ser lida como recurso sem trabalho.
+
+        Fonte única desta decisão. A análise usa esta função para derivar
+        ``EventCategory.NO_DEMAND`` e o Andon usa ``resource_has_no_demand``,
+        que delega o mesmo caso para cá.
+        """
+
+        value = (
+            category.value if isinstance(category, EventCategory) else str(category or "")
+        ).strip()
+        if value == EventCategory.NO_DEMAND.value:
+            return True
+        return (
+            value == EventCategory.QUEUE.value
+            and str(interruption_type or "").strip() == SHIFT_START_NO_DEMAND_TYPE
+        )
+
     @classmethod
     def resource_has_no_demand(
         cls,
@@ -264,7 +289,9 @@ class ManufacturingRules:
         # única fila dentro do turno que significa ausência de demanda; uma
         # fila operacional comum continua sem essa interpretação.
         if explicit_shift_return:
-            return category == EventCategory.QUEUE.value
+            return cls.state_is_no_demand(
+                category=category, interruption_type=SHIFT_START_NO_DEMAND_TYPE
+            )
         if cls.is_operational_window(window_kind):
             return False
         if category in (None, ""):
@@ -273,6 +300,7 @@ class ManufacturingRules:
             return EventCategory(category) in {
                 EventCategory.OUT_OF_SHIFT,
                 EventCategory.QUEUE,
+                EventCategory.NO_DEMAND,
                 EventCategory.UNKNOWN,
             }
         except (TypeError, ValueError):

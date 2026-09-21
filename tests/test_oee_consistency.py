@@ -73,6 +73,7 @@ class CanonicalOeeCalculationTests(unittest.TestCase):
                 EventCategory.SETUP: 600,
                 EventCategory.DOWNTIME: 600,
                 EventCategory.QUEUE: 600,
+                EventCategory.NO_DEMAND: 1800,
             },
             good_quantity=90,
             scrap_quantity=5,
@@ -80,16 +81,47 @@ class CanonicalOeeCalculationTests(unittest.TestCase):
             standard_run_seconds=900,
         )
 
-        self.assertAlmostEqual(calculation.availability.value, 4200 / 5400 * 100)
+        # Base disponível = produção + setup + parada. Fila e ausência de
+        # demanda ficam fora: recurso sem trabalho atribuído não é perda de
+        # disponibilidade.
+        self.assertAlmostEqual(calculation.availability.value, 4200 / 4800 * 100)
         self.assertAlmostEqual(calculation.performance.value, 1500 / 4200 * 100)
         self.assertAlmostEqual(calculation.ftt.value, 90.0)
         self.assertAlmostEqual(
             calculation.oee.value,
-            4200 / 5400 * 1500 / 4200 * 0.9 * 100,
+            4200 / 4800 * 1500 / 4200 * 0.9 * 100,
         )
         self.assertEqual(calculation.oee.unit, "%")
         self.assertEqual(calculation.oee.availability, DataAvailability.AVAILABLE)
         self.assertEqual(calculation.time_bases["performance_difference_seconds"], -2700.0)
+        self.assertEqual(calculation.time_bases["available_seconds"], 4800.0)
+        self.assertEqual(calculation.time_bases["no_demand_seconds"], 1800.0)
+        self.assertEqual(calculation.time_bases["queue_seconds"], 600.0)
+
+    def test_recurso_sem_demanda_nao_derruba_a_disponibilidade(self):
+        """Regressão do resumo quinzenal: produção real com Disp. ≈ 0%.
+
+        Duas semanas de recurso sem demanda com uma hora de produção davam
+        Disponibilidade 0,1% e OEE 0% porque a ausência de demanda entrava na
+        base disponível.
+        """
+
+        seconds_by_category = {
+            EventCategory.PRODUCTION: 3600,
+            EventCategory.NO_DEMAND: 14 * 9 * 3600,
+        }
+        calculation = calculate_oee(
+            seconds_by_category=seconds_by_category,
+            good_quantity=38,
+            scrap_quantity=0,
+            rework_quantity=0,
+            standard_run_seconds=3600,
+        )
+
+        self.assertEqual(calculation.availability.value, 100.0)
+        self.assertEqual(calculation.performance.value, 100.0)
+        self.assertEqual(calculation.ftt.value, 100.0)
+        self.assertEqual(calculation.oee.value, 100.0)
 
     def test_ausencia_real_de_dados_permanece_explicita(self):
         calculation = calculate_oee(

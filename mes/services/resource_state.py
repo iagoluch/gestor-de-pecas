@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from mes.analytics.resource_state import physical_state_category
 from mes.domain import EventCategory, ManufacturingRules
 
 
@@ -118,10 +119,9 @@ class ResourceStateService:
         by_sector = defaultdict(lambda: defaultdict(float))
         unknown_seconds = 0.0
         for row in rows:
-            try:
-                category = EventCategory(str(row.get("categoria") or ""))
-            except ValueError:
-                category = EventCategory.UNKNOWN
+            # Mesma derivação usada pela análise: ausência de demanda tem
+            # bucket próprio, separado de fila e de fora de turno.
+            category = physical_state_category(row)
             seconds = float(row.get("segundos_periodo") or 0.0)
             totals[category] += seconds
             resource_key = str(row.get("recurso") or "Não informado")

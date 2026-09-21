@@ -4,17 +4,36 @@ from enum import Enum
 
 
 class EventCategory(str, Enum):
+    """Categorias de tempo físico do recurso.
+
+    ``NO_DEMAND`` é a única categoria ANALÍTICA: ela não é gravada em
+    ``eventos_estado_recurso``. O scheduler continua persistindo ``fila`` no
+    retorno do turno (``retorno_turno_sem_demanda``) e a leitura "recurso sem
+    demanda" é derivada dela uma única vez, em
+    ``mes.analytics.resource_state.physical_state_category``. Ausência de
+    demanda não é fila operacional e não é fora de turno: são três buckets
+    distintos e nenhum deles pode absorver o outro.
+    """
+
     QUEUE = "fila"
     PRODUCTION = "producao"
     DOWNTIME = "parada"
     SETUP = "setup"
     REWORK = "retrabalho"
     ACTIVITY_WITHOUT_OP = "atividade_sem_op"
+    NO_DEMAND = "sem_demanda"
     OUT_OF_SHIFT = "fora_turno"
     UNKNOWN = "desconhecido"
 
 
-PHYSICAL_STATE_VALUES = tuple(category.value for category in EventCategory)
+#: Categorias aceitas pela persistência de ``eventos_estado_recurso``. O CHECK
+#: da migration 12 vale para exatamente estes valores; ``sem_demanda`` fica de
+#: fora porque é derivada na análise, nunca gravada.
+PHYSICAL_STATE_VALUES = tuple(
+    category.value
+    for category in EventCategory
+    if category is not EventCategory.NO_DEMAND
+)
 
 
 class ShiftWindowKind(str, Enum):

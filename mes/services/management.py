@@ -350,6 +350,7 @@ class ManagementService:
         }
         losses_breakdown = {
             "fora_de_turno_segundos": totals[EventCategory.OUT_OF_SHIFT],
+            "sem_demanda_segundos": totals[EventCategory.NO_DEMAND],
             "parada_planejada_segundos": planned_downtime_seconds,
             "parada_nao_planejada_segundos": unplanned_downtime_seconds,
             "ritmo_segundos": time_bases["performance_difference_seconds"],
@@ -406,7 +407,8 @@ class ManagementService:
                     "unplanned_downtime_seconds": unplanned_downtime_seconds,
                     "downtime_seconds": totals[EventCategory.DOWNTIME],
                     "out_of_shift_seconds": totals[EventCategory.OUT_OF_SHIFT],
-                    "no_demand_seconds": totals[EventCategory.QUEUE],
+                    "no_demand_seconds": totals[EventCategory.NO_DEMAND],
+                    "queue_seconds": totals[EventCategory.QUEUE],
                     "activity_without_op_seconds": totals[EventCategory.ACTIVITY_WITHOUT_OP],
                     "setup_seconds": totals[EventCategory.SETUP],
                     "rework_seconds": totals[EventCategory.REWORK],
@@ -434,6 +436,11 @@ class ManagementService:
                 "tempo_parada_segundos": bucket["seconds"][EventCategory.DOWNTIME],
                 "tempo_retrabalho_segundos": bucket["seconds"][EventCategory.REWORK],
                 "tempo_atividade_sem_op_segundos": bucket["seconds"][EventCategory.ACTIVITY_WITHOUT_OP],
+                # Três leituras distintas e nomeadas. Sem o bucket de ausência
+                # de demanda, esse tempo sumia da aba por setor e "fora de
+                # turno" ficava sendo o único balde grande visível.
+                "tempo_sem_demanda_segundos": bucket["seconds"][EventCategory.NO_DEMAND],
+                "tempo_fila_segundos": bucket["seconds"][EventCategory.QUEUE],
                 "tempo_fora_turno_segundos": bucket["seconds"][EventCategory.OUT_OF_SHIFT],
                 "tempo_produtivo_segundos": sum(
                     bucket["seconds"][category]
@@ -449,7 +456,8 @@ class ManagementService:
                     "setor": "Corte", "producao_boa": 0, "refugo": 0, "retrabalho": 0,
                     "ops": 0, "tempo_producao_segundos": 0.0, "tempo_setup_segundos": 0.0,
                     "tempo_parada_segundos": 0.0, "tempo_retrabalho_segundos": 0.0,
-                    "tempo_atividade_sem_op_segundos": 0.0, "tempo_fora_turno_segundos": 0.0,
+                    "tempo_atividade_sem_op_segundos": 0.0, "tempo_sem_demanda_segundos": 0.0,
+                    "tempo_fila_segundos": 0.0, "tempo_fora_turno_segundos": 0.0,
                     "tempo_produtivo_segundos": 0.0,
                 }
                 sector_rows.append(cutting_row)
@@ -495,6 +503,9 @@ class ManagementService:
                 "planned_downtime_seconds": planned_downtime_seconds,
                 "unplanned_downtime_seconds": unplanned_downtime_seconds,
                 "queue_seconds": totals[EventCategory.QUEUE],
+                # Ausência de demanda: recurso em turno sem trabalho atribuído.
+                # Não é fila operacional e não é fora de turno.
+                "no_demand_seconds": totals[EventCategory.NO_DEMAND],
                 "productive_seconds": productive_seconds,
                 "activity_without_op_seconds": totals[EventCategory.ACTIVITY_WITHOUT_OP],
                 # Grandeza global de calendário: o mesmo intervalo noturno visto

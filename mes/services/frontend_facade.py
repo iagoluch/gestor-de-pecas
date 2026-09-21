@@ -178,6 +178,7 @@ class FrontendBackendFacade:
             ("Retrabalho", "rework_seconds"),
             ("Atividade sem OP", "activity_without_op_seconds"),
             ("Fila / espera", "queue_seconds"),
+            ("Recurso sem demanda", "no_demand_seconds"),
             ("Fora do turno", "out_of_shift_seconds"),
         )
         items = [
@@ -808,6 +809,7 @@ class FrontendBackendFacade:
             "activity_without_op_seconds": hours.get("activity_without_op_seconds"),
             "out_of_shift_seconds": hours.get("out_of_shift_seconds"),
             "queue_seconds": hours.get("queue_seconds"),
+            "no_demand_seconds": hours.get("no_demand_seconds"),
             "oee_losses": overview.get("kpi_losses_breakdown") or {},
             "source": "ManagementService.get_overview",
         }

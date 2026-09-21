@@ -153,11 +153,16 @@ class CanonicalPhysicalSourceTests(unittest.TestCase):
         simulated = ManagementService(SimulationRepo(), simulation_mode=True).get_overview(self.filters)
         self.assertEqual(result["kpis"], simulated["kpis"])
         simulation = simulated["simulation"]
-        self.assertAlmostEqual(simulation["time_bases"]["available_seconds"], 5400)
+        # A fila de 10 min continua medida e publicada, mas fora da base
+        # disponível: ela não é tempo em que o recurso deixou de produzir
+        # tendo trabalho atribuído.
+        self.assertAlmostEqual(simulation["time_bases"]["available_seconds"], 4800)
         self.assertAlmostEqual(simulation["time_bases"]["worked_seconds"], 4200)
         self.assertAlmostEqual(simulation["time_bases"]["standard_run_seconds"], 900)
         self.assertAlmostEqual(simulation["time_bases"]["supporting_productive_seconds"], 600)
-        self.assertAlmostEqual(result["kpis"]["availability"]["value"], 4200 / 5400 * 100)
+        self.assertAlmostEqual(simulation["time_bases"]["queue_seconds"], 600)
+        self.assertAlmostEqual(result["hours"]["queue_seconds"], 600)
+        self.assertAlmostEqual(result["kpis"]["availability"]["value"], 4200 / 4800 * 100)
         self.assertAlmostEqual(result["kpis"]["performance"]["value"], 1500 / 4200 * 100)
         self.assertEqual(result["kpis"]["ftt"]["value"], 100)
         self.assertEqual(simulation["policy"], "canonical_oee")
