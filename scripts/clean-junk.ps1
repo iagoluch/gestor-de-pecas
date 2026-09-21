@@ -3,7 +3,8 @@
 # .tmp.driveupload - são staging ativo do OneDrive, mexer ali pode corromper sync.
 param(
     [switch]$DryRun,
-    [string]$Root = (Split-Path -Parent $PSScriptRoot)
+    [string]$Root = (Split-Path -Parent $PSScriptRoot),
+    [int]$RetentionDays = 30
 )
 
 Set-Location $Root
@@ -73,6 +74,35 @@ Get-ChildItem -Path $Root -Force -File -ErrorAction SilentlyContinue |
         $removed += $_.FullName
         if (-not $DryRun) { Remove-Item -Force -ErrorAction SilentlyContinue $_.FullName }
     }
+
+# 6. simulation_runs/ e dev_reports/ - pastas de execução datadas mais antigas
+#    que a retenção (default 30 dias). Cada subpasta já carrega a data no nome
+#    ou é atualizada só na hora em que a simulação/relatório roda, então
+#    LastWriteTime reflete quando aquele lote foi gerado.
+$retentionCutoff = (Get-Date).AddDays(-$RetentionDays)
+foreach ($outputDir in @("simulation_runs", "dev_reports")) {
+    $p = Join-Path $Root $outputDir
+    if (Test-Path $p) {
+        Get-ChildItem -Path $p -Force -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -lt $retentionCutoff } |
+            ForEach-Object {
+                $removed += $_.FullName
+                if (-not $DryRun) { Remove-Item -Force -Recurse -ErrorAction SilentlyContinue $_.FullName }
+            }
+    }
+}
+
+# 7. _quarentena_revisar/ - itens já identificados como lixo em auditorias
+#    anteriores (pente-fino 2026-09-14): 0 bytes, .zip de homologação, .pyc
+#    órfão, nada referenciado pelo projeto. Seguro apagar sem retenção.
+$quarantine = Join-Path $Root "_quarentena_revisar"
+if (Test-Path $quarantine) {
+    Get-ChildItem -Path $quarantine -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $removed += $_.FullName
+            if (-not $DryRun) { Remove-Item -Force -Recurse -ErrorAction SilentlyContinue $_.FullName }
+        }
+}
 
 $logPath = Join-Path $env:USERPROFILE ".cache\junk-cleanup.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $logPath) | Out-Null

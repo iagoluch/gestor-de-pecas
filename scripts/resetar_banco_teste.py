@@ -10,10 +10,24 @@ Uso recomendado::
     python scripts/resetar_banco_teste.py --dry-run
     python scripts/resetar_banco_teste.py --confirmar gestor_pecas_test
 
+Opções de preservação de OPs::
+
+    # Preserva uma OU múltiplas OPs específicas
+    python scripts/resetar_banco_teste.py --confirmar gestor_pecas_test --preservar-ops PCMIXQ01001
+    python scripts/resetar_banco_teste.py --confirmar gestor_pecas_test --preservar-ops PCMIXQ01001,PCMIXQ01002
+
+    # Automaticamente busca e preserva OPs fechadas no banco REAL (Protheus)
+    python scripts/resetar_banco_teste.py --confirmar gestor_pecas_test --preservar-ops-fechadas-protheus
+
+    # Combina: preserva tanto as OPs fechadas quanto as informadas
+    python scripts/resetar_banco_teste.py --confirmar gestor_pecas_test \\
+        --preservar-ops-fechadas-protheus --preservar-ops PCMIXQ01999
+
 A limpeza efetiva exige a confirmação literal do nome do banco. Todas as
 tabelas operacionais são truncadas na mesma transação, com locks limitados por
 timeout. Envelopes ``ProductionOrder`` são removidos seletivamente da inbox
-TOTVS; mensagens ``WhoIs`` e outras transações permanecem.
+TOTVS, respeitando OPs a preservar; mensagens ``WhoIs`` e outras transações
+permanecem.
 """
 
 from __future__ import annotations
@@ -355,14 +369,27 @@ def _truncate_operational(cursor) -> None:
     )
 
 
-def _delete_production_order_messages(cursor) -> int:
-    cursor.execute(
-        sql.SQL("DELETE FROM {}.{} WHERE transaction = %s").format(
-            sql.Identifier(PUBLIC_SCHEMA),
-            sql.Identifier(SELECTIVE_TABLE),
-        ),
-        (SELECTIVE_TRANSACTION,),
-    )
+def _delete_production_order_messages(cursor, *, preserve_op_numbers: frozenset[str] | None = None) -> int:
+    if not preserve_op_numbers:
+        cursor.execute(
+            sql.SQL("DELETE FROM {}.{} WHERE transaction = %s").format(
+                sql.Identifier(PUBLIC_SCHEMA),
+                sql.Identifier(SELECTIVE_TABLE),
+            ),
+            (SELECTIVE_TRANSACTION,),
+        )
+    else:
+        # Deleta ProductionOrder messages EXCETO as que contêm números de OP preservados
+        cursor.execute(
+            sql.SQL(
+                "DELETE FROM {}.{} WHERE transaction = %s AND NOT "
+                "(payload_raw::jsonb->'ProductionOrder'->>'number' = ANY(%s))"
+            ).format(
+                sql.Identifier(PUBLIC_SCHEMA),
+                sql.Identifier(SELECTIVE_TABLE),
+            ),
+            (SELECTIVE_TRANSACTION, list(preserve_op_numbers)),
+        )
     return int(cursor.rowcount)
 
 
@@ -376,7 +403,37 @@ def _verify_real_snapshot(connection) -> tuple[DatabaseIdentity, dict[str, int]]
     return identity, counts
 
 
-def execute_reset(*, dry_run: bool) -> dict[str, Any]:
+def _get_closed_ops_from_real(connection) -> frozenset[str]:
+    """Busca OPs com status de fechamento no banco REAL (Protheus)."""
+    closed_ops: set[str] = set()
+    try:
+        with connection.cursor() as cursor:
+            # Busca tarefas com data_finalizacao preenchida (indicando conclusão)
+            cursor.execute(
+                """
+                SELECT DISTINCT op_por_tarefa.codigo_op
+                FROM tarefas
+                JOIN op_por_tarefa ON tarefas.id = op_por_tarefa.tarefa_id
+                WHERE tarefas.data_finalizacao IS NOT NULL
+                  AND tarefas.status IN ('Concluida', 'Finalizada', 'Fechada')
+                ORDER BY op_por_tarefa.codigo_op
+                """
+            )
+            for row in cursor.fetchall():
+                op_number = str(row.get("codigo_op") or "").strip()
+                if op_number:
+                    closed_ops.add(op_number)
+    except Exception as exc:
+        print(
+            f"Aviso: não foi possível buscar OPs fechadas do Protheus: {exc}",
+            file=sys.stderr,
+        )
+    return frozenset(closed_ops)
+
+
+def execute_reset(
+    *, dry_run: bool, preserve_op_numbers: frozenset[str] | None = None
+) -> dict[str, Any]:
     test_config = _test_config()
     real_config = _real_config()
     real_connection = _connect_read_only(real_config.dsn)
@@ -400,7 +457,12 @@ def execute_reset(*, dry_run: bool) -> dict[str, Any]:
                 protected_before = _count_tables(cursor, PROTECTED_TABLES)
                 protected_integration_before = _count_selective(cursor, eligible=False)
                 removed = _count_tables(cursor, TRUNCATE_TABLES)
-                removed[SELECTIVE_TABLE] = _count_selective(cursor, eligible=True)
+                total_production_orders = _count_selective(cursor, eligible=True)
+                if preserve_op_numbers:
+                    # Contagem de ProductionOrder que serão removidas (total - preservadas)
+                    removed[SELECTIVE_TABLE] = total_production_orders - len(preserve_op_numbers)
+                else:
+                    removed[SELECTIVE_TABLE] = total_production_orders
 
                 if dry_run:
                     # Não há mutação no dry-run. O contexto encerra a
@@ -408,10 +470,18 @@ def execute_reset(*, dry_run: bool) -> dict[str, Any]:
                     pass
                 else:
                     _truncate_operational(cursor)
-                    deleted_messages = _delete_production_order_messages(cursor)
-                    if deleted_messages != removed[SELECTIVE_TABLE]:
+                    deleted_messages = _delete_production_order_messages(
+                        cursor, preserve_op_numbers=preserve_op_numbers
+                    )
+                    expected_delete_count = (
+                        removed[SELECTIVE_TABLE]
+                        if not preserve_op_numbers
+                        else removed[SELECTIVE_TABLE] - len(preserve_op_numbers)
+                    )
+                    if deleted_messages != expected_delete_count:
                         raise RuntimeError(
-                            "Contagem da inbox TOTVS mudou durante a transação; limpeza cancelada."
+                            f"Contagem da inbox TOTVS mudou durante a transação; limpeza cancelada. "
+                            f"Esperado: {expected_delete_count}, deletado: {deleted_messages}"
                         )
 
                     remaining = _count_tables(cursor, TRUNCATE_TABLES)
@@ -462,7 +532,7 @@ def execute_reset(*, dry_run: bool) -> dict[str, Any]:
         else:
             confirmed_identity = test_identity
 
-        return {
+        result = {
             "mode": "dry-run" if dry_run else "applied",
             "test_target": confirmed_identity.__dict__,
             "real_read_only_target": real_identity_after.__dict__,
@@ -474,6 +544,9 @@ def execute_reset(*, dry_run: bool) -> dict[str, Any]:
             "schema_version": SCHEMA_VERSION,
             "schema_intact": True,
         }
+        if preserve_op_numbers:
+            result["preserved_ops"] = sorted(preserve_op_numbers)
+        return result
     finally:
         test_connection.close()
         real_connection.close()
@@ -492,6 +565,16 @@ def _parse_args() -> argparse.Namespace:
         help=f"Para executar, informe literalmente {EXPECTED_DATABASE}.",
     )
     parser.add_argument("--json", action="store_true", help="Emite o resultado em JSON.")
+    parser.add_argument(
+        "--preservar-ops",
+        metavar="OP1,OP2,OP3",
+        help="Número de OPs a preservar, separadas por vírgula (ex: PCMIXQ01001,PCMIXQ01002).",
+    )
+    parser.add_argument(
+        "--preservar-ops-fechadas-protheus",
+        action="store_true",
+        help="Automaticamente busca e preserva OPs fechadas no banco REAL (Protheus).",
+    )
     return parser.parse_args()
 
 
@@ -509,6 +592,10 @@ def _print_result(result: dict[str, Any]) -> None:
         suffix = " (somente ProductionOrder)" if table == SELECTIVE_TABLE else ""
         print(f"  {table:<40} {count:>8}{suffix}")
     print(f"  {'TOTAL':<40} {result['removed_total']:>8}")
+    if result.get("preserved_ops"):
+        print(
+            f"\nOPs preservadas: {', '.join(sorted(result['preserved_ops']))}"
+        )
     print(
         "\nMensagens de integração preservadas (não ProductionOrder): "
         f"{result['protected_integration_messages']}"
@@ -540,8 +627,47 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Processa OPs a preservar
+    preserve_op_numbers: frozenset[str] | None = None
+    if args.preservar_ops or args.preservar_ops_fechadas_protheus:
+        ops_to_preserve: set[str] = set()
+
+        # Adiciona OPs informadas via argumento
+        if args.preservar_ops:
+            ops_list = [op.strip() for op in args.preservar_ops.split(",")]
+            ops_to_preserve.update(op for op in ops_list if op)
+
+        # Busca OPs fechadas do Protheus
+        if args.preservar_ops_fechadas_protheus:
+            try:
+                real_config = _real_config()
+                real_connection = _connect_read_only(real_config.dsn)
+                try:
+                    closed_ops = _get_closed_ops_from_real(real_connection)
+                    ops_to_preserve.update(closed_ops)
+                    if closed_ops:
+                        print(
+                            f"OPs fechadas no Protheus encontradas: {', '.join(sorted(closed_ops))}",
+                            file=sys.stderr,
+                        )
+                finally:
+                    real_connection.close()
+            except Exception as exc:
+                print(
+                    f"Aviso: erro ao buscar OPs fechadas do Protheus: {exc}",
+                    file=sys.stderr,
+                )
+
+        if ops_to_preserve:
+            preserve_op_numbers = frozenset(ops_to_preserve)
+            print(
+                f"OPs a preservar: {', '.join(sorted(preserve_op_numbers))}",
+                file=sys.stderr,
+            )
+
     try:
-        result = execute_reset(dry_run=args.dry_run)
+        result = execute_reset(dry_run=args.dry_run, preserve_op_numbers=preserve_op_numbers)
     except Exception as exc:
         print(f"Falha segura: {exc}", file=sys.stderr)
         return 1
