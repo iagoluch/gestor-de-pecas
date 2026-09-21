@@ -10,7 +10,7 @@ from html import escape
 FRONTS = {
     "corte": ("✂️", "Corte"),
     "solda": ("👨‍🏭", "Solda"),
-    "pintura": ("🌸", "Pintura"),
+    "pintura": ("🫟", "Pintura"),
     "caldeiraria": ("🔨", "Caldeiraria"),
 }
 
@@ -109,7 +109,7 @@ def _front_buttons(prefix: str) -> list[list[dict]]:
             button("👨‍🏭 Solda", f"gp:{prefix}:solda", "primary"),
         ],
         [
-            button("🌸 Pintura", f"gp:{prefix}:pintura", "primary"),
+            button("🫟 Pintura", f"gp:{prefix}:pintura", "primary"),
             button("🔨 Caldeiraria", f"gp:{prefix}:caldeiraria", "primary"),
         ],
     ]

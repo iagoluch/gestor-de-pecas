@@ -239,7 +239,9 @@ export function CuttingPage({ resource }: { resource: string }) {
       <div className="cutting-toolbar">
         <p className="operator-notice" role="status">{message}</p>
         <div>
-          {active && stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Retomada" })}>Retomar corte</button> : null}
+          {/* Retomar não depende de haver OP ativa: uma parada registrada sem
+              nesting em processo também precisa de saída pela tela. */}
+          {stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Retomada" })}>Retomar corte</button> : null}
           {!stopped ? <button type="button" className="button operator-danger" disabled={busy} onClick={() => setStopOpen(true)}>Registrar parada</button> : null}
           {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>Finalizar nesting</button> : null}
         </div>
@@ -364,47 +366,61 @@ function CuttingTaskCard({ item, busy, collapsed, onToggle, onStart }: {
 function CuttingPlanBlock({ plano, busy, podeIniciar, onStart }: { plano: CuttingPlan; busy: boolean; podeIniciar: boolean; onStart: (planHash?: string) => void }) {
   const estado = plano.estado ?? PLAN_STATE_WAITING_CUT;
   const aguardando = plano.plano_hashes_aguardando?.[0];
+  // Fechado por padrão: o operador vê Plano/estado/chapas de cara e só abre
+  // o detalhe (OPs, produtos, chapas) quando precisa conferir algo.
+  const [aberto, setAberto] = useState(false);
   return (
     <section className={`cutting-plan cutting-plan--${slug(estado)}`}>
-      <header>
+      <button type="button" className="cutting-plan__toggle" aria-expanded={aberto} onClick={() => setAberto((atual) => !atual)}>
+        <span className="cutting-card__chevron" aria-hidden="true">{aberto ? "▼" : "▶"}</span>
         <div><small>Plano</small><strong>{plano.programa ?? "—"}</strong></div>
+        <span className="cutting-plan__resumo-curto">{plano.chapas_cortadas ?? 0} de {plano.chapas_total ?? 0} chapas</span>
         <span className="cutting-plan__estado">{estado}</span>
-      </header>
-      <dl className="cutting-plan__resumo">
-        <div><dt>Chapas</dt><dd>{plano.chapas_cortadas ?? 0} de {plano.chapas_total ?? 0}</dd></div>
-        <div><dt>Repetição</dt><dd>{plano.repeticoes?.length ? plano.repeticoes.join(", ") : "—"}</dd></div>
-        <div><dt>Chapa</dt><dd>{plano.nome_chapa ?? "—"}</dd></div>
-        <div><dt>Tempo previsto</dt><dd>{formatDuration(plano.tempo_previsto_segundos ?? 0)}</dd></div>
-      </dl>
-      <ul className="cutting-plan__ops">
-        {plano.ops?.length ? plano.ops.map((op) => (
-          <li key={op.codigo_op}>
-            <strong>OP {op.codigo_op}</strong>
-            <span>{produtoDaOp(op)}</span>
-            <span className="cutting-plan__qtd">{op.quantidade ?? op.quantidade_op ?? "—"}</span>
-          </li>
-        )) : <li className="cutting-plan__ops--vazio">Nenhuma OP vinculada a este plano.</li>}
-      </ul>
-      {plano.chapas?.length ? (
-        <div className="cutting-nestings">
-          <div className="table-scroll">
-            <table>
-              <thead><tr><th>#</th><th>Chapa</th><th>Repetição</th><th>Status</th><th>Previsto</th><th>Realizado</th></tr></thead>
-              <tbody>
-                {plano.chapas.map((chapa) => (
-                  <tr key={chapa.plano_hash ?? chapa.sequencia}>
-                    <td>{chapa.sequencia ?? "—"}</td>
-                    <td>{chapa.nome_chapa ?? "—"}</td>
-                    <td>{chapa.repeticao ?? "—"}</td>
-                    <td>{chapa.status ?? "—"}</td>
-                    <td>{formatDuration(chapa.tempo_previsto_segundos)}</td>
-                    <td>{chapa.tempo_real_segundos == null ? "—" : formatDuration(chapa.tempo_real_segundos)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      </button>
+      {aberto ? (
+        <>
+          <dl className="cutting-plan__resumo">
+            <div><dt>Chapas</dt><dd>{plano.chapas_cortadas ?? 0} de {plano.chapas_total ?? 0}</dd></div>
+            <div><dt>Repetição</dt><dd>{plano.repeticoes?.length ? plano.repeticoes.join(", ") : "—"}</dd></div>
+            <div><dt>Chapa</dt><dd>{plano.nome_chapa ?? "—"}</dd></div>
+            <div><dt>Tempo previsto</dt><dd>{formatDuration(plano.tempo_previsto_segundos ?? 0)}</dd></div>
+          </dl>
+          {plano.ops?.length ? (
+            <div className="cutting-plan__ops-cabecalho" role="row">
+              <span>OP</span><span>Produto</span><span className="cutting-plan__qtd">Qtd</span>
+            </div>
+          ) : null}
+          <ul className="cutting-plan__ops">
+            {plano.ops?.length ? plano.ops.map((op) => (
+              <li key={op.codigo_op}>
+                <strong>OP {op.codigo_op}</strong>
+                <span>{produtoDaOp(op)}</span>
+                <span className="cutting-plan__qtd">{op.quantidade ?? op.quantidade_op ?? "—"}</span>
+              </li>
+            )) : <li className="cutting-plan__ops--vazio">Nenhuma OP vinculada a este plano.</li>}
+          </ul>
+          {plano.chapas?.length ? (
+            <div className="cutting-nestings">
+              <div className="table-scroll">
+                <table>
+                  <thead><tr><th>#</th><th>Chapa</th><th>Repetição</th><th>Status</th><th>Previsto</th><th>Realizado</th></tr></thead>
+                  <tbody>
+                    {plano.chapas.map((chapa) => (
+                      <tr key={chapa.plano_hash ?? chapa.sequencia}>
+                        <td>{chapa.sequencia ?? "—"}</td>
+                        <td>{chapa.nome_chapa ?? "—"}</td>
+                        <td>{chapa.repeticao ?? "—"}</td>
+                        <td>{chapa.status ?? "—"}</td>
+                        <td>{formatDuration(chapa.tempo_previsto_segundos)}</td>
+                        <td>{chapa.tempo_real_segundos == null ? "—" : formatDuration(chapa.tempo_real_segundos)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </>
       ) : null}
       {podeIniciar && aguardando ? (
         <button type="button" className="button button--primary" disabled={busy} onClick={() => onStart(aguardando)}>

@@ -11,6 +11,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
+import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
 import { formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
 
@@ -37,21 +38,28 @@ function producingCount(summary?: ResourceSummary) {
   return (summary?.by_category.producao ?? 0) + (summary?.by_category["produção"] ?? 0);
 }
 
-function LoadingPage({ title, subtitle, period = true }: { title: string; subtitle: string; period?: boolean }) {
-  return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={period}><LoadingState /></PageFrame>;
+function LoadingPage({ title, subtitle, period = true, filters = true }: { title: string; subtitle: string; period?: boolean; filters?: boolean }) {
+  return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={period} filters={filters}><LoadingState /></PageFrame>;
 }
 
 export function OperationsOverviewPage() {
-  const filters = useManagementFilters();
-  const query = useApiQuery<OperationsOverview>(`/api/v1/operations/overview?${filters.dailyQuery}`);
-  const stream = useOperationsStream(filters.dailyQuery);
+  // Visão geral não usa o filtro compartilhado entre sub-abas: ela sempre
+  // mostra o dia corrente completo, e o próprio setor é escolhido abaixo, no
+  // seletor local de "Recursos por estado" — um filtro mestre aqui só
+  // duplicaria esse seletor e arriscaria esconder dados por um filtro
+  // deixado ligado em outra sub-aba.
+  const { reference } = useReferenceClock();
+  const today = localDate(referenceNow(reference));
+  const dailyQuery = new URLSearchParams({ inicio: `${today}T00:00:00`, fim: `${today}T23:59:59` }).toString();
+  const query = useApiQuery<OperationsOverview>(`/api/v1/operations/overview?${dailyQuery}`);
+  const stream = useOperationsStream(dailyQuery);
   const [selectedSector, setSelectedSector] = useState("");
   const title = "Consulta Operacional — Visão Geral";
   const subtitle = "Situação física atual dos recursos e OPs associadas no dia corrente, com atualização incremental.";
-  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} filters={false} />;
+  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
-  if (!data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><EmptyState /></PageFrame>;
+  if (!data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><EmptyState /></PageFrame>;
   const resources = stream.snapshot?.resources ?? data.resources;
   const summary: ResourceSummary = data.summary ?? { resources: resources.length, active_operations: 0, by_category: {} };
   const sectors = [...new Set(resources.map((resource) => resource.setor ?? "Setor não informado"))].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -63,6 +71,7 @@ export function OperationsOverviewPage() {
       title={title}
       subtitle={subtitle}
       period={false}
+      filters={false}
       actions={<span className={`live-indicator ${stream.connected ? "live-indicator--connected" : ""}`}><i />{stream.connected ? "Atualização ao vivo" : "Reconectando atualizações"}</span>}
     >
       <div className="metric-grid metric-grid--four">

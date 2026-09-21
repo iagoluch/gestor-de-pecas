@@ -996,15 +996,18 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .cutting-plan--em-corte { border-left-color: var(--accent); }
 .cutting-plan--disponivel-para-destaque { border-left-color: var(--primary); }
 .cutting-plan--finalizado { border-left-color: var(--muted); }
-.cutting-plan > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.cutting-plan > header small { color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; }
-.cutting-plan > header strong { display: block; margin-top: 2px; font-size: 15px; }
+.cutting-plan__toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.cutting-plan__toggle:hover .cutting-card__chevron { color: var(--primary); }
+.cutting-plan__toggle small { color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.cutting-plan__toggle strong { display: block; margin-top: 2px; font-size: 15px; }
+.cutting-plan__resumo-curto { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .cutting-plan__estado { padding: 3px 9px; border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .cutting-plan--em-corte .cutting-plan__estado { background: var(--accent-soft); color: var(--accent); }
 .cutting-plan--disponivel-para-destaque .cutting-plan__estado { background: var(--primary-soft); color: var(--primary); }
 .cutting-plan--aguardando-corte .cutting-plan__estado { background: var(--warning-soft); color: var(--warning); }
 .cutting-plan__resumo { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 10px 0 0; }
-.cutting-plan__ops { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; }
+.cutting-plan__ops-cabecalho { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 2fr) 56px; gap: 10px; margin: 10px 0 0; padding: 0 9px; color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.cutting-plan__ops { display: grid; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
 .cutting-plan__ops li { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 2fr) 56px; align-items: center; gap: 10px; padding: 6px 9px; border-radius: 6px; background: var(--surface); font-size: 11px; }
 .cutting-plan__ops li strong { font-size: 11px; }
 .cutting-plan__ops li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1233,8 +1236,8 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 }
 
 /* Escopo diário nas consultas de situação atual, no lugar do período. */
-.filter-bar__scope { display: flex; align-items: center; gap: 7px; min-height: 34px; margin: 0; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
-.filter-bar__scope::before { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); content: ""; }
+.filter-bar__scope { display: inline-flex; align-items: center; gap: 6px; height: 34px; margin: 0; padding: 0 12px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.filter-bar__scope::before { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); content: ""; }
 
 @media (max-width: 1680px), (max-height: 960px) {
   .operator-sidebar { padding: 14px; }
