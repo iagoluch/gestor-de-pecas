@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import FileResponse
 
 from app.core.operator_sectors import WELDING_OPEN_PICKER_SECTORS, WELDING_SECTOR_NAMES
@@ -20,6 +20,7 @@ from mes.services.drawings import DrawingLookupService, parse_drawing_roots
 from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.order_provisioning import STATUS_INDISPONIVEL, OrderProvisioningService
+from mes.services.telegram_alerts import schedule_resource_stop_alert
 
 
 router = APIRouter(prefix="/operator", tags=["Operador"])
@@ -508,6 +509,7 @@ def drawing_file(
 def execute_action(
     payload: OperatorActionRequest,
     request: Request,
+    background: BackgroundTasks,
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
@@ -525,6 +527,9 @@ def execute_action(
                 motivo_codigo=payload.stop_reason_code,
                 comentario=payload.comment,
             )
+        )
+        schedule_resource_stop_alert(
+            background, request.app.state.settings, response.get("data") or {}
         )
         request.app.state.realtime.publish("operator_stop_without_op")
         return response
@@ -564,5 +569,9 @@ def execute_action(
         recurso_exclusivo=True,
     )
     response = _raise_result(result)
+    if payload.action == "Parada":
+        schedule_resource_stop_alert(
+            background, request.app.state.settings, response.get("data") or {}
+        )
     request.app.state.realtime.publish("operator_action")
     return response

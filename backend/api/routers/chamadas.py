@@ -5,7 +5,7 @@ numa tela própria dentro do sistema — nunca pelo Dev Observatory, que é
 somente leitura de propósito. Motivo e comentário são sempre obrigatórios.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
 from backend.api.database import get_database
 from backend.api.dependencies.auth import (
@@ -18,10 +18,9 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import ChamadaContatoRequest, ChamadaRequest
 from app.core.operator_sectors import OPERATOR_SECTORS
-from mes.integrations.notifications.telegram import (
-    format_chamada_message,
-    send_telegram_message,
-)
+from app.core.permissions import operator_sector_for_user_level
+from mes.integrations.notifications.telegram import format_chamada_message
+from mes.services.telegram_alerts import deliver_chamada, station_context
 
 
 router = APIRouter(prefix="/chamadas", tags=["Chamadas"])
@@ -35,6 +34,23 @@ MOTIVOS = (
     "Ferramental",
     "Outro",
 )
+
+
+def _contexto_do_posto(user: SessionUser, database, recurso) -> dict:
+    """Máquina e OP em andamento de onde a chamada partiu.
+
+    Só o posto tem essa identidade: a chamada da gestão não parte de máquina
+    alguma. O recurso informado é confrontado com o setor do login antes de
+    virar contexto — a máquina que aparece no aviso é sempre uma do posto.
+    """
+
+    recurso = str(recurso or "").strip()
+    if not recurso or not user.operator_access:
+        return {}
+    setor = operator_sector_for_user_level(user.role)
+    if setor is None or recurso not in setor.resources:
+        return {}
+    return station_context(database, setor=setor.name, recurso=recurso)
 
 
 @router.get("/motivos")
@@ -81,6 +97,7 @@ def listar_setores(_user: SessionUser = Depends(get_current_user)):
 def criar_chamada(
     payload: ChamadaRequest,
     request: Request,
+    background: BackgroundTasks,
     user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
@@ -163,14 +180,28 @@ def criar_chamada(
         getattr(settings, "chamada_telegram_chat_id", "") or ""
     ).strip()
     if not bot_token or not chat_id:
-        enviado, erro = False, "Telegram não configurado para o botão de chamada."
-    else:
-        enviado = send_telegram_message(
-            bot_token=bot_token, chat_id=chat_id, text=format_chamada_message(chamada)
-        )
-        erro = None if enviado else "Falha ao enviar o aviso pelo Telegram."
-    chamada = database.marcar_chamada_telegram(chamada["id"], enviado=enviado, erro=erro) or chamada
-    return {"ok": True, "item": chamada, "telegram_enviado": enviado}
+        chamada = database.marcar_chamada_telegram(
+            chamada["id"],
+            enviado=False,
+            erro="Telegram não configurado para o botão de chamada.",
+        ) or chamada
+        return {"ok": True, "item": chamada, "telegram_agendado": False}
+
+    # A mensagem é montada agora, ainda dentro do request: máquina/OP/peça são
+    # o retrato do posto no instante da chamada, não o de quando a tarefa rodar.
+    # O envio em si sai depois da resposta — o operador não espera o Telegram.
+    mensagem = format_chamada_message(
+        {**_contexto_do_posto(user, database, payload.recurso), **chamada}
+    )
+    background.add_task(
+        deliver_chamada,
+        database,
+        chamada["id"],
+        bot_token=bot_token,
+        chat_id=chat_id,
+        texto=mensagem,
+    )
+    return {"ok": True, "item": chamada, "telegram_agendado": True}
 
 
 # ---------------------------------------------------------------------------

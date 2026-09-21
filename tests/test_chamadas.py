@@ -234,6 +234,11 @@ class _FakeChamadaDatabase:
         }
         self._next_id = 1
         self.vistas = {}
+        #: Apontamento ativo por (setor, máquina) — de onde vem OP/peça do aviso.
+        self.apontamentos = {}
+
+    def listar_apontamentos_operacionais(self, tipo_setor, maquina=None, somente_ativos=True):
+        return list(self.apontamentos.get((tipo_setor, maquina), ()))
 
     def buscar_operadores_apontamento(self, crachas):
         return [
@@ -415,7 +420,12 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertEqual(resposta.status_code, 200)
         corpo = resposta.json()
         self.assertTrue(corpo["ok"])
-        self.assertFalse(corpo["telegram_enviado"])
+        self.assertFalse(corpo["telegram_agendado"])
+        # Sem canal configurado o desfecho já é conhecido e fica gravado.
+        self.assertEqual(
+            self.db.chamadas[0]["telegram_erro"],
+            "Telegram não configurado para o botão de chamada.",
+        )
         self.assertEqual(corpo["item"]["contato_nome"], "Fulano")
         self.assertEqual(corpo["item"]["solicitante_cracha"], "0042")
         self.assertEqual(corpo["item"]["solicitante_nome"], "Maria Operadora")
@@ -490,7 +500,7 @@ class ChamadaApiTests(unittest.TestCase):
         self.client = TestClient(self.app)
         self._as(_operator_user())
         with patch(
-            "backend.api.routers.chamadas.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message", return_value=True
         ) as mocked:
             resposta = self.client.post(
                 "/api/v1/chamadas",
@@ -500,8 +510,10 @@ class ChamadaApiTests(unittest.TestCase):
                 },
             )
         self.assertEqual(resposta.status_code, 200)
-        self.assertTrue(resposta.json()["telegram_enviado"])
+        self.assertTrue(resposta.json()["telegram_agendado"])
         mocked.assert_called_once()
+        # O envio sai fora do request; o desfecho real fica na linha da chamada.
+        self.assertTrue(self.db.chamadas[0]["telegram_enviado"])
         self.assertEqual(mocked.call_args.kwargs["chat_id"], "-100999")
         self.assertIn("Maria Operadora (operador_corte) — crachá 0042", mocked.call_args.kwargs["text"])
 
@@ -518,7 +530,7 @@ class ChamadaApiTests(unittest.TestCase):
         self.client = TestClient(self.app)
         self._as(_operator_user())
         with patch(
-            "backend.api.routers.chamadas.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message", return_value=True
         ) as mocked:
             resposta = self.client.post(
                 "/api/v1/chamadas",
@@ -527,9 +539,91 @@ class ChamadaApiTests(unittest.TestCase):
                     "solicitante_cracha": "0042",
                 },
             )
-        self.assertTrue(resposta.json()["telegram_enviado"])
+        self.assertTrue(resposta.json()["telegram_agendado"])
         # Vai direto pro Telegram do contato, não pro chat geral do ambiente.
         self.assertEqual(mocked.call_args.kwargs["chat_id"], "555111222")
+
+    def _cliente_com_telegram(self):
+        self.app = create_app(
+            settings=_settings(
+                telegram_bot_token="token-teste", chamada_telegram_chat_id="-100999"
+            ),
+            database_factory=lambda: self.db,
+        )
+        self.app.dependency_overrides[get_database] = lambda: self.db
+        self.app.dependency_overrides[require_csrf] = lambda: None
+        self.client = TestClient(self.app)
+
+    def test_chamada_do_posto_detalha_maquina_op_e_peca_em_html(self):
+        self.db.apontamentos[("Corte", "Laser Ensis 3015")] = [
+            {
+                "op": "012345", "numero_operacao": "0020",
+                "produto_codigo": "ABC-123", "produto_descricao": "Suporte lateral",
+                "status": "Em processo",
+            }
+        ]
+        self._cliente_com_telegram()
+        self._as(_operator_user())
+        with patch(
+            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+        ) as mocked:
+            resposta = self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Manutenção", "comentario": "Máquina travada",
+                    "recurso": "Laser Ensis 3015", "solicitante_cracha": "0042",
+                },
+            )
+
+        self.assertEqual(resposta.status_code, 200)
+        kwargs = mocked.call_args.kwargs
+        self.assertEqual(kwargs["parse_mode"], "HTML")
+        texto = kwargs["text"]
+        self.assertIn("📣 <b>Chamada do posto</b>", texto)
+        self.assertIn("Máquina: <b>Laser Ensis 3015</b>", texto)
+        self.assertIn("Setor: <b>Corte</b>", texto)
+        self.assertIn("OP: <b>012345</b>", texto)
+        self.assertIn("Peça: <b>ABC-123</b>", texto)
+        self.assertIn("Descrição: <b>Suporte lateral</b>", texto)
+        self.assertIn("Motivo: <b>Manutenção</b>", texto)
+        self.assertIn("Comentário: Máquina travada", texto)
+        self.assertIn("📅 Data:", texto)
+        self.assertIn("🕐 Hora:", texto)
+
+    def test_recurso_fora_do_setor_do_login_nao_entra_no_aviso(self):
+        self._cliente_com_telegram()
+        self._as(_operator_user())
+        with patch(
+            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+        ) as mocked:
+            self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Manutenção", "comentario": "x",
+                    "recurso": "Estação de Solda 1", "solicitante_cracha": "0042",
+                },
+            )
+
+        self.assertNotIn("Máquina:", mocked.call_args.kwargs["text"])
+
+    def test_chamada_da_gestao_nao_inventa_maquina(self):
+        self._cliente_com_telegram()
+        self._as(_management_user())
+        with patch(
+            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+        ) as mocked:
+            self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Manutenção", "comentario": "x",
+                    "recurso": "Laser Ensis 3015",
+                    "solicitante_nome_manual": "Gestor", "solicitante_email": "g@empresa.com",
+                },
+            )
+
+        texto = mocked.call_args.kwargs["text"]
+        self.assertNotIn("Máquina:", texto)
+        self.assertIn("Solicitado por: Gestor (supervisor) — g@empresa.com", texto)
 
     def test_motivo_fora_da_lista_e_recusado(self):
         self._as(_operator_user())

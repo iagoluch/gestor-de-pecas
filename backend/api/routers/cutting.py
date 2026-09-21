@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from backend.api.database import get_database
 from backend.api.dependencies.auth import (
@@ -16,6 +16,7 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.operator import CuttingActionRequest
 from mes.services.cut import CutService
+from mes.services.telegram_alerts import schedule_resource_stop_alert
 from mes.services.telegram_cut import build_cut_plan_notifier
 
 
@@ -205,6 +206,7 @@ def history(
 def action(
     payload: CuttingActionRequest,
     request: Request,
+    background: BackgroundTasks,
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
@@ -233,6 +235,8 @@ def action(
             else "corte_nesting_concluido"
         )
     response = _result(result)
+    if payload.action == "Parada":
+        schedule_resource_stop_alert(background, request.app.state.settings, result.data or {})
     if telegram_event:
         try:
             notifier = build_cut_plan_notifier(

@@ -10,7 +10,8 @@ interface ChamadaContato {
 
 interface ChamadaResult {
   ok: boolean;
-  telegram_enviado: boolean;
+  /** O aviso foi aceito para envio. A entrega em si sai depois da resposta. */
+  telegram_agendado: boolean;
 }
 
 type Passo = "form" | "enviando" | "sucesso" | "erro";
@@ -19,6 +20,8 @@ type Variante = "operador" | "gestao";
 interface ChamadaButtonProps {
   variant?: Variante;
   sector?: string | null;
+  /** Posto de onde a chamada parte. O backend resolve a OP/peça em andamento. */
+  resource?: string | null;
   /** Valores contextuais sugeridos pelo posto; continuam editáveis no formulário. */
   defaultReason?: string;
   defaultComment?: string;
@@ -44,6 +47,7 @@ const DEBOUNCE_MS = 250;
 export function ChamadaButton({
   variant = "operador",
   sector,
+  resource,
   defaultReason = "",
   defaultComment = "",
   inline = false,
@@ -62,7 +66,7 @@ export function ChamadaButton({
   const [cracha, setCracha] = useState("");
   const [nomeSolicitante, setNomeSolicitante] = useState("");
   const [emailSolicitante, setEmailSolicitante] = useState("");
-  const [avisoEnviado, setAvisoEnviado] = useState(false);
+  const [avisoAgendado, setAvisoAgendado] = useState(false);
   const [erro, setErro] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -135,11 +139,12 @@ export function ChamadaButton({
         contato_id: contato.id,
         motivo,
         comentario: comentario.trim(),
+        ...(resource ? { recurso: resource } : {}),
         ...(gestao
           ? { solicitante_nome_manual: nomeSolicitante.trim(), solicitante_email: emailSolicitante.trim() }
           : { solicitante_cracha: cracha.trim() }),
       });
-      setAvisoEnviado(resultado.telegram_enviado);
+      setAvisoAgendado(resultado.telegram_agendado);
       setPasso("sucesso");
     } catch (reason) {
       setErro(reason instanceof ApiError ? reason.message : "Não foi possível registrar a chamada.");
@@ -171,8 +176,8 @@ export function ChamadaButton({
             <div className="chamada-feedback chamada-feedback--ok">
               <strong>Chamada registrada.</strong>
               <p>
-                {avisoEnviado
-                  ? "O aviso foi enviado pelo Telegram."
+                {avisoAgendado
+                  ? "O aviso está sendo enviado pelo Telegram."
                   : "O aviso pelo Telegram não pôde ser enviado agora, mas a chamada ficou registrada — avise pessoalmente se for urgente."}
               </p>
               <div className="operator-dialog__actions">

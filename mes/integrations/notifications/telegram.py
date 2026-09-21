@@ -9,6 +9,7 @@ só avisa; a resolução continua manual, feita pelo supervisor.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Callable
 
 import httpx
@@ -223,23 +224,16 @@ def _format_outbox_error_message(item: dict) -> str:
     return TelegramPresenter().totvs_outbox_error(item)
 
 
-def format_chamada_message(chamada: dict) -> str:
-    """Mensagem do botão de chamada (operador ou gestão), enviada só ao Telegram."""
+def format_chamada_message(chamada: dict, *, now: datetime | None = None) -> str:
+    """Mensagem HTML do botão de chamada (operador ou gestão).
 
-    solicitante = f"{chamada.get('solicitante_nome')} ({chamada.get('solicitante_nivel')})"
-    cracha = str(chamada.get("solicitante_cracha") or "").strip()
-    email = str(chamada.get("solicitante_email") or "").strip()
-    if cracha:
-        solicitante += f" — crachá {cracha}"
-    if email:
-        solicitante += f" — {email}"
-    return (
-        "📣 Chamada no Gestor de Peças\n"
-        f"Para: {chamada.get('contato_nome')} ({chamada.get('contato_funcao')})\n"
-        f"Motivo: {chamada.get('motivo')}\n"
-        f"Comentário: {chamada.get('comentario')}\n"
-        f"Solicitado por: {solicitante}"
-    )
+    Mesmo apresentador das demais mensagens automáticas: emoji, título em
+    negrito e linhas rotuladas. Sempre enviada com ``parse_mode="HTML"``.
+    """
+
+    from mes.services.telegram_presenter import TelegramPresenter
+
+    return TelegramPresenter().chamada(chamada, now=now or datetime.now())
 
 
 def build_outbox_error_notifier(
@@ -273,6 +267,7 @@ __all__ = [
     "deliver_telegram_message",
     "edit_telegram_message",
     "fetch_telegram_updates",
+    "format_chamada_message",
     "send_telegram_message",
     "send_telegram_message_with_id",
 ]
