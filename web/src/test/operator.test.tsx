@@ -298,6 +298,37 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Parada", resource: "1303", op: null, operation_id: null });
   });
 
+  it("retoma parada registrada sem OP carregada", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 4, name: "Operador Dobra", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra" });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/workbench")) {
+        return json({
+          sector: "Dobra",
+          resource: "1303",
+          resource_state: { categoria: "parada", motivo: "0029 - Quebra de ferramenta", op: null },
+          queue: [],
+          production: [],
+        });
+      }
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/actions") && init?.method === "POST") return json({ ok: true, message: "Recurso retomado com sucesso.", code: "retomada_recurso_sem_op" });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText(/Recurso parado — 0029 - Quebra de ferramenta/);
+    // Sem OP carregada não existe apontamento: a retomada é do próprio recurso.
+    fireEvent.click(screen.getByRole("button", { name: "Retomar" }));
+    await screen.findByText("Recurso retomado com sucesso.");
+    const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
+    expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retomar", resource: "1303", op: null, operation_id: null });
+  });
+
   // ------------------------------------------------------------------
   // Wave 6B — o portão Setup/Qualidade é a entrada do botão Iniciar.
   // ------------------------------------------------------------------
@@ -721,6 +752,36 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("heading", { name: "Selecione o recurso" });
     expect(await screen.findByText("Nenhum posto configurado para este setor")).toBeInTheDocument();
     expect(screen.getByText("Montagem", { selector: ".operator-sector-link strong" })).toBeInTheDocument();
+  });
+
+  it("retoma o Destaque parado sem tarefa carregada", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 9, name: "Destacador", role: "operador_destaque", management_access: false, operator_access: true, operator_sector: "Destaque" });
+      if (path.includes("/operator/context")) return json({ sector: "Destaque", route: "Destaque", resources: [], automatic_queue: false, workflow: "highlight" });
+      if (path.includes("/operator/stop-reasons")) return json({ items: [] });
+      if (path.includes("/highlight/queue")) {
+        return json({
+          items: [],
+          count: 0,
+          parciais: 0,
+          completas: 0,
+          planos_disponiveis: 0,
+          resource_state: { categoria: "parada", motivo: "0029 - Quebra de ferramenta", op: null },
+        });
+      }
+      if (path.includes("/highlight/actions") && init?.method === "POST") return json({ ok: true, message: "Recurso retomado com sucesso.", code: "retomada_recurso_sem_op" });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText(/Posto parado — 0029 - Quebra de ferramenta/);
+    // Sem tarefa carregada não existe destaque para retomar pelo Início.
+    fireEvent.click(screen.getByRole("button", { name: "Retomar" }));
+    await screen.findByText("Recurso retomado com sucesso.");
+    const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST");
+    expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retomar", task_code: null });
   });
 
   it("confere as OPs por checklist antes de finalizar o Destaque", async () => {

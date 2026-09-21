@@ -43,7 +43,8 @@ const GATE_CODES = ["primeira_peca_gate_obrigatorio", "primeira_peca_bloqueada"]
 
 interface OperationsSync { source?: string; pending?: boolean; remote_available?: boolean; status?: string; message?: string; found?: boolean }
 interface OperationsResponse { items: OperatorOperation[]; sync?: OperationsSync }
-interface WorkbenchResponse { sector: string; resource: string; queue: OperatorCard[]; production: OperatorCard[] }
+interface ResourceState { categoria?: string; motivo?: string; op?: string | null }
+interface WorkbenchResponse { sector: string; resource: string; resource_state?: ResourceState | null; queue: OperatorCard[]; production: OperatorCard[] }
 interface HistoryResponse { sector: string; resource: string; items: OperatorCard[]; page: number; page_size: number; has_more: boolean }
 interface OperatorBadge { cracha: string; nome: string; ativo?: boolean }
 interface OperationContext {
@@ -240,7 +241,16 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // segunda lista, que já nascia desatualizada a cada setor novo.
   const showSetup = hasSetup;
   const currentStatus = String(selectedCard?.status ?? "");
-  const startAction = currentStatus === "Parada"
+  const canPoint = isSelectable(selected);
+  // A parada registrada sem OP é do recurso, não de um apontamento: não existe
+  // card para rotular o botão nem OP para enviar. Sem ler o estado físico do
+  // recurso o posto ficava parado para sempre, porque toda ação exigia uma OP.
+  const resourceState = cards.data?.resource_state;
+  const stoppedWithoutOp = Boolean(
+    resourceState?.categoria === "parada" && !String(resourceState?.op ?? "").trim(),
+  );
+  const resumeWithoutOp = stoppedWithoutOp && !canPoint;
+  const startAction = resumeWithoutOp || currentStatus === "Parada"
     ? "Retomar"
     : currentStatus === "Setup"
       ? "Retornar"
@@ -250,7 +260,6 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const startLabel = selectedCard?.rework_return
     ? "Iniciar retrabalho"
     : startAction === "Início" ? "Iniciar" : startAction;
-  const canPoint = isSelectable(selected);
   const activeCard = (cards.data?.production ?? []).find((item) =>
     ["Em processo", "Parada", "Setup", "Retrabalho"].includes(String(item.status ?? "")),
   );
@@ -277,7 +286,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // entrega a orientação ao operador, em vez de um botão morto.
   const canFinish = canPoint
     && ((selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired);
-  const canStart = canPoint && currentStatus !== "Retrabalho" && !firstPiece?.bloqueio_ativo;
+  const canStart = resumeWithoutOp
+    || (canPoint && currentStatus !== "Retrabalho" && !firstPiece?.bloqueio_ativo);
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
     operation: String(activeCard.operation ?? activeCard.numero_operacao ?? ""),
@@ -504,7 +514,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   async function execute(action: string, extra: Record<string, unknown> = {}) {
     const appointmentForStop = action === "Parada" ? activeCard : undefined;
     const stopWithoutOp = action === "Parada" && !appointmentForStop;
-    if (!stopWithoutOp && (!loadedOp || !selected)) {
+    // Parada e retomada do recurso correm sem OP: o backend atua no estado
+    // físico do posto, não em um apontamento.
+    const withoutOp = stopWithoutOp || (action === "Retomar" && resumeWithoutOp);
+    if (!withoutOp && (!loadedOp || !selected)) {
       if (!appointmentForStop) {
         setMessage("Carregue e selecione uma operação antes de apontar.");
         return;
@@ -515,9 +528,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       const response = await api.post<{ message: string; data?: Record<string, unknown> }>("/api/v1/operator/actions", {
         action,
         resource,
-        op: stopWithoutOp ? null : String(appointmentForStop?.op ?? loadedOp),
-        operation_id: stopWithoutOp ? null : appointmentForStop?.catalogo_operacao_id ?? selected?.id ?? selected?.catalogo_operacao_id,
-        operation_number: stopWithoutOp ? null : appointmentForStop?.numero_operacao ?? appointmentForStop?.operation ?? selected?.numero_operacao ?? selected?.codigo,
+        op: withoutOp ? null : String(appointmentForStop?.op ?? loadedOp),
+        operation_id: withoutOp ? null : appointmentForStop?.catalogo_operacao_id ?? selected?.id ?? selected?.catalogo_operacao_id,
+        operation_number: withoutOp ? null : appointmentForStop?.numero_operacao ?? appointmentForStop?.operation ?? selected?.numero_operacao ?? selected?.codigo,
         ...extra,
       });
       setMessage(response.message);
@@ -583,12 +596,17 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {operations.loading && loadedOp ? <LoadingState label="Carregando roteiro…" /> : null}
       {remoteSearch === "searching" ? <LoadingState label="Buscando OP no TOTVS..." /> : null}
       {operations.error ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
+      {stoppedWithoutOp ? (
+        <p className="operator-notice operator-notice--error">
+          Recurso parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
+        </p>
+      ) : null}
       {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
           preparação da máquina, que é quando a primeira peça é fabricada. */}
       <div className="operator-actions" aria-label="Ações operacionais">
         <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => void execute(startAction)}><img src={assets.operator.actions.start} alt="" /><span>{startLabel}</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={submitting || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
+        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canPoint} onClick={() => void setupAppointment()}><img src={assets.operator.actions.setup} alt="" /><span>Setup</span></button> : null}
         <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => setDialog({ kind: "confirm", action: "Retrabalho" })}><img src={assets.operator.actions.rework} alt="" /><span>Retrabalho</span></button>

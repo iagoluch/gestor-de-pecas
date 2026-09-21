@@ -187,6 +187,24 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "parada")
         self.assertIsNone(db.buscar_estado_recurso_atual("1303").get("op"))
 
+    def test_retomada_fisica_encerra_parada_sem_op(self):
+        db, service, _operation = self._service()
+        self.assertTrue(
+            service.registrar_parada_recurso(
+                setor="Dobra", recurso="1303", motivo_codigo="0029"
+            ).ok
+        )
+        retomada = service.retomar_recurso_sem_op(setor="Dobra", recurso="1303")
+        self.assertTrue(retomada.ok, retomada.message)
+        self.assertEqual(retomada.code, "retomada_recurso_sem_op")
+        self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "fila")
+
+    def test_retomada_sem_op_recusa_recurso_que_nao_esta_parado(self):
+        _db, service, _operation = self._service()
+        recusa = service.retomar_recurso_sem_op(setor="Dobra", recurso="1303")
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "recurso_nao_parado")
+
     def test_parada_valida_codigo_e_comentario_obrigatorio(self):
         _db, service, operation = self._service()
         reason_codes = {item["codigo"] for item in service.listar_motivos_parada()}

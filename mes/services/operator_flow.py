@@ -405,6 +405,12 @@ class OperatorFlowService:
         rows = list(loader(**filters) or [])
         return dict(rows[0]) if rows else None
 
+    def estado_recurso(self, recurso):
+        """Estado físico atual do recurso, como a tela do Corte já expõe."""
+
+        state = ResourceStateService(self.db, self.operador).atual(recurso)
+        return dict(state) if state else None
+
     def registrar_parada_recurso(self, *, setor, recurso, motivo_codigo, comentario=None):
         """Registra parada física manual sem exigir OP, tarefa ou nesting ativo."""
 
@@ -464,6 +470,53 @@ class OperatorFlowService:
             True,
             "Parada registrada com sucesso.",
             "parada_recurso_sem_op",
+            dict(row),
+        )
+
+    def retomar_recurso_sem_op(self, *, setor, recurso):
+        """Encerra a parada física registrada sem OP e devolve o recurso à fila.
+
+        Simétrico de ``registrar_parada_recurso``: sem OP não existe apontamento
+        para retomar, então a retomada é do próprio recurso. O destino é
+        ``fila`` — máquina disponível e sem demanda apontada —, o mesmo estado
+        que o retorno de turno sem demanda já usa.
+        """
+
+        state_service = ResourceStateService(self.db, self.operador)
+        current = state_service.atual(recurso)
+        category = str((current or {}).get("categoria") or "")
+        if category != EventCategory.DOWNTIME.value:
+            return OperatorFlowResult(
+                False,
+                "O recurso não está parado.",
+                "recurso_nao_parado",
+                dict(current) if current else None,
+            )
+        if str(current.get("op") or "").strip():
+            return OperatorFlowResult(
+                False,
+                "Esta parada pertence a uma OP. Carregue a OP e retome o apontamento.",
+                "parada_vinculada_op",
+                dict(current),
+            )
+        row = state_service.registrar_estado(
+            recurso,
+            EventCategory.QUEUE.value,
+            tipo_setor=setor,
+            motivo="Retomada após parada sem OP",
+            automatico=False,
+            data_hora=self._now(),
+        )
+        if not row:
+            return OperatorFlowResult(
+                False,
+                "Não foi possível retomar o recurso.",
+                "estado_recurso_alterado",
+            )
+        return OperatorFlowResult(
+            True,
+            "Recurso retomado com sucesso.",
+            "retomada_recurso_sem_op",
             dict(row),
         )
 
