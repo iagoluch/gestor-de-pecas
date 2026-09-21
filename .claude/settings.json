@@ -34,6 +34,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/omniroute-autostart.sh",
+            "timeout": 20,
+            "statusMessage": "Verificando servidor local do omniroute..."
+          }
+        ]
+      }
     ]
   }
 }
