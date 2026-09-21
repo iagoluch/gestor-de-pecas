@@ -190,6 +190,8 @@ export function CuttingPage({ resource }: { resource: string }) {
   const appliedSearch = useDebouncedValue(search.trim(), 250);
   const [message, setMessage] = useState("Fila automática — novas tarefas aparecem sozinhas.");
   const [stopOpen, setStopOpen] = useState(false);
+  // Atividade diária do posto: só o Sim/Não fica na tela, o tipo é do backend.
+  const [activityPrompt, setActivityPrompt] = useState<"Início" | "Finalizado" | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // Estado só de apresentação: as tarefas chegam recolhidas e o operador
@@ -204,6 +206,9 @@ export function CuttingPage({ resource }: { resource: string }) {
   const active = queue.data?.items.find((item) => item.status === "Em processo");
   const activePlan = planoAtivo(active);
   const stopped = queue.data?.resource_state?.categoria === "parada";
+  // Atividade sem plano selecionado: trabalho real do posto que não pertence a
+  // nenhum nesting. Começa e termina no recurso, como a parada sem nesting.
+  const activityInProgress = queue.data?.resource_state?.categoria === "atividade_sem_op";
   const sync = queue.data?.sync;
 
   // O botão existe para observabilidade: a fila já chega sozinha. Ele dispara
@@ -244,6 +249,7 @@ export function CuttingPage({ resource }: { resource: string }) {
       const response = await api.post<{ message: string }>("/api/v1/cutting/actions", { resource, ...payload });
       setMessage(response.message);
       setStopOpen(false);
+      setActivityPrompt(null);
       queue.reload();
     } catch (reason) {
       setMessage(apiErrorMessage(reason));
@@ -275,10 +281,14 @@ export function CuttingPage({ resource }: { resource: string }) {
               nesting em processo também precisa de saída pela tela. */}
           {stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Retomada" })}>Retomar corte</button> : null}
           {!stopped ? <button type="button" className="button operator-danger" disabled={busy} onClick={() => setStopOpen(true)}>Registrar parada</button> : null}
+          {/* Sem plano em processo o Início do posto é a atividade diária. */}
+          {activityInProgress ? <button type="button" className="button button--primary" disabled={busy} onClick={() => setActivityPrompt("Finalizado")}>Finalizar atividade</button> : null}
+          {!stopped && !activityInProgress && !active ? <button type="button" className="button" disabled={busy} onClick={() => setActivityPrompt("Início")}>Iniciar atividade</button> : null}
           {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>{planoTemRepeticao(activePlan) ? "Finalizar nesting" : "Finalizar plano"}</button> : null}
         </div>
       </div>
       {stopped ? <p className="operator-notice operator-notice--error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</p> : null}
+      {activityInProgress ? <p className="operator-notice">{queue.data?.resource_state?.motivo || "Atividade diária"} em andamento neste recurso. Finalize para iniciar um corte.</p> : null}
       {queue.loading && !queue.data ? <LoadingState label="Carregando fila do Corte…" /> : queue.error ? <ErrorState error={queue.error} onRetry={queue.reload} /> : queue.data?.items.length ? (
         <div className="cutting-queue">
           {queue.data.items.map((item, index) => (
@@ -293,6 +303,15 @@ export function CuttingPage({ resource }: { resource: string }) {
           ))}
         </div>
       ) : <EmptyState title={appliedSearch ? "Nenhuma tarefa corresponde ao filtro" : "Nenhum plano na fila"} detail={appliedSearch ? "Limpe o filtro para ver toda a fila do recurso." : "Assim que uma tarefa entrar no planejamento, ela aparece aqui automaticamente."} />}
+      {activityPrompt ? (
+        <OperatorDialog title="Atividade diária" size="compact" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={() => setActivityPrompt(null)}>
+          <p>{activityPrompt === "Início" ? "Iniciar uma atividade diária neste recurso?" : "Finalizar a atividade diária em andamento?"}</p>
+          <div className="operator-dialog__actions">
+            <button type="button" onClick={() => setActivityPrompt(null)}>Não</button>
+            <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: activityPrompt })}>Sim</button>
+          </div>
+        </OperatorDialog>
+      ) : null}
       {stopOpen ? <CutStopDialog resource={resource} reasons={reasons.data?.items ?? []} onCancel={() => setStopOpen(false)} onConfirm={(code, comment) => void action({ action: "Parada", stop_reason_code: code, comment })} /> : null}
       {historyOpen ? (
         <OperatorDialog title="Histórico do Corte" size="wide" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={() => setHistoryOpen(false)}>

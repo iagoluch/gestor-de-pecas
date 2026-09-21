@@ -1827,6 +1827,7 @@ class Database(
             query += (
                 " AND COALESCE(grupo_codigo, '') <> '0001'"
                 " AND setup = FALSE AND retrabalho = FALSE"
+                " AND retorno_automatico = FALSE"
             )
         if setup is not None:
             query += " AND setup = %s"
@@ -3517,17 +3518,36 @@ class Database(
             "Retrabalho": "retrabalho",
         }.get(str(status or "").strip())
 
-    def _estado_recurso_aberto_tx(self, cursor, recurso):
+    def _estado_recurso_aberto_tx(self, cursor, recurso, *, instante=None):
+        """Retorna o estado físico aberto mais recente do recurso.
+
+        Se houver mais de uma linha aberta para o mesmo recurso (duplicata
+        histórica), fecha as extras aqui mesmo — sem isso, o recurso
+        continuava aparecendo duplicado na Consulta Operacional a cada nova
+        transição, pois cada chamada fechava apenas uma linha arbitrária.
+        """
         cursor.execute(
             """
             SELECT *
             FROM eventos_estado_recurso
             WHERE UPPER(recurso) = UPPER(%s) AND data_fim IS NULL
+            ORDER BY data_inicio DESC, id DESC
             FOR UPDATE
             """,
             (str(recurso or "").strip(),),
         )
-        return cursor.fetchone()
+        rows = cursor.fetchall()
+        if not rows:
+            return None
+        current = rows[0]
+        stray_ids = [row["id"] for row in rows[1:]]
+        if stray_ids:
+            fechamento = _period_value(instante) or current.get("data_inicio") or agora_db()
+            cursor.execute(
+                "UPDATE eventos_estado_recurso SET data_fim = %s WHERE id = ANY(%s)",
+                (fechamento, stray_ids),
+            )
+        return current
 
     def _encerrar_estado_recurso_tx(self, cursor, recurso, instante, *, somente_origem=None):
         resource = str(recurso or "").strip()
@@ -3537,7 +3557,7 @@ class Database(
             "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
             (resource,),
         )
-        current = self._estado_recurso_aberto_tx(cursor, resource)
+        current = self._estado_recurso_aberto_tx(cursor, resource, instante=instante)
         if not current:
             return None
         if somente_origem and str(current.get("origem") or "") != str(somente_origem):
@@ -3565,7 +3585,7 @@ class Database(
         produto_codigo=None, motivo=None, causa_raiz=None, comentario=None,
         data_hora=None, origem="gestor_pecas", referencia_origem=None,
         planejado=None, automatico=False, tipo_interrupcao=None,
-        apontamento_id=None, evento_apontamento_id=None,
+        tipo_atividade=None, apontamento_id=None, evento_apontamento_id=None,
     ):
         instante = _period_value(data_hora) or agora_db()
         resource = str(recurso or "").strip()
@@ -3579,7 +3599,7 @@ class Database(
             "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
             (resource,),
         )
-        current = self._estado_recurso_aberto_tx(cursor, resource)
+        current = self._estado_recurso_aberto_tx(cursor, resource, instante=instante)
         if current and current.get("data_inicio") and current["data_inicio"] > instante:
             result = dict(current)
             result["retroativo_ignorado"] = True
@@ -3596,6 +3616,7 @@ class Database(
                 and str(current.get("causa_raiz") or "") == str(causa_raiz or "")
                 and bool(current.get("automatico")) == bool(automatico)
                 and str(current.get("tipo_interrupcao") or "") == str(tipo_interrupcao or "")
+                and str(current.get("tipo_atividade") or "") == str(tipo_atividade or "")
             )
             if same_state:
                 return dict(current)
@@ -3610,10 +3631,11 @@ class Database(
                 recurso, tipo_setor, categoria, codigo_status_recurso, op,
                 numero_operacao, produto_codigo, operador, motivo, causa_raiz,
                 comentario, data_inicio, origem, referencia_origem, planejado,
-                automatico, tipo_interrupcao, apontamento_id, evento_apontamento_id
+                automatico, tipo_interrupcao, tipo_atividade, apontamento_id,
+                evento_apontamento_id
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING *
             """,
@@ -3622,8 +3644,8 @@ class Database(
                 limpa_codigo(op) if op else None, numero_operacao, produto_codigo,
                 operador, motivo, causa_raiz, comentario, instante,
                 str(origem or "gestor_pecas"), referencia_origem, planejado,
-                bool(automatico), tipo_interrupcao, apontamento_id,
-                evento_apontamento_id,
+                bool(automatico), tipo_interrupcao, tipo_atividade,
+                apontamento_id, evento_apontamento_id,
             ),
         )
         return dict(cursor.fetchone())
@@ -3747,7 +3769,7 @@ class Database(
         produto_codigo=None, motivo=None, causa_raiz=None, comentario=None,
         data_hora=None, origem="gestor_pecas", referencia_origem=None,
         planejado=None, automatico=False, tipo_interrupcao=None,
-        apontamento_id=None, evento_apontamento_id=None,
+        tipo_atividade=None, apontamento_id=None, evento_apontamento_id=None,
     ):
         """Transiciona o estado físico canônico do recurso.
 
@@ -3777,6 +3799,7 @@ class Database(
                 planejado=planejado,
                 automatico=automatico,
                 tipo_interrupcao=tipo_interrupcao,
+                tipo_atividade=tipo_atividade,
                 apontamento_id=apontamento_id,
                 evento_apontamento_id=evento_apontamento_id,
             )

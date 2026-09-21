@@ -15,7 +15,9 @@ from backend.api.dependencies.operator import validate_resource
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.operator import CuttingActionRequest
+from mes.domain import EventCategory
 from mes.services.cut import CutService
+from mes.services.operator_flow import OperatorFlowService
 from mes.services.telegram_alerts import schedule_resource_stop_alert
 from mes.services.telegram_cut import build_cut_plan_notifier
 
@@ -30,6 +32,25 @@ def _service(database, user, request=None):
         user.name,
         now_func=request_now_func(request) if request is not None else None,
     )
+
+
+def _activity_service(database, user, request=None):
+    """Serviço canônico do estado do recurso, compartilhado com os demais setores.
+
+    A atividade sem OP não é um fato de Corte: ela pertence ao recurso e já tem
+    dono em ``OperatorFlowService``. O Corte apenas a expõe pela sua tela.
+    """
+
+    return OperatorFlowService(
+        database,
+        user.name,
+        now_func=request_now_func(request) if request is not None else None,
+    )
+
+
+def _atividade_sem_op_aberta(service, resource):
+    estado = service.estado_recurso(resource) or {}
+    return str(estado.get("categoria") or "") == EventCategory.ACTIVITY_WITHOUT_OP.value
 
 
 def _require_cutting(user, resource):
@@ -213,10 +234,16 @@ def action(
     resource = _require_cutting(user, payload.resource)
     service = _service(database, user, request)
     if payload.action == "Início":
+        # Sem plano selecionado o operador não está cortando: é atividade
+        # diária do posto. O estado é do recurso, como a parada sem nesting.
         if not payload.plan_hash:
-            raise AppError("cutting_plan_required", "Selecione um plano para iniciar.")
-        result = service.iniciar(payload.plan_hash, resource)
-        telegram_event = "corte_iniciado"
+            result = _activity_service(database, user, request).iniciar_atividade_sem_op(
+                setor="Corte", recurso=resource
+            )
+            telegram_event = None
+        else:
+            result = service.iniciar(payload.plan_hash, resource)
+            telegram_event = "corte_iniciado"
     elif payload.action == "Parada":
         if not payload.stop_reason_code:
             raise AppError("cutting_stop_reason_required", "Selecione o motivo da parada.")
@@ -227,13 +254,23 @@ def action(
         telegram_event = None
     else:
         if payload.appointment_id is None:
-            raise AppError("cutting_appointment_required", "Não foi possível identificar o nesting em processo.")
-        result = service.finalizar(payload.appointment_id)
-        telegram_event = (
-            "corte_finalizado"
-            if (result.data or {}).get("status") == "Finalizado"
-            else "corte_nesting_concluido"
-        )
+            # O encerramento sem nesting só é válido quando o que está aberto é
+            # a atividade sem OP; um nesting em processo continua exigindo o
+            # apontamento, como antes.
+            if _atividade_sem_op_aberta(service, resource):
+                result = _activity_service(database, user, request).finalizar_atividade_sem_op(
+                    setor="Corte", recurso=resource
+                )
+                telegram_event = None
+            else:
+                raise AppError("cutting_appointment_required", "Não foi possível identificar o nesting em processo.")
+        else:
+            result = service.finalizar(payload.appointment_id)
+            telegram_event = (
+                "corte_finalizado"
+                if (result.data or {}).get("status") == "Finalizado"
+                else "corte_nesting_concluido"
+            )
     response = _result(result)
     if payload.action == "Parada":
         schedule_resource_stop_alert(background, request.app.state.settings, result.data or {})

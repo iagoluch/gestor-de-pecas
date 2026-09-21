@@ -86,6 +86,18 @@ FORCED_UNPLANNED_STOP_REASONS = frozenset({
 })
 
 
+# Atividade sem OP — trabalho real do posto que não pertence a nenhuma OP.
+#
+# Corte e Destaque trabalham por tarefa/nesting e têm rotina diária própria
+# (organização de chapas, sucata, conferência): o que o operador inicia sem OP
+# nesses setores é a atividade diária do posto. Nos demais setores a atividade
+# sem OP não tem tipo específico. Quem decide é o setor, nunca o operador.
+DAILY_ACTIVITY_KIND = "diaria"
+DAILY_ACTIVITY_SECTORS = frozenset({"corte", "destaque"})
+ACTIVITY_WITHOUT_OP_LABELS = {DAILY_ACTIVITY_KIND: "Atividade diária"}
+DEFAULT_ACTIVITY_WITHOUT_OP_LABEL = "Atividade s/OP"
+
+
 # Falha de equipamento — taxonomia usada por MTBF/MTTR.
 #
 # O Gestor não classifica falha por nome de motivo. A única classificação
@@ -181,6 +193,20 @@ class ManufacturingRules:
             EventCategory.SETUP,
             EventCategory.ACTIVITY_WITHOUT_OP,
         }
+
+    @staticmethod
+    def activity_kind_for_sector(sector: str | None) -> str | None:
+        """Tipo da atividade sem OP a gravar para o setor informado."""
+
+        key = str(sector or "").strip().casefold()
+        return DAILY_ACTIVITY_KIND if key in DAILY_ACTIVITY_SECTORS else None
+
+    @staticmethod
+    def activity_display_label(activity_kind: str | None) -> str:
+        """Rótulo da atividade sem OP, único para Andon, tela e relatório."""
+
+        key = str(activity_kind or "").strip().casefold()
+        return ACTIVITY_WITHOUT_OP_LABELS.get(key, DEFAULT_ACTIVITY_WITHOUT_OP_LABEL)
 
     # ------------------------------------------------------------------
     # Calendário operacional

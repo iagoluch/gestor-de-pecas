@@ -183,15 +183,18 @@ class CutService:
         return CutResult(True, "Parada registrada.", data=payload)
 
     def retomar(self, maquina):
-        """Retoma o nesting ativo após uma parada manual do recurso."""
+        """Retoma o recurso após uma parada manual, com ou sem nesting ativo.
+
+        Simétrico de ``parar``: a parada pode ser registrada sem nenhum
+        nesting em processo, então a retomada também não pode exigir um.
+        Sem nesting ativo o recurso volta para ``fila`` (sem demanda).
+        """
 
         machine = str(maquina or "").strip()
         active = next(
             (row for row in self.listar_fila(machine) if row.get("status") == "Em processo"),
             None,
         )
-        if not active:
-            return CutResult(False, "Não existe tarefa de Corte ativa para retomar.", code="sem_corte_ativo")
         current = self.estado_recurso(machine)
         if not current or current.get("categoria") not in {"parada", "fora_turno"}:
             return CutResult(False, "O recurso não está parado.", code="nao_parado", data=current)
@@ -208,15 +211,19 @@ class CutService:
         transition = getattr(self.db, "transicionar_estado_recurso", None)
         if not callable(transition):
             return CutResult(False, "O estado físico do recurso não está disponível.", code="estado_indisponivel")
-        active_id = next(iter(active.get("apontamento_ids_em_processo") or []), active.get("id"))
-        nesting = active.get("nesting_atual") or active.get("sequencia_nesting") or ""
+        active_id = (
+            next(iter(active.get("apontamento_ids_em_processo") or []), active.get("id"))
+            if active
+            else None
+        )
+        nesting = (active.get("nesting_atual") or active.get("sequencia_nesting") or "") if active else ""
         changed = transition(
             machine,
-            "producao",
+            "producao" if active else "fila",
             tipo_setor="Corte",
             operador=self.operador,
-            motivo=f"Nesting {nesting}".strip(),
-            origem="corte_nesting",
+            motivo=f"Nesting {nesting}".strip() if active else "Retomada sem nesting ativo",
+            origem="corte_nesting" if active else "corte_retomada_sem_nesting",
             referencia_origem=f"nesting:{active_id}" if active_id is not None else None,
             planejado=None,
             automatico=False,
@@ -224,7 +231,7 @@ class CutService:
         )
         if not changed:
             return CutResult(False, "Não foi possível retomar o Corte.", code="estado_alterado")
-        payload = dict(active)
+        payload = dict(active or {"maquina": machine, "status": "Sem nesting ativo"})
         payload["estado_recurso"] = dict(changed)
         self._record_event("corte_retomado", payload, f"Corte retomado em {machine}.")
         return CutResult(True, "Corte retomado.", data=payload)

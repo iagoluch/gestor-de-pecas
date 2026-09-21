@@ -432,6 +432,7 @@ class OperatorFlowService:
             or status.get("setup")
             or status.get("retrabalho")
             or status.get("grupo_codigo") == "0001"
+            or status.get("retorno_automatico")
         ):
             return OperatorFlowResult(
                 False,
@@ -529,6 +530,102 @@ class OperatorFlowService:
             True,
             "Recurso retomado com sucesso.",
             "retomada_recurso_sem_op",
+            dict(row),
+        )
+
+    def iniciar_atividade_sem_op(self, *, setor, recurso):
+        """Abre atividade sem OP: trabalho real do posto fora de qualquer OP.
+
+        É produtivo (``ManufacturingRules.is_productive``) e pertence ao
+        recurso, não a um apontamento: por isso não exige OP, tarefa nem
+        nesting. O tipo da atividade é decidido pelo setor, nunca pelo
+        operador.
+        """
+
+        state_service = ResourceStateService(self.db, self.operador)
+        current = state_service.atual(recurso)
+        category = str((current or {}).get("categoria") or "")
+        if category == EventCategory.ACTIVITY_WITHOUT_OP.value:
+            return OperatorFlowResult(
+                False,
+                "Já existe uma atividade sem OP em andamento neste recurso.",
+                "atividade_sem_op_em_andamento",
+                dict(current),
+            )
+        if category == EventCategory.DOWNTIME.value:
+            return OperatorFlowResult(
+                False,
+                "O recurso está parado. Retome antes de iniciar a atividade.",
+                "recurso_parado",
+                dict(current),
+            )
+        if category in {
+            EventCategory.PRODUCTION.value,
+            EventCategory.SETUP.value,
+            EventCategory.REWORK.value,
+        }:
+            return OperatorFlowResult(
+                False,
+                "O recurso está executando uma OP. Finalize o apontamento antes de iniciar a atividade.",
+                "recurso_em_execucao",
+                dict(current),
+            )
+        activity_kind = ManufacturingRules.activity_kind_for_sector(setor)
+        row = state_service.registrar_atividade_sem_op(
+            recurso,
+            tipo_setor=setor,
+            tipo_atividade=activity_kind,
+            motivo=ManufacturingRules.activity_display_label(activity_kind),
+            data_hora=self._now(),
+        )
+        if not row:
+            return OperatorFlowResult(
+                False,
+                "Não foi possível iniciar a atividade sem OP.",
+                "estado_recurso_alterado",
+            )
+        return OperatorFlowResult(
+            True,
+            "Atividade sem OP iniciada com sucesso.",
+            "inicio_atividade_sem_op",
+            dict(row),
+        )
+
+    def finalizar_atividade_sem_op(self, *, setor, recurso):
+        """Encerra a atividade sem OP e devolve o recurso ao estado sem demanda.
+
+        Simétrico de ``retomar_recurso_sem_op``: o destino persistido é ``fila``
+        e a regra central projeta toda fila sem OP como recurso sem demanda.
+        """
+
+        state_service = ResourceStateService(self.db, self.operador)
+        current = state_service.atual(recurso)
+        category = str((current or {}).get("categoria") or "")
+        if category != EventCategory.ACTIVITY_WITHOUT_OP.value:
+            return OperatorFlowResult(
+                False,
+                "Não existe atividade sem OP em andamento neste recurso.",
+                "atividade_sem_op_inexistente",
+                dict(current) if current else None,
+            )
+        row = state_service.registrar_estado(
+            recurso,
+            EventCategory.QUEUE.value,
+            tipo_setor=setor,
+            motivo="Fim da atividade sem OP",
+            automatico=False,
+            data_hora=self._now(),
+        )
+        if not row:
+            return OperatorFlowResult(
+                False,
+                "Não foi possível finalizar a atividade sem OP.",
+                "estado_recurso_alterado",
+            )
+        return OperatorFlowResult(
+            True,
+            "Atividade sem OP finalizada com sucesso.",
+            "fim_atividade_sem_op",
             dict(row),
         )
 
@@ -809,6 +906,7 @@ class OperatorFlowService:
                 or status_recurso.get("setup")
                 or status_recurso.get("retrabalho")
                 or status_recurso.get("grupo_codigo") == "0001"
+                or status_recurso.get("retorno_automatico")
             ):
                 return OperatorFlowResult(
                     False,

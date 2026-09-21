@@ -898,7 +898,9 @@ describe("fluxo Web do operador", () => {
 
     // A ação é sempre do plano selecionado, inclusive com o Corte da tarefa
     // ainda parcial.
-    fireEvent.click(screen.getByRole("button", { name: /Plano 8501/i }));
+    // O cartão do plano e o botão "Ver OPs do plano" citam o mesmo número: a
+    // seleção é o cartão, identificado pelo próprio rótulo de toque.
+    fireEvent.click(screen.getByRole("button", { name: /(selecionar|selecionado)\s*Plano 8501/i }));
     const finalizar = screen.getByRole("button", { name: "Finalizar" });
     expect(finalizar).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));

@@ -187,6 +187,16 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "parada")
         self.assertIsNone(db.buscar_estado_recurso_atual("1303").get("op"))
 
+    def test_parada_fisica_recusa_motivo_de_retorno_automatico(self):
+        _db, service, _operation = self._service()
+        result = service.registrar_parada_recurso(
+            setor="Dobra",
+            recurso="1303",
+            motivo_codigo="0002",
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, "motivo_parada_invalido")
+
     def test_retomada_fisica_encerra_parada_sem_op(self):
         db, service, _operation = self._service()
         self.assertTrue(
@@ -205,11 +215,63 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(recusa.ok)
         self.assertEqual(recusa.code, "recurso_nao_parado")
 
+    def test_atividade_sem_op_abre_e_fecha_o_estado_do_recurso(self):
+        db, service, _operation = self._service()
+        inicio = service.iniciar_atividade_sem_op(setor="Dobra", recurso="1303")
+        self.assertTrue(inicio.ok, inicio.message)
+        self.assertEqual(inicio.code, "inicio_atividade_sem_op")
+        estado = db.buscar_estado_recurso_atual("1303")
+        self.assertEqual(estado["categoria"], "atividade_sem_op")
+        self.assertIsNone(estado.get("op"))
+        fim = service.finalizar_atividade_sem_op(setor="Dobra", recurso="1303")
+        self.assertTrue(fim.ok, fim.message)
+        self.assertEqual(fim.code, "fim_atividade_sem_op")
+        self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "fila")
+
+    def test_atividade_sem_op_grava_tipo_diaria_apenas_no_corte_e_no_destaque(self):
+        for setor, esperado in (("Corte", "diaria"), ("Destaque", "diaria"), ("Dobra", None)):
+            with self.subTest(setor=setor):
+                db, service, _operation = self._service()
+                inicio = service.iniciar_atividade_sem_op(setor=setor, recurso="1303")
+                self.assertTrue(inicio.ok, inicio.message)
+                estado = db.buscar_estado_recurso_atual("1303")
+                self.assertEqual(estado.get("tipo_atividade"), esperado)
+                self.assertEqual(
+                    estado.get("motivo"),
+                    "Atividade diária" if esperado else "Atividade s/OP",
+                )
+
+    def test_atividade_sem_op_nao_duplica_nem_fecha_o_que_nao_abriu(self):
+        _db, service, _operation = self._service()
+        self.assertFalse(
+            service.finalizar_atividade_sem_op(setor="Dobra", recurso="1303").ok
+        )
+        self.assertEqual(
+            service.finalizar_atividade_sem_op(setor="Dobra", recurso="1303").code,
+            "atividade_sem_op_inexistente",
+        )
+        self.assertTrue(service.iniciar_atividade_sem_op(setor="Dobra", recurso="1303").ok)
+        repetida = service.iniciar_atividade_sem_op(setor="Dobra", recurso="1303")
+        self.assertFalse(repetida.ok)
+        self.assertEqual(repetida.code, "atividade_sem_op_em_andamento")
+
+    def test_atividade_sem_op_recusa_recurso_parado(self):
+        _db, service, _operation = self._service()
+        self.assertTrue(
+            service.registrar_parada_recurso(
+                setor="Dobra", recurso="1303", motivo_codigo="0029"
+            ).ok
+        )
+        recusa = service.iniciar_atividade_sem_op(setor="Dobra", recurso="1303")
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "recurso_parado")
+
     def test_parada_valida_codigo_e_comentario_obrigatorio(self):
         _db, service, operation = self._service()
         reason_codes = {item["codigo"] for item in service.listar_motivos_parada()}
         self.assertNotIn("1005", reason_codes)
         self.assertNotIn("0040", reason_codes)
+        self.assertNotIn("0002", reason_codes)
         self.assertTrue(
             service.executar(
                 "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=operation

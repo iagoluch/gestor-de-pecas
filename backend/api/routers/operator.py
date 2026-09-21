@@ -550,6 +550,20 @@ def execute_action(
         )
         request.app.state.realtime.publish("operator_action")
         return response
+    # Atividade sem OP: trabalho real do posto que não pertence a nenhuma OP.
+    # Iniciar e Finalizar são do recurso, como a parada/retomada sem OP.
+    if payload.action == "Início" and not payload.op:
+        response = _raise_result(
+            service.iniciar_atividade_sem_op(setor=sector.name, recurso=resource)
+        )
+        request.app.state.realtime.publish("operator_action")
+        return response
+    if payload.action == "Finalizado" and not payload.op:
+        response = _raise_result(
+            service.finalizar_atividade_sem_op(setor=sector.name, recurso=resource)
+        )
+        request.app.state.realtime.publish("operator_action")
+        return response
     if not payload.op:
         raise AppError(
             "operator_op_required",

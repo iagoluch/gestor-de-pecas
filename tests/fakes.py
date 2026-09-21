@@ -131,6 +131,13 @@ class FakeDatabase:
                 "habilitado": True, "oculto": False, "setup": False,
                 "retrabalho": True, "requer_comentario": False,
             },
+            {
+                "codigo": "0002", "nome": "Fora de turno",
+                "grupo_codigo": "0002", "grupo_nome": "PARADA PROGRAMADA",
+                "habilitado": True, "oculto": False, "setup": False,
+                "retrabalho": False, "requer_comentario": False,
+                "retorno_automatico": True,
+            },
         ]
         self.closed = False
         self._ids = Counter()
@@ -1045,6 +1052,7 @@ class FakeDatabase:
                 if row.get("grupo_codigo") != "0001"
                 and not row.get("setup")
                 and not row.get("retrabalho")
+                and not row.get("retorno_automatico")
             ]
         if setup is not None:
             rows = [row for row in rows if bool(row.get("setup")) is bool(setup)]

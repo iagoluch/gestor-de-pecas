@@ -28,6 +28,7 @@ type DialogState =
   | { kind: "stop" }
   | { kind: "finish" }
   | { kind: "confirm"; action: "Setup" | "Retrabalho" }
+  | { kind: "activity"; action: "Início" | "Finalizado" }
   | { kind: "authorization"; action: string; code: string; details?: Record<string, unknown> }
   | { kind: "list"; source: "production" | "queue" | "history" }
   | { kind: "route"; operationKey: string }
@@ -148,6 +149,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // Wave 6B — o portão Setup/Qualidade é lido só quando o popup abre. Fora
   // dele o roteiro já traz o estado que a tela precisa.
   const [gateOperationKey, setGateOperationKey] = useState("");
+  // Congela a operação do portão no instante em que o popup abre. Enquanto
+  // ele está aberto, atualizações SSE podem substituir `operations.data` e
+  // fazer `selected` cair para `undefined` (ex.: a etapa some do roteiro
+  // corrente); sem este retrato, o clique em "Autorizar e liberar" caía no
+  // guard de operação ausente e não dava nenhum retorno visível ao operador.
+  const [gateSelected, setGateSelected] = useState<OperatorOperation | null>(null);
   // Mantém a liberação confirmada imediatamente após a aprovação. O próximo
   // snapshot do roteiro normalmente traz esse estado, mas a tela não pode
   // deixar o operador preso ao snapshot anterior enquanto ele é atualizado.
@@ -256,6 +263,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     resourceState?.categoria === "parada" && !String(resourceState?.op ?? "").trim(),
   );
   const resumeWithoutOp = stoppedWithoutOp && !canPoint;
+  // Atividade sem OP: trabalho real do posto que não pertence a nenhuma OP.
+  // Sem OP carregada o Iniciar abre a atividade, e o Finalizar dela é o mesmo
+  // botão — não existe apontamento para encerrar. Quem decide o tipo da
+  // atividade é o backend, pelo setor; a tela só confirma com o operador.
+  // Sem OP carregada os botões agem sobre o posto, como já acontece na parada
+  // e na retomada sem OP; com um roteiro aberto a tela volta a apontar a OP.
+  const activityInProgress = resourceState?.categoria === "atividade_sem_op" && !loadedOp;
+  const startsActivity = !loadedOp && !stoppedWithoutOp && !activityInProgress;
   const startAction = resumeWithoutOp || currentStatus === "Parada"
     ? "Retomar"
     : currentStatus === "Setup"
@@ -265,7 +280,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         : "Início";
   const startLabel = selectedCard?.rework_return
     ? "Iniciar retrabalho"
-    : startAction === "Início" ? "Iniciar" : startAction;
+    : startsActivity
+      ? "Iniciar atividade"
+      : startAction === "Início" ? "Iniciar" : startAction;
   const activeCard = (cards.data?.production ?? []).find((item) =>
     ["Em processo", "Parada", "Setup", "Retrabalho"].includes(String(item.status ?? "")),
   );
@@ -295,9 +312,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // O Finalizar continua clicável com o portão pendente: o clique é que
   // entrega a orientação ao operador, em vez de um botão morto.
   const setupConcluido = gateReleasedLocally || !firstPiece?.setup_obrigatorio || firstPiece.setup_registrado;
-  const canFinish = canPoint && setupConcluido
-    && (gateReleasedLocally || (selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired);
+  const canFinish = activityInProgress || (canPoint && setupConcluido
+    && (gateReleasedLocally || (selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired));
   const canStart = resumeWithoutOp
+    || startsActivity
     || (canPoint
       && !["Em processo", "Setup", "Retrabalho"].includes(currentStatus)
       && !firstPiece?.bloqueio_ativo);
@@ -383,6 +401,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       + `&resource=${encodeURIComponent(resource)}`
       + (operationId == null ? "" : `&operation_id=${encodeURIComponent(String(operationId))}`),
     );
+    setGateSelected(selected);
     setDialog({ kind: "gate" });
   }
 
@@ -390,9 +409,16 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     // Fechar ou cancelar o popup nunca libera a OP: nenhuma ação é enviada.
     setDialog(null);
     setGateOperationKey("");
+    setGateSelected(null);
   }
 
   function finishAppointment() {
+    // A atividade sem OP não tem apontamento, quantidade nem crachá: o
+    // encerramento é do recurso e só precisa da confirmação do operador.
+    if (activityInProgress) {
+      setDialog({ kind: "activity", action: "Finalizado" });
+      return;
+    }
     // A etapa fica fixada para que o próximo snapshot do roteiro não apague a
     // orientação que o operador acabou de receber.
     const operationKey = routeStepKey(selected);
@@ -472,7 +498,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     action: "produzida" | "inspecionar" | "autorizar" | "checklist",
     extra: Record<string, unknown> = {},
   ) {
-    if (!loadedOp || !selected) {
+    // Usa o retrato tirado quando o popup abriu: `selected` acompanha o
+    // roteiro ao vivo (SSE) e pode ficar `undefined` com o popup ainda
+    // aberto, o que fazia o clique em "Autorizar e liberar" não dar
+    // nenhum retorno visível (a mensagem de erro fica atrás do popup).
+    const gateOperation = gateSelected ?? selected;
+    if (!loadedOp || !gateOperation) {
       setMessage("Carregue e selecione uma operação antes de registrar a primeira peça.");
       return;
     }
@@ -484,15 +515,15 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           action,
           resource,
           op: loadedOp,
-          operation_id: selected.id ?? selected.catalogo_operacao_id,
-          operation_number: selected.numero_operacao ?? selected.codigo,
+          operation_id: gateOperation.id ?? gateOperation.catalogo_operacao_id,
+          operation_number: gateOperation.numero_operacao ?? gateOperation.codigo,
           ...extra,
         },
       );
       setMessage(response.message);
       // A etapa que passou pelo portão é a escolha do operador: fixá-la evita
       // que o próximo snapshot do roteiro apague o retorno do lote liberado.
-      const operationKey = routeStepKey(selected);
+      const operationKey = routeStepKey(gateOperation);
       if (operationKey) setRouteSelection({ op: loadedOp, operationKey });
       if (response.data?.liberado && operationKey) {
         setReleasedGateKey(`${loadedOp}::${operationKey}`);
@@ -542,7 +573,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     const stopWithoutOp = action === "Parada" && !appointmentForStop;
     // Parada e retomada do recurso correm sem OP: o backend atua no estado
     // físico do posto, não em um apontamento.
-    const withoutOp = stopWithoutOp || (action === "Retomar" && resumeWithoutOp);
+    const withoutOp = stopWithoutOp
+      || (action === "Retomar" && resumeWithoutOp)
+      || (action === "Início" && startsActivity)
+      || (action === "Finalizado" && activityInProgress);
     if (!withoutOp && (!loadedOp || !selected)) {
       if (!appointmentForStop) {
         setMessage("Carregue e selecione uma operação antes de apontar.");
@@ -628,11 +662,16 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           Recurso parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
         </p>
       ) : null}
+      {activityInProgress ? (
+        <p className="operator-notice">
+          {resourceState?.motivo || "Atividade s/OP"} em andamento neste posto. Finalize para voltar a apontar.
+        </p>
+      ) : null}
       {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
           preparação da máquina, que é quando a primeira peça é fabricada. */}
       <div className="operator-actions" aria-label="Ações operacionais">
-        <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => void execute(startAction)}><img src={assets.operator.actions.start} alt="" /><span>{startLabel}</span></button>
+        <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><img src={assets.operator.actions.start} alt="" /><span>{startLabel}</span></button>
         <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} onClick={() => void setupAppointment()}><img src={assets.operator.actions.setup} alt="" /><span>Setup</span></button> : null}
@@ -677,6 +716,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => void confirmFirstPiece(result, note)} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => void execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><button type="button" className="button button--primary" onClick={() => void execute(dialog.action)}>Confirmar</button></div></OperatorDialog> : null}
+      {dialog?.kind === "activity" ? <OperatorDialog title="Atividade sem OP" size="compact" onCancel={() => setDialog(null)}><p>{dialog.action === "Início" ? "Iniciar uma atividade sem OP neste posto?" : "Finalizar a atividade sem OP em andamento?"}</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><button type="button" className="button button--primary" disabled={submitting} onClick={() => void execute(dialog.action)}>Sim</button></div></OperatorDialog> : null}
       {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => void execute(dialog.action, { badges: [badge], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" })} /> : null}
       {dialog?.kind === "list" ? <CardListDialog title={{ production: "Produção", queue: "Fila de Ordem", history: "Histórico" }[dialog.source]} items={dialog.source === "history" ? historyQuery.data?.items ?? [] : cards.data?.[dialog.source] ?? []} hasMore={dialog.source === "history" && Boolean(historyQuery.data?.has_more)} onCancel={() => setDialog(null)} onSelect={(item) => { selectCard(item); setDialog(null); }} /> : null}
       {dialog?.kind === "gate" ? (

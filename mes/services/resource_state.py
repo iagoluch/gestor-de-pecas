@@ -19,7 +19,8 @@ class ResourceStateService:
 
     def registrar_atividade_sem_op(
         self, recurso, *, tipo_setor=None, codigo_status_recurso=None,
-        motivo=None, causa_raiz=None, comentario=None, data_hora=None,
+        tipo_atividade=None, motivo=None, causa_raiz=None, comentario=None,
+        data_hora=None,
     ):
         return self.db.transicionar_estado_recurso(
             recurso,
@@ -27,6 +28,7 @@ class ResourceStateService:
             tipo_setor=tipo_setor,
             operador=self.operador,
             codigo_status_recurso=codigo_status_recurso,
+            tipo_atividade=tipo_atividade,
             motivo=motivo,
             causa_raiz=causa_raiz,
             comentario=comentario,

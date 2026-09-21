@@ -6,7 +6,7 @@ from collections import Counter
 from copy import deepcopy
 
 from app.core.resource_mapping import station_resource_code
-from mes.domain import DataAvailability, EventCategory
+from mes.domain import DataAvailability, EventCategory, ManufacturingRules
 
 
 #: Leitura explícita de "fora de turno, sem HE e sem ninguém trabalhando".
@@ -554,11 +554,8 @@ class AndonService:
             if status_code and display_label.casefold().startswith(prefix.casefold()):
                 display_label = display_label[len(prefix):].strip()
         elif category == EventCategory.ACTIVITY_WITHOUT_OP.value:
-            activity_kind = str(item.get("tipo_atividade") or "").strip().casefold()
-            display_label = (
-                "Atividade diária"
-                if activity_kind == "diaria"
-                else "Atividade s/OP"
+            display_label = ManufacturingRules.activity_display_label(
+                item.get("tipo_atividade")
             )
         else:
             display_label = STATE_LABELS[category]

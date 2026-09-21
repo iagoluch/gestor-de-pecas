@@ -26,6 +26,20 @@ def _require_highlight(user):
     return sector
 
 
+def _resource_response(request, result):
+    """Resposta das ações do posto (sem tarefa), já publicada no tempo real."""
+
+    if not result.ok:
+        raise AppError(
+            result.code or "highlight_action_failed",
+            result.message,
+            status_code=409,
+            details=result.data,
+        )
+    request.app.state.realtime.publish("highlight_action")
+    return {"ok": True, "message": result.message, "code": result.code, "data": result.data}
+
+
 def _cutting_queue(database, operador, codigo_tarefa):
     """Situação de corte da tarefa, reaproveitando o serviço canônico de Corte.
 
@@ -182,13 +196,24 @@ def action(
                 "Esta tarefa é retomada pelo Início do destaque.",
                 status_code=409,
             )
-        result = OperatorFlowService(
+        return _resource_response(
+            request,
+            OperatorFlowService(
+                database, user.name, now_func=request_now_func(request)
+            ).retomar_recurso_sem_op(setor=sector.name, recurso=sector.name),
+        )
+    # Atividade sem OP: trabalho real do posto que não pertence a nenhuma
+    # tarefa. Começa e termina no recurso, como a parada sem tarefa.
+    if payload.action in {"Início", "Fim"} and not payload.task_code:
+        activity = OperatorFlowService(
             database, user.name, now_func=request_now_func(request)
-        ).retomar_recurso_sem_op(setor=sector.name, recurso=sector.name)
-        if not result.ok:
-            raise AppError(result.code or "highlight_action_failed", result.message, status_code=409, details=result.data)
-        request.app.state.realtime.publish("highlight_action")
-        return {"ok": True, "message": result.message, "code": result.code, "data": result.data}
+        )
+        return _resource_response(
+            request,
+            activity.iniciar_atividade_sem_op(setor=sector.name, recurso=sector.name)
+            if payload.action == "Início"
+            else activity.finalizar_atividade_sem_op(setor=sector.name, recurso=sector.name),
+        )
     if not payload.task_code and payload.action != "Parada":
         raise AppError("highlight_task_required", "Busque uma tarefa antes de continuar.", status_code=409)
 
