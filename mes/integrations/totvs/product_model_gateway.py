@@ -27,6 +27,8 @@ import os
 
 import httpx
 
+from mes.integrations.totvs.transport import transport_failure_kind
+
 
 DEFAULT_TIMEOUT_SECONDS = 20.0
 
@@ -47,16 +49,6 @@ class ProductModelGatewayConfig:
     username: str | None = None
     password: str | None = None
     verify_tls: bool = True
-
-
-def _transport_failure_kind(exc: Exception) -> str:
-    if isinstance(exc, httpx.TimeoutException):
-        return "timeout"
-    if isinstance(exc, httpx.ConnectError):
-        return "conexao_recusada"
-    if isinstance(exc, httpx.NetworkError):
-        return "falha_de_rede"
-    return "falha_de_transporte"
 
 
 class ProtheusProductModelGateway:
@@ -88,7 +80,7 @@ class ProtheusProductModelGateway:
                     auth=auth,
                 )
         except httpx.HTTPError as exc:
-            kind = _transport_failure_kind(exc)
+            kind = transport_failure_kind(exc)
             return ProductModelRequestResult(unavailable_reason=kind, detail=str(exc)[:300])
 
         if response.status_code == 404:

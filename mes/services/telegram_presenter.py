@@ -348,8 +348,36 @@ class TelegramPresenter:
         lines.extend(["", "O que deseja consultar?", "", _footer("Atualizado às", now)])
         return TelegramView("\n".join(lines), keyboard(
             [button("📊 Produção", f"gp:prod:{front}", "primary"), button("⏱️ Paradas", f"gp:stops:{front}", "danger" if summary.get("downtime") else "success")],
+            [button("📋 Recursos", f"gp:res:{front}", "primary")],
             [button("🔄 Atualizar", f"gp:front:{front}", "primary")],
             [button("⬅️ Frentes", "gp:fronts", "primary"), _home_button()],
+        ))
+
+    def resources(self, *, front: str, items: list[dict], now: datetime) -> TelegramView:
+        icon, label = FRONTS[front]
+        lines = _header(icon, f"Recursos · {label}")
+        state_icons = {
+            "production": "🟢", "downtime": "🔴", "setup": "🟡",
+            "rework": "🟡", "queue": "⚪", "out_of_shift": "⚪",
+        }
+        if not items:
+            lines.append("⚪ Nenhum recurso cadastrado neste setor.")
+        for item in items[:20]:
+            state = item.get("state") or {}
+            category = state.get("category")
+            state_icon = state_icons.get(category, "⚪")
+            lines.append(f"{state_icon} <b>{html(item.get('name') or 'Recurso não informado')}</b>")
+            lines.append(html(state.get("display_label") or "Estado não informado"))
+            operation = item.get("operation") or {}
+            if operation.get("op"):
+                lines.append(f"🧾 OP: <b>{html(operation['op'])}</b>")
+            if operation.get("operator"):
+                lines.append(f"👤 {html(operation['operator'])}")
+            lines.append("")
+        lines.append(_footer("Atualizado às", now))
+        return TelegramView("\n".join(lines), keyboard(
+            [button("🔄 Atualizar", f"gp:res:{front}", "primary")],
+            [button("⬅️ Frente", f"gp:front:{front}", "primary"), _home_button()],
         ))
 
     def my_status(self, *, operator: dict | None, participations: list[dict], now: datetime) -> TelegramView:

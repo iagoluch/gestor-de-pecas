@@ -21,6 +21,7 @@ import httpx
 from mes.integrations.totvs.errors import TotvsContractError, TotvsIntegrationError
 from mes.integrations.totvs.outbound_ack import parse_wspcp_ack
 from mes.integrations.totvs.outbound_models import TotvsOutboundAck, TotvsOutboundMessage
+from mes.integrations.totvs.transport import transport_failure_kind
 
 
 SOAP_ENVELOPE_NAMESPACE = "http://schemas.xmlsoap.org/soap/envelope/"
@@ -86,16 +87,6 @@ class WspcpSendResult:
         return self.ack is not None and self.ack.accepted
 
 
-def _transport_failure_kind(exc: Exception) -> str:
-    if isinstance(exc, httpx.TimeoutException):
-        return "timeout"
-    if isinstance(exc, httpx.ConnectError):
-        return "conexao_recusada"
-    if isinstance(exc, httpx.NetworkError):
-        return "falha_de_rede"
-    return "falha_de_transporte"
-
-
 class TotvsWspcpClient:
     def __init__(self, config: WspcpClientConfig, *, transport=None):
         self.config = config
@@ -143,7 +134,7 @@ class TotvsWspcpClient:
                     auth=auth,
                 )
         except httpx.HTTPError as exc:
-            kind = _transport_failure_kind(exc)
+            kind = transport_failure_kind(exc)
             return WspcpSendResult(
                 transport_failure=kind,
                 error_code=kind,

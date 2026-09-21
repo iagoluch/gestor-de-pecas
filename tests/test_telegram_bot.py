@@ -280,9 +280,28 @@ class CommandRoutingTests(unittest.TestCase):
             callbacks = {button["callback_data"] for row in reply.reply_markup["inline_keyboard"] for button in row}
             self.assertIn(f"gp:prod:{front}", callbacks)
             self.assertIn(f"gp:stops:{front}", callbacks)
+            self.assertIn(f"gp:res:{front}", callbacks)
             self.assertIn(f"gp:front:{front}", callbacks)
             self.assertIn("gp:fronts", callbacks)
             self.assertIn("gp:home", callbacks)
+
+    def test_botao_recursos_lista_recursos_do_setor(self):
+        service = _fake_service()
+        reply = service.handle_update(_callback("gp:res:corte"))
+        self.assertIn("Recursos · Corte", reply.text)
+        self.assertIn("LASER &lt;01&gt;", reply.text)
+        callbacks = {button["callback_data"] for row in reply.reply_markup["inline_keyboard"] for button in row}
+        self.assertIn("gp:res:corte", callbacks)
+        self.assertIn("gp:front:corte", callbacks)
+
+    def test_comando_recursos_aceita_frente_por_texto_e_pede_frente_quando_ausente(self):
+        service = _fake_service()
+        reply = service.handle_update(_update("/recursos solda"))
+        self.assertIn("Recursos · Solda", reply.text)
+        self.assertIn("Solda 01", reply.text)
+
+        sem_frente = service.handle_update(_update("/recursos"))
+        self.assertIn("Escolha uma frente", sem_frente.text)
 
     def test_html_dinamico_e_escapado(self):
         reply = _fake_service().handle_update(_update("/fabrica"))
@@ -296,6 +315,7 @@ class CommandRoutingTests(unittest.TestCase):
             "como tá a fábrica?": "Status da fábrica",
             "tem parada no corte?": "Paradas · Corte",
             "produção da solda": "Produção · Solda",
+            "recursos da solda": "Recursos · Solda",
             "como está a pintura?": "Pintura",
             "meu status": "Vincular crachá",
             "o que você sabe fazer?": "Ajuda",
@@ -310,6 +330,9 @@ class IntentParserTests(unittest.TestCase):
         intent = parse_telegram_intent("Tem alguma parada na usinagem?")
         self.assertEqual((intent.name, intent.front), ("stoppages", "caldeiraria"))
         self.assertEqual(parse_telegram_intent("xyz").name, "unknown")
+
+        recursos = parse_telegram_intent("quais recursos tem na solda?")
+        self.assertEqual((recursos.name, recursos.front), ("resources", "solda"))
 
 
 class DigestPeriodTests(unittest.TestCase):

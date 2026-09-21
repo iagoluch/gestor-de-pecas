@@ -42,6 +42,7 @@ from mes.integrations.totvs.on_demand import (
 )
 from mes.integrations.totvs.product_model_gateway import ProtheusProductModelGateway
 from mes.integrations.totvs.service import build_totvs_ingestion_service
+from mes.integrations.totvs.transport import transport_failure_kind
 from mes.services.order_provisioning import OrderProvisioningService
 
 
@@ -56,16 +57,6 @@ class OnDemandGatewayConfig:
     username: str | None = None
     password: str | None = None
     verify_tls: bool = True
-
-
-def _transport_failure_kind(exc: Exception) -> str:
-    if isinstance(exc, httpx.TimeoutException):
-        return "timeout"
-    if isinstance(exc, httpx.ConnectError):
-        return "conexao_recusada"
-    if isinstance(exc, httpx.NetworkError):
-        return "falha_de_rede"
-    return "falha_de_transporte"
 
 
 class ProtheusOnDemandRequestGateway:
@@ -109,7 +100,7 @@ class ProtheusOnDemandRequestGateway:
                 if attempt + 1 < attempts:
                     time.sleep(0.5)
         else:
-            kind = _transport_failure_kind(last_exc)
+            kind = transport_failure_kind(last_exc)
             return ProductionOrderRequestResult(
                 unavailable_reason=kind, detail=str(last_exc)[:300]
             )

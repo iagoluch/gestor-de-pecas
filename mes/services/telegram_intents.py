@@ -20,6 +20,10 @@ def _plain(value: str) -> str:
     ).casefold()).strip()
 
 
+def front_from_text(text: str) -> str | None:
+    return _front(_plain(text))
+
+
 def _front(text: str) -> str | None:
     if "corte" in text:
         return "corte"
@@ -47,6 +51,8 @@ def parse_telegram_intent(text: str) -> TelegramIntent:
         return TelegramIntent("stoppages", front)
     if any(term in plain for term in ("producao", "produzido", "pecas", "resultado")):
         return TelegramIntent("production", front)
+    if any(term in plain for term in ("recurso", "recursos", "maquinas", "equipamentos")):
+        return TelegramIntent("resources", front)
     if front and any(term in plain for term in ("como esta", "como ta", "status", "situacao")):
         return TelegramIntent("front_overview", front)
     if any(term in plain for term in ("fabrica", "panorama", "como estamos")):
@@ -54,4 +60,4 @@ def parse_telegram_intent(text: str) -> TelegramIntent:
     return TelegramIntent("unknown")
 
 
-__all__ = ["TelegramIntent", "parse_telegram_intent"]
+__all__ = ["TelegramIntent", "parse_telegram_intent", "front_from_text"]

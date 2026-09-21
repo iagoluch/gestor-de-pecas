@@ -9,7 +9,7 @@ import logging
 from mes.contracts import AnalyticsFilter
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.telegram_digest import canonical_sectors_for_panel
-from mes.services.telegram_intents import parse_telegram_intent
+from mes.services.telegram_intents import front_from_text, parse_telegram_intent
 from mes.services.telegram_presenter import (
     FRONTS,
     TelegramPresenter,
@@ -52,6 +52,7 @@ class TelegramFactoryBotService:
             "/fabrica": self._view_factory,
             "/producao": self._view_production,
             "/paradas": self._view_stops,
+            "/recursos": self._view_resources,
         }
 
     def handle_update(self, update: dict) -> TelegramBotReply | None:
@@ -147,6 +148,8 @@ class TelegramFactoryBotService:
                 return self._view_production(chat_id, front=front)
             if prefix == "gp:stops":
                 return self._view_stops(chat_id, front=front)
+            if prefix == "gp:res":
+                return self._view_resources(chat_id, front=front)
         return self._view_help(chat_id)
 
     def _view_from_intent(self, chat_id: str, text: str) -> TelegramView:
@@ -157,6 +160,8 @@ class TelegramFactoryBotService:
             return self._view_production(chat_id, front=intent.front)
         if intent.name == "stoppages":
             return self._view_stops(chat_id, front=intent.front)
+        if intent.name == "resources":
+            return self._view_resources(chat_id, front=intent.front)
         if intent.name == "front_overview" and intent.front:
             return self._view_front(chat_id, front=intent.front)
         if intent.name == "my_status":
@@ -196,6 +201,15 @@ class TelegramFactoryBotService:
                     "duration_seconds": state.get("duration_seconds"),
                 })
         return rows
+
+    @staticmethod
+    def _resources_for_front(snapshot: dict, front: str) -> list[dict]:
+        expected = FRONTS[front][1]
+        panel = next(
+            (item for item in snapshot.get("sectors") or () if item.get("name") == expected),
+            None,
+        )
+        return list((panel or {}).get("resources") or ())
 
     @staticmethod
     def _front_summary(snapshot: dict, front: str) -> dict:
@@ -298,6 +312,15 @@ class TelegramFactoryBotService:
         return self.presenter.front(
             front=front, summary=self._front_summary(snapshot, front),
             good=self._production_data(front).get("good"), now=self._now(),
+        )
+
+    def _view_resources(self, chat_id: str, rest: str = "", *, front: str | None = None) -> TelegramView:
+        front = front or front_from_text(rest)
+        if not front:
+            return self._view_fronts(chat_id)
+        snapshot = self._snapshot()
+        return self.presenter.resources(
+            front=front, items=self._resources_for_front(snapshot, front), now=self._now(),
         )
 
 

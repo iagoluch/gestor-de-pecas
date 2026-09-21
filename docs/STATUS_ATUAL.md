@@ -456,6 +456,19 @@ próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
   fila vinculada a OP não é reclassificada. A categoria `Fila / espera` saiu
   das composições, insights e planilhas gerenciais.
 
+### 2.16 Atividade sem OP e consulta de recursos no Telegram (21/09/2026)
+
+- O posto pode iniciar e finalizar **Atividade sem OP** como estado físico
+  produtivo do recurso, sem apontamento, quantidade ou crachá. Corte e Destaque
+  classificam-na como `Atividade diária`; os outros setores usam o rótulo geral.
+  O tipo é decidido pelo setor e persistido no estado canônico (schema 42), não
+  pela interface. Corte e Destaque expõem o mesmo fluxo sem criar uma segunda
+  regra para tarefa/plano.
+- O bot privado ganhou `/recursos <frente>` e o botão equivalente: mostra o
+  estado e o contexto operacional dos recursos da frente pelo snapshot canônico,
+  sem comando produtivo. A classificação de falhas HTTP do TOTVS também foi
+  consolidada em um único módulo compartilhado pelos três gateways.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
