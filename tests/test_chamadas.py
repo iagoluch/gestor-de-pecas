@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import unittest
-from contextlib import contextmanager
 from unittest.mock import patch
 from uuid import uuid4
 

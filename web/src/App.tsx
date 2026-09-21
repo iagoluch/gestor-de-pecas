@@ -25,7 +25,6 @@ import {
   AnalyticsOeePage,
   AnalyticsQualityPage,
   AnalyticsReliabilityPage,
-  AnalyticsSetupPage,
   AnalyticsStandardPage,
 } from "./pages/analytics/AnalyticsPages";
 import { AuditAppointmentsPage, AuditIssuesPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
@@ -101,7 +100,6 @@ export default function App() {
         <Route path="analises/oee" element={<AnalyticsOeePage />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />
         <Route path="analises/paradas" element={<AnalyticsDowntimesPage />} />
-        <Route path="analises/setup" element={<AnalyticsSetupPage />} />
         <Route path="analises/qualidade" element={<AnalyticsQualityPage />} />
         <Route path="analises/tempo-padrao-real" element={<AnalyticsStandardPage />} />
         <Route path="analises/cronoanalise" element={<AnalyticsChronoPage />} />

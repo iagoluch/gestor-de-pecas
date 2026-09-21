@@ -89,15 +89,17 @@ describe("contrato gerencial Web", () => {
     expect(screen.getByRole("button", { name: "Abrir resumo" })).toBeInTheDocument();
   });
 
-  it("mantém as telas gerenciais e inclui as sub-abas do Andon e da Solda", () => {
-    expect(managementRoutes).toHaveLength(40);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(40);
-    // Wave 6D: o acompanhamento gerencial da Solda entra como sub-aba dos
+  it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
+    expect(managementRoutes).toHaveLength(38);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(38);
+    // Wave 6D: o acompanhamento gerencial da Solda entrou como sub-aba dos
     // Painéis Operacionais, ao lado do Andon, sem aplicação nem navegação
     // paralela. Reorganização 15/09/2026: Andon/Solda/Metas/Pausas
     // saíram da Tela inicial para a seção própria "Painéis Operacionais".
+    // Pedido do usuário (21/09/2026): a aba "Solda" saiu do menu — a tela
+    // (`/welding-management`) continua existindo, só não é mais navegável.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "panels" }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Solda", path: "/inicio/solda", sectionId: "panels" }));
+    expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Solda" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Metas", path: "/inicio/metas", sectionId: "panels" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "panels" }));
     // Chamadas reúne configuração e histórico técnico, por isso fica no
@@ -334,7 +336,7 @@ describe("contrato gerencial Web", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Ver análise relacionada a DOBRA-01 está em parada não programada/i }));
-    await screen.findByRole("heading", { name: "Análises — Paradas" });
+    await screen.findByRole("heading", { name: "Análises — Paradas & Setup" });
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
     await screen.findByRole("heading", { name: "Entrar no Gestor" });
     expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/auth/logout") && init?.method === "POST")).toBe(true);

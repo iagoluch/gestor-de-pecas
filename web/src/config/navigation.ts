@@ -49,7 +49,8 @@ export const managementSections: ManagementSection[] = [
     defaultPath: "/inicio/andon",
     tabs: [
       { label: "Andon", path: "/inicio/andon", screen: "panels-andon" },
-      { label: "Solda", path: "/inicio/solda", screen: "panels-welding" },
+      // Solda: aba oculta a pedido do usuário (21/09/2026). A tela e a rota
+      // seguem existindo (`/welding-management`) — nada foi excluído.
       { label: "Metas", path: "/inicio/metas", screen: "panels-goals" },
       { label: "Pausas", path: "/inicio/pausas", screen: "panels-pauses" },
     ],
@@ -85,8 +86,7 @@ export const managementSections: ManagementSection[] = [
     tabs: [
       { label: "OEE", path: "/analises/oee", screen: "analytics-oee" },
       { label: "Horas & Utilização", path: "/analises/horas-utilizacao", screen: "analytics-hours" },
-      { label: "Paradas", path: "/analises/paradas", screen: "analytics-downtimes" },
-      { label: "Setup", path: "/analises/setup", screen: "analytics-setup" },
+      { label: "Paradas & Setup", path: "/analises/paradas", screen: "analytics-downtimes" },
       { label: "Qualidade", path: "/analises/qualidade", screen: "analytics-quality" },
       { label: "Tempo padrão", path: "/analises/tempo-padrao-real", screen: "analytics-standard" },
       { label: "Cronoanálise", path: "/analises/cronoanalise", screen: "analytics-chrono" },

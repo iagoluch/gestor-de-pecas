@@ -223,16 +223,17 @@ describe("Andon Geral Web", () => {
     const navRow = container.querySelector(".andon-nav-row");
     expect(navRow).toBeInTheDocument();
     expect(within(navRow as HTMLElement).getByRole("link", { name: "Andon" })).toHaveClass("page-tab--active");
-    for (const label of ["Solda", "Metas", "Pausas"]) {
+    for (const label of ["Metas", "Pausas"]) {
       expect(within(navRow as HTMLElement).getByRole("link", { name: label })).toBeInTheDocument();
     }
+    expect(within(navRow as HTMLElement).queryByRole("link", { name: "Solda" })).not.toBeInTheDocument();
     expect(within(navRow as HTMLElement).queryByRole("link", { name: "Chamadas" })).not.toBeInTheDocument();
     expect(navRow?.compareDocumentPosition(container.querySelector(".andon-content") as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
     fireEvent.click(screen.getByRole("button", { name: "Minimizar abas dos Painéis Operacionais" }));
-    expect(screen.queryByRole("link", { name: "Solda" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Metas" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mostrar abas dos Painéis Operacionais" }));
-    expect(screen.getByRole("link", { name: "Solda" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Metas" })).toBeInTheDocument();
   });
 
   it("redireciona a entrada gerencial para a visão geral dedicada", async () => {

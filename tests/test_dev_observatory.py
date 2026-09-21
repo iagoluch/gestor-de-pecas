@@ -12,7 +12,7 @@ O que precisa ficar provado aqui:
 """
 
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date
 import json
 from pathlib import Path
 import tempfile

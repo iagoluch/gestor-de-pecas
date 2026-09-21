@@ -424,17 +424,24 @@ export function AnalyticsHoursPage() {
   );
 }
 
-function SegmentPage({ kind }: { kind: "downtimes" | "setups" }) {
+function SegmentPage() {
+  const [kind, setKind] = useState<"downtimes" | "setups">("downtimes");
   const filters = useManagementFilters();
   const isStop = kind === "downtimes";
   const endpoint = isStop ? "downtimes" : "setups";
-  const title = isStop ? "Análises — Paradas" : "Análises — Setup";
+  const title = "Análises — Paradas & Setup";
   const subtitle = isStop
     ? "Tempo, frequência, classificação e motivo das paradas físicas."
     : "Tempo de setup produtivo, separado da produção e sem penalizar Disponibilidade ou Performance.";
+  const toggle = (
+    <div className="segment-toggle" role="tablist" aria-label="Tipo de análise">
+      <button type="button" role="tab" aria-selected={isStop} className={`segment-toggle__btn${isStop ? " segment-toggle__btn--active" : ""}`} onClick={() => setKind("downtimes")}>Paradas</button>
+      <button type="button" role="tab" aria-selected={!isStop} className={`segment-toggle__btn${!isStop ? " segment-toggle__btn--active" : ""}`} onClick={() => setKind("setups")}>Setup</button>
+    </div>
+  );
   const query = useApiQuery<SegmentSummary>(`/api/v1/analytics/${endpoint}?${filters.query}`);
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>{toggle}<ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const reasons = (data?.by_reason ?? []).map((row) => ({
     label: String(row.motivo ?? "Não informado"),
@@ -449,6 +456,7 @@ function SegmentPage({ kind }: { kind: "downtimes" | "setups" }) {
   const topResource = resourceRanking[0];
   return (
     <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+      {toggle}
       <div className="metric-grid metric-grid--four">
         <MetricCard label={`Tempo total de ${isStop ? "parada" : "setup"}`} value={formatHours(data?.total_seconds)} accent={isStop ? "danger" : "teal"} />
         <MetricCard label="Ocorrências" value={formatNumber(data?.count)} detail={data?.count ? `Média de ${formatDuration((data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
@@ -483,8 +491,7 @@ function SegmentPage({ kind }: { kind: "downtimes" | "setups" }) {
   );
 }
 
-export function AnalyticsDowntimesPage() { return <SegmentPage kind="downtimes" />; }
-export function AnalyticsSetupPage() { return <SegmentPage kind="setups" />; }
+export function AnalyticsDowntimesPage() { return <SegmentPage />; }
 
 export function AnalyticsQualityPage() {
   const filters = useManagementFilters();

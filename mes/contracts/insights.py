@@ -7,7 +7,7 @@ desvios e a evidência que sustenta cada leitura.
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from mes.contracts.management import MetricValue, json_value
 

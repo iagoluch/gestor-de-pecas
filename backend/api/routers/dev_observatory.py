@@ -28,7 +28,6 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.api.database import get_database
 from backend.api.dependencies.auth import require_dev_observatory_user
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
