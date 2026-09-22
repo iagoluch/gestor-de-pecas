@@ -410,17 +410,6 @@ class FirstPieceService:
                 "Chame o responsável para liberar com o crachá dele.",
                 self._publico(linha),
             )
-        # Reenvio do mesmo formulário não pode inspecionar duas vezes a peça
-        # que já liberou o lote: o portão devolve o mesmo desfecho.
-        if linha and linha.get("status") == FIRST_PIECE_CONFORMING:
-            gate = self._avaliar(linha, setor, operacao)
-            return FirstPieceResult(
-                True,
-                "Primeira peça aprovada. Lote liberado para produção.",
-                "primeira_peca_ja_aprovada",
-                {**gate.como_dicionario(), "registro": self._publico(linha)},
-            )
-
         # O formulário é validado antes de qualquer escrita: um envio recusado
         # não pode deixar rastro de estado no posto.
         checklist = self.checklist(setor=setor, operacao=operacao, registro=linha)
@@ -434,6 +423,23 @@ class FirstPieceService:
         cotas, erro = resolve_checklist_measures(cotas_template, medidas)
         if erro is not None:
             return _fail(erro.code, erro.message, {"checklist": checklist})
+
+        conforme_atual = not any(
+            cota["status"] == QUALITY_MEASURE_NON_CONFORMING for cota in cotas
+        )
+        # Reenvio do mesmo formulário não pode inspecionar duas vezes a peça
+        # que já liberou o lote: o portão devolve o mesmo desfecho. Mas isso só
+        # vale quando o novo envio também dá conforme — uma correção com cota
+        # fora da faixa (refugo/retrabalho) precisa ser processada de verdade,
+        # nunca silenciada pelo resultado antigo.
+        if linha and linha.get("status") == FIRST_PIECE_CONFORMING and conforme_atual:
+            gate = self._avaliar(linha, setor, operacao)
+            return FirstPieceResult(
+                True,
+                "Primeira peça aprovada. Lote liberado para produção.",
+                "primeira_peca_ja_aprovada",
+                {**gate.como_dicionario(), "registro": self._publico(linha)},
+            )
 
         if linha is None:
             linha = self.garantir(
@@ -458,9 +464,7 @@ class FirstPieceService:
                 self._publico(linha),
             )
 
-        conforme = not any(
-            cota["status"] == QUALITY_MEASURE_NON_CONFORMING for cota in cotas
-        )
+        conforme = conforme_atual
         resultado = (
             FIRST_PIECE_CONFORMING
             if conforme

@@ -773,6 +773,38 @@ class IdempotenciaEConcorrenciaTests(unittest.TestCase):
         fluxo.executar("Início", **contexto)
         self.assertTrue(finalizar(fluxo, contexto).ok)
 
+    def test_correcao_para_refugo_apos_aprovacao_credita_o_refugo(self):
+        """Corrigir uma primeira peça já aprovada não pode virar 'já aprovada'.
+
+        Reproduz o bug relatado: o operador aprovou a primeira peça e, ao
+        perceber que a cota estava fora da faixa, reenviou o checklist com a
+        medida real e destino Refugo. O portão não pode devolver o desfecho
+        antigo — o refugo precisa ser processado e creditado de verdade.
+        """
+
+        db, fluxo, contexto = cenario("Dobra")
+        servico = FirstPieceService(db, "OPERADOR 6B")
+
+        aprovada = servico.registrar_checklist(
+            **contexto, medidas=medidas("12,0", "40,0")
+        )
+        self.assertTrue(aprovada.ok, aprovada.message)
+        self.assertEqual(db.first_pieces[0]["status"], "CONFORME")
+
+        corrigida = servico.registrar_checklist(
+            **contexto,
+            medidas=medidas("13,0", "40,0"),
+            destino="REFUGO",
+            cracha_responsavel="SIM99",
+        )
+        self.assertTrue(corrigida.ok, corrigida.message)
+        self.assertNotEqual(corrigida.code, "primeira_peca_ja_aprovada")
+        self.assertEqual(db.first_pieces[0]["status"], "REFUGO")
+
+        apontamento_id = db.first_pieces[0]["apontamento_id"]
+        apontamento = db.buscar_apontamento_operacional(apontamento_id)
+        self.assertEqual(apontamento["quantidade_refugo"], 1)
+
     def test_duas_submissoes_simultaneas_produzem_uma_unica_transicao(self):
         db, _fluxo, contexto = cenario("Dobra")
         servico = FirstPieceService(db, "OPERADOR 6B")
