@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
+from mes.analytics.intervals import merge_intervals
 from mes.domain import DataAvailability, ManufacturingRules, ShiftWindowKind
 
 PLANNED_OVERTIME_EXCEPTION_TYPE = "disponivel_extra"
@@ -227,7 +228,7 @@ class CalendarService:
             if not covered_by_window:
                 exact_segments.append((exc_start, exc_end))
 
-        merged = _merge_intervals(exact_segments)
+        merged = merge_intervals(exact_segments)
         exact_segment_total = sum((end - start).total_seconds() for start, end in merged)
         total = None if unresolved_total else exact_segment_total + scalar_total
 
@@ -292,7 +293,7 @@ class CalendarService:
                 if end >= inicio and start <= fim:
                     windows.append((start, end))
             day += timedelta(days=1)
-        return _merge_intervals(windows)
+        return merge_intervals(windows)
 
     def planned_overtime_intervals(self, resource_code, inicio, fim):
         """Hora extra planejada: ``disponivel_extra`` fora das janelas de turno.
@@ -316,7 +317,7 @@ class CalendarService:
                 continue
             for piece_start, piece_end in _subtract_many([(exc_start, exc_end)], shifts):
                 intervals.append((piece_start, piece_end))
-        return _merge_intervals(intervals)
+        return merge_intervals(intervals)
 
     def operational_intervals(self, resource_code, inicio, fim):
         """Janela operacional planejada = turno + hora extra planejada.
@@ -331,14 +332,14 @@ class CalendarService:
             for start, end in self.shift_intervals(resource_code, inicio, fim)
         ]
         windows.extend(self.planned_overtime_intervals(resource_code, inicio, fim))
-        merged = _merge_intervals([(s, e) for s, e in windows if e > s])
+        merged = merge_intervals([(s, e) for s, e in windows if e > s])
         for raw in self._exceptions(turns, inicio, fim):
             row = dict(raw)
             if str(row.get("tipo")) != UNAVAILABLE_EXCEPTION_TYPE:
                 continue
             exc_start, exc_end = _exception_bounds(row)
             merged = _subtract_interval_list(merged, exc_start, exc_end)
-        return _merge_intervals(merged)
+        return merge_intervals(merged)
 
     def out_of_shift_intervals(self, resource_code, inicio, fim):
         """Complemento da janela operacional dentro do recorte.
@@ -428,7 +429,7 @@ class CalendarService:
             end = min(end, shift_end)
             if end > start:
                 result.append((start, end))
-        return _merge_intervals(result)
+        return merge_intervals(result)
 
 
 def _exception_bounds(row):
@@ -463,7 +464,7 @@ def _official_window_intervals(inicio, fim):
         if end > start:
             intervals.append((start, end))
         day += timedelta(days=1)
-    return _merge_intervals(intervals)
+    return merge_intervals(intervals)
 
 
 def _subtract_many(intervals, cuts):
@@ -486,15 +487,3 @@ def _subtract_interval_list(intervals, cut_start, cut_end):
     return [(start, end) for start, end in result if end > start]
 
 
-def _merge_intervals(intervals):
-    ordered = sorted(
-        ((start, end) for start, end in intervals if end > start),
-        key=lambda item: (item[0], item[1]),
-    )
-    merged = []
-    for start, end in ordered:
-        if not merged or start > merged[-1][1]:
-            merged.append([start, end])
-        else:
-            merged[-1][1] = max(merged[-1][1], end)
-    return [(start, end) for start, end in merged]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable, Mapping
 
+from mes.analytics.intervals import merge_intervals
 from mes.domain import EventCategory, StopClassification
 
 
@@ -122,7 +123,7 @@ def consolidate_physical_time(
     attributed_out_of_shift = totals.get(EventCategory.OUT_OF_SHIFT, 0.0)
     global_out_of_shift = sum(
         (end - start).total_seconds()
-        for start, end in _merge_intervals(out_of_shift_intervals)
+        for start, end in merge_intervals(out_of_shift_intervals)
     )
     if out_of_shift_intervals:
         totals[EventCategory.OUT_OF_SHIFT] = global_out_of_shift
@@ -155,20 +156,6 @@ def consolidate_physical_time(
             0.0, attributed_out_of_shift - global_out_of_shift
         ),
     }
-
-
-def _merge_intervals(intervals):
-    ordered = sorted(
-        ((start, end) for start, end in intervals if end > start),
-        key=lambda item: (item[0], item[1]),
-    )
-    merged = []
-    for start, end in ordered:
-        if not merged or start > merged[-1][1]:
-            merged.append([start, end])
-        else:
-            merged[-1][1] = max(merged[-1][1], end)
-    return [(start, end) for start, end in merged]
 
 
 def _normalize(raw, index):

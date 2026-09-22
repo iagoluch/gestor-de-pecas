@@ -10,7 +10,7 @@ import argparse
 import csv
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 import hashlib
 import json
 import os

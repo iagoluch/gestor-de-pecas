@@ -203,8 +203,6 @@ class ManagementInsightsService:
             ),
             reverse=True,
         )
-        standard_total = sum(float(item.get("tempo_padrao_estimado_segundos") or 0.0) for item in comparable)
-        actual_total = sum(float(item.get("tempo_producao_real_segundos") or 0.0) for item in comparable)
         time_bases = overview.get("kpi_time_bases") or {}
         performance_components = tuple(
             {

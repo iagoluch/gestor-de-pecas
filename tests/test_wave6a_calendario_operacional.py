@@ -234,7 +234,21 @@ class NoDemandStateTests(unittest.TestCase):
         ))
 
     def test_dentro_do_turno_e_ociosidade_e_nunca_sem_demanda(self):
+        # Ociosidade é fila **com OP**: há demanda cadastrada e o recurso não a
+        # está executando. A presença da ordem é a evidência de demanda, então
+        # o caso nunca pode ser lido como ausência dela.
         self.assertFalse(ManufacturingRules.resource_has_no_demand(
+            category=EventCategory.QUEUE.value,
+            window_kind=self._kind(self.sem_he, 10),
+            operation="OP-123",
+        ))
+
+    def test_dentro_do_turno_fila_sem_op_e_sem_demanda(self):
+        # Contrapartida da regra acima: fila **sem** OP significa recurso sem
+        # trabalho disponível, independentemente da origem que criou o estado
+        # e de o instante cair dentro do turno. Fonte única em
+        # ``ManufacturingRules.state_is_no_demand``.
+        self.assertTrue(ManufacturingRules.resource_has_no_demand(
             category=EventCategory.QUEUE.value,
             window_kind=self._kind(self.sem_he, 10),
         ))
