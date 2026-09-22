@@ -1212,7 +1212,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .insp-status-badge--nao_conforme { border-color: var(--danger-ink); color: var(--danger-ink); background: var(--danger-soft); }
 .insp-range { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
 .insp-table--checklist tr.is-non-conforming { background: var(--danger-soft); }
-.insp-template-note { margin: 0; padding: 10px 12px; border-radius: 6px; color: #33445f; background: var(--surface-alt); font-size: 12px; }
+.insp-template-note { margin: 0; padding: 10px 12px; border-radius: 6px; color: var(--muted); background: var(--surface-alt); font-size: 12px; }
 
 .insp-rnc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .insp-rnc-button { min-height: 44px; padding: 0 18px; border: 1px solid var(--danger); border-radius: 6px; color: var(--on-danger); background: var(--danger); font-weight: 700; }
@@ -1249,7 +1249,7 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
 .insp-drawing__meta small { color: var(--muted); }
 .insp-drawing__viewer { width: 100%; height: clamp(420px, 62vh, 760px); border: 1px solid var(--border); border-radius: 8px; background: var(--surface-alt); }
 .insp-drawing__fallback { display: grid; place-content: center; justify-items: center; gap: 12px; height: 100%; padding: 24px; text-align: center; }
-.insp-drawing__fallback strong { color: #33445f; font-size: 13px; }
+.insp-drawing__fallback strong { color: var(--muted); font-size: 13px; }
 .insp-drawing__link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 18px; border: 1px solid var(--primary); border-radius: 6px; color: var(--primary); background: var(--surface); font-weight: 700; text-decoration: none; }
 .insp-drawing__link:hover { color: var(--on-primary); background: var(--primary); }
 

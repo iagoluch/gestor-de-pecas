@@ -34,7 +34,7 @@
   --danger-ink: #9f1d2a;
   --danger-border: #f2b8bf;
   --warning-ink: #8a5700;
-  --success-ink: #11823b;
+  --success-ink: #0f7c37;
   /* A barra lateral mantém a mesma identidade azul-marinho nos dois temas —
      é a cor de marca, não um token de superfície que deva clarear. */
   --sidebar: #001e3f;
@@ -44,6 +44,7 @@
   --sidebar-border: #0a426f;
   --purple: #7047e8;
   --teal: #20a7a1;
+  --teal-ink: #0f6e69;
   /* Estados operacionais do apontamento: a mesma identidade dos botoes do
      operador, para que o Andon leia igual ao posto. */
   --state-setup: #0cc0df;
@@ -101,6 +102,7 @@
     --danger-border: #5c2530;
     --warning-ink: #f2b866;
     --success-ink: #7fe0a0;
+    --teal-ink: #63d7d0;
     --state-setup: #3fd4ef;
     --state-setup-soft: #0f3540;
     --on-state-setup: #071426;
@@ -137,6 +139,7 @@
   --danger-border: #5c2530;
   --warning-ink: #f2b866;
   --success-ink: #7fe0a0;
+  --teal-ink: #63d7d0;
   --state-setup: #3fd4ef;
   --state-setup-soft: #0f3540;
   --on-state-setup: #071426;

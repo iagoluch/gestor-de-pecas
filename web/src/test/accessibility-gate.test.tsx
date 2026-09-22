@@ -59,6 +59,9 @@ describe("gate de acessibilidade", () => {
       expectAa(colors, "on-operator-start", "operator-start");
       expectAa(colors, "on-operator-stop", "operator-stop");
       expectAa(colors, "on-operator-finish", "operator-finish");
+      expectAa(colors, "success-ink", "accent-soft");
+      expectAa(colors, "warning-ink", "warning-soft");
+      expectAa(colors, "teal-ink", "surface");
     }
   });
 

@@ -189,7 +189,7 @@
 }
 .welding-macro-table th[scope="col"]:first-child { text-align: left; }
 .welding-macro-table th[scope="col"][data-tone="late"] { color: var(--danger); }
-.welding-macro-table th[scope="col"][data-tone="due"] { color: #0d7a3c; }
+.welding-macro-table th[scope="col"][data-tone="due"] { color: var(--success-ink); }
 .welding-macro-table th[scope="col"][data-tone="done"] { color: var(--primary); }
 .welding-macro-table td,
 .welding-macro-table th[scope="row"] {
@@ -202,7 +202,7 @@
 .welding-macro-table th[scope="row"] strong { display: block; font-weight: 700; }
 .welding-macro-table th[scope="row"] small { color: var(--muted); font-size: 10px; }
 .welding-macro-table td[data-tone="late"] { color: var(--danger); font-weight: 700; }
-.welding-macro-table td[data-tone="due"] { color: #0d7a3c; font-weight: 700; }
+.welding-macro-table td[data-tone="due"] { color: var(--success-ink); font-weight: 700; }
 .welding-macro-table td[data-tone="done"] { color: var(--primary); font-weight: 700; }
 .welding-macro-table tfoot th,
 .welding-macro-table tfoot td {
@@ -315,14 +315,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
   font-size: 10px;
   font-weight: 700;
   font-style: normal;
 }
-.welding-barchart__bar i[data-tone="late"] { background: var(--danger); }
-.welding-barchart__bar i[data-tone="due"] { background: var(--accent); }
-.welding-barchart__bar i[data-tone="done"] { background: var(--primary); }
+.welding-barchart__bar i[data-tone="late"] { color: var(--on-danger); background: var(--danger); }
+.welding-barchart__bar i[data-tone="due"] { color: var(--on-accent); background: var(--accent); }
+.welding-barchart__bar i[data-tone="done"] { color: var(--on-primary); background: var(--primary); }
 .welding-barchart__label {
   /* Os MACROs compartilham o prefixo "CONJ. SOLD.": cortados numa linha só
      ficavam todos iguais. Três linhas, sempre reservadas em todos os grupos,
@@ -404,8 +403,8 @@
   font-variant-numeric: tabular-nums;
 }
 .welding-station__tally i[data-tone="late"] { color: var(--danger); background: var(--danger-soft); }
-.welding-station__tally i[data-tone="due"] { color: #0f6e69; background: var(--surface); border: 1px solid var(--teal); }
-.welding-station__tally i[data-tone="done"] { color: #15803d; background: var(--accent-soft); }
+.welding-station__tally i[data-tone="due"] { color: var(--teal-ink); background: var(--surface); border: 1px solid var(--teal); }
+.welding-station__tally i[data-tone="done"] { color: var(--success-ink); background: var(--accent-soft); }
 
 .welding-station[data-availability="sem_registros"] .welding-station__name {
   color: var(--muted);
@@ -474,8 +473,8 @@
 }
 
 .welding-badge--late { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
-.welding-badge--due { border-color: var(--warning); color: #8a5300; background: var(--warning-soft); }
-.welding-badge--done { border-color: var(--accent); color: #15803d; background: var(--accent-soft); }
+.welding-badge--due { border-color: var(--warning); color: var(--warning-ink); background: var(--warning-soft); }
+.welding-badge--done { border-color: var(--accent); color: var(--success-ink); background: var(--accent-soft); }
 .welding-badge--unknown { color: var(--muted); background: var(--surface-alt); }
 
 .welding-status small { max-width: 230px; white-space: normal; }
