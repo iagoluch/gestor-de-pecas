@@ -8,6 +8,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { ResourceCard } from "../../components/ResourceCard";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
+import type { FilterFieldKey } from "../../filters/FilterContext";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
@@ -37,8 +38,8 @@ function producingCount(summary?: ResourceSummary) {
   return (summary?.by_category.producao ?? 0) + (summary?.by_category["produção"] ?? 0);
 }
 
-function LoadingPage({ title, subtitle, period = true }: { title: string; subtitle: string; period?: boolean }) {
-  return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={period}><LoadingState /></PageFrame>;
+function LoadingPage({ title, subtitle, period = true, filters = true, fields }: { title: string; subtitle: string; period?: boolean; filters?: boolean; fields?: FilterFieldKey[] }) {
+  return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={period} filters={filters} fields={fields}><LoadingState /></PageFrame>;
 }
 
 export function OperationsOverviewPage() {
@@ -48,10 +49,10 @@ export function OperationsOverviewPage() {
   const [selectedSector, setSelectedSector] = useState("");
   const title = "Consulta Operacional — Visão Geral";
   const subtitle = "Situação física atual dos recursos e OPs associadas no dia corrente, com atualização incremental.";
-  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} filters={false} />;
+  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
-  if (!data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><EmptyState /></PageFrame>;
+  if (!data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><EmptyState /></PageFrame>;
   const resources = stream.snapshot?.resources ?? data.resources;
   const summary: ResourceSummary = data.summary ?? { resources: resources.length, active_operations: 0, by_category: {} };
   const sectors = [...new Set(resources.map((resource) => resource.setor ?? "Setor não informado"))].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -63,6 +64,7 @@ export function OperationsOverviewPage() {
       title={title}
       subtitle={subtitle}
       period={false}
+      filters={false}
       actions={<span className={`live-indicator ${stream.connected ? "live-indicator--connected" : ""}`}><i />{stream.connected ? "Atualização ao vivo" : "Reconectando atualizações"}</span>}
     >
       <div className="metric-grid metric-grid--four">
@@ -95,19 +97,22 @@ export function OperationsOverviewPage() {
   );
 }
 
+const RESOURCES_FILTER_FIELDS: FilterFieldKey[] = ["sector", "resource"];
+
 export function OperationsResourcesPage() {
   const filters = useManagementFilters();
   const [params] = useSearchParams();
   const sector = params.get("setor");
-  const queryText = sector ? `${filters.dailyQuery}&setor=${encodeURIComponent(sector)}` : filters.dailyQuery;
+  const dailyQuery = filters.dailyQueryFor(RESOURCES_FILTER_FIELDS);
+  const queryText = sector ? `${dailyQuery}&setor=${encodeURIComponent(sector)}` : dailyQuery;
   const query = useApiQuery<ResourcePage>(`/api/v1/operations/resources?${queryText}&page=1&page_size=200`);
   const title = "Consulta Operacional — Recursos";
   const subtitle = "Estado, OP, operador e duração por recurso físico no dia corrente.";
-  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} fields={RESOURCES_FILTER_FIELDS} />;
+  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} fields={RESOURCES_FILTER_FIELDS}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   return (
-    <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}>
+    <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} fields={RESOURCES_FILTER_FIELDS}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Recursos no filtro" value={formatNumber(data?.page.total ?? 0)} />
         <MetricCard label="Em produção agora" value={formatNumber(producingCount(data?.summary))} accent="success" />

@@ -15,6 +15,9 @@ export interface ManagementFilters {
   operator: string;
 }
 
+/** Campos de filtro além do período — usados para restringir a FilterBar aos campos que o backend realmente aplica. */
+export type FilterFieldKey = "sector" | "resource" | "shift" | "op" | "operation" | "product" | "operator";
+
 interface FilterValue {
   filters: ManagementFilters;
   setFilters: (filters: ManagementFilters) => void;
@@ -24,6 +27,11 @@ interface FilterValue {
    * Telas de situação atual não usam período: elas consultam o valor diário.
    */
   dailyQuery: string;
+  /**
+   * Como `dailyQuery`, mas montada só com os campos informados: usado em telas
+   * onde o backend ignora os demais campos da FilterBar para essa consulta.
+   */
+  dailyQueryFor: (fields: FilterFieldKey[]) => string;
   reset: () => void;
 }
 
@@ -46,21 +54,31 @@ export function defaultFilters(reference: Date | null): ManagementFilters {
   };
 }
 
-function toQuery(filters: ManagementFilters) {
+function toQuery(filters: ManagementFilters, fields?: FilterFieldKey[]) {
   const query = new URLSearchParams();
   query.set("inicio", `${filters.startDate}T00:00:00`);
   query.set("fim", `${filters.endDate}T23:59:59`);
-  const values = {
-    setor: filters.sector,
-    recurso: filters.resource,
-    turno: filters.shift,
+  const values: Record<FilterFieldKey, string> = {
+    sector: filters.sector,
+    resource: filters.resource,
+    shift: filters.shift,
     op: filters.op,
-    operacao: filters.operation,
-    produto: filters.product,
-    operador: filters.operator,
+    operation: filters.operation,
+    product: filters.product,
+    operator: filters.operator,
   };
-  Object.entries(values).forEach(([key, value]) => {
-    if (value.trim()) query.set(key, value.trim());
+  const params: Record<FilterFieldKey, string> = {
+    sector: "setor",
+    resource: "recurso",
+    shift: "turno",
+    op: "op",
+    operation: "operacao",
+    product: "produto",
+    operator: "operador",
+  };
+  (fields ?? (Object.keys(values) as FilterFieldKey[])).forEach((field) => {
+    const value = values[field].trim();
+    if (value) query.set(params[field], value);
   });
   return query.toString();
 }
@@ -84,6 +102,7 @@ function ResolvedFilterProvider({ reference, children }: PropsWithChildren<{ ref
       setFilters,
       query: toQuery(filters),
       dailyQuery: toQuery({ ...filters, startDate: today, endDate: today }),
+      dailyQueryFor: (fields: FilterFieldKey[]) => toQuery({ ...filters, startDate: today, endDate: today }, fields),
       reset: () => setFilters(defaultFilters(reference)),
     };
   }, [filters, reference]);

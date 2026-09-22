@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import type { FilterFieldKey } from "../filters/FilterContext";
 import { useManagementFilters } from "../filters/FilterContext";
 import { localDate, referenceNow, useReferenceClock } from "../system/ReferenceClock";
 import { DatePicker } from "./DatePicker";
@@ -9,11 +10,14 @@ const MANAGEMENT_SECTORS = [
   "Montagem", "Destaque", "Almoxarifado",
 ];
 
-export function FilterBar({ period = true }: { period?: boolean } = {}) {
+export function FilterBar({ period = true, fields }: { period?: boolean; fields?: FilterFieldKey[] } = {}) {
   const context = useManagementFilters();
   const { reference } = useReferenceClock();
   const [draft, setDraft] = useState(context.filters);
   const [expanded, setExpanded] = useState(false);
+  const isVisible = (field: FilterFieldKey) => !fields || fields.includes(field);
+  const advancedFields: FilterFieldKey[] = (["shift", "op", "operation", "product", "operator"] as FilterFieldKey[]).filter(isVisible);
+  const hasAdvanced = advancedFields.length > 0;
 
   useEffect(() => setDraft(context.filters), [context.filters]);
 
@@ -53,19 +57,25 @@ export function FilterBar({ period = true }: { period?: boolean } = {}) {
       ) : (
         <p className="filter-bar__scope">Situação do dia corrente</p>
       )}
-      <label>Setor<select value={draft.sector} onChange={(event) => setDraft({ ...draft, sector: event.target.value })}>
-        <option value="">Todos os setores</option>
-        {MANAGEMENT_SECTORS.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
-      </select></label>
-      <div className="filter-bar__advanced">
+      {isVisible("sector") && (
+        <label>Setor<select value={draft.sector} onChange={(event) => setDraft({ ...draft, sector: event.target.value })}>
+          <option value="">Todos os setores</option>
+          {MANAGEMENT_SECTORS.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+        </select></label>
+      )}
+      {isVisible("resource") && (
         <label>Recurso<input value={draft.resource} onChange={(event) => setDraft({ ...draft, resource: event.target.value })} placeholder="Todos" /></label>
-        <label>Turno<input value={draft.shift} onChange={(event) => setDraft({ ...draft, shift: event.target.value })} placeholder="Todos" /></label>
-        <label>OP<input value={draft.op} onChange={(event) => setDraft({ ...draft, op: event.target.value })} placeholder="Todas" /></label>
-        <label>Operação<input value={draft.operation} onChange={(event) => setDraft({ ...draft, operation: event.target.value })} placeholder="Todas" /></label>
-        <label>Produto<input value={draft.product} onChange={(event) => setDraft({ ...draft, product: event.target.value })} placeholder="Todos" /></label>
-        <label>Operador<input value={draft.operator} onChange={(event) => setDraft({ ...draft, operator: event.target.value })} placeholder="Todos" /></label>
-      </div>
-      <button className="filter-bar__toggle" type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? "Menos filtros" : "Mais filtros"}</button>
+      )}
+      {hasAdvanced && (
+        <div className="filter-bar__advanced">
+          {advancedFields.includes("shift") && <label>Turno<input value={draft.shift} onChange={(event) => setDraft({ ...draft, shift: event.target.value })} placeholder="Todos" /></label>}
+          {advancedFields.includes("op") && <label>OP<input value={draft.op} onChange={(event) => setDraft({ ...draft, op: event.target.value })} placeholder="Todas" /></label>}
+          {advancedFields.includes("operation") && <label>Operação<input value={draft.operation} onChange={(event) => setDraft({ ...draft, operation: event.target.value })} placeholder="Todas" /></label>}
+          {advancedFields.includes("product") && <label>Produto<input value={draft.product} onChange={(event) => setDraft({ ...draft, product: event.target.value })} placeholder="Todos" /></label>}
+          {advancedFields.includes("operator") && <label>Operador<input value={draft.operator} onChange={(event) => setDraft({ ...draft, operator: event.target.value })} placeholder="Todos" /></label>}
+        </div>
+      )}
+      {hasAdvanced && <button className="filter-bar__toggle" type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? "Menos filtros" : "Mais filtros"}</button>}
       <button className="filter-bar__reset" type="button" onClick={context.reset}>Limpar</button>
       <button className="filter-bar__apply" type="submit">Aplicar</button>
     </form>

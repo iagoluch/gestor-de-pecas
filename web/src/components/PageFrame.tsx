@@ -4,8 +4,9 @@ import { useOptionalAuth } from "../auth/AuthContext";
 import type { ManagementSectionId } from "../config/navigation";
 import { sectionById } from "../config/navigation";
 import { FilterBar } from "./FilterBar";
+import type { FilterFieldKey } from "../filters/FilterContext";
 
-export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true }: PropsWithChildren<{
+export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, fields }: PropsWithChildren<{
   sectionId: ManagementSectionId;
   title: string;
   subtitle: string;
@@ -13,6 +14,8 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
   filters?: boolean;
   /** Falso nas telas de situação atual, que consultam apenas o dia corrente. */
   period?: boolean;
+  /** Restringe a FilterBar aos campos que essa tela realmente aplica no backend. */
+  fields?: FilterFieldKey[];
 }>) {
   const section = sectionById(sectionId);
   const auth = useOptionalAuth();
@@ -34,7 +37,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
           </div>
           {actions}
         </header>
-        {filters ? <FilterBar period={period} /> : null}
+        {filters ? <FilterBar period={period} fields={fields} /> : null}
         {children}
       </section>
     </div>
