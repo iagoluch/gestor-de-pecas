@@ -304,8 +304,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // apenas lê `pode_finalizar` e explica o motivo com a frase que veio de lá.
   const firstPiece: FirstPieceGate | undefined = selected?.primeira_peca;
   const selectedOperationKey = routeStepKey(selected);
+  // A seleção explícita do operador sobrevive aos refreshes SSE do roteiro.
+  // O gate liberado precisa comparar contra essa identidade estável; usar só
+  // o snapshot selecionado podia reabilitar Setup por alguns instantes.
+  const effectiveOperationKey = routeSelection?.op === loadedOp
+    ? routeSelection.operationKey
+    : selectedOperationKey;
   const gateReleasedLocally = Boolean(
-    selectedOperationKey && releasedGateKey === `${loadedOp}::${selectedOperationKey}`,
+    effectiveOperationKey && releasedGateKey === `${loadedOp}::${effectiveOperationKey}`,
   );
   // Wave 6B: o portão Setup/Qualidade é do **Finalizar**. Quem diz isso é o
   // backend (`exige_gate_primeira_peca` e o código da pendência); a tela não
