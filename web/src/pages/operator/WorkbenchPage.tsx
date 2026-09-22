@@ -341,6 +341,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // popup sem querer, esse clique reabre o mesmo checklist sem duplicar o
   // registro de Setup (a chamada ao backend é idempotente).
   const canSetup = canPoint
+    && !gateReleasedLocally
     && ["Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus)
     && (!firstPiece?.setup_registrado || gateRequired);
   const stopContext = activeCard ? {
