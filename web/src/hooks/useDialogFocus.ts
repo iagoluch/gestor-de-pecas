@@ -27,10 +27,11 @@ export function useDialogFocus(
     if (!open) return undefined;
     const dialog = dialogRef.current;
     if (!dialog) return undefined;
+    const dialogElement: HTMLElement = dialog;
 
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    if (!dialog.hasAttribute("tabindex")) dialog.tabIndex = -1;
-    (initialFocusRef?.current ?? focusableElements(dialog)[0] ?? dialog).focus();
+    if (!dialogElement.hasAttribute("tabindex")) dialogElement.tabIndex = -1;
+    (initialFocusRef?.current ?? focusableElements(dialogElement)[0] ?? dialogElement).focus();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -40,17 +41,17 @@ export function useDialogFocus(
       }
       if (event.key !== "Tab") return;
 
-      const elements = focusableElements(dialog);
+      const elements = focusableElements(dialogElement);
       if (!elements.length) {
         event.preventDefault();
-        dialog.focus();
+        dialogElement.focus();
         return;
       }
       const first = elements[0], last = elements[elements.length - 1], active = document.activeElement;
-      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+      if (event.shiftKey && (active === first || !dialogElement.contains(active))) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+      } else if (!event.shiftKey && (active === last || !dialogElement.contains(active))) {
         event.preventDefault();
         first.focus();
       }
