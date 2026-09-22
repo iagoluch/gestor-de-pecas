@@ -400,18 +400,18 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   }
 
   /** Abre o portão Setup/Qualidade: o popup é a entrada do botão Iniciar. */
-  function openGate() {
-    if (!loadedOp || !selected) {
+  function openGate(operation: OperatorOperation | undefined = selected) {
+    if (!loadedOp || !operation) {
       setMessage("Carregue e selecione uma operação antes de iniciar.");
       return;
     }
-    const operationId = selected.id ?? selected.catalogo_operacao_id;
+    const operationId = operation.id ?? operation.catalogo_operacao_id;
     setGateOperationKey(
       `/api/v1/operator/first-piece?op=${encodeURIComponent(loadedOp)}`
       + `&resource=${encodeURIComponent(resource)}`
       + (operationId == null ? "" : `&operation_id=${encodeURIComponent(String(operationId))}`),
     );
-    setGateSelected(selected);
+    setGateSelected(operation);
     setDialog({ kind: "gate" });
   }
 
@@ -496,8 +496,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       setDialog({ kind: "confirm", action: "Setup" });
       return;
     }
+    // O POST de Setup recarrega o roteiro. Preserve a operação que originou o
+    // clique para o checklist não depender do snapshot assíncrono seguinte.
+    const gateOperation = selected;
     await execute("Setup");
-    openGate();
+    openGate(gateOperation);
   }
 
   /**

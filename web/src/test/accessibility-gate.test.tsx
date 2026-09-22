@@ -13,10 +13,13 @@ function variables(block: string): Palette {
   );
 }
 
-function palette(selector: RegExp) {
-  const match = selector.exec(tokensCss);
-  if (!match?.[1]) throw new Error("Bloco de tokens não encontrado");
-  return variables(match[1]);
+function palette(marker: string) {
+  const start = tokensCss.indexOf(marker);
+  if (start < 0) throw new Error(`Bloco de tokens não encontrado: ${marker}`);
+  const open = tokensCss.indexOf("{", start);
+  const close = tokensCss.indexOf("}", open + 1);
+  if (open < 0 || close < 0) throw new Error(`Bloco de tokens inválido: ${marker}`);
+  return variables(tokensCss.slice(open + 1, close));
 }
 
 function luminance(hex: string) {
@@ -42,8 +45,8 @@ function expectAa(paletteValues: Palette, foreground: string, background: string
 
 describe("gate de acessibilidade", () => {
   it("mantém contraste AA dos pares semânticos nos temas claro e escuro", () => {
-    const light = palette(/:root\s*\{([\s\S]*?)\n\}/);
-    const darkOverrides = palette(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/);
+    const light = palette(":root {");
+    const darkOverrides = palette(':root[data-theme="dark"] {');
     const dark = { ...light, ...darkOverrides };
 
     for (const colors of [light, dark]) {
