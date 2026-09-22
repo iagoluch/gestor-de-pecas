@@ -33,6 +33,27 @@
             "statusMessage": "Type-checking TypeScript (tsc -b)..."
           }
         ]
+      },
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/headroom-remind.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/ponytail-reminder.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionStart": [
