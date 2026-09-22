@@ -102,6 +102,7 @@ describe("gate de acessibilidade", () => {
   it("permite navegar no calendário com setas e restaura o foco ao fechar", () => {
     render(<DatePicker label="Data inicial" value="2026-09-22" onChange={() => undefined} />);
     const input = screen.getByRole("textbox", { name: "Data inicial" });
+    input.focus();
     fireEvent.click(input);
 
     const selected = document.querySelector<HTMLButtonElement>('[data-date="2026-09-22"]');
