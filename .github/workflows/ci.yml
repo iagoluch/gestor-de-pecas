@@ -61,6 +61,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test
+      - name: Gate de acessibilidade (contraste, foco modal e teclado do calendário)
+        run: npm run test:a11y
       - name: npm audit (dependências com CVE conhecida, alta/crítica)
         # Roda sempre, mesmo se um passo anterior falhar, para o sinal de
         # segurança não ficar escondido atrás de uma falha de build/teste.
