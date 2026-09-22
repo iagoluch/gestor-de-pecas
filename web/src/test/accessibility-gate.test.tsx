@@ -1,25 +1,26 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
-import tokensCss from "../styles/tokens.css?raw";
+import "../styles/tokens.css";
 import { DatePicker } from "../components/DatePicker";
 import { OperatorDialog } from "../components/OperatorDialog";
 
 type Palette = Record<string, string>;
 
-function variables(block: string): Palette {
-  return Object.fromEntries(
-    Array.from(block.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})\s*;/g), (match) => [match[1], match[2]]),
-  );
-}
+const COLOR_TOKENS = [
+  "muted", "surface", "surface-alt", "bg",
+  "on-primary", "primary", "on-warning", "warning",
+  "on-danger", "danger", "on-state-setup", "state-setup",
+  "on-state-rework", "state-rework", "on-orange", "orange",
+  "on-operator-start", "operator-start", "on-operator-stop", "operator-stop",
+  "on-operator-finish", "operator-finish", "success-ink", "accent-soft",
+  "warning-ink", "warning-soft", "teal-ink",
+] as const;
 
-function palette(marker: string) {
-  const start = tokensCss.indexOf(marker);
-  if (start < 0) throw new Error(`Bloco de tokens não encontrado: ${marker}`);
-  const open = tokensCss.indexOf("{", start);
-  const close = tokensCss.indexOf("}", open + 1);
-  if (open < 0 || close < 0) throw new Error(`Bloco de tokens inválido: ${marker}`);
-  return variables(tokensCss.slice(open + 1, close));
+function palette(theme: "light" | "dark"): Palette {
+  document.documentElement.dataset.theme = theme;
+  const style = getComputedStyle(document.documentElement);
+  return Object.fromEntries(COLOR_TOKENS.map((token) => [token, style.getPropertyValue(`--${token}`).trim()]));
 }
 
 function luminance(hex: string) {
@@ -45,9 +46,8 @@ function expectAa(paletteValues: Palette, foreground: string, background: string
 
 describe("gate de acessibilidade", () => {
   it("mantém contraste AA dos pares semânticos nos temas claro e escuro", () => {
-    const light = palette(":root {");
-    const darkOverrides = palette(':root[data-theme="dark"] {');
-    const dark = { ...light, ...darkOverrides };
+    const light = palette("light");
+    const dark = palette("dark");
 
     for (const colors of [light, dark]) {
       expectAa(colors, "muted", "surface");

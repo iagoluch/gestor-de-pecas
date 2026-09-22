@@ -160,6 +160,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // snapshot do roteiro normalmente traz esse estado, mas a tela não pode
   // deixar o operador preso ao snapshot anterior enquanto ele é atualizado.
   const [releasedGateKey, setReleasedGateKey] = useState("");
+  // O POST de ação devolve o estado canônico imediatamente; usamos esse valor
+  // só até o snapshot de /workbench confirmar o mesmo estado.
+  const [actionStatus, setActionStatus] = useState("");
   const gate = useApiQuery<FirstPieceState>(gateOperationKey || null);
 
   // Uma OP nova por digitação: a busca remota anterior não vale para outra OP.
@@ -167,6 +170,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setRemoteSearch("idle");
     setSearchedOp("");
     setReleasedGateKey("");
+    setActionStatus("");
   }, [loadedOp]);
 
   // A OP não está no Gestor, mas pode existir no TOTVS. Pede UMA vez por OP:
@@ -254,11 +258,20 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // a tela recebe a resposta pronta em `/operator/context` em vez de manter uma
   // segunda lista, que já nascia desatualizada a cada setor novo.
   const showSetup = hasSetup;
-  const currentStatus = String(selectedCard?.status ?? "");
+  const backendCardStatus = String(selectedCard?.status ?? "");
+  const currentStatus = actionStatus || backendCardStatus;
   const canPoint = isSelectable(selected);
   // A parada registrada sem OP é do recurso, não de um apontamento: não existe
   // card para rotular o botão nem OP para enviar. Sem ler o estado físico do
   // recurso o posto ficava parado para sempre, porque toda ação exigia uma OP.
+  useEffect(() => {
+    if (actionStatus && backendCardStatus === actionStatus) setActionStatus("");
+  }, [actionStatus, backendCardStatus]);
+
+  useEffect(() => {
+    setActionStatus("");
+  }, [selected?.id, selected?.catalogo_operacao_id, selected?.numero_operacao]);
+
   const resourceState = cards.data?.resource_state;
   const stoppedWithoutOp = Boolean(
     resourceState?.categoria === "parada" && !String(resourceState?.op ?? "").trim(),
@@ -626,6 +639,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         ...extra,
       });
       setMessage(response.message);
+      const nextStatus = String(response.data?.status ?? "").trim();
+      if (nextStatus) setActionStatus(nextStatus);
       setDialog(null);
       cards.reload();
       historyQuery.reload();
