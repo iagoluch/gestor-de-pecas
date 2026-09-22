@@ -486,6 +486,50 @@ próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
   (`setup_exige_inicio`, HTTP 409), e o botão do posto permanece desabilitado
   enquanto não houver apontamento ativo; não é apenas uma restrição visual.
 
+### 2.18 Hooks locais do Codex alinhados ao Claude (22/09/2026)
+
+O `.codex/hooks.json` local preserva os guards Graphify, o type-check de
+TypeScript e os hooks globais do Brain. Foi alinhado aos hooks recentes do
+Claude com o lembrete Ponytail em cada prompt, a compressão Headroom para
+saídas grandes de Bash/Grep (limite de 12.000 bytes) e o autostart do proxy
+Headroom na abertura da sessão. Os comandos usam o Git Bash local de forma
+explícita, pois `bash` não está no `PATH` do PowerShell. O OmniRoute deixou de
+ser iniciado automaticamente pelo Codex; permanece opcional e configurável
+separadamente.
+
+Validação dirigida: JSON do hook, sintaxe dos scripts Bash, saída do lembrete,
+limiar Headroom e resolução do runtime Git Bash.
+
+### 2.19 Matriz operacional Claude → Codex (22/09/2026)
+
+A auditoria de instruções, memória, skills, hooks, agentes, comandos, MCPs,
+plugins, permissões e Git está consolidada em `docs/CODEX_PARIDADE_CLAUDE.md`.
+O inventário completo tem 900 arquivos `SKILL.md`: 68 skills individuais e 832
+automações Composio. As individuais permanecem nativas/compartilhadas no Codex,
+e as 832 Composio foram espelhadas, arquivo a arquivo, no catálogo sob demanda
+do Codex; 29 duplicatas idênticas da biblioteca compartilhada foram arquivadas,
+mantendo as cópias nativas. O resultado preserva a descoberta sem perda integral
+das descrições. O limite nativo de instruções foi ajustado para 96 KB, carregando
+integralmente o `AGENTS.md` de 72,5 KB. O novo hook ainda exige confiança
+explícita do Codex na próxima sessão. O launcher Headroom órfão foi restaurado
+offline da versão cacheada 0.37.0 (com extra MCP) e validou `initialize` e o
+pipeline `headroom_compress`.
+O pg_aiguide também respondeu a `initialize`, `tools/list` e `search_docs`
+somente-leitura; a pendência MCP fica restrita ao OmniRoute.
+
+### 2.20 Skill e detector visual Impeccable no Codex (22/09/2026)
+
+A skill local `impeccable` (v4.3.1) foi vinculada ao catálogo global do Codex,
+reaproveitando a fonte única em `.claude/skills/impeccable`. O detector visual
+foi habilitado por projeto: roda a verificação imediata depois de `Write/Edit`
+e a análise profunda no encerramento da sessão, sem substituir Graphify,
+type-check, Headroom, Ponytail ou Brain. As configurações geradas em
+`.impeccable/` permanecem locais e ainda não foram versionadas.
+
+Validação dirigida: manifesto JSON, ambos os comandos do detector com entrada
+de evento não visual, status `enabled` sem exceções configuradas e vínculo da
+skill global ao diretório do projeto.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

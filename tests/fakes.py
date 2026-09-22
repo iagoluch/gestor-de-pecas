@@ -1140,6 +1140,8 @@ class FakeDatabase:
         operacao_id = valores.get("catalogo_operacao_id")
         existente = self._primeira_peca(codigo, operacao_id)
         if existente is not None:
+            if existente.get("apontamento_id") is None and valores.get("apontamento_id") is not None:
+                existente["apontamento_id"] = valores.get("apontamento_id")
             return dict(existente)
         agora = valores.get("criada_em") or datetime.now().replace(microsecond=0)
         linha = {
@@ -1259,6 +1261,9 @@ class FakeDatabase:
             bloqueio_ativo=bool(bloquear),
             bloqueio_ocorrencia=ocorrencia if bloquear else None,
             bloqueio_em=momento if bloquear else None,
+            # Retrabalho limpa o Setup: a máquina precisa ser reconferida, o
+            # portão volta a exigir Setup antes da próxima finalização.
+            setup_registrado_em=None if bloquear else linha.get("setup_registrado_em"),
             atualizada_em=momento,
         )
         return dict(linha)
@@ -1777,6 +1782,16 @@ class FakeDatabase:
     def buscar_apontamento_operacional(self, item_id):
         row = next((item for item in self.appointments if item["id"] == item_id), None)
         return dict(row) if row else None
+
+    def registrar_refugo_primeira_peca(self, apontamento_id, quantidade=1):
+        qty = max(0, int(quantidade or 0))
+        if not apontamento_id or qty <= 0:
+            return None
+        row = next((item for item in self.appointments if item["id"] == apontamento_id), None)
+        if row is None:
+            return None
+        row["quantidade_refugo"] = int(row.get("quantidade_refugo") or 0) + qty
+        return dict(row)
 
     def listar_apontamentos_operacionais(self, tipo_setor, maquina=None, somente_ativos=True):
         rows = [item for item in self.appointments if item["tipo_setor"].upper() == tipo_setor.upper()]

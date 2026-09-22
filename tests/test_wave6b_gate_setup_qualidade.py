@@ -98,6 +98,10 @@ def cenario(
     )
     fluxo = OperatorFlowService(db, "OPERADOR 6B")
     if setup_apontado and sector_has_setup(setor):
+        # Setup exige a OP já iniciada (`setup_exige_inicio`); os testes que
+        # chamam "Início" de novo depois disso contam com a idempotência já
+        # coberta por IdempotenciaEConcorrenciaTests.
+        assert fluxo.executar("Início", **contexto).ok
         apontar_setup(fluxo, contexto)
     return db, fluxo, contexto
 
@@ -460,6 +464,18 @@ class RetrabalhoDaPrimeiraPecaTests(unittest.TestCase):
         db, fluxo, contexto, servico = self._bloquear()
         servico.autorizar(**contexto, cracha="SIM99")
 
+        # Retrabalho limpa o Setup: a peça saiu de uma máquina que precisa ser
+        # reconferida, então o portão volta a exigir Setup de novo, mesmo
+        # fluxo da primeira peça — reinspecionar sem apontar Setup é recusado.
+        self.assertIsNone(db.first_pieces[0]["setup_registrado_em"])
+        self.assertTrue(fluxo.executar("Início", **contexto).ok)
+        sem_setup = servico.registrar_checklist(
+            **contexto, medidas=medidas("12,0", "40,0")
+        )
+        self.assertFalse(sem_setup.ok)
+        self.assertEqual(sem_setup.code, "primeira_peca_setup_pendente")
+
+        apontar_setup(fluxo, contexto)
         reinspecao = servico.registrar_checklist(
             **contexto, medidas=medidas("12,0", "40,0")
         )
@@ -502,6 +518,12 @@ class RetrabalhoDaPrimeiraPecaTests(unittest.TestCase):
         self.assertEqual(db.first_pieces[0]["status"], "REFUGO")
         # Refugo não bloqueia a OP; o que ele exige é a autorização.
         self.assertFalse(db.first_pieces[0]["bloqueio_ativo"])
+        # O refugo da primeira peça precisa aparecer no mesmo saldo que o
+        # card da OP e o popup Finalizar leem (apontamentos_operacionais).
+        apontamento_id = db.first_pieces[0]["apontamento_id"]
+        self.assertIsNotNone(apontamento_id)
+        apontamento = db.buscar_apontamento_operacional(apontamento_id)
+        self.assertEqual(apontamento["quantidade_refugo"], 1)
         decisoes = [
             (row["ocorrencia"], row["decisao"])
             for row in db.listar_autorizacoes_primeira_peca()

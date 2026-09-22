@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { OperatorShell } from "../../layouts/OperatorShell";
@@ -65,7 +66,7 @@ export function OperatorPortalPage() {
   // entrada da qualidade é o popup Setup/Qualidade do botão Iniciar, e não uma
   // aba separada. A regra continua toda no backend.
   if (context.data.workflow === "highlight") {
-    return <OperatorShell sector={sector}><HighlightPage /></OperatorShell>;
+    return <OperatorShell sector={sector}><ErrorBoundary><HighlightPage /></ErrorBoundary></OperatorShell>;
   }
   if (!selectedResource) {
     return <OperatorShell sector={sector}><ResourceSelection context={context.data} onSelect={setResource} /></OperatorShell>;
@@ -76,9 +77,11 @@ export function OperatorPortalPage() {
       resource={selectedResource}
       onBack={!context.data.fixed_resource && !context.data.station_profile_required && context.data.resources.length > 1 ? () => setResource(null) : undefined}
     >
-      {context.data.workflow === "cutting"
-        ? <CuttingPage resource={selectedResource} />
-        : <WorkbenchPage sector={sector} resource={selectedResource} hasSetup={context.data.has_setup !== false} />}
+      <ErrorBoundary>
+        {context.data.workflow === "cutting"
+          ? <CuttingPage resource={selectedResource} />
+          : <WorkbenchPage sector={sector} resource={selectedResource} hasSetup={context.data.has_setup !== false} />}
+      </ErrorBoundary>
     </OperatorShell>
   );
 }

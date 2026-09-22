@@ -62,7 +62,8 @@ interface OperationContext {
   balance: number;
 }
 
-function operationLabel(item: OperatorOperation) {
+function operationLabel(item: OperatorOperation | undefined) {
+  if (!item) return "";
   return [item.numero_operacao ?? item.codigo, item.descricao_operacao ?? item.recurso_nome].filter(Boolean).join(" - ");
 }
 
@@ -321,9 +322,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       && !firstPiece?.bloqueio_ativo);
   // Setup mede a preparação de uma OP já em execução. Sem Início ainda não há
   // apontamento operacional a que esse tempo possa pertencer.
+  // Setup já registrado normalmente desliga o botão — mas com o portão ainda
+  // pendente (`gateRequired`) o Setup continua sendo a única porta de volta
+  // para o checklist. Chão de fábrica é imprevisível: se o operador sair do
+  // popup sem querer, esse clique reabre o mesmo checklist sem duplicar o
+  // registro de Setup (a chamada ao backend é idempotente).
   const canSetup = canPoint
-    && ["Em processo", "Parada", "Retrabalho"].includes(currentStatus)
-    && !firstPiece?.setup_registrado;
+    && ["Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus)
+    && (!firstPiece?.setup_registrado || gateRequired);
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
     operation: String(activeCard.operation ?? activeCard.numero_operacao ?? ""),
@@ -542,6 +548,25 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         await execute(startAction);
         return;
       }
+      if (action === "autorizar") {
+        // Bloqueio de retrabalho liberado, mas a peça ainda não foi
+        // reinspecionada (`liberado` continua falso). O popup fecha do mesmo
+        // jeito e a OP já entra em retrabalho sozinha — reinspecionar fica
+        // para quando o operador apontar o Setup de novo, mesmo fluxo da
+        // primeira peça.
+        closeGate();
+        await execute("Retrabalho");
+        return;
+      }
+      if (action === "checklist" && extra.destination === "REFUGO") {
+        // Refugo não bloqueia a OP (diferente do retrabalho): o saldo já foi
+        // debitado e outra peça vai ser produzida agora. O popup fecha e a
+        // produção retoma sozinha — a próxima peça passa pela primeira peça
+        // de novo, como o portão já exige.
+        closeGate();
+        await execute(startAction);
+        return;
+      }
       gate.reload();
     } catch (reason) {
       setMessage(apiErrorMessage(reason));
@@ -679,7 +704,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} onClick={() => void setupAppointment()}><img src={assets.operator.actions.setup} alt="" /><span>Setup</span></button> : null}
-        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => setDialog({ kind: "confirm", action: "Retrabalho" })}><img src={assets.operator.actions.rework} alt="" /><span>Retrabalho</span></button>
+        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><img src={assets.operator.actions.rework} alt="" /><span>Retrabalho</span></button>
       </div>
       {canPoint && gateRequired ? (
         <p className="operator-help operator-gate-notice">
@@ -728,6 +753,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           context={context}
           sector={sector}
           state={gate.data}
+          message={message}
           loading={gate.loading && !gate.data}
           busy={submitting}
           onCancel={closeGate}
@@ -809,6 +835,7 @@ function SetupQualityDialog({
   context,
   sector,
   state,
+  message,
   loading,
   busy,
   onCancel,
@@ -819,6 +846,7 @@ function SetupQualityDialog({
   context: OperationContext;
   sector: string;
   state?: FirstPieceState | null;
+  message?: string;
   loading: boolean;
   busy: boolean;
   onCancel: () => void;
@@ -833,6 +861,17 @@ function SetupQualityDialog({
   const [drafts, setDrafts] = useState<DraftDimension[]>([
     { sequencia: 1, descricao: "", nominal: "", tolerancia: "" },
   ]);
+
+  // O popup não desmonta entre o bloqueio e a reinspeção — só troca de aba
+  // conforme `state.bloqueio_ativo` muda. Sem este reset, a medição reprovada
+  // e o destino "RETRABALHO" ficavam presos no formulário depois de autorizar,
+  // e reenviar sem perceber bloqueava a OP de novo com os mesmos dados.
+  useEffect(() => {
+    setMeasures({});
+    setDestination("RETRABALHO");
+    setBadge("");
+    setNote("");
+  }, [state?.bloqueio_ativo]);
 
   const cotas: QualityDimension[] = state?.checklist?.template?.cotas ?? [];
   const setupPendente = Boolean(state?.setup_obrigatorio && !state?.setup_registrado);
@@ -862,6 +901,10 @@ function SetupQualityDialog({
   return (
     <OperatorDialog title="Setup e Qualidade" size="wide" context={<ContextLine {...context} />} onCancel={onCancel}>
       {loading ? <LoadingState label="Carregando o Setup/Qualidade…" /> : null}
+      {/* A ação anterior (autorizar, salvar cotas, enviar checklist) responde
+          aqui dentro — o popup fica por cima do aviso da tela de fundo, e sem
+          isso o operador não via o retorno de "Autorizar e liberar". */}
+      {!loading && message ? <p className="operator-notice" role="status">{message}</p> : null}
       {!loading && state?.bloqueio_ativo ? (
         <>
           <p className="operator-help">{state.message}</p>

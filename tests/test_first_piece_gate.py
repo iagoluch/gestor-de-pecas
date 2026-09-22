@@ -262,6 +262,20 @@ class FirstPieceServiceTests(unittest.TestCase):
         self.assertFalse(gate.liberado)
         # Dobra usa o checklist estruturado: a pendência é conferir a peça.
         self.assertEqual(gate.code, "primeira_peca_gate_obrigatorio")
+
+        # O retrabalho limpou o Setup (máquina reconferida); a reinspeção
+        # exige apontar o Setup de novo antes de aprovar a peça.
+        sem_setup = servico.inspecionar(
+            op="OP-PP",
+            setor="Dobra",
+            recurso="Gasparini",
+            operacao=self.OPERACAO,
+            resultado="CONFORME",
+        )
+        self.assertFalse(sem_setup.ok)
+        self.assertEqual(sem_setup.code, "primeira_peca_setup_pendente")
+
+        servico.marcar_setup(op="OP-PP", operacao=self.OPERACAO)
         servico.inspecionar(
             op="OP-PP",
             setor="Dobra",
@@ -323,6 +337,46 @@ class FirstPieceServiceTests(unittest.TestCase):
                 op="OP-PP", setor="Dobra", recurso="Gasparini", operacao=self.OPERACAO
             ).ok
         )
+
+    def test_refugo_credita_mesmo_quando_checklist_cria_a_linha_antes_do_apontamento(self):
+        """Regressão: popup Setup/Qualidade cria a primeira peça sem apontamento_id.
+
+        No fluxo real, o portão recusa o primeiro "Iniciar" antes de o
+        apontamento existir — é aí que o popup abre e ``registrar_checklist``
+        chama ``garantir()`` sem ``apontamento_id`` (o router nunca o
+        conhece nesse instante). Só depois, quando o apontamento é enfileirado,
+        o Wave 5 chama ``garantir()`` de novo com o id real. O ``ON CONFLICT
+        DO NOTHING`` antigo descartava essa segunda chamada e o refugo nunca
+        creditava no saldo. Este teste prova que o id real é aproveitado.
+        """
+        db, servico = self._servico()
+        # 1) Checklist cria a linha sem apontamento (popup antes do "Iniciar").
+        servico.garantir(
+            op="OP-PP", setor="Dobra", recurso="Gasparini", operacao=self.OPERACAO
+        )
+        self.assertIsNone(db.first_pieces[0]["apontamento_id"])
+        # 2) O apontamento é enfileirado e o Wave 5 tenta religar o id real.
+        apontamento = db.enfileirar_apontamento_operacional(
+            "OP-PP", "PECA-PP", "TAREFA-PP", "Dobra", "Gasparini", "OPERADOR PP",
+            quantidade=10, operacao=self.OPERACAO,
+        )
+        servico.garantir(
+            op="OP-PP", setor="Dobra", recurso="Gasparini", operacao=self.OPERACAO,
+            apontamento_id=apontamento["id"],
+        )
+        self.assertEqual(db.first_pieces[0]["apontamento_id"], apontamento["id"])
+        # 3) Refugo agora credita de verdade no saldo do apontamento.
+        servico.registrar_producao(
+            op="OP-PP", setor="Dobra", recurso="Gasparini", operacao=self.OPERACAO
+        )
+        servico.marcar_setup(op="OP-PP", operacao=self.OPERACAO)
+        refugo = servico.inspecionar(
+            op="OP-PP", setor="Dobra", recurso="Gasparini", operacao=self.OPERACAO,
+            resultado="REFUGO",
+        )
+        self.assertTrue(refugo.ok)
+        atualizado = db.buscar_apontamento_operacional(apontamento["id"])
+        self.assertEqual(atualizado["quantidade_refugo"], 1)
 
     def test_solda_finaliza_a_etapa_real_sem_portao_da_primeira_peca(self):
         """Regressão: Solda não tinha saída para o portão da primeira peça.
@@ -493,6 +547,13 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
         self.assertFalse(recusa.ok)
         self.assertEqual(recusa.code, "primeira_peca_setup_pendente")
 
+        # Setup exige a OP já iniciada.
+        self.assertTrue(
+            servico.executar(
+                "Início", op="OP-FLUXO", setor="Dobra", recurso="Gasparini", operacao=operacao
+            ).ok
+        )
+
         # O Setup apontado pelo fluxo canônico satisfaz o portão sozinho: o
         # operador não executa um passo novo só para a primeira peça.
         self.assertTrue(
@@ -586,6 +647,9 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
             operacao=operacao,
             cracha="SIM99",
         )
+        # O retrabalho limpou o Setup (máquina reconferida); a reinspeção
+        # exige apontar o Setup de novo, mesmo fluxo da primeira peça.
+        primeira.marcar_setup(op="OP-FLUXO", operacao=operacao)
         primeira.inspecionar(
             op="OP-FLUXO",
             setor="Dobra",

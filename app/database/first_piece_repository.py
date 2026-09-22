@@ -76,7 +76,9 @@ class FirstPieceRepositoryMixin:
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 ON CONFLICT (UPPER(codigo_op), COALESCE(catalogo_operacao_id, -1))
-                DO NOTHING
+                DO UPDATE SET apontamento_id = COALESCE(
+                    qualidade_primeira_peca.apontamento_id, EXCLUDED.apontamento_id
+                )
                 RETURNING *
                 """,
                 (
@@ -217,6 +219,12 @@ class FirstPieceRepositoryMixin:
 
         ``bloquear`` só é verdadeiro para ``RETRABALHO``; a constraint
         ``ck_primeira_peca_bloqueio`` recusa qualquer outra combinação.
+
+        Um retrabalho também limpa ``setup_registrado_em``: a máquina que
+        produziu a peça rejeitada precisa ser reconferida, então o portão
+        volta a exigir Setup antes da próxima finalização (mesma exigência da
+        primeira vez). Refugo não mexe no Setup — o defeito é da peça, não do
+        ajuste da máquina.
         """
 
         momento = instante or datetime.now().replace(microsecond=0)
@@ -232,6 +240,7 @@ class FirstPieceRepositoryMixin:
                        bloqueio_ativo = %s,
                        bloqueio_ocorrencia = %s,
                        bloqueio_em = CASE WHEN %s THEN %s ELSE NULL END,
+                       setup_registrado_em = CASE WHEN %s THEN NULL ELSE setup_registrado_em END,
                        atualizada_em = %s
                  WHERE id = %s
                    AND bloqueio_ativo IS FALSE
@@ -247,6 +256,7 @@ class FirstPieceRepositoryMixin:
                     _texto(ocorrencia, 60) if bloquear else None,
                     bool(bloquear),
                     momento,
+                    bool(bloquear),
                     momento,
                     int(primeira_peca_id),
                 ),

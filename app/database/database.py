@@ -1946,6 +1946,33 @@ class Database(
             cursor.execute("SELECT * FROM apontamentos_operacionais WHERE id = %s", (apontamento_id,))
             return _as_dict(cursor.fetchone())
 
+    def registrar_refugo_primeira_peca(self, apontamento_id, quantidade=1):
+        """Credita o refugo da primeira peça no saldo do apontamento.
+
+        O portão da primeira peça não passa pela transição de Finalizado
+        (não exige crachá/motivo e não muda o estado da OP), mas o refugo
+        precisa aparecer no mesmo saldo que o card e o popup Finalizar leem
+        (``apontamentos_operacionais.quantidade_refugo``), senão a peça é
+        descartada sem consumir o planejado.
+        """
+
+        if not apontamento_id:
+            return None
+        qty = max(0, int(quantidade or 0))
+        if qty <= 0:
+            return None
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE apontamentos_operacionais
+                   SET quantidade_refugo = quantidade_refugo + %s
+                 WHERE id = %s
+                RETURNING *
+                """,
+                (qty, apontamento_id),
+            )
+            return _as_dict(cursor.fetchone())
+
     def listar_apontamentos_operacionais_periodo(self, tipo_setor, inicio, fim):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(

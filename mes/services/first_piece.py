@@ -339,6 +339,14 @@ class FirstPieceService:
             )
             codigo = "primeira_peca_retrabalho"
         elif decisao == FIRST_PIECE_SCRAP:
+            creditar = getattr(self.db, "registrar_refugo_primeira_peca", None)
+            if callable(creditar):
+                try:
+                    creditar(atualizada.get("apontamento_id"))
+                except Exception:  # pragma: no cover - não pode derrubar o apontamento
+                    logging.exception(
+                        "Falha ao creditar o refugo da primeira peça da OP %s.", op
+                    )
             self._alertas.primeira_peca_refugada(contexto)
             mensagem = (
                 "Primeira peça refugada. Produza e inspecione outra primeira peça; "
