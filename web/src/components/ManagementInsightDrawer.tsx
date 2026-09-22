@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import type { InsightEvidence, KpiExplanation, ManagementException } from "../types/api";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 import { availabilityLabel, formatDateTime, formatHours, formatNumber, humanize } from "../utils/format";
 
 function text(value: unknown, fallback = "Não disponível") {
@@ -153,23 +154,16 @@ export function ManagementInsightDrawer({
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const open = Boolean(explanation || exception);
-  useEffect(() => {
-    if (!open) return undefined;
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  useDialogFocus(open, dialogRef, onClose, closeRef);
   if (!open) return null;
   const title = explanation ? `Entenda o ${explanation.label}` : exception?.title ?? "Detalhes da exceção";
   return (
     <div className="insight-drawer-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <aside className="insight-drawer" role="dialog" aria-modal="true" aria-labelledby="insight-drawer-title">
+      <aside ref={dialogRef} className="insight-drawer" role="dialog" aria-modal="true" aria-labelledby="insight-drawer-title">
         <header>
           <div>
             <small>{explanation ? "KPI explicável" : "Exceção gerencial"}</small>

@@ -16,8 +16,13 @@
   --border: #c7d3e2;
   --divider: #dde5ef;
   --text: #081630;
-  --muted: #71809d;
+  /* Texto secundário mantém contraste AA inclusive sobre --surface-alt. */
+  --muted: #5f6f8d;
   --primary: #0866f5;
+  --on-primary: #ffffff;
+  --on-accent: #071426;
+  --on-warning: #071426;
+  --on-danger: #071426;
   --primary-hover: #075bd8;
   --primary-soft: #e8f2ff;
   --accent: #16a34a;
@@ -43,9 +48,18 @@
      operador, para que o Andon leia igual ao posto. */
   --state-setup: #0cc0df;
   --state-setup-soft: #e6f8fc;
+  --on-state-setup: #071426;
   --state-rework: #7a2f00;
   --state-rework-soft: #f5ebe4;
+  --on-state-rework: #ffffff;
   --orange: #ff7100;
+  --on-orange: #071426;
+  --operator-start: #42d85a;
+  --on-operator-start: #071426;
+  --operator-stop: #ff3131;
+  --on-operator-stop: #071426;
+  --operator-finish: #ffde59;
+  --on-operator-finish: #071426;
   --radius-control: 5px;
   --radius-card: 10px;
   --radius-panel: 12px;
@@ -73,6 +87,10 @@
     --primary: #4c8cff;
     --primary-hover: #6ba0ff;
     --primary-soft: #16375f;
+    --on-primary: #071426;
+    --on-accent: #071426;
+    --on-warning: #071426;
+    --on-danger: #071426;
     --accent: #3ecb77;
     --accent-soft: #123a24;
     --warning: #fbbf24;
@@ -85,8 +103,10 @@
     --success-ink: #7fe0a0;
     --state-setup: #3fd4ef;
     --state-setup-soft: #0f3540;
+    --on-state-setup: #071426;
     --state-rework: #ffb37a;
     --state-rework-soft: #3a2415;
+    --on-state-rework: #071426;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3);
     --shadow-hover: 0 10px 24px rgba(0, 0, 0, .45);
   }
@@ -103,6 +123,10 @@
   --primary: #4c8cff;
   --primary-hover: #6ba0ff;
   --primary-soft: #16375f;
+  --on-primary: #071426;
+  --on-accent: #071426;
+  --on-warning: #071426;
+  --on-danger: #071426;
   --accent: #3ecb77;
   --accent-soft: #123a24;
   --warning: #fbbf24;
@@ -115,8 +139,10 @@
   --success-ink: #7fe0a0;
   --state-setup: #3fd4ef;
   --state-setup-soft: #0f3540;
+  --on-state-setup: #071426;
   --state-rework: #ffb37a;
   --state-rework-soft: #3a2415;
+  --on-state-rework: #071426;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3);
   --shadow-hover: 0 10px 24px rgba(0, 0, 0, .45);
 }
