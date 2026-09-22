@@ -10,7 +10,18 @@ button { cursor: pointer; }
 @keyframes slideInRight { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  html { scroll-behavior: auto; }
+  .page-panel,
+  .date-picker__calendar,
+  .filter-bar__advanced,
+  .insight-drawer-backdrop,
+  .insight-drawer,
+  .operator-dialog-backdrop,
+  .operator-dialog { animation: none !important; }
+  .app-shell,
+  .sidebar,
+  .sidebar-collapse-toggle,
+  .chamada-fab { transition: none !important; }
 }
 
 .app-loading { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
@@ -53,7 +64,7 @@ button { cursor: pointer; }
 .sidebar__nav { display: grid; gap: 7px; }
 .sidebar-link { position: relative; display: flex; align-items: center; gap: 12px; height: 61px; padding: 0 14px 0 12px; border-left: 5px solid transparent; border-radius: 7px; color: white; text-decoration: none; background: var(--sidebar-button); }
 .sidebar-link:hover { background: var(--sidebar-hover); }
-.sidebar-link--active { border-left-color: #39a0ff; background: var(--primary); font-weight: 700; }
+.sidebar-link--active { border-left-color: #39a0ff; color: var(--on-primary); background: var(--primary); font-weight: 700; }
 .sidebar-link__icon { width: 48px; height: 47px; flex: 0 0 48px; display: grid; place-items: center; overflow: hidden; }
 .sidebar-link__icon img { width: 42px; height: 42px; object-fit: contain; }
 .sidebar-link span { font-size: 15px; }
@@ -109,7 +120,7 @@ button { cursor: pointer; }
 .date-picker__calendar { position: fixed; z-index: 1000; padding: 0 16px 14px; border: 1px solid var(--border); border-top: 4px solid var(--text); border-radius: 0 0 5px 5px; background: var(--surface); box-shadow: 0 10px 25px rgba(8, 22, 48, .16); font-family: Arial, sans-serif; animation: fadeIn .12s ease; }
 .date-picker__header { height: 52px; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; }
 .date-picker__header strong { color: var(--text); font-size: 14px; text-align: center; }
-.date-picker__header button { width: 42px; height: 42px; min-height: 42px; padding: 0; border: 0; border-radius: 5px; color: var(--text); background: transparent; font-size: 30px; line-height: 1; }
+.date-picker__header button { width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 5px; color: var(--text); background: transparent; font-size: 30px; line-height: 1; }
 .date-picker__header button:hover, .date-picker__header button:focus-visible { color: var(--primary); background: var(--primary-soft); outline: none; }
 .date-picker__weekdays, .date-picker__days { display: grid; grid-template-columns: repeat(7, 1fr); }
 .date-picker__weekdays { margin-bottom: 3px; }
@@ -126,7 +137,7 @@ button { cursor: pointer; }
 .filter-bar button:hover, .filter-bar button:focus-visible { border-color: var(--primary); outline: none; }
 .filter-bar__toggle { display: inline-flex; align-items: center; gap: 7px; }
 .filter-bar__badge { min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 5px; border-radius: 9px; color: var(--on-primary); background: var(--primary); font-size: 10px; line-height: 1; }
-.filter-bar__apply { border-color: var(--primary) !important; color: white !important; background: var(--primary) !important; }
+.filter-bar__apply { border-color: var(--primary) !important; color: var(--on-primary) !important; background: var(--primary) !important; }
 /* "Aplicar" só chama atenção quando existe alteração ainda não aplicada. */
 .filter-bar__apply[data-pending] { box-shadow: 0 0 0 3px var(--primary-soft); }
 .metric-grid { display: grid; gap: 11px; }
@@ -1536,4 +1547,21 @@ tbody tr:nth-child(even) { background: var(--surface-alt); }
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
+}
+
+/* Em telas touch industriais, controles compactos ganham área mínima de toque
+   sem aumentar a densidade da interface em estações operadas por mouse. */
+@media (pointer: coarse) {
+  .sidebar-collapse-toggle,
+  .chamada-sino,
+  .panels-tabs-minimize { min-width: 44px; min-height: 44px; }
+  .logout-button,
+  .theme-toggle,
+  .filter-bar button,
+  .filter-bar input,
+  .filter-bar select,
+  .date-picker__input,
+  .chamada-option,
+  .chamada-selected button,
+  .insp-remove { min-height: 44px; }
 }
