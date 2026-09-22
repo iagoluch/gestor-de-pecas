@@ -495,6 +495,13 @@ describe("fluxo Web do operador", () => {
     expect(setup?.body).toMatchObject({ action: "Setup", op: "OP-GATE" });
   });
 
+  it("mantém Finalizar desabilitado após Setup enquanto a primeira peça ainda não foi aprovada", async () => {
+    await abrirPortao();
+
+    expect(screen.getByRole("button", { name: "Finalizar" })).toBeDisabled();
+    expect(screen.getByText(/operação só pode ser finalizada/)).toBeInTheDocument();
+  });
+
   it("não bloqueia o Iniciar na Caldeiraria: o portão é do Finalizar", async () => {
     const { calls } = gateBackend();
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);

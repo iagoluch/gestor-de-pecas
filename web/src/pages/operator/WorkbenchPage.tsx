@@ -329,11 +329,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const simpleGateRequired = Boolean(
     firstPiece?.aplicavel && !firstPiece?.liberado && !gateRequired,
   );
-  // O Finalizar continua clicável com o portão pendente: o clique é que
-  // entrega a orientação ao operador, em vez de um botão morto.
+  // Gate estruturado (Setup/Qualidade): enquanto a primeira peça estiver
+  // pendente, Finalizar precisa permanecer desabilitado. Nos setores de
+  // conferência simples, Finalizar continua sendo a entrada do próprio gate.
   const setupConcluido = gateReleasedLocally || !firstPiece?.setup_obrigatorio || firstPiece.setup_registrado;
-  const canFinish = activityInProgress || (canPoint && setupConcluido
-    && (gateReleasedLocally || (selected?.pode_finalizar ?? true) || gateRequired || simpleGateRequired));
+  const canFinish = activityInProgress || (canPoint && setupConcluido && !gateRequired
+    && (gateReleasedLocally || (selected?.pode_finalizar ?? true) || simpleGateRequired));
   const canStart = resumeWithoutOp
     || startsActivity
     || (canPoint
