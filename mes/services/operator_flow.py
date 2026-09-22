@@ -27,6 +27,7 @@ from mes.domain import (
     resolve_operator_action,
     validate_transition,
 )
+from mes.domain.manufacturing_rules import LOW_PRIORITY_STOP_REASONS
 from mes.services.operator_participation import (
     OperatorParticipationService,
     sincronizar_participacoes,
@@ -374,12 +375,15 @@ class OperatorFlowService:
             )
         return rows
 
-    def listar_motivos_parada(self):
+    def listar_motivos_parada(self, setor=None):
         """Catálogo PCFactory de motivos de parada com a classificação central.
 
         Os nomes e grupos continuam sendo os do cadastro corporativo. O Gestor
         apenas acrescenta ``classificacao`` e ``cor``, para que nenhuma tela
         reconstrua o mapeamento planejado/não planejado por grupo ou por texto.
+        Paradas que o sistema já lança sozinho (ex.: fim de turno) e paradas
+        específicas de outro setor ficam de fora — ver
+        ``ManufacturingRules.stop_reason_selectable_by_operator``.
         """
 
         loader = getattr(self.db, "listar_status_recursos", None)
@@ -388,10 +392,15 @@ class OperatorFlowService:
         rows = []
         for raw in loader(somente_paradas=True) or []:
             row = dict(raw)
+            if not ManufacturingRules.stop_reason_selectable_by_operator(
+                row.get("codigo"), setor
+            ):
+                continue
             classification = ManufacturingRules.classify_stop(status_row=row)
             row["classificacao"] = classification.value
             row["cor"] = ManufacturingRules.stop_classification_ui_token(classification)
             rows.append(row)
+        rows.sort(key=lambda r: r.get("codigo") in LOW_PRIORITY_STOP_REASONS)
         return rows
 
     def listar_operadores(self):
@@ -433,6 +442,9 @@ class OperatorFlowService:
             or status.get("retrabalho")
             or status.get("grupo_codigo") == "0001"
             or status.get("retorno_automatico")
+            or not ManufacturingRules.stop_reason_selectable_by_operator(
+                status.get("codigo"), setor
+            )
         ):
             return OperatorFlowResult(
                 False,

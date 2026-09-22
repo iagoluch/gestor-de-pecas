@@ -294,7 +294,7 @@ def stop_reasons(
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
-    rows = _service(database, user).listar_motivos_parada()
+    rows = _service(database, user).listar_motivos_parada(sector_for_user(user).name)
     if search:
         needle = search.strip().casefold()
         rows = [

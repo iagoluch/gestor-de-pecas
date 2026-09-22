@@ -31,6 +31,43 @@ class ManufacturingRulesTests(unittest.TestCase):
         self.assertFalse(ManufacturingRules.manual_stop_is_planned())
         self.assertTrue(ManufacturingRules.automatic_stop_is_planned())
 
+    def test_parada_que_o_sistema_ja_lanca_sozinho_some_do_seletor_manual(self):
+        self.assertFalse(
+            ManufacturingRules.stop_reason_selectable_by_operator("0004", "Dobra")
+        )
+
+    def test_parada_sem_setor_mapeado_continua_visivel_a_todos(self):
+        self.assertTrue(
+            ManufacturingRules.stop_reason_selectable_by_operator("0029", "Dobra")
+        )
+        self.assertTrue(
+            ManufacturingRules.stop_reason_selectable_by_operator("0029", "Solda")
+        )
+
+    def test_parada_administrativa_some_do_seletor_manual(self):
+        self.assertFalse(
+            ManufacturingRules.stop_reason_selectable_by_operator("0033", "Dobra")
+        )
+        self.assertFalse(
+            ManufacturingRules.stop_reason_selectable_by_operator("0038", "Dobra")
+        )
+
+    def test_parada_de_solda_so_aparece_para_setores_de_solda(self):
+        self.assertTrue(
+            ManufacturingRules.stop_reason_selectable_by_operator("0026", "Solda Robô")
+        )
+        self.assertFalse(
+            ManufacturingRules.stop_reason_selectable_by_operator("0026", "Dobra")
+        )
+
+    def test_parada_de_dobra_so_aparece_para_dobra(self):
+        self.assertTrue(
+            ManufacturingRules.stop_reason_selectable_by_operator("0023", "Dobra")
+        )
+        self.assertFalse(
+            ManufacturingRules.stop_reason_selectable_by_operator("0023", "Solda Aço")
+        )
+
 
 class GoodQuantityFlowTests(unittest.TestCase):
     def setUp(self):

@@ -152,6 +152,45 @@ def resource_display_name(code, catalog_name=None):
     return exact_catalog_name or str(code).strip()
 
 
+_RESOURCE_DISPLAY_TO_CODE = {
+    name.casefold(): code for code, name in RESOURCE_FRIENDLY_NAMES.items()
+}
+
+
+def resolve_resource_identity(value):
+    """Resolve um valor de identidade de recurso ao código canônico quando o
+    valor recebido for o nome de apresentação de um recurso mapeado.
+
+    Cobre os dois jeitos conhecidos de um recurso chegar com identidade
+    divergente da canônica:
+
+    1. **Alias de código bruto** (``OFFICIAL_RESOURCE_ALIASES``, ex.: o TOTVS
+       manda "LASER" e o resto do sistema usa "LASER1").
+    2. **Nome de tela** em vez do código (ex.: Corte, via ``CUT_MACHINE_MAP``
+       em ``mes/services/cut.py``, grava "Laser Ensis 3015" em vez de
+       "LASER1").
+
+    Sem esta resolução, o mesmo recurso físico acaba com duas identidades em
+    ``eventos_estado_recurso`` e duplica cards/tempo — foi o que aconteceu com
+    LASER1/PLASMA no Corte. Qualquer setor com um recurso mapeado em
+    ``RESOURCE_FRIENDLY_NAMES``/``OFFICIAL_RESOURCE_ALIASES`` fica protegido
+    automaticamente, sem precisar de tratamento por serviço: todo ponto de
+    leitura/escrita de ``eventos_estado_recurso`` por ``recurso`` em
+    ``app/database/database.py`` passa por aqui antes de consultar/gravar.
+    Strings que não batem com nenhum código ou nome mapeado (identidades sem
+    cadastro, como as estações de Solda) voltam inalteradas.
+    """
+
+    text = str(value or "").strip()
+    if not text:
+        return text
+    normalized = normalize_resource_code(text)
+    if normalized in OFFICIAL_RESOURCE_ALIASES or normalized in RESOURCE_FRIENDLY_NAMES:
+        return canonical_resource_code(normalized)
+    code = _RESOURCE_DISPLAY_TO_CODE.get(text.casefold())
+    return canonical_resource_code(code) if code else text
+
+
 def station_resource_code(sector, station):
     """Retorna o código exato representado por uma tela/posto conhecido.
 

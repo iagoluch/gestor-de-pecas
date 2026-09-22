@@ -10,6 +10,7 @@ import unicodedata
 
 from app.core.resource_mapping import (
     RESOURCE_FRIENDLY_NAMES,
+    STATION_RESOURCE_CODES,
     resource_display_name,
 )
 
@@ -89,6 +90,31 @@ WELDING_STEEL_SECTOR = WELDING_FAMILY_SECTORS[0][0]
 #: quem precisa tratar a frente inteira como um bloco (Andon, acompanhamento
 #: gerencial da Solda, regras de setor).
 WELDING_SECTOR_NAMES = tuple(name for name, _stations, _levels in WELDING_FAMILY_SECTORS)
+
+#: Lista fechada de recursos que a aba Capacidade (Análises) deve exibir.
+#: Decisão do usuário em 22/09/2026: a tela mostrava todo recurso habilitado
+#: sincronizado do PC Factory/Protheus para o setor, inclusive código obsoleto
+#: e duplicado (ex.: DISPOG/DISPOEX duplicam DISPG/DISPEX do cadastro com nome
+#: quase idêntico). Fora da frente de Solda Aço/Alumínio/Robô — que não têm
+#: código de catálogo próprio e continuam identificadas por estação, ver
+#: CAPACITY_TAB_STATION_OWNED_SECTORS — só os códigos abaixo aparecem, mesmo
+#: que o cadastro traga outros habilitados para o mesmo setor.
+CAPACITY_TAB_WHITELIST_CODES = (
+    frozenset(RESOURCE_FRIENDLY_NAMES)
+    | frozenset(STATION_RESOURCE_CODES.values())
+    | frozenset(
+        code
+        for name, stations, _logins in WELDING_FAMILY_SECTORS
+        if name in ("Proj. Ferramentaria", "Protótipo")
+        for code in stations
+    )
+)
+
+#: Setores da frente de Solda identificados por estação, não por código de
+#: recurso do catálogo corporativo. A aba Capacidade só os exibe quando
+#: referenciados em roteiro real de OP (regra reativa da Wave 6F, antes
+#: restrita à Solda Aço, agora estendida às 3 sem código próprio).
+CAPACITY_TAB_STATION_OWNED_SECTORS = frozenset({"Solda Aço", "Solda Alumínio", "Solda Robô"})
 
 #: Setores da frente de Solda cujo login enxerga vários recursos ao mesmo
 #: tempo e por isso pede seleção na tela, igual Dobra/Usinagem/Serra — ao

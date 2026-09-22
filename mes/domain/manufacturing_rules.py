@@ -98,6 +98,46 @@ ACTIVITY_WITHOUT_OP_LABELS = {DAILY_ACTIVITY_KIND: "Atividade diária"}
 DEFAULT_ACTIVITY_WITHOUT_OP_LABEL = "Atividade s/OP"
 
 
+# Paradas do catálogo que duplicam uma interrupção que o próprio sistema já
+# lança automaticamente (ex.: fim de turno via `shift_boundary.py`). Ficam
+# ocultas do seletor manual do operador — selecionar uma delas à mão criaria
+# uma segunda parada para o mesmo evento que o sistema já registra sozinho.
+AUTOMATIC_DUPLICATE_STOP_CODES = frozenset({"0004"})  # FORA DE TURNO
+
+# Motivos administrativos (ausência do funcionário) que a Manufatura decidiu
+# não expor ao seletor manual: não são uma parada operacional que o operador
+# escolhe, são lançados por quem controla o expediente.
+ADMINISTRATIVE_STOP_CODES = frozenset({
+    "0033",  # FALTA NO EXPEDIENTE
+    "0038",  # SAIDA ANTECIPADA
+})
+
+# Motivos de parada não planejada específicos de um setor, confirmados com a
+# Manufatura em 22/09/2026 (código do motivo -> setores em que é selecionável).
+SECTOR_SPECIFIC_STOP_REASONS: dict[str, frozenset[str]] = {
+    "0022": frozenset({"Solda Aço", "Solda Alumínio", "Solda Robô"}),  # TROCA DE ARAME
+    "0026": frozenset({"Solda Aço", "Solda Alumínio", "Solda Robô"}),  # TROCA DE GÁS
+    "0027": frozenset({"Solda Aço", "Solda Alumínio", "Solda Robô"}),  # PROBLEMA NA TOCHA
+    "0028": frozenset({"Solda Aço", "Solda Alumínio", "Solda Robô"}),  # PROBLEMA MÁQUINA DE SOLDA
+    "0023": frozenset({"Dobra"}),  # AJUSTE DOBRADEIRA
+    "0074": frozenset({"Montagem"}),  # Montagem P/ EST. 08
+    "0082": frozenset({"Montagem"}),  # MONT. CAMPO BELO
+}
+
+# Motivos genéricos (qualquer setor pode usar) que a Manufatura pediu para
+# aparecer por último no seletor, em vez de misturados com os motivos mais
+# comuns: dependem de outro setor/unidade/pessoa específica, não do próprio
+# setor do operador (ex.: 0037 é "aguardando a Solda", não uma parada da Solda).
+LOW_PRIORITY_STOP_REASONS = frozenset({
+    "0034",  # AGUARDANDO LAVAÇÃO/PINTURA
+    "0037",  # AGUARDANDO SETOR SOLDA
+    "0059",  # AGUARDANDO PROGRAMAÇÃO CNC
+    "0080",  # AGUAR. PEÇAS UNI 4 (filial)
+    "0083",  # AGUAR.DEF. ASSIS (dono da GTS Brasil)
+    "0048",  # TRANSFORMAÇÃO DE MAQUINA
+})
+
+
 # Falha de equipamento — taxonomia usada por MTBF/MTTR.
 #
 # O Gestor não classifica falha por nome de motivo. A única classificação
@@ -429,6 +469,25 @@ class ManufacturingRules:
         """Interrupções automáticas do sistema são programadas."""
 
         return True
+
+    @staticmethod
+    def stop_reason_selectable_by_operator(codigo: str, setor: str | None = None) -> bool:
+        """Filtra o catálogo para o que o operador pode lançar manualmente.
+
+        Exclui paradas que o sistema já lança sozinho (``AUTOMATIC_DUPLICATE_STOP_CODES``),
+        motivos administrativos que não são escolha do operador
+        (``ADMINISTRATIVE_STOP_CODES``) e, quando o motivo tem setor(es)
+        definidos em ``SECTOR_SPECIFIC_STOP_REASONS``, exige que o setor do
+        operador esteja entre eles.
+        """
+
+        codigo = str(codigo or "").strip()
+        if codigo in AUTOMATIC_DUPLICATE_STOP_CODES or codigo in ADMINISTRATIVE_STOP_CODES:
+            return False
+        allowed_sectors = SECTOR_SPECIFIC_STOP_REASONS.get(codigo)
+        if not allowed_sectors:
+            return True
+        return str(setor or "").strip() in allowed_sectors
 
     @staticmethod
     def stop_reason_is_equipment_failure(status_row) -> bool:

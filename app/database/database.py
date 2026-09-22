@@ -12,7 +12,11 @@ from psycopg.errors import UniqueViolation
 
 from app.core.constants import FMT_DB
 from app.core.normalization import limpa_codigo, normalizar_data_db
-from app.core.operator_sectors import WELDING_STEEL_SECTOR
+from app.core.resource_mapping import resolve_resource_identity
+from app.core.operator_sectors import (
+    CAPACITY_TAB_STATION_OWNED_SECTORS,
+    CAPACITY_TAB_WHITELIST_CODES,
+)
 from app.database.config import PostgresConfig, load_postgres_config
 from app.database.ai_repository import AIRepositoryMixin
 from app.database.chamada_repository import ChamadaRepositoryMixin
@@ -53,14 +57,6 @@ PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
 
-#: Setor cujo cadastro só é publicado em tela depois de comprovar uso real.
-#:
-#: Wave 6F — a Solda Aço herdou do PC Factory 41 recursos que são etapas de
-#: solda históricas, sem posto físico e sem aparecer no roteiro de nenhuma OP.
-#: Eles continuam no catálogo (rastreabilidade e sincronização com o TOTVS), mas
-#: ficam fora das listagens até uma OP real referenciá-los. A regra é desse
-#: setor e só dele: não existe filtro geral de "esconder recurso sem uso".
-CATALOG_ONLY_RESOURCE_SECTOR = WELDING_STEEL_SECTOR
 
 
 def _corte_concluido_sql(operacao_alias):
@@ -3577,7 +3573,7 @@ class Database(
         return current
 
     def _encerrar_estado_recurso_tx(self, cursor, recurso, instante, *, somente_origem=None):
-        resource = str(recurso or "").strip()
+        resource = resolve_resource_identity(recurso)
         if not resource:
             return None
         cursor.execute(
@@ -3615,7 +3611,7 @@ class Database(
         tipo_atividade=None, apontamento_id=None, evento_apontamento_id=None,
     ):
         instante = _period_value(data_hora) or agora_db()
-        resource = str(recurso or "").strip()
+        resource = resolve_resource_identity(recurso)
         if not resource:
             raise ValueError("Recurso é obrigatório para registrar estado.")
         category = str(categoria or "").strip().lower()
@@ -3839,7 +3835,7 @@ class Database(
             )
 
     def buscar_estado_recurso_atual(self, recurso):
-        resource = str(recurso or "").strip()
+        resource = resolve_resource_identity(recurso)
         if not resource:
             return None
         with self.connection() as connection, connection.cursor() as cursor:
@@ -3883,7 +3879,7 @@ class Database(
             params.append(str(setor).strip())
         if recurso:
             query += " AND UPPER(e.recurso) = UPPER(%s)"
-            params.append(str(recurso).strip())
+            params.append(resolve_resource_identity(recurso))
         query += " ORDER BY COALESCE(e.tipo_setor, ''), e.recurso, e.data_inicio"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
@@ -3918,7 +3914,7 @@ class Database(
             params.append(str(setor).strip())
         if recurso:
             query += " AND UPPER(e.recurso) = UPPER(%s)"
-            params.append(str(recurso).strip())
+            params.append(resolve_resource_identity(recurso))
         if categoria:
             query += " AND e.categoria = %s"
             params.append(str(categoria).strip().lower())
@@ -4159,14 +4155,15 @@ class Database(
     def listar_configuracao_capacidade_recursos(self, *, setor=None, recurso=None):
         """Expõe configuração, sem calcular capacidade restante por conta própria.
 
-        Wave 6F — o cadastro da Solda Aço herdou 41 recursos do PC Factory que
-        descrevem etapas de solda antigas e nunca aparecem no roteiro de uma OP.
-        Eles continuam no catálogo (rastreabilidade e sincronização com o TOTVS
-        dependem disso), mas não são posto de trabalho nem linha de capacidade:
-        exibi-los enchia a tela de Capacidade de recursos inexistentes na
-        prática. A regra é reativa e vale só para esse setor: o recurso de Solda
-        Aço volta a aparecer sozinho no dia em que uma OP real o referenciar em
-        ``catalogo_operacoes_op``. Nenhum outro setor é filtrado.
+        A tela de Capacidade (Análises) mostra só o inventário físico real
+        confirmado com o usuário em 22/09/2026 (``CAPACITY_TAB_WHITELIST_CODES``),
+        e não todo recurso habilitado que o PC Factory/Protheus sincronizou —
+        o cadastro bruto traz código obsoleto e duplicado (ex.: DISPOG/DISPOEX
+        duplicam DISPG/DISPEX com nome quase idêntico) que nunca deveria
+        aparecer em tela. A frente de Solda Aço/Alumínio/Robô não tem código de
+        catálogo próprio por estação, então continua com a regra reativa da
+        Wave 6F: só aparece quando uma OP real referencia o recurso em
+        ``catalogo_operacoes_op``.
         """
 
         query = """
@@ -4178,14 +4175,20 @@ class Database(
             LEFT JOIN calendarios_produtivos c ON c.codigo = r.calendario_codigo
             WHERE r.habilitado IS TRUE
               AND (
-                UPPER(COALESCE(r.tipo_setor, '')) <> UPPER(%s)
-                OR EXISTS (
-                    SELECT 1 FROM catalogo_operacoes_op o
-                    WHERE UPPER(BTRIM(o.codigo_recurso)) = UPPER(BTRIM(r.codigo))
+                UPPER(r.codigo) = ANY(%s)
+                OR (
+                    UPPER(COALESCE(r.tipo_setor, '')) = ANY(%s)
+                    AND EXISTS (
+                        SELECT 1 FROM catalogo_operacoes_op o
+                        WHERE UPPER(BTRIM(o.codigo_recurso)) = UPPER(BTRIM(r.codigo))
+                    )
                 )
               )
         """
-        params = [CATALOG_ONLY_RESOURCE_SECTOR]
+        params = [
+            sorted(code.upper() for code in CAPACITY_TAB_WHITELIST_CODES),
+            sorted(sector.upper() for sector in CAPACITY_TAB_STATION_OWNED_SECTORS),
+        ]
         if setor:
             query += " AND UPPER(COALESCE(r.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())
