@@ -1,5 +1,5 @@
 :root {
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* color-scheme decide as cores que o próprio navegador pinta (fundo de
      campo, texto de campo, barra de rolagem, lista do select, autofill).
      Sem ele o tema escuro trocava só os tokens e todo input que não declara
