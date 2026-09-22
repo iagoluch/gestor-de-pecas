@@ -1,23 +1,13 @@
-import type { PropsWithChildren } from "react";
+import { Suspense, type PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoadingState } from "./components/DataState";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
-import { AndonPage } from "./pages/AndonPage";
-import { WeldingManagementPage } from "./pages/WeldingManagementPage";
-import { ManagementOverviewPage } from "./pages/ManagementOverviewPage";
-import { ManagementGoalsPage } from "./pages/home/GoalsPage";
-import { ManagementPausesPage } from "./pages/home/PausesPage";
-import { ManagementBadgesPage } from "./pages/home/BadgesPage";
-import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
-import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
-import { ManagementSystemPage } from "./pages/home/SystemPage";
-import { ManagementUsersPage } from "./pages/home/UsersPage";
-import { AIPage } from "./pages/AIPage";
-import { OperatorPortalPage } from "./pages/operator/OperatorPortalPage";
 import {
+  AIPage,
+  AnalyticalDataReportPage,
   AnalyticsCapacityPage,
   AnalyticsChronoPage,
   AnalyticsDowntimesPage,
@@ -26,24 +16,45 @@ import {
   AnalyticsQualityPage,
   AnalyticsReliabilityPage,
   AnalyticsStandardPage,
-} from "./pages/analytics/AnalyticsPages";
-import { AuditAppointmentsPage, AuditIssuesPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
-import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
-import { OperationsOrdersPage, OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
-import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
-import {
-  AnalyticalDataReportPage,
+  AndonPage,
+  AuditAppointmentsPage,
+  AuditIssuesPage,
+  AuditReliabilityPage,
+  HomeAlertsPage,
+  HomeSectorsPage,
   IndicatorsReportPage,
   LossesReportPage,
+  ManagementBadgesPage,
+  ManagementChamadasPage,
+  ManagementGoalsPage,
+  ManagementOverviewPage,
+  ManagementPausesPage,
   ManagementReportPage,
+  ManagementShiftsPage,
+  ManagementSystemPage,
+  ManagementUsersPage,
+  OperationsOrdersPage,
+  OperationsOverviewPage,
+  OperationsResourcesPage,
+  OperationsTimePage,
+  OperatorPortalPage,
+  ProductionCompletedPage,
+  ProductionOrdersPage,
+  ProductionPlanActualPage,
   ProductionReportPage,
-} from "./pages/reports/ReportsPages";
-import { TraceabilityNestingPage, TraceabilityOrderPage, TraceabilityTimelinePage } from "./pages/traceability/TraceabilityPages";
-
+  TraceabilityNestingPage,
+  TraceabilityOrderPage,
+  TraceabilityTimelinePage,
+  WeldingManagementPage,
+} from "./routes/lazyPages";
 function roleHome(user: { management_access: boolean; andon_access?: boolean }) {
   if (user.management_access) return "/inicio/visao-geral";
   if (user.andon_access) return "/andon";
   return "/operador";
+}
+
+function RouteLoading({ children }: PropsWithChildren) {
+  return <Suspense fallback={<div className="app-loading"><LoadingState label="Carregando interface…" /></div>}>{children}</Suspense>;
 }
 
 function RequireAuth({ management = false, andon = false, operator = false, children }: PropsWithChildren<{ management?: boolean; andon?: boolean; operator?: boolean }>) {
@@ -61,10 +72,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/andon" element={<RequireAuth andon><AndonPage /></RequireAuth>} />
+      <Route path="/andon" element={<RequireAuth andon><RouteLoading><AndonPage /></RouteLoading></RequireAuth>} />
       {/* Visão gerencial da Solda. Compartilha a autorização do Andon porque
           participa do mesmo ciclo de TV, sem aplicação nem login separados. */}
-      <Route path="/welding-management" element={<RequireAuth andon><WeldingManagementPage /></RequireAuth>} />
+      <Route path="/welding-management" element={<RequireAuth andon><RouteLoading><WeldingManagementPage /></RouteLoading></RequireAuth>} />
       <Route
         path="/"
         element={(
@@ -120,7 +131,7 @@ export default function App() {
         <Route path="rastreabilidade/linha-do-tempo" element={<TraceabilityTimelinePage />} />
         <Route path="rastreabilidade/lote-material-nesting" element={<TraceabilityNestingPage />} />
       </Route>
-      <Route path="/operador/*" element={<RequireAuth operator><OperatorPortalPage /></RequireAuth>} />
+      <Route path="/operador/*" element={<RequireAuth operator><RouteLoading><OperatorPortalPage /></RouteLoading></RequireAuth>} />
       <Route path="*" element={<RoleHome />} />
     </Routes>
   );

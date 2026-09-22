@@ -7,9 +7,6 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ReferenceClockProvider } from "./system/ReferenceClock";
 import "./styles/tokens.css";
 import "./styles/global.css";
-import "./styles/ai.css";
-import "./styles/andon.css";
-import "./styles/welding.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

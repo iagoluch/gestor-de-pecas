@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import "../styles/ai.css";
 import { aiApi } from "../api/ai";
 import { api, ApiError } from "../api/client";
 import { AssistantMarkdown } from "../components/AssistantMarkdown";

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "../styles/andon.css";
 import type { CSSProperties } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { AndonResourceDrawer } from "../components/AndonResourceDrawer";

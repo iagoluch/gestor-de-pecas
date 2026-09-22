@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ChamadaButton } from "../components/ChamadaButton";
+import { LoadingState } from "../components/DataState";
 import { ChamadaSino } from "../components/ChamadaSino";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
@@ -100,7 +101,13 @@ export function AppShell({ children }: PropsWithChildren) {
           <small className="sidebar__credit">Desenvolvido por:<br />Iago Luchtenberg da Silva</small>
         </div>
       </aside>
-      <main className="app-content">{children ?? <Outlet />}</main>
+      <main className="app-content">
+        {children ?? (
+          <Suspense fallback={<div className="app-loading"><LoadingState label="Carregando página…" /></div>}>
+            <Outlet />
+          </Suspense>
+        )}
+      </main>
       <ChamadaButton variant="gestao" />
     </div>
   );

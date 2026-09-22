@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "../styles/welding.css";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
