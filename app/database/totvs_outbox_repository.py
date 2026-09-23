@@ -248,13 +248,23 @@ class TotvsOutboxRepositoryMixin:
             cursor.execute(
                 f"""
                 WITH elegiveis AS (
-                    SELECT id FROM totvs_outbox
-                    WHERE status IN ('PENDING', 'RETRY')
-                      AND next_attempt_at <= %(now)s
-                      AND payload_xml IS NOT NULL
-                    ORDER BY next_attempt_at, id
+                    SELECT o.id FROM totvs_outbox o
+                    WHERE o.status IN ('PENDING', 'RETRY')
+                      AND o.next_attempt_at <= %(now)s
+                      AND o.payload_xml IS NOT NULL
+                      -- O WSPCP recebe fatos de uma OP em ordem causal. Um
+                      -- item em backoff, em envio ou bloqueado por erro
+                      -- funcional precisa segurar os posteriores da mesma OP;
+                      -- só SENT libera a sequência.
+                      AND NOT EXISTS (
+                          SELECT 1 FROM totvs_outbox anterior
+                          WHERE anterior.aggregate_id = o.aggregate_id
+                            AND anterior.id < o.id
+                            AND anterior.status <> 'SENT'
+                      )
+                    ORDER BY o.next_attempt_at, o.id
                     LIMIT %(batch)s
-                    FOR UPDATE SKIP LOCKED
+                    FOR UPDATE OF o SKIP LOCKED
                 )
                 UPDATE totvs_outbox o
                 SET status = 'SENDING',

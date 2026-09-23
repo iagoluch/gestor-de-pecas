@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 17/09/2026.
+**Atualizado em:** 23/09/2026.
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -11,6 +11,14 @@ ferramenta.
 Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
+
+### Atualização de auditoria — 23/09/2026
+
+- A outbox TOTVS agora preserva a ordem causal por OP: evento em `RETRY`,
+  `SENDING` ou `ERROR` bloqueia qualquer posterior da mesma OP; somente
+  `SENT` libera a sequência. A migration 46 normaliza itens anteriores para
+  a chave da OP e cria o índice de suporte. O fato canônico continua ligado ao
+  item por `canonical_event_id` para idempotência e reconstrução.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e

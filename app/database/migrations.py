@@ -2222,6 +2222,16 @@ TELEGRAM_BOT_CURSOR_STATEMENTS = (
 )
 
 
+TOTVS_OUTBOX_ORDERING_DESCRIPTION = "ordenação causal da outbox TOTVS por OP"
+TOTVS_OUTBOX_ORDERING_STATEMENTS = (
+    # Antes da migration 46 os fatos de execução usavam o id do evento como
+    # aggregate_id. A ordenação da outbox é por OP, portanto normalizamos os
+    # itens históricos antes de criar o índice que atende a guarda do worker.
+    "UPDATE totvs_outbox SET aggregate_id = production_order WHERE aggregate_id <> production_order",
+    "CREATE INDEX idx_totvs_outbox_aggregate_pending ON totvs_outbox (aggregate_id, id) WHERE status <> 'SENT'",
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2270,6 +2280,7 @@ MIGRATIONS = {
     43: (PAUSAS_SOLDA_DESMEMBRADA_DESCRIPTION, PAUSAS_SOLDA_DESMEMBRADA_STATEMENTS),
     44: (PRIMEIRA_PECA_REFUGO_EVENT_DESCRIPTION, PRIMEIRA_PECA_REFUGO_EVENT_STATEMENTS),
     45: (TELEGRAM_BOT_CURSOR_DESCRIPTION, TELEGRAM_BOT_CURSOR_STATEMENTS),
+    46: (TOTVS_OUTBOX_ORDERING_DESCRIPTION, TOTVS_OUTBOX_ORDERING_STATEMENTS),
 }
 
 

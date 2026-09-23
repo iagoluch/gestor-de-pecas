@@ -795,6 +795,28 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
         self.assertEqual(depois["attempts"], 1)
         self.assertGreater(depois["next_attempt_at"], depois["last_attempt_at"])
 
+    def test_retry_anterior_da_mesma_op_bloqueia_evento_posterior(self):
+        """A outbox preserva a sequência causal da OP durante o backoff."""
+
+        self._produce_and_finish("10", boas=10)
+        primeiro = self._outbox(status=OutboxStatus.PENDING)[0]
+        self._run_worker_with(
+            lambda request: (_ for _ in ()).throw(
+                httpx.ReadTimeout("tempo esgotado", request=request)
+            )
+        )
+        self._produce_and_finish("20", boas=8, quantidade=8)
+        itens = self._outbox()
+        posterior = next(item for item in itens if item["id"] != primeiro["id"])
+
+        self.assertEqual(primeiro["aggregate_id"], self.op)
+        self.assertEqual(posterior["aggregate_id"], self.op)
+        self.assertEqual(self.db.reservar_lote_outbound_totvs(worker="w-ordem"), [])
+
+        self._make_due(primeiro["id"])
+        reservado = self.db.reservar_lote_outbound_totvs(worker="w-ordem")
+        self.assertEqual([item["id"] for item in reservado], [primeiro["id"]])
+
     def test_503_volta_para_retry_e_agenda_backoff_crescente(self):
         self._produce_and_finish("10", boas=10)
         item_id = self._outbox()[0]["id"]

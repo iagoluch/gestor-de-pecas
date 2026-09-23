@@ -266,7 +266,11 @@ def _production_appointment_request(
         return _blocked(
             event_type=event_type,
             aggregate_type=AGGREGATE_EXECUTION_EVENT,
-            aggregate_id=str(event.event_id),
+            # A ordem do Protheus é a da OP, não a de cada fato isolado. O
+            # ``canonical_event_id`` preserva a identidade do fato para
+            # idempotência e reconstrução; a outbox usa a OP para não enviar
+            # um evento posterior antes de um anterior em retry.
+            aggregate_id=event.production_order,
             idempotency_key=fallback_key,
             transaction="productionappointment",
             production_order=event.production_order,
@@ -280,7 +284,7 @@ def _production_appointment_request(
     return OutboxEnqueueRequest(
         event_type=event_type,
         aggregate_type=AGGREGATE_EXECUTION_EVENT,
-        aggregate_id=str(event.event_id),
+        aggregate_id=event.production_order,
         idempotency_key=message.idempotency_key,
         transaction=message.transaction,
         production_order=event.production_order,
@@ -315,7 +319,7 @@ def _stop_report_request(
         return _blocked(
             event_type=EVENT_STOP_REPORT,
             aggregate_type=AGGREGATE_EXECUTION_EVENT,
-            aggregate_id=str(event.event_id),
+            aggregate_id=event.production_order,
             idempotency_key=fallback_key,
             transaction="stopreport",
             production_order=event.production_order,
@@ -334,7 +338,7 @@ def _stop_report_request(
         return _blocked(
             event_type=EVENT_STOP_REPORT,
             aggregate_type=AGGREGATE_EXECUTION_EVENT,
-            aggregate_id=str(event.event_id),
+            aggregate_id=event.production_order,
             idempotency_key=fallback_key,
             transaction="stopreport",
             production_order=event.production_order,
@@ -348,7 +352,7 @@ def _stop_report_request(
     return OutboxEnqueueRequest(
         event_type=EVENT_STOP_REPORT,
         aggregate_type=AGGREGATE_EXECUTION_EVENT,
-        aggregate_id=str(event.event_id),
+        aggregate_id=event.production_order,
         idempotency_key=message.idempotency_key,
         transaction=message.transaction,
         production_order=event.production_order,
