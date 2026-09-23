@@ -221,16 +221,19 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
     settings = application.state.settings
     interval = settings.telegram_bot_poll_interval_seconds
     token = settings.telegram_bot_token
+    cursor_key = "factory_bot"
     offset = None
     while True:
         try:
             database = application.state.database_manager.get()
+            load_cursor = getattr(database, "obter_cursor_telegram_bot", None)
+            if offset is None and callable(load_cursor):
+                offset = await asyncio.to_thread(load_cursor, cursor_key)
             service = TelegramFactoryBotService(database)
             updates = await asyncio.to_thread(
                 fetch_telegram_updates, bot_token=token, offset=offset
             )
             for update in updates:
-                offset = int(update.get("update_id", 0)) + 1
                 # ``handle_update`` consulta o PostgreSQL de forma síncrona;
                 # fora do laço de eventos ele não congela as demais requisições.
                 reply = await asyncio.to_thread(service.handle_update, update)
@@ -250,6 +253,10 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
                         parse_mode=reply.parse_mode,
                         reply_markup=reply.reply_markup,
                     )
+                offset = int(update.get("update_id", 0)) + 1
+                save_cursor = getattr(database, "avancar_cursor_telegram_bot", None)
+                if callable(save_cursor):
+                    offset = await asyncio.to_thread(save_cursor, cursor_key, offset)
         except asyncio.CancelledError:
             raise
         except Exception:

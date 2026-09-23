@@ -150,6 +150,26 @@ class Database(
     ReportRepositoryMixin,
     AIRepositoryMixin,
 ):
+    def obter_cursor_telegram_bot(self, bot_key):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT next_update_id FROM telegram_bot_cursors WHERE bot_key = %s", (str(bot_key),))
+            row = cursor.fetchone()
+            return int(row["next_update_id"]) if row else None
+
+    def avancar_cursor_telegram_bot(self, bot_key, next_update_id):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO telegram_bot_cursors (bot_key, next_update_id)
+                VALUES (%s, %s)
+                ON CONFLICT (bot_key) DO UPDATE SET
+                    next_update_id = GREATEST(telegram_bot_cursors.next_update_id, EXCLUDED.next_update_id),
+                    atualizado_em = CURRENT_TIMESTAMP
+                RETURNING next_update_id
+                """,
+                (str(bot_key), int(next_update_id)),
+            )
+            return int(cursor.fetchone()["next_update_id"])
     """Stable facade backed exclusively by PostgreSQL."""
 
     schema_version = SCHEMA_VERSION
