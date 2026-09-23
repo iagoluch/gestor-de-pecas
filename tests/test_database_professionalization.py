@@ -598,6 +598,61 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
             ],
         )
 
+    def test_apontamento_e_participacao_preservam_id_apos_renomear_operador(self):
+        operador = self.db.cadastrar_operador_apontamento(
+            "7001", "Nome anterior", fonte="teste"
+        )
+        item = self._appointment("OP-IDENTIDADE")
+        iniciado = self.db.transicionar_apontamento_operador(
+            item["id"],
+            "producao",
+            "POSTO DOBRA",
+            operadores_cracha=["7001"],
+        )
+        finalizado = self.db.transicionar_apontamento_operador(
+            item["id"],
+            "finalizado",
+            "POSTO DOBRA",
+            quantidade_boa=2,
+            operadores_cracha=["7001"],
+        )
+        self.assertEqual(iniciado["operador_inicio_id"], operador["id"])
+        self.assertEqual(finalizado["operador_fim_id"], operador["id"])
+
+        self.db.iniciar_participacao_operador(
+            "2204",
+            operador_id=operador["id"],
+            cracha="7001",
+            nome="Nome anterior",
+            apontamento_id=item["id"],
+            data_inicio=datetime(2026, 9, 23, 8, 0, 0),
+        )
+        self.db.finalizar_participacoes_apontamento(
+            item["id"], data_fim=datetime(2026, 9, 23, 9, 0, 0)
+        )
+
+        self.db.cadastrar_operador_apontamento("7001", "Nome atualizado", fonte="teste")
+        participacao = self.db.listar_participacoes_apontamento(item["id"])[0]
+        self.assertEqual(participacao["operador_id"], operador["id"])
+        self.assertEqual(participacao["nome_resolvido"], "Nome atualizado")
+
+        fatos = self.db.listar_fatos_operacionais_periodo(
+            datetime(2026, 1, 1), datetime(2026, 12, 31), op="OP-IDENTIDADE"
+        )
+        self.assertEqual(fatos[0]["operador_inicio_nome"], "Nome atualizado")
+        self.assertEqual(fatos[0]["operador_fim_nome"], "Nome atualizado")
+        self.assertEqual(
+            fatos[0]["eventos"][-1]["operadores"],
+            [{"id": operador["id"], "cracha": "7001", "nome": "Nome atualizado"}],
+        )
+        ordens = FrontendBackendFacade(self.db).ordens_producao(
+            AnalyticsFilter(
+                inicio=datetime(2026, 1, 1), fim=datetime(2026, 12, 31)
+            )
+        )
+        self.assertEqual(ordens["items"][0]["operador_inicio"], "Nome atualizado")
+        self.assertEqual(ordens["items"][0]["operador_fim"], "Nome atualizado")
+
     def test_catalogos_pcfactory_alimentam_parada_e_evento_do_operador(self):
         now = datetime.now().replace(microsecond=0)
         with self.db.connection() as connection, connection.cursor() as cursor:
@@ -919,7 +974,9 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         self.assertEqual(events[-1]["operadores"], [{"cracha": "1", "nome": "Iago"}])
 
     def test_recurso_divergente_exige_cracha_e_fica_auditado_no_postgresql(self):
-        self.db.cadastrar_operador_apontamento("1", "Iago", fonte="teste")
+        self.db.cadastrar_operador_apontamento(
+            "1", "Iago", fonte="teste", autorizador_retrabalho=True
+        )
         operation = {
             "numero_operacao": "20",
             "codigo_recurso": "DOBRA1",
@@ -956,7 +1013,7 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
             confirmar_recurso_divergente=True,
             operadores_cracha=["1"],
         )
-        self.assertTrue(accepted.ok)
+        self.assertTrue(accepted.ok, accepted.message)
         event = self.db.listar_eventos_apontamento_operador(accepted.data["id"])[-1]
         self.assertTrue(event["recurso_divergente"])
         self.assertEqual(event["recurso_roteiro_codigo"], "DOBRA1")

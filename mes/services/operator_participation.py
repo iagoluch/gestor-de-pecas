@@ -11,9 +11,9 @@ serviço existe para impedir:
   duplicidade: é outra pergunta.
 
 A fonte canônica do tempo-pessoa é ``participacoes_operador``, uma linha por
-pessoa por execução. O operador que abriu o apontamento continua registrado em
-``apontamentos_operacionais.operador_inicio`` e nunca é substituído: ele apenas
-passa a ser uma das participações, marcada como principal.
+pessoa por execução. A pessoa é ligada pelo ``operador_id`` imutável; crachá e
+nome são snapshots de compatibilidade e a leitura usa o cadastro atual quando
+o vínculo está presente.
 """
 
 from __future__ import annotations
@@ -168,8 +168,8 @@ class OperatorParticipationService:
             )
             total += segundos
             pessoas.append({
-                "cracha": row.get("cracha"),
-                "nome": row.get("nome"),
+                "cracha": row.get("cracha_resolvido") or row.get("cracha"),
+                "nome": row.get("nome_resolvido") or row.get("nome"),
                 "principal": bool(row.get("operador_principal")),
                 "tipo_participacao": row.get("tipo_participacao"),
                 "data_inicio": inicio,

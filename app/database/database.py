@@ -2316,6 +2316,10 @@ class Database(
                     raise ValueError(
                         f"Crachá não cadastrado ou inativo: {', '.join(ausentes)}."
                     )
+            # A pessoa que assinou a ação é o primeiro crachá informado. O
+            # texto do login continua apenas como contexto do posto; nunca é
+            # usado para inferir a identidade física de alguém.
+            operador_principal_id = operadores[0]["id"] if operadores else None
             if destino == OperatorState.FINISHED:
                 quality_rework_only = bool(
                     str(atual.get("tipo_setor") or "").casefold() == "qualidade"
@@ -2351,6 +2355,8 @@ class Database(
                     UPDATE apontamentos_operacionais
                     SET status = 'Em processo',
                         operador_inicio = COALESCE(operador_inicio, %s),
+                        operador_inicio_id = COALESCE(operador_inicio_id, %s),
+                        operador_fila_id = COALESCE(operador_fila_id, %s),
                         data_inicio = COALESCE(data_inicio, %s),
                         motivo_parada = NULL,
                         codigo_status_recurso = NULL,
@@ -2359,7 +2365,14 @@ class Database(
                     WHERE id = %s
                     RETURNING *
                     """,
-                    (operador, instante, comentario, apontamento_id),
+                    (
+                        operador,
+                        operador_principal_id,
+                        operador_principal_id,
+                        instante,
+                        comentario,
+                        apontamento_id,
+                    ),
                 )
             elif destino == OperatorState.FINISHED and finalizacao_parcial:
                 cursor.execute(
@@ -2389,7 +2402,9 @@ class Database(
                 cursor.execute(
                     """
                     UPDATE apontamentos_operacionais
-                    SET status = 'Finalizado', operador_fim = %s, data_fim = %s,
+                    SET status = 'Finalizado', operador_fim = %s,
+                        operador_fim_id = COALESCE(%s, operador_fim_id),
+                        data_fim = %s,
                         setor_destino = %s, quantidade_boa = %s, quantidade_refugo = %s,
                         quantidade_retrabalho = %s, lote = COALESCE(%s, lote),
                         motivo_refugo = COALESCE(%s, motivo_refugo),
@@ -2402,7 +2417,10 @@ class Database(
                     RETURNING *
                     """,
                     (
-                        operador, instante, str(setor_destino or "Almoxarifado").strip(),
+                        operador,
+                        operador_principal_id,
+                        instante,
+                        str(setor_destino or "Almoxarifado").strip(),
                         total_boas, total_refugos, total_retrabalhos + retrabalhos,
                         lote, motivo_refugo, causa_raiz, codigo_status_recurso, motivo,
                         comentario, apontamento_id,
@@ -2414,6 +2432,8 @@ class Database(
                     UPDATE apontamentos_operacionais
                     SET status = %s, codigo_status_recurso = %s,
                         operador_inicio = COALESCE(operador_inicio, %s),
+                        operador_inicio_id = COALESCE(operador_inicio_id, %s),
+                        operador_fila_id = COALESCE(operador_fila_id, %s),
                         data_inicio = COALESCE(data_inicio, %s),
                         motivo_parada = %s, comentario = %s,
                         estado_retorno = %s,
@@ -2425,7 +2445,13 @@ class Database(
                     """,
                     (
                         operator_status_for_state(destino), codigo_status_recurso,
-                        operador, instante, motivo, comentario, estado_retorno_db,
+                        operador,
+                        operador_principal_id,
+                        operador_principal_id,
+                        instante,
+                        motivo,
+                        comentario,
+                        estado_retorno_db,
                         retrabalhos if destino == OperatorState.REWORK else 0,
                         causa_raiz, destino_estado, tipo_setup, apontamento_id,
                     ),
@@ -3435,6 +3461,16 @@ class Database(
                 p.fim_planejado,
                 p.prazo_entrega,
                 p.prioridade,
+                (
+                    SELECT operador.nome
+                    FROM operadores_apontamento operador
+                    WHERE operador.id = a.operador_inicio_id
+                ) AS operador_inicio_nome,
+                (
+                    SELECT operador.nome
+                    FROM operadores_apontamento operador
+                    WHERE operador.id = a.operador_fim_id
+                ) AS operador_fim_nome,
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -3445,6 +3481,22 @@ class Database(
                             'quantidade_boa', e.quantidade_boa,
                             'quantidade_refugo', e.quantidade_refugo,
                             'operador', e.operador,
+                            'operadores', COALESCE(
+                                (
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'id', operador.id,
+                                            'cracha', operador.cracha,
+                                            'nome', operador.nome
+                                        ) ORDER BY operador.cracha
+                                    )
+                                    FROM operadores_evento_apontamento vinculo
+                                    JOIN operadores_apontamento operador
+                                      ON operador.id = vinculo.operador_id
+                                    WHERE vinculo.evento_id = e.id
+                                ),
+                                '[]'::jsonb
+                            ),
                             'data_hora', e.data_hora,
                             'codigo_status_recurso', e.codigo_status_recurso,
                             'recurso_roteiro_codigo', e.recurso_roteiro_codigo,
@@ -4579,12 +4631,18 @@ class Database(
                     """
                     SELECT * FROM participacoes_operador
                     WHERE apontamento_id = %s
-                      AND UPPER(COALESCE(cracha, '')) = UPPER(COALESCE(%s, ''))
+                      AND (
+                          operador_id = %s
+                          OR (
+                              operador_id IS NULL
+                              AND UPPER(COALESCE(cracha, '')) = UPPER(COALESCE(%s, ''))
+                          )
+                      )
                       AND data_fim IS NULL
                     ORDER BY id DESC
                     LIMIT 1
                     """,
-                    (apontamento_id, cracha),
+                    (apontamento_id, operador_id, cracha),
                 )
                 aberta = _as_dict(cursor.fetchone())
                 if aberta is not None:
@@ -4615,12 +4673,18 @@ class Database(
                         """
                         SELECT * FROM participacoes_operador
                         WHERE apontamento_id = %s
-                          AND UPPER(COALESCE(cracha, '')) = UPPER(COALESCE(%s, ''))
+                          AND (
+                              operador_id = %s
+                              OR (
+                                  operador_id IS NULL
+                                  AND UPPER(COALESCE(cracha, '')) = UPPER(COALESCE(%s, ''))
+                              )
+                          )
                           AND data_fim IS NULL
                         ORDER BY id DESC
                         LIMIT 1
                         """,
-                        (apontamento_id, cracha),
+                        (apontamento_id, operador_id, cracha),
                     )
                     return _as_dict(retry.fetchone())
             return _as_dict(cursor.fetchone())
@@ -4629,13 +4693,19 @@ class Database(
         """Participações de uma execução, base do tempo-pessoa da OP."""
 
         query = """
-            SELECT * FROM participacoes_operador
-            WHERE apontamento_id = %s
+            SELECT
+                participacao.*,
+                COALESCE(operador.cracha, participacao.cracha) AS cracha_resolvido,
+                COALESCE(operador.nome, participacao.nome) AS nome_resolvido
+            FROM participacoes_operador participacao
+            LEFT JOIN operadores_apontamento operador
+              ON operador.id = participacao.operador_id
+            WHERE participacao.apontamento_id = %s
         """
         params = [apontamento_id]
         if somente_abertas:
             query += " AND data_fim IS NULL"
-        query += " ORDER BY data_inicio, id"
+        query += " ORDER BY participacao.data_inicio, participacao.id"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
@@ -4652,19 +4722,31 @@ class Database(
 
         fim = _period_value(data_fim) or self._now()
         query = """
-            UPDATE participacoes_operador
+            UPDATE participacoes_operador participacao
             SET data_fim = %s
-            WHERE apontamento_id = %s
-              AND data_fim IS NULL
-              AND data_inicio <= %s
+            WHERE participacao.apontamento_id = %s
+              AND participacao.data_fim IS NULL
+              AND participacao.data_inicio <= %s
         """
         params = [fim, apontamento_id, fim]
         alvo = [str(item or "").strip() for item in (crachas or ()) if str(item or "").strip()]
         if crachas is not None:
             if not alvo:
                 return []
-            query += " AND UPPER(COALESCE(cracha, '')) = ANY(%s)"
-            params.append([item.upper() for item in alvo])
+            query += """
+                AND (
+                    participacao.operador_id IN (
+                        SELECT id FROM operadores_apontamento
+                        WHERE UPPER(cracha) = ANY(%s)
+                    )
+                    OR (
+                        participacao.operador_id IS NULL
+                        AND UPPER(COALESCE(participacao.cracha, '')) = ANY(%s)
+                    )
+                )
+            """
+            normalized = [item.upper() for item in alvo]
+            params.extend((normalized, normalized))
         query += " RETURNING *"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
@@ -4679,28 +4761,33 @@ class Database(
         if start is None or end is None or end <= start:
             return []
         query = """
-            SELECT *
-            FROM participacoes_operador
-            WHERE data_inicio < %s
-              AND COALESCE(data_fim, %s) > %s
+            SELECT
+                participacao.*,
+                COALESCE(operador.cracha, participacao.cracha) AS cracha_resolvido,
+                COALESCE(operador.nome, participacao.nome) AS nome_resolvido
+            FROM participacoes_operador participacao
+            LEFT JOIN operadores_apontamento operador
+              ON operador.id = participacao.operador_id
+            WHERE participacao.data_inicio < %s
+              AND COALESCE(participacao.data_fim, %s) > %s
         """
         params = [end, end, start]
         if recurso:
-            query += " AND UPPER(recurso) = UPPER(%s)"
+            query += " AND UPPER(participacao.recurso) = UPPER(%s)"
             params.append(str(recurso).strip())
         if setor:
-            query += " AND UPPER(COALESCE(tipo_setor, '')) = UPPER(%s)"
+            query += " AND UPPER(COALESCE(participacao.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())
         if op:
-            query += " AND UPPER(COALESCE(op, '')) = UPPER(%s)"
+            query += " AND UPPER(COALESCE(participacao.op, '')) = UPPER(%s)"
             params.append(limpa_codigo(op))
         if operacao is not None:
-            query += " AND COALESCE(numero_operacao, '') = %s"
+            query += " AND COALESCE(participacao.numero_operacao, '') = %s"
             params.append(str(operacao))
         if cracha:
-            query += " AND UPPER(COALESCE(cracha, '')) = UPPER(%s)"
+            query += " AND UPPER(COALESCE(operador.cracha, participacao.cracha, '')) = UPPER(%s)"
             params.append(str(cracha).strip())
-        query += " ORDER BY data_inicio, id"
+        query += " ORDER BY participacao.data_inicio, participacao.id"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
@@ -4964,10 +5051,18 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT recurso, tipo_setor, op, numero_operacao, data_inicio
-                FROM participacoes_operador
-                WHERE cracha = %s AND data_fim IS NULL
-                ORDER BY data_inicio DESC
+                SELECT
+                    participacao.recurso,
+                    participacao.tipo_setor,
+                    participacao.op,
+                    participacao.numero_operacao,
+                    participacao.data_inicio
+                FROM participacoes_operador participacao
+                LEFT JOIN operadores_apontamento operador
+                  ON operador.id = participacao.operador_id
+                WHERE COALESCE(operador.cracha, participacao.cracha) = %s
+                  AND participacao.data_fim IS NULL
+                ORDER BY participacao.data_inicio DESC
                 """,
                 (codigo,),
             )

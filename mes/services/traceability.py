@@ -39,11 +39,13 @@ def _person_time_summary(participations):
     for row in participations or ():
         inicio = _dt(row.get("data_inicio"))
         fim = _dt(row.get("data_fim"))
-        chave = str(row.get("cracha") or row.get("nome") or "").strip()
+        operador_id = row.get("operador_id")
+        chave = str(operador_id or row.get("cracha_resolvido") or row.get("cracha") or row.get("nome_resolvido") or row.get("nome") or "").strip()
         if chave:
             pessoas.setdefault(chave, {
-                "cracha": row.get("cracha"),
-                "nome": row.get("nome"),
+                "operador_id": operador_id,
+                "cracha": row.get("cracha_resolvido") or row.get("cracha"),
+                "nome": row.get("nome_resolvido") or row.get("nome"),
                 "segundos": 0.0,
                 "participacoes": 0,
             })
@@ -157,12 +159,19 @@ class TraceabilityService:
                     "appointment_id": operation.get("apontamento_id"),
                 })
             for event in operation.get("eventos") or []:
+                participantes = list(event.get("operadores") or [])
+                participante_principal = participantes[0] if participantes else {}
                 timeline.append({
                     "timestamp": event.get("data_hora"),
                     "type": event.get("tipo_evento") or event.get("tipo") or "evento_operacional",
                     "status": event.get("status_novo") or event.get("status"),
                     "reason": event.get("motivo") or event.get("comentario"),
-                    "operator": event.get("operador") or event.get("operador_nome"),
+                    "operator": (
+                        participante_principal.get("nome")
+                        or participante_principal.get("cracha")
+                        or event.get("operador_nome")
+                        or event.get("operador")
+                    ),
                     "resource": operation.get("recurso_real"),
                     "operation": operation.get("operacao"),
                     "source": "eventos_apontamento_operador",
@@ -215,7 +224,12 @@ class TraceabilityService:
                 "type": "participacao_operador",
                 "status": participation.get("status"),
                 "reason": participation.get("tipo_participacao"),
-                "operator": participation.get("nome") or participation.get("cracha"),
+                "operator": (
+                    participation.get("nome_resolvido")
+                    or participation.get("nome")
+                    or participation.get("cracha_resolvido")
+                    or participation.get("cracha")
+                ),
                 "resource": participation.get("recurso"),
                 "operation": participation.get("numero_operacao"),
                 "source": "participacoes_operador",

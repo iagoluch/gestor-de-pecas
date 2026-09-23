@@ -2253,6 +2253,33 @@ LOGIN_THROTTLE_STATEMENTS = (
 )
 
 
+OPERATOR_IDENTITY_DESCRIPTION = (
+    "identidade imutável dos operadores em apontamentos e participações"
+)
+OPERATOR_IDENTITY_STATEMENTS = (
+    # O texto histórico continua como snapshot de compatibilidade. O vínculo
+    # canônico dos novos fatos é o id do crachá, que sobrevive à mudança de
+    # nome e é resolvido apenas na leitura.
+    "ALTER TABLE apontamentos_operacionais ADD COLUMN operador_fila_id BIGINT REFERENCES operadores_apontamento(id) ON DELETE RESTRICT",
+    "ALTER TABLE apontamentos_operacionais ADD COLUMN operador_inicio_id BIGINT REFERENCES operadores_apontamento(id) ON DELETE RESTRICT",
+    "ALTER TABLE apontamentos_operacionais ADD COLUMN operador_fim_id BIGINT REFERENCES operadores_apontamento(id) ON DELETE RESTRICT",
+    "CREATE INDEX idx_apontamentos_operador_inicio ON apontamentos_operacionais (operador_inicio_id) WHERE operador_inicio_id IS NOT NULL",
+    "CREATE INDEX idx_apontamentos_operador_fim ON apontamentos_operacionais (operador_fim_id) WHERE operador_fim_id IS NOT NULL",
+    # Dados legados só recebem vínculo quando o texto era o próprio crachá.
+    # Nome de exibição não é chave única e nunca pode ser associado por palpite.
+    "UPDATE apontamentos_operacionais a SET operador_fila_id = o.id FROM operadores_apontamento o WHERE a.operador_fila_id IS NULL AND a.operador_fila = o.cracha",
+    "UPDATE apontamentos_operacionais a SET operador_inicio_id = o.id FROM operadores_apontamento o WHERE a.operador_inicio_id IS NULL AND a.operador_inicio = o.cracha",
+    "UPDATE apontamentos_operacionais a SET operador_fim_id = o.id FROM operadores_apontamento o WHERE a.operador_fim_id IS NULL AND a.operador_fim = o.cracha",
+    "UPDATE participacoes_operador p SET operador_id = o.id FROM operadores_apontamento o WHERE p.operador_id IS NULL AND p.cracha = o.cracha",
+    "CREATE INDEX idx_participacoes_operador_id ON participacoes_operador (operador_id, data_inicio) WHERE operador_id IS NOT NULL",
+    # O índice anterior usava o texto do crachá. Para fatos identificados,
+    # exclusividade é por identidade imutável; texto fica apenas para legado.
+    "DROP INDEX uq_participacao_aberta_apontamento",
+    "CREATE UNIQUE INDEX uq_participacao_aberta_apontamento ON participacoes_operador (apontamento_id, operador_id) WHERE data_fim IS NULL AND apontamento_id IS NOT NULL AND operador_id IS NOT NULL",
+    "CREATE UNIQUE INDEX uq_participacao_aberta_apontamento_legado ON participacoes_operador (apontamento_id, UPPER(COALESCE(cracha, ''))) WHERE data_fim IS NULL AND apontamento_id IS NOT NULL AND operador_id IS NULL",
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2304,6 +2331,7 @@ MIGRATIONS = {
     46: (TOTVS_OUTBOX_ORDERING_DESCRIPTION, TOTVS_OUTBOX_ORDERING_STATEMENTS),
     47: (USER_SESSION_VERSION_DESCRIPTION, USER_SESSION_VERSION_STATEMENTS),
     48: (LOGIN_THROTTLE_DESCRIPTION, LOGIN_THROTTLE_STATEMENTS),
+    49: (OPERATOR_IDENTITY_DESCRIPTION, OPERATOR_IDENTITY_STATEMENTS),
 }
 
 

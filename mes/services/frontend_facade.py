@@ -350,7 +350,10 @@ class FrontendBackendFacade:
                 "quantidade_boa": fact.get("quantidade_boa"),
                 "refugo": fact.get("quantidade_refugo"),
                 "retrabalho": fact.get("quantidade_retrabalho"),
-                "operador_inicio": fact.get("operador_inicio"),
+                "operador_inicio": (
+                    fact.get("operador_inicio_nome")
+                    or fact.get("operador_inicio")
+                ),
                 "status": fact.get("status"),
                 "inicio": fact.get("data_inicio"),
             })
@@ -504,7 +507,10 @@ class FrontendBackendFacade:
                         "quantidade_boa": fact.get("quantidade_boa"),
                         "refugo": fact.get("quantidade_refugo"),
                         "retrabalho": fact.get("quantidade_retrabalho"),
-                        "operador_inicio": fact.get("operador_inicio"),
+                        "operador_inicio": (
+                            fact.get("operador_inicio_nome")
+                            or fact.get("operador_inicio")
+                        ),
                         "status": fact.get("status"),
                         "inicio": fact.get("data_entrada"),
                     })
@@ -754,8 +760,14 @@ class FrontendBackendFacade:
                 "fim_real": fact.get("data_fim"),
                 # A Auditoria precisa responder "quem", e o operador que
                 # iniciou a execução já vem no fato canônico.
-                "operador_inicio": fact.get("operador_inicio"),
-                "operador_fim": fact.get("operador_fim"),
+                "operador_inicio": (
+                    fact.get("operador_inicio_nome")
+                    or fact.get("operador_inicio")
+                ),
+                "operador_fim": (
+                    fact.get("operador_fim_nome")
+                    or fact.get("operador_fim")
+                ),
                 "quantidade_planejada": planned,
                 "quantidade_boa": good,
                 "refugo": scrap,

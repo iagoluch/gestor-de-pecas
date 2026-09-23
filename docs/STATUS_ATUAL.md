@@ -647,8 +647,23 @@ cookie da sessão principal; compara o header e o cookie legível com o token
 assinado da sessão do observatório. Logout remove os dois cookies. O relatório
 continua sendo uma projeção somente leitura, sem escrita de dados operacionais.
 
-Validação dirigida: `tests.test_dev_observatory` (20 testes) passou, incluindo
+Validação dirigida: `tests.test_dev_observatory` (19 testes) passou, incluindo
 a recusa explícita de POST sem CSRF.
+
+### 2.30 Identidade de operador é preservada por ID (23/09/2026)
+
+O apontamento operacional agora registra o ID imutável do primeiro crachá
+informado no Início e no Fim. Participações passam a usar a identidade como
+chave de exclusividade e retornam crachá/nome resolvidos do cadastro atual.
+Snapshots de texto continuam apenas como compatibilidade para fatos legados ou
+ações sem crachá; nenhum nome antigo é associado por inferência.
+
+Validação dirigida: `tests.test_database_professionalization` e
+`tests.test_wave5_1` (87 testes) passaram. A cobertura PostgreSQL renomeia um
+crachá após o apontamento e confirma que apontamento, eventos e tempo-pessoa
+permanecem no mesmo ID, com o novo nome exibido na leitura. A regressão de
+consistência execução→gestão (11 testes) também passou com a identidade canônica
+do recurso.
 
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 

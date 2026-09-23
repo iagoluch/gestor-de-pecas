@@ -16,6 +16,7 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
+from app.core.resource_mapping import resolve_resource_identity
 from app.database.config import DEFAULT_SESSION_TIMEZONE, load_postgres_config
 from app.database.database import Database
 from mes.contracts import AnalyticsFilter
@@ -188,8 +189,8 @@ class ExecutionToManagementTests(unittest.TestCase):
 
         # 4. Estado físico do recurso: eventos_estado_recurso é a fonte.
         estados_recurso = self._rows(
-            "SELECT categoria FROM eventos_estado_recurso WHERE recurso = 'Romi D 1000'"
-            " ORDER BY id"
+            "SELECT categoria FROM eventos_estado_recurso WHERE recurso = %s ORDER BY id",
+            (resolve_resource_identity("Romi D 1000"),),
         )
         self.assertTrue(estados_recurso)
         self.assertIn(EventCategory.DOWNTIME.value, {linha["categoria"] for linha in estados_recurso})
@@ -233,7 +234,8 @@ class ExecutionToManagementTests(unittest.TestCase):
 
         recurso_operacional = next(
             linha for linha in operacional["resources"]
-            if str(linha.get("recurso") or "") == "Romi D 1000"
+            if str(linha.get("recurso") or "")
+            == resolve_resource_identity("Romi D 1000")
         )
         # A consulta operacional declara a fonte canônica do estado.
         self.assertEqual(recurso_operacional["fonte"], "eventos_estado_recurso")
