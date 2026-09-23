@@ -516,6 +516,20 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertTrue(autorizado.ok, autorizado.message)
         self.assertEqual(autorizado.data["catalogo_operacao_id"], pintura["id"])
 
+    def test_excecao_de_roteiro_recusa_cracha_ativo_sem_autorizacao(self):
+        db, service, operation = self._service()
+        db.cadastrar_operador_apontamento("2", "Operador sem alçada")
+        pending = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao={**operation, "codigo_recurso": "DOBRA1"},
+            confirmar_recurso_divergente=True,
+            operadores_cracha=["2"],
+        )
+
+        self.assertFalse(pending.ok)
+        self.assertEqual(pending.code, "cracha_autorizacao_nao_autorizado")
+        self.assertEqual(db.appointments, [])
+
     def test_fluxos_especializados_mantem_a_eligibilidade_do_posto(self):
         db, service, dobra = self._service()
         db.catalog_operations.insert(

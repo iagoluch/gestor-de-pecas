@@ -1087,17 +1087,38 @@ class OperatorFlowService:
                         "Informe um crachá para autorizar esta exceção operacional.",
                         "cracha_autorizacao_obrigatorio",
                     )
-                finder = getattr(self.db, "buscar_operadores_apontamento", None)
-                operadores = list(finder(crachas) or []) if callable(finder) else []
-                encontrados = {
-                    str(item.get("cracha") or "").strip() for item in operadores
-                }
-                ausentes = [cracha for cracha in crachas if cracha not in encontrados]
+                finder = getattr(self.db, "buscar_operador_apontamento_detalhado", None)
+                if not callable(finder):
+                    return OperatorFlowResult(
+                        False,
+                        "Não foi possível validar o responsável pela exceção operacional.",
+                        "autorizacao_indisponivel",
+                    )
+                operadores = [(cracha, finder(cracha)) for cracha in crachas]
+                ausentes = [
+                    cracha
+                    for cracha, operador in operadores
+                    if not operador or not operador.get("ativo")
+                ]
                 if ausentes:
                     return OperatorFlowResult(
                         False,
                         f"Crachá não cadastrado ou inativo: {', '.join(ausentes)}.",
                         "cracha_invalido",
+                    )
+                autorizado = next(
+                    (
+                        (cracha, operador)
+                        for cracha, operador in operadores
+                        if operador.get("autorizador_retrabalho")
+                    ),
+                    None,
+                )
+                if autorizado is None:
+                    return OperatorFlowResult(
+                        False,
+                        "A exceção operacional exige o crachá de um responsável autorizado.",
+                        "cracha_autorizacao_nao_autorizado",
                     )
             # Wave 6B — o portão é avaliado antes de enfileirar: um Iniciar
             # recusado pelo popup não pode deixar apontamento algum para trás.

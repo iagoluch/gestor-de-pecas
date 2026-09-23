@@ -23,6 +23,9 @@ commit `4a60564`.
   ocupante, inclusive `Aguardando → Parada`. A trava e a comparação usam a
   identidade canônica do recurso, reconhecendo aliases oficiais como `LASER1`
   e `Laser Ensis 3015`.
+- Exceções de recurso divergente e etapa anterior pendente exigem agora um
+  crachá com a designação já canônica de responsável (`autorizador_retrabalho`);
+  um crachá meramente ativo não autoriza a exceção.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e
