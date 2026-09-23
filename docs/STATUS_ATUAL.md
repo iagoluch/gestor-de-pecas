@@ -687,6 +687,19 @@ sendo necessária para habilitar a observação do REAL.
 Validação dirigida: `tests.test_dev_observatory` (20 testes), compilação e
 prova no PostgreSQL TESTE passaram.
 
+### 2.33 Backup local restaurável do TESTE (23/09/2026)
+
+`scripts/backup_banco_teste.py` só aceita `gestor_pecas_test` após confirmação
+literal. Ele executa `pg_dump` em formato custom dentro do serviço Docker,
+valida o archive com `pg_restore --list` sem restaurar dados e produz manifesto
+SHA-256. Um dump efetivo de 5.093.524 bytes foi criado e validado em
+`backups/test/`, diretório local ignorado pelo Git. O procedimento está em
+`docs/BACKUP_TESTE.md`.
+
+Validação dirigida: `tests.test_backup_banco_teste` e
+`tests.test_resetar_banco_teste` (10 testes) passaram, além do dry-run e do
+backup TESTE efetivo.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
@@ -710,9 +723,9 @@ prova no PostgreSQL TESTE passaram.
 6. **F18 — ciclo de vida de OP no TOTVS:** falta contrato/exemplo oficial que
    defina `StatusOrderType` terminal e o evento corporativo de exclusão. Não
    desativar OP por inferência de payloads mistos.
-7. **F21 — backup/DR:** faltam RPO, retenção, destino externo e credenciais
-   aprovados. Sem essa política, não há como automatizar cópia ou restauração
-   sem inventar uma decisão operacional.
+7. **F21 — backup/DR:** o backup local TESTE existe e tem verificação de
+   formato, mas faltam RPO, retenção, destino externo e a janela/responsável
+   para teste periódico de restauração em banco descartável.
 8. **F4/F9 — ativação operacional:** registrar o IP/CIDR real do servidor
    Protheus e provisionar uma role PostgreSQL apenas de leitura para o Dev
    Observatory; enquanto ausentes, ambas as superfícies permanecem fechadas.

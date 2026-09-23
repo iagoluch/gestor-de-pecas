@@ -27,7 +27,7 @@ test-results/
 output/
 outputs/
 tmp/
-backups/test/*.dump
+backups/test/
 
 # Local application data
 dados/
