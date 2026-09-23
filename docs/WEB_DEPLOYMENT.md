@@ -35,3 +35,12 @@ do React usam o fallback SPA, enquanto a API permanece em `/api/v1`.
 
 Rollback de implantação deve trocar a versão Web/servidor, nunca limpar banco ou
 reescrever produção.
+
+## Dados de runtime no deploy
+
+O deploy da VM espelha apenas código versionado. `.env`, `dados/`,
+`dev_reports/` e `backups/` são preservados explicitamente e não podem ser
+colocados no checkout como mecanismo de recuperação. Antes de habilitar o
+primeiro deploy, execute `powershell -ExecutionPolicy Bypass -File
+scripts/test_deploy_mirror.ps1`; o ensaio usa apenas um diretório temporário e
+confirma remoção de código obsoleto e preservação idempotente dos dados.
