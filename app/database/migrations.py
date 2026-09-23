@@ -51,6 +51,7 @@ EXPECTED_TABLES = (
     "chamada_visualizacoes",
     "eventos_sistema",
     "telegram_corte_mensagens",
+    "telegram_bot_cursors",
     "schema_migrations",
     "apontamentos_operacionais",
     "catalogo_pcp_ops",
