@@ -12,7 +12,10 @@ configuração e é verificada em tempo de abertura:
    somente leitura o PostgreSQL recusa qualquer ``CREATE``. Se a recusa não
    acontecer, o pool é fechado e o ambiente REAL fica indisponível no
    observatório — falhar fechado, nunca aberto;
-3. ``auto_migrate=False``: nenhuma migração é aplicada ao abrir o REAL.
+3. antes da prova, o PostgreSQL confirma que o papel efetivo não tem
+   privilégio de escrita/DDL em bancos, schemas, relações ou sequências, nem
+   uma associação a papel elevado; e
+4. ``auto_migrate=False``: nenhuma migração é aplicada ao abrir o REAL.
 
 Recomendação operacional (opcional, e melhor ainda): aponte
 ``GESTOR_DEVOBS_REAL_DATABASE_URL`` para um papel dedicado sem privilégio de
@@ -25,7 +28,8 @@ escrita::
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT TO gestor_devobs;
     ALTER ROLE gestor_devobs SET default_transaction_read_only = on;
 
-Aí a garantia passa a ser também de permissão. O código continua o mesmo.
+Sem essa separação de privilégios, o observatório falha fechado mesmo que a
+sessão tenha sido aberta com ``default_transaction_read_only=on``.
 """
 
 from __future__ import annotations
@@ -44,8 +48,78 @@ READ_ONLY_OPTION = "-c default_transaction_read_only=on"
 APPLICATION_NAME = "gestor_dev_observatory"
 
 
+_WRITE_PRIVILEGE_SQL = """
+    SELECT
+        EXISTS (
+            SELECT 1
+            FROM pg_roles AS candidate
+            WHERE (
+                candidate.rolsuper
+                OR candidate.rolcreaterole
+                OR candidate.rolcreatedb
+                OR candidate.rolreplication
+                OR candidate.rolbypassrls
+            )
+              AND pg_has_role(current_user, candidate.oid, 'USAGE')
+        ) AS elevated_role,
+        has_database_privilege(current_user, current_database(), 'CREATE')
+            AS database_create,
+        EXISTS (
+            SELECT 1
+            FROM pg_namespace AS namespace
+            WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND namespace.nspname NOT LIKE 'pg_toast%'
+              AND has_schema_privilege(current_user, namespace.oid, 'CREATE')
+        ) AS schema_create,
+        EXISTS (
+            SELECT 1
+            FROM pg_class AS relation
+            JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND namespace.nspname NOT LIKE 'pg_toast%'
+              AND (
+                  (
+                      relation.relkind = 'S'
+                      AND has_sequence_privilege(current_user, relation.oid, 'USAGE, UPDATE')
+                  )
+                  OR (
+                      relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+                      AND (
+                          has_table_privilege(current_user, relation.oid, 'INSERT')
+                          OR has_table_privilege(current_user, relation.oid, 'UPDATE')
+                          OR has_table_privilege(current_user, relation.oid, 'DELETE')
+                          OR has_table_privilege(current_user, relation.oid, 'TRUNCATE')
+                          OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
+                          OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+                      )
+                  )
+              )
+        ) AS relation_write
+"""
+
+
 class ReadOnlyVerificationError(RuntimeError):
     """A sessão aberta não é comprovadamente somente leitura."""
+
+
+def _write_privilege_evidence(cursor) -> dict[str, bool]:
+    cursor.execute(_WRITE_PRIVILEGE_SQL)
+    row = dict(cursor.fetchone())
+    return {
+        "elevated_role": bool(row.get("elevated_role")),
+        "database_create": bool(row.get("database_create")),
+        "schema_create": bool(row.get("schema_create")),
+        "relation_write": bool(row.get("relation_write")),
+    }
+
+
+def _require_no_write_privileges(evidence: dict[str, bool]) -> None:
+    enabled = [name for name, value in evidence.items() if value]
+    if enabled:
+        raise ReadOnlyVerificationError(
+            "A credencial do Dev Observatory ainda possui privilégios incompatíveis "
+            f"com leitura exclusiva: {', '.join(enabled)}."
+        )
 
 
 def read_only_config(dsn: str, *, pool_size: int = 2) -> PostgresConfig:
@@ -83,6 +157,7 @@ def verify_read_only(pool: PostgresPoolManager) -> dict:
         default_read_only = str(next(iter(cursor.fetchone().values())))
         cursor.execute("SELECT current_database() AS db, current_user AS usuario")
         identity = dict(cursor.fetchone())
+        write_privileges = _write_privilege_evidence(cursor)
 
         write_refused_with = None
         try:
@@ -97,6 +172,7 @@ def verify_read_only(pool: PostgresPoolManager) -> dict:
             "A conexão de observação do banco REAL não é comprovadamente somente leitura "
             f"(transaction_read_only={transaction_read_only!r}, gravação recusada={bool(write_refused_with)})."
         )
+    _require_no_write_privileges(write_privileges)
     return {
         "transaction_read_only": transaction_read_only,
         "default_transaction_read_only": default_read_only,
@@ -104,6 +180,7 @@ def verify_read_only(pool: PostgresPoolManager) -> dict:
         "user": identity.get("usuario"),
         "write_probe": "recusada pelo PostgreSQL",
         "write_probe_error": write_refused_with,
+        "write_privileges": write_privileges,
         "application_name": APPLICATION_NAME,
     }
 

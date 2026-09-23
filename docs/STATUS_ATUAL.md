@@ -91,14 +91,11 @@ aprovada sem ajuste pelo usuário.
 Relatório completo: `docs/AUDITORIA_SEGURANCA_2026-09-14.md`.
 
 **Corrigido:**
-- **Crítico**: o receptor SOAP do TOTVS (`POST /PcfIntegService`) não exigia
-  autenticação e gravava OP no banco a partir de qualquer mensagem aceita. Como
-  o sistema pode ser publicado num túnel Cloudflare público
-  (`iniciar_sistema_teste_cloudflare.py`) com `GESTOR_TOTVS_SOAP_ENABLED=true`,
-  isso era gravável pela internet. Corrigido em
-  `backend/integrations/totvs_soap.py:30`
-  (`_arrived_through_public_host`): recusa 403 quando a requisição chega pelo
-  hostname público do túnel, aceita pela LAN normalmente.
+- **Crítico**: o receptor SOAP do TOTVS (`POST /PcfIntegService`) não aceita
+  mais uma origem não autorizada apenas por estar na LAN. Quando ativo, ele só
+  atende IP/CIDR declarado em `GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS`; sem a
+  configuração, o receptor fica indisponível (503), sem impedir a aplicação de
+  iniciar. Hostname público continua bloqueado como segunda barreira.
 - **Alto**: login do Dev Observatory sem freio de tentativa (credencial única
   guardando stack trace/leitura do REAL) — agora bloqueia por IP após 5
   falhas/300s. Corrigido de brinde um bug que derrubava o login com 500 em
@@ -647,7 +644,7 @@ cookie da sessão principal; compara o header e o cookie legível com o token
 assinado da sessão do observatório. Logout remove os dois cookies. O relatório
 continua sendo uma projeção somente leitura, sem escrita de dados operacionais.
 
-Validação dirigida: `tests.test_dev_observatory` (19 testes) passou, incluindo
+Validação dirigida: `tests.test_dev_observatory` (20 testes) passou, incluindo
 a recusa explícita de POST sem CSRF.
 
 ### 2.30 Identidade de operador é preservada por ID (23/09/2026)
@@ -664,6 +661,31 @@ crachá após o apontamento e confirma que apontamento, eventos e tempo-pessoa
 permanecem no mesmo ID, com o novo nome exibido na leitura. A regressão de
 consistência execução→gestão (11 testes) também passou com a identidade canônica
 do recurso.
+
+### 2.31 Receptor SOAP TOTVS falha fechado por origem (23/09/2026)
+
+O receptor inbound não usa mais `Host` ou `X-Forwarded-For` para provar quem
+envia a OP. `GET /PcfIntegService?wsdl` e `POST /PcfIntegService` verificam o
+peer TCP contra `GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS`; CIDR inválido é erro
+de configuração e allowlist ausente fecha apenas o receptor com 503, antes da
+leitura do envelope. Para o TESTE, falta registrar o IP/CIDR real do servidor
+Protheus nessa variável — não há chamada externa nem valor inventado aqui.
+
+Validação dirigida: `tests.test_totvs_integration` (39 testes) passou, incluindo
+origem permitida, origem negada mesmo com `X-Forwarded-For` forjado e allowlist
+ausente.
+
+### 2.32 Dev Observatory exige credencial sem escrita (23/09/2026)
+
+Além da sessão PostgreSQL somente leitura e da prova de `CREATE TEMP TABLE`
+recusada, a abertura agora consulta os privilégios efetivos da credencial. Papel
+elevado, `CREATE` em banco/schema ou escrita em tabela/sequência fazem a
+observação falhar fechada. A credencial atual do banco TESTE, que é gravável,
+foi recusada pela própria verificação; uma role exclusiva com `SELECT` continua
+sendo necessária para habilitar a observação do REAL.
+
+Validação dirigida: `tests.test_dev_observatory` (20 testes), compilação e
+prova no PostgreSQL TESTE passaram.
 
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
@@ -685,6 +707,15 @@ do recurso.
    `curl 'http://127.0.0.1:8010/api/v1/audit/appointments?fim=0263-10-17T17%3A14%3A48Z'`
    contra o preview visual. Não corrigido — fora do escopo daquela auditoria
    (infraestrutura de CI/dev, não regra de negócio).
+6. **F18 — ciclo de vida de OP no TOTVS:** falta contrato/exemplo oficial que
+   defina `StatusOrderType` terminal e o evento corporativo de exclusão. Não
+   desativar OP por inferência de payloads mistos.
+7. **F21 — backup/DR:** faltam RPO, retenção, destino externo e credenciais
+   aprovados. Sem essa política, não há como automatizar cópia ou restauração
+   sem inventar uma decisão operacional.
+8. **F4/F9 — ativação operacional:** registrar o IP/CIDR real do servidor
+   Protheus e provisionar uma role PostgreSQL apenas de leitura para o Dev
+   Observatory; enquanto ausentes, ambas as superfícies permanecem fechadas.
 
 ## 4. O que NÃO fazer (reforço das regras já em `AGENTS.md`)
 

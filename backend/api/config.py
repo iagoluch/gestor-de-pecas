@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from ipaddress import ip_network
 import json
 import logging
 import os
@@ -27,6 +28,22 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 def _csv(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
     values = tuple(item.strip() for item in str(value or "").split(",") if item.strip())
     return values or default
+
+
+def _ip_network_csv(value: str | None, *, name: str) -> tuple[str, ...]:
+    """Valida e normaliza uma lista de endereços IP ou redes CIDR."""
+
+    result: list[str] = []
+    for item in (part.strip() for part in str(value or "").split(",")):
+        if not item:
+            continue
+        try:
+            normalized = str(ip_network(item, strict=False))
+        except ValueError as exc:
+            raise RuntimeError(f"{name} contém IP/CIDR inválido: {item!r}.") from exc
+        if normalized not in result:
+            result.append(normalized)
+    return tuple(result)
 
 
 def _json_string_map(value: str | None, *, name: str) -> dict[str, str]:
@@ -138,6 +155,7 @@ class WebSettings:
     telegram_timeout_seconds: float = 30.0
     totvs_enabled: bool = False
     totvs_soap_enabled: bool = False
+    totvs_soap_allowed_source_cidrs: tuple[str, ...] = ()
     totvs_soap_success_result: str = field(default="", repr=False)
     totvs_max_xml_bytes: int = 1_048_576
     totvs_resource_map: dict[str, str] = field(default_factory=dict)
@@ -299,6 +317,10 @@ class WebSettings:
         totvs_soap_enabled = _as_bool(
             env.get("GESTOR_TOTVS_SOAP_ENABLED"), default=False
         )
+        totvs_soap_allowed_source_cidrs = _ip_network_csv(
+            env.get("GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS"),
+            name="GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS",
+        )
         totvs_soap_success_result = str(
             env.get("GESTOR_TOTVS_SOAP_SUCCESS_RESULT") or ""
         ).strip()
@@ -309,6 +331,12 @@ class WebSettings:
         if totvs_soap_enabled and not totvs_soap_success_result:
             raise RuntimeError(
                 "GESTOR_TOTVS_SOAP_SUCCESS_RESULT é obrigatória quando o receptor SOAP está ativo."
+            )
+        if totvs_soap_enabled and not totvs_soap_allowed_source_cidrs:
+            logging.warning(
+                "GESTOR_TOTVS_SOAP_ENABLED está ativo sem "
+                "GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS; o receptor SOAP "
+                "permanecerá indisponível até a origem autorizada ser configurada."
             )
 
         sigmanest_configured = bool(
@@ -453,6 +481,7 @@ class WebSettings:
             ),
             totvs_enabled=totvs_enabled,
             totvs_soap_enabled=totvs_soap_enabled,
+            totvs_soap_allowed_source_cidrs=totvs_soap_allowed_source_cidrs,
             totvs_soap_success_result=totvs_soap_success_result,
             totvs_max_xml_bytes=_bounded_int(
                 env.get("GESTOR_TOTVS_MAX_XML_BYTES"),

@@ -801,6 +801,7 @@ def _settings(**overrides):
         "session_ttl_seconds": 3600,
         "totvs_enabled": True,
         "totvs_soap_enabled": True,
+        "totvs_soap_allowed_source_cidrs": ("10.10.1.0/24",),
         "totvs_soap_success_result": "OK",
     }
     values.update(overrides)
@@ -818,12 +819,12 @@ def _soap_envelope(payload: str, *, operation: str = "receiveMessage") -> str:
 
 
 class TotvsSoapContractTests(unittest.TestCase):
-    def _client(self, *, settings=None, service=None):
+    def _client(self, *, settings=None, service=None, source_ip="10.10.1.25"):
         database = FakeDatabase()
         app = create_app(settings=settings or _settings(), database_factory=lambda: database)
         stub = service or _StubTotvsService()
         app.state.totvs_service_factory = lambda _database: stub
-        return TestClient(app), stub
+        return TestClient(app, client=(source_ip, 50_000)), stub
 
     def test_wsdl_e_receive_message_usam_contrato_confirmado(self):
         client, service = self._client()
@@ -946,6 +947,31 @@ class TotvsSoapContractTests(unittest.TestCase):
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual(service.payloads, [payload])
 
+    def test_allowlist_bloqueia_origem_desconhecida_sem_confiar_em_headers(self):
+        client, service = self._client(source_ip="203.0.113.45")
+        payload = OK.read_text(encoding="utf-8")
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": f'"{SOAP_ACTION}"',
+            "X-Forwarded-For": "10.10.1.25",
+        }
+        with client:
+            wsdl = client.get(
+                "/PcfIntegService?wsdl",
+                headers={"X-Forwarded-For": "10.10.1.25"},
+            )
+            response = client.post(
+                "/PcfIntegService",
+                content=_soap_envelope(payload).encode("utf-8"),
+                headers=headers,
+            )
+
+        self.assertEqual(wsdl.status_code, 403)
+        self.assertIn("totvs_soap_source_forbidden", wsdl.text)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("totvs_soap_source_forbidden", response.text)
+        self.assertFalse(service.payloads)
+
     def test_excecao_controlada_nao_vaza_payload(self):
         service = _StubTotvsService(
             TotvsIntegrationError("Falha controlada.", code="processing_error")
@@ -971,15 +997,48 @@ class TotvsSoapContractTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(RuntimeError, "GESTOR_TOTVS_SOAP_SUCCESS_RESULT"):
             WebSettings.from_env(base)
+        without_source = WebSettings.from_env(
+            {**base, "GESTOR_TOTVS_SOAP_SUCCESS_RESULT": "ACK-EXTERNO"}
+        )
+        self.assertEqual(without_source.totvs_soap_allowed_source_cidrs, ())
+        with self.assertRaisesRegex(RuntimeError, "IP/CIDR inválido"):
+            WebSettings.from_env(
+                {
+                    **base,
+                    "GESTOR_TOTVS_SOAP_SUCCESS_RESULT": "ACK-EXTERNO",
+                    "GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS": "rede-totvs",
+                }
+            )
         configured = WebSettings.from_env(
             {
                 **base,
                 "GESTOR_TOTVS_SOAP_SUCCESS_RESULT": "ACK-EXTERNO",
+                "GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS": "10.10.1.25, 10.10.2.0/24",
                 "GESTOR_TOTVS_RESOURCE_MAP_JSON": '{"LASER":"LASER1"}',
             }
         )
         self.assertTrue(configured.totvs_enabled)
+        self.assertEqual(
+            configured.totvs_soap_allowed_source_cidrs,
+            ("10.10.1.25/32", "10.10.2.0/24"),
+        )
         self.assertEqual(configured.totvs_resource_map, {"LASER": "LASER1"})
+
+    def test_allowlist_ausente_mantem_aplicacao_disponivel_mas_fecha_o_receptor(self):
+        client, service = self._client(settings=_settings(totvs_soap_allowed_source_cidrs=()))
+        payload = OK.read_text(encoding="utf-8")
+        with client:
+            wsdl = client.get("/PcfIntegService?wsdl")
+            response = client.post(
+                "/PcfIntegService",
+                content=_soap_envelope(payload).encode("utf-8"),
+                headers={"SOAPAction": SOAP_ACTION},
+            )
+        self.assertEqual(wsdl.status_code, 503)
+        self.assertIn("totvs_soap_source_not_configured", wsdl.text)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("totvs_soap_source_not_configured", response.text)
+        self.assertFalse(service.payloads)
 
 
 def _receive_message_result(body: str) -> str:
@@ -1013,7 +1072,7 @@ class TotvsResponseContractTests(unittest.TestCase):
         database = FakeDatabase()
         app = create_app(settings=_settings(), database_factory=lambda: database)
         app.state.totvs_service_factory = lambda _database: self.service
-        return TestClient(app)
+        return TestClient(app, client=("10.10.1.25", 50_000))
 
     def test_parser_le_whois_real_sem_extrair_dado_de_negocio(self):
         message = self.parser.parse_whois(WHOIS.read_bytes())

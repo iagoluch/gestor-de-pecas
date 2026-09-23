@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from ipaddress import ip_address, ip_network
 import logging
 from xml.etree.ElementTree import ParseError  # nosec B405 -- só o tipo de exceção; parse real usa defusedxml (SafeElementTree) abaixo
 from xml.sax.saxutils import escape  # nosec B406 -- só escape() de string, não faz parse de XML
@@ -45,6 +46,43 @@ def _arrived_through_public_host(request: Request) -> bool:
     if not public_host or public_host in _INTERNAL_PUBLIC_HOSTS:
         return False
     return str(request.url.hostname or "").strip().casefold() == public_host
+
+
+def _source_is_allowed(request: Request) -> bool:
+    """Confere o socket de origem contra a allowlist configurada.
+
+    O endereço vem de ``request.client`` (peer TCP observado pelo servidor).
+    Cabeçalhos como ``Host`` e ``X-Forwarded-For`` são controláveis pelo
+    chamador e, portanto, não participam desta decisão.
+    """
+
+    peer = str(request.client.host if request.client else "").strip()
+    try:
+        source = ip_address(peer)
+    except ValueError:
+        return False
+
+    for raw_network in getattr(
+        request.app.state.settings, "totvs_soap_allowed_source_cidrs", ()
+    ):
+        try:
+            network = ip_network(str(raw_network), strict=False)
+        except ValueError:
+            # Instâncias construídas fora de ``WebSettings.from_env`` também
+            # permanecem fail-closed se trouxerem configuração inválida.
+            logging.error("CIDR inválido na allowlist do receptor SOAP TOTVS.")
+            continue
+        if source.version == network.version and source in network:
+            return True
+    return False
+
+
+def _source_authorization_is_configured(request: Request) -> bool:
+    return bool(
+        getattr(
+            request.app.state.settings, "totvs_soap_allowed_source_cidrs", ()
+        )
+    )
 
 
 def _local_name(tag: str) -> str:
@@ -177,6 +215,18 @@ def get_wsdl(request: Request):
             "O receptor TOTVS responde somente na rede interna.",
             status_code=403,
         )
+    if not _source_authorization_is_configured(request):
+        return _fault(
+            "totvs_soap_source_not_configured",
+            "Origem autorizada do receptor SOAP TOTVS não configurada.",
+            status_code=503,
+        )
+    if not _source_is_allowed(request):
+        return _fault(
+            "totvs_soap_source_forbidden",
+            "Origem não autorizada para o receptor SOAP TOTVS.",
+            status_code=403,
+        )
     address = str(request.base_url).rstrip("/") + "/PcfIntegService"
     return _xml_response(_wsdl(address))
 
@@ -195,6 +245,18 @@ async def receive_message(request: Request):
         return _fault(
             "totvs_soap_internal_only",
             "O receptor TOTVS responde somente na rede interna.",
+            status_code=403,
+        )
+    if not _source_authorization_is_configured(request):
+        return _fault(
+            "totvs_soap_source_not_configured",
+            "Origem autorizada do receptor SOAP TOTVS não configurada.",
+            status_code=503,
+        )
+    if not _source_is_allowed(request):
+        return _fault(
+            "totvs_soap_source_forbidden",
+            "Origem não autorizada para o receptor SOAP TOTVS.",
             status_code=403,
         )
     action = str(request.headers.get("SOAPAction") or "").strip().strip('"')

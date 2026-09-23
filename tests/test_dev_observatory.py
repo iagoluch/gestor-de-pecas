@@ -35,7 +35,12 @@ from backend.observability.classification import (
     classify_http,
     sanitize,
 )
-from backend.observability.readonly_db import READ_ONLY_OPTION, read_only_config
+from backend.observability.readonly_db import (
+    READ_ONLY_OPTION,
+    ReadOnlyVerificationError,
+    _require_no_write_privileges,
+    read_only_config,
+)
 from backend.observability.shift_report import shift_windows_for_date
 from mes.domain.manufacturing_rules import OFFICIAL_WORK_WINDOW, OVERTIME_WINDOWS
 from tests.fakes import FakeDatabase
@@ -129,6 +134,20 @@ class ReadOnlyConfigTests(unittest.TestCase):
         options = conninfo_to_dict(config.dsn)["options"]
         self.assertIn("statement_timeout", options)
         self.assertIn(READ_ONLY_OPTION, options)
+
+    def test_credencial_com_qualquer_privilegio_de_escrita_e_recusada(self):
+        clean = {
+            "elevated_role": False,
+            "database_create": False,
+            "schema_create": False,
+            "relation_write": False,
+        }
+        _require_no_write_privileges(clean)
+        for flag in clean:
+            with self.subTest(flag=flag):
+                evidence = {**clean, flag: True}
+                with self.assertRaisesRegex(ReadOnlyVerificationError, flag):
+                    _require_no_write_privileges(evidence)
 
 
 class DevObservatoryApiTests(unittest.TestCase):

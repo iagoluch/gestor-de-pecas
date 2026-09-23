@@ -54,6 +54,22 @@ GET  /PcfIntegService?wsdl
 POST /PcfIntegService
 ```
 
+O receptor é fail-closed por origem. Ao ativar
+`GESTOR_TOTVS_SOAP_ENABLED=true`, também é obrigatório configurar
+`GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS` com os IPs ou CIDRs reais dos
+servidores TOTVS autorizados, separados por vírgula. Exemplo:
+
+```dotenv
+GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS=10.10.1.25/32,10.10.2.0/24
+```
+
+GET do WSDL e POST de mensagens são recusados antes da leitura do corpo quando
+o IP observado diretamente no socket não pertence à allowlist. `Host` e
+`X-Forwarded-For` não autenticam a origem; o bloqueio adicional pelo hostname
+público permanece ativo. Se houver proxy entre TOTVS e Gestor, a rede deve
+preservar a conexão direta ou aplicar a restrição no próprio proxy — cadastrar
+somente o IP do proxy no Gestor autorizaria todos os clientes que o alcançam.
+
 ## 3. Correção definitiva sobre o ACK
 
 A interpretação antiga de que o sucesso seria `receiveMessageResult = "OK"`
