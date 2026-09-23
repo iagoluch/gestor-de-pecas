@@ -561,6 +561,13 @@ essa permissão por fallback: login e revalidação da sessão retornam 403, e a
 funções de navegação/permissão não concedem acesso. A cobertura HTTP inclui uma
 conta persistida com nível inválido.
 
+### 2.24 Catálogo de migrations é validado antes do banco (23/09/2026)
+
+O migrador verifica que toda versão até `SCHEMA_VERSION` existe no catálogo
+antes de abrir a transação. Uma versão declarada sem migration agora produz
+erro de configuração explícito, em vez de um `KeyError` tardio após iniciar a
+atualização do schema.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

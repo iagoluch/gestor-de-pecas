@@ -2260,6 +2260,22 @@ MIGRATIONS = {
 }
 
 
+def validate_migration_catalog():
+    """Garante que cada versão declarada possui uma migration executável.
+
+    ``SCHEMA_VERSION`` é deliberadamente separado do dicionário para evitar
+    dependência circular. Sem esta guarda, incrementar apenas a constante faz
+    o migrador falhar tarde com ``KeyError`` — depois de já abrir a transação.
+    """
+
+    missing = sorted(set(range(2, SCHEMA_VERSION + 1)).difference(MIGRATIONS))
+    if missing:
+        formatted = ", ".join(str(version) for version in missing)
+        raise DatabaseMigrationError(
+            f"SCHEMA_VERSION={SCHEMA_VERSION} declara migration(s) ausente(s): {formatted}."
+        )
+
+
 def _positive_timeout_ms(name, default):
     raw = str(os.getenv(name, default)).strip()
     try:
@@ -2274,6 +2290,7 @@ def _positive_timeout_ms(name, default):
 def apply_migrations(connection):
     """Apply migrations with bounded waits for locks and long-running SQL."""
 
+    validate_migration_catalog()
     lock_timeout_ms = _positive_timeout_ms("GESTOR_MIGRATION_LOCK_TIMEOUT_MS", 5000)
     statement_timeout_ms = _positive_timeout_ms(
         "GESTOR_MIGRATION_STATEMENT_TIMEOUT_MS",

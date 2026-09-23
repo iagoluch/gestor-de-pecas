@@ -30,7 +30,7 @@ from app.database import migrations as migrations_module
 from app.database.config import load_postgres_config
 from app.database.database import Database
 from app.database.errors import DatabaseMigrationError
-from app.database.migrations import apply_migrations
+from app.database.migrations import apply_migrations, validate_migration_catalog
 from app.database.schema import SCHEMA_VERSION
 from mes.integrations.totvs.outbound_enqueue import OutboundEnqueueConfig
 from mes.integrations.totvs.outbox import OutboxStatus
@@ -54,6 +54,17 @@ TABELAS_PRESERVADAS = (
     "catalogo_sigmanest_planos_corte",
     "apontamentos_corte",
 )
+
+
+class MigrationCatalogTests(unittest.TestCase):
+    def test_schema_version_sem_migration_falha_com_diagnostico(self):
+        original = migrations_module.SCHEMA_VERSION
+        migrations_module.SCHEMA_VERSION = original + 1
+        try:
+            with self.assertRaisesRegex(DatabaseMigrationError, "migration.*ausente"):
+                validate_migration_catalog()
+        finally:
+            migrations_module.SCHEMA_VERSION = original
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
