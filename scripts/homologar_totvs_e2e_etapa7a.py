@@ -274,7 +274,7 @@ def _build_provisioning(
         ingestion_service=ingestion,
         gateway=gateway,
         company_id=COMPANY_ID,
-        branch_id=BRANCH_ID,
+        branch_ids=(BRANCH_ID,),
         timeout_seconds=timeout_seconds,
         poll_interval_seconds=0.05,
         negative_ttl_seconds=30,
@@ -762,7 +762,14 @@ def run_homologation(
         )
         offline_cycle = offline_worker.run_once()
         after_failure = db.listar_itens_outbound_totvs(production_order=OP, limit=20)
-        _require(all(row["status"] == "RETRY" for row in after_failure), "Falha não virou RETRY.")
+        # Ordem causal por OP (F19): só a obrigação mais antiga da OP é
+        # tentada; enquanto ela não chegar a SENT, as posteriores esperam em
+        # PENDING — nenhuma é perdida, enviada fora de ordem ou vira ERROR.
+        statuses = sorted(row["status"] for row in after_failure)
+        _require(
+            statuses == ["PENDING"] * (len(after_failure) - 1) + ["RETRY"],
+            f"Falha não virou RETRY preservando a ordem causal: {statuses}",
+        )
         _require(
             {row["idempotency_key"] for row in after_failure} == initial_keys,
             "Retry alterou a identidade lógica.",
@@ -818,7 +825,11 @@ def run_homologation(
                 batch_size=20,
                 lease_seconds=30,
             )
-            online_cycle = online_worker.run_once()
+            # Um item por OP por ciclo (F19): um ciclo por obrigação pendente.
+            online_cycles = []
+            for _ in range(len(initial_keys)):
+                online_cycles.append(online_worker.run_once())
+                _make_due(db)
             final_rows = db.listar_itens_outbound_totvs(production_order=OP, limit=20)
             _require(all(row["status"] == "SENT" for row in final_rows), "Nem toda obrigação chegou a SENT.")
             _require(
@@ -830,7 +841,7 @@ def run_homologation(
             evidence["delivery"] = {
                 "executed": True,
                 "kind": delivery_kind,
-                "cycle": online_cycle.as_dict(),
+                "cycles": [cycle.as_dict() for cycle in online_cycles],
                 "items": _outbox_summary(final_rows),
                 "duplicate_cycle_reserved": duplicate_cycle.reserved,
             }

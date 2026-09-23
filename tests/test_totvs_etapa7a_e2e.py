@@ -119,12 +119,21 @@ class TotvsEtapa7AE2ETests(unittest.TestCase):
         self.assertEqual(terminal["payload_fields"]["approved_quantity"], "1")
         self.assertEqual(terminal["payload_fields"]["scrap_quantity"], "0")
 
-        self.assertEqual(evidence["retry"]["cycle"]["reagendados"], 4)
+        # Ordem causal por OP (F19): o ciclo offline só tenta a obrigação mais
+        # antiga; as outras três esperam em PENDING.
+        self.assertEqual(evidence["retry"]["cycle"]["reagendados"], 1)
+        self.assertEqual(
+            sorted(item["status"] for item in evidence["retry"]["items"]),
+            ["PENDING", "PENDING", "PENDING", "RETRY"],
+        )
         self.assertTrue(evidence["restart_and_lease"]["payloads_preserved"])
         self.assertEqual(evidence["restart_and_lease"]["recovered"], 1)
         self.assertTrue(evidence["delivery"]["executed"])
         self.assertEqual(evidence["delivery"]["kind"], "ack_controlado_automatizado")
-        self.assertEqual(evidence["delivery"]["cycle"]["enviados"], 4)
+        # Um item por OP por ciclo: quatro ciclos, um envio em cada.
+        self.assertEqual(
+            [cycle["enviados"] for cycle in evidence["delivery"]["cycles"]], [1, 1, 1, 1]
+        )
         self.assertEqual(evidence["delivery"]["duplicate_cycle_reserved"], 0)
         self.assertTrue(all(item["status"] == "SENT" for item in evidence["delivery"]["items"]))
         self.assertTrue(
