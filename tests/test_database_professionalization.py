@@ -69,6 +69,12 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         self.assertIn("c", delete_actions.values())  # CASCADE
         self.assertGreaterEqual(list(delete_actions.values()).count("n"), 2)  # SET NULL
 
+    def test_cursor_telegram_persiste_e_nunca_regride(self):
+        self.assertIsNone(self.db.obter_cursor_telegram_bot("factory_bot"))
+        self.assertEqual(self.db.avancar_cursor_telegram_bot("factory_bot", 42), 42)
+        self.assertEqual(self.db.obter_cursor_telegram_bot("factory_bot"), 42)
+        self.assertEqual(self.db.avancar_cursor_telegram_bot("factory_bot", 17), 42)
+
     def test_migration_13_mantem_contexto_historico_nulo(self):
         item = self._appointment("OP-MIGRATION-13")
         self.assertIsNotNone(
