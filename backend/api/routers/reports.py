@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, Response
 
 from backend.api.dependencies.auth import require_csrf, require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
-from backend.api.dependencies.filters import analytics_filter
+from backend.api.dependencies.filters import analytics_filter, validated_business_datetime
 from backend.api.dependencies.reports import get_report_service
 from backend.api.dependencies.messaging import get_report_messaging_service
 from backend.api.errors import AppError
@@ -54,8 +54,8 @@ async def generate_report(
         inicio, fim = resolve_report_period(
             payload.period_kind,
             now=now,
-            inicio=payload.inicio,
-            fim=payload.fim,
+            inicio=validated_business_datetime(payload.inicio, now),
+            fim=validated_business_datetime(payload.fim, now),
         )
         request = ReportRequest(
             report_type=payload.report_type,

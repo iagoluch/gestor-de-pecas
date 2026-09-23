@@ -29,6 +29,35 @@ def _reject_implausible_date(value: datetime, current: datetime) -> None:
         )
 
 
+def _to_local_naive(value: datetime) -> datetime:
+    # O relógio e o banco trabalham em horário local ingênuo. Uma data com
+    # fuso (ex.: sufixo "Z") comparada a eles lançava TypeError e virava 500.
+    if value.tzinfo is None:
+        return value
+    try:
+        return value.astimezone().replace(tzinfo=None)
+    except (OverflowError, ValueError, OSError):
+        raise AppError(
+            "invalid_date",
+            "A data informada está fora do intervalo permitido.",
+            status_code=422,
+        ) from None
+
+
+def validated_business_datetime(value: datetime | None, current: datetime) -> datetime | None:
+    """Contrato único para datas de período vindas da API: rejeita ano
+    implausível (422 invalid_date) e devolve horário local ingênuo."""
+    if value is None:
+        return None
+    _reject_implausible_date(value, current)
+    return _to_local_naive(value)
+
+
+def request_now(request: Request) -> datetime:
+    clock = getattr(request.app.state, "clock", None)
+    return clock.now() if clock is not None else datetime.now().replace(microsecond=0)
+
+
 def analytics_filter(
     request: Request,
     inicio: datetime | None = Query(default=None),
@@ -41,12 +70,9 @@ def analytics_filter(
     produto: str | None = Query(default=None, max_length=160),
     operador: str | None = Query(default=None, max_length=160),
 ) -> AnalyticsFilter:
-    clock = getattr(request.app.state, "clock", None)
-    current = clock.now() if clock is not None else datetime.now().replace(microsecond=0)
-    if fim is not None:
-        _reject_implausible_date(fim, current)
-    if inicio is not None:
-        _reject_implausible_date(inicio, current)
+    current = request_now(request)
+    fim = validated_business_datetime(fim, current)
+    inicio = validated_business_datetime(inicio, current)
     end = fim or current
     settings = getattr(request.app.state, "settings", None)
     simulation_now = current if getattr(settings, "simulation_mode", False) else None

@@ -25,6 +25,7 @@ from app.core.permissions import (
 from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, get_current_user
 from backend.api.dependencies.clock import request_now_func
+from backend.api.dependencies.filters import request_now, validated_business_datetime
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.quality import (
@@ -278,14 +279,15 @@ def history(
     database=Depends(get_database),
 ):
     sector = _sector(user)
+    current = request_now(request)
     rows = _service(database, user, request).listar_historico(
         sector.name,
         op=op,
         produto=product,
         recurso=resource,
         resultado=result,
-        inicio=start,
-        fim=end,
+        inicio=validated_business_datetime(start, current),
+        fim=validated_business_datetime(end, current),
         limite=page_size + 1,
         deslocamento=(page - 1) * page_size,
     )

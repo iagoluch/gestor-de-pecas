@@ -834,6 +834,57 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(response.json()["code"], "invalid_date")
 
+    def test_contrato_de_data_dos_filtros_gerenciais(self):
+        # Regressão: "fim=0263-10-17T17:14:48Z" e qualquer data com fuso ("Z")
+        # comparada ao relógio local ingênuo lançava TypeError -> 500.
+        self.login_manager()
+        ano_futuro = datetime.now().year + 2
+        casos = [
+            ({"fim": "2026-08-20T10:00:00Z"}, 200, None),
+            ({"inicio": "2026-08-20T08:00:00Z", "fim": "2026-08-20T10:00:00"}, 200, None),
+            ({"fim": "0263-10-17T17:14:48Z"}, 422, "invalid_date"),
+            ({"fim": "1999-12-31T23:59:59"}, 422, "invalid_date"),
+            ({"inicio": "1999-12-31T00:00:00", "fim": "2026-08-20T10:00:00"}, 422, "invalid_date"),
+            ({"fim": f"{ano_futuro}-01-01T00:00:00Z"}, 422, "invalid_date"),
+        ]
+        for path in ("/api/v1/audit/appointments", "/api/v1/audit", "/api/v1/orders"):
+            for params, status, code in casos:
+                with self.subTest(path=path, params=params):
+                    response = self.client.get(path, params=params)
+                    self.assertEqual(response.status_code, status, response.text)
+                    if code:
+                        self.assertEqual(response.json()["code"], code)
+
+    def test_relatorio_personalizado_aplica_o_mesmo_contrato_de_data(self):
+        with tempfile.TemporaryDirectory() as artifact_dir:
+            settings = replace(_settings(), report_artifact_dir=artifact_dir)
+            app = create_app(settings=settings, database_factory=lambda: self.db)
+            with TestClient(app) as client:
+                client.post(
+                    "/api/v1/auth/login",
+                    json={"username": "Gestor Web", "password": "senha-segura"},
+                )
+                headers = {"X-CSRF-Token": client.cookies.get("gestor_csrf")}
+                base = {"report_type": "ops", "period_kind": "personalizado"}
+                for inicio, fim in (
+                    ("0263-10-17T17:14:48Z", "2026-08-20T10:00:00"),
+                    ("2026-08-20T08:00:00", f"{datetime.now().year + 2}-01-01T00:00:00"),
+                ):
+                    with self.subTest(inicio=inicio, fim=fim):
+                        rejected = client.post(
+                            "/api/v1/reports/generate",
+                            headers=headers,
+                            json={**base, "inicio": inicio, "fim": fim},
+                        )
+                        self.assertEqual(rejected.status_code, 422, rejected.text)
+                        self.assertEqual(rejected.json()["code"], "invalid_date")
+                generated = client.post(
+                    "/api/v1/reports/generate",
+                    headers=headers,
+                    json={**base, "inicio": "2026-08-20T08:00:00Z", "fim": "2026-08-20T10:00:00"},
+                )
+                self.assertEqual(generated.status_code, 201, generated.text)
+
     def test_logout_exige_csrf_e_expira_cookies(self):
         self.login_manager()
         denied = self.client.post("/api/v1/auth/logout")
@@ -1498,6 +1549,18 @@ class QualityWebApiTests(unittest.TestCase):
                 negado = self.client.get(path)
                 self.assertEqual(negado.status_code, 403, negado.text)
                 self.assertEqual(negado.json()["code"], "quality_sector_unavailable")
+
+    def test_historico_aplica_o_contrato_de_data_dos_filtros(self):
+        self._login("Operador Dobra", "senha-dobra")
+        ok = self.client.get(
+            "/api/v1/quality/history", params={"start": "2026-08-20T08:00:00Z"}
+        )
+        self.assertEqual(ok.status_code, 200, ok.text)
+        for params in ({"start": "0263-10-17T17:14:48Z"}, {"end": "1999-12-31T23:59:59"}):
+            with self.subTest(params=params):
+                rejected = self.client.get("/api/v1/quality/history", params=params)
+                self.assertEqual(rejected.status_code, 422, rejected.text)
+                self.assertEqual(rejected.json()["code"], "invalid_date")
 
     def test_fila_e_pesquisa_sao_locais_e_nao_acionam_o_erp(self):
         chamadas = []
