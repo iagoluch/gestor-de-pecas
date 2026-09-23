@@ -705,6 +705,16 @@ Validação dirigida: `tests.test_backup_banco_teste` e
 `tests.test_resetar_banco_teste` (10 testes) passaram, além do dry-run e do
 backup TESTE efetivo.
 
+### 2.34 Instância `:8001` reiniciada com o código atual (23/09/2026)
+
+O processo TESTE em `:8001` estava rodando código anterior às correções de
+segurança (WSDL respondia `200` sem allowlist configurada). Reiniciado com o
+mesmo comando (`uvicorn backend.api.main:app --host 127.0.0.1 --port 8001`,
+config via `.env`). Confirmado após reinício: `GET /health` → `200`;
+`GET /PcfIntegService` → `503 totvs_soap_source_not_configured` (fail-closed
+correto, nenhum CIDR foi configurado). Nenhuma credencial de escrita foi
+apontada para o Dev Observatory nesta janela.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
