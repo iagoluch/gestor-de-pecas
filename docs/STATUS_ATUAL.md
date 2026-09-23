@@ -530,6 +530,16 @@ Validação dirigida: manifesto JSON, ambos os comandos do detector com entrada
 de evento não visual, status `enabled` sem exceções configuradas e vínculo da
 skill global ao diretório do projeto.
 
+### 2.21 Deploy preserva dados de runtime (23/09/2026)
+
+O espelho de deploy da VM preserva explicitamente `.env`, `dados/`,
+`dev_reports/` e `backups/`; estes diretórios não participam mais do `robocopy
+/MIR`. O health check após reinício passou a ter timeout total de 60 segundos,
+tentativas de 3 segundos e timeout por requisição. O ensaio
+`scripts/test_deploy_mirror.ps1` usa somente diretório temporário e comprovou
+que código obsoleto é removido, enquanto dados de runtime permanecem após dois
+espelhamentos consecutivos. Commit: `7727432`.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
