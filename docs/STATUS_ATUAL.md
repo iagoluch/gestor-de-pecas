@@ -19,6 +19,10 @@ commit `4a60564`.
   `SENT` libera a sequência. A migration 46 normaliza itens anteriores para
   a chave da OP e cria o índice de suporte. O fato canônico continua ligado ao
   item por `canonical_event_id` para idempotência e reconstrução.
+- A exclusividade de recurso agora é conferida em qualquer entrada para estado
+  ocupante, inclusive `Aguardando → Parada`. A trava e a comparação usam a
+  identidade canônica do recurso, reconhecendo aliases oficiais como `LASER1`
+  e `Laser Ensis 3015`.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e

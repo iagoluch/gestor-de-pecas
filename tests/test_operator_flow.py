@@ -121,6 +121,39 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(second.ok)
         self.assertEqual(second.code, "operator_resource_occupied")
 
+    def test_recurso_exclusivo_nao_permite_contornar_por_parada_e_retomada(self):
+        db, service, first_operation = self._service()
+        second_task = db.inserir_tarefa("T-OPERADOR-PARADA")
+        db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-PARADA", "PECA-2", "Dobra", 1)
+        second_operation = {
+            **first_operation,
+            "id": 12,
+            "codigo_op": "OP-OPERADOR-PARADA",
+            "produto_codigo": "PECA-2",
+            "quantidade": 1,
+        }
+        db.catalog_operations.append(second_operation)
+
+        first = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=first_operation, recurso_exclusivo=True,
+        )
+        queued = db.enfileirar_apontamento_operacional(
+            "OP-OPERADOR-PARADA", "PECA-2", second_task, "Dobra", "1303", "OPERADOR",
+            quantidade=1, operacao=second_operation,
+        )
+        stopped = service.executar(
+            "Parada", op="OP-OPERADOR-PARADA", setor="Dobra", recurso="1303",
+            operacao=second_operation, motivo="Ajuste", motivo_codigo="0029",
+            recurso_exclusivo=True,
+        )
+
+        self.assertTrue(first.ok)
+        self.assertEqual(queued["status"], "Aguardando")
+        self.assertFalse(stopped.ok)
+        self.assertEqual(stopped.code, "operator_resource_occupied")
+        self.assertEqual(db.buscar_apontamento_operacional(queued["id"])["status"], "Aguardando")
+
     def test_parada_exige_motivo_e_finalizacao_exige_quantidades_e_operador(self):
         self.assertEqual(
             validate_transition(OperatorState.PRODUCTION, OperatorState.STOPPED).missing_fields,

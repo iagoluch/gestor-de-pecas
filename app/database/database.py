@@ -2207,27 +2207,31 @@ class Database(
                 recurso_exclusivo
                 and destino in {
                     OperatorState.PRODUCTION,
+                    OperatorState.STOPPED,
                     OperatorState.SETUP,
                     OperatorState.REWORK,
                 }
-                and origem == "Aguardando"
             ):
-                resource = str(atual.get("maquina") or "").strip()
-                cursor.execute(
-                    "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-                    (resource,),
-                )
+                resource = resolve_resource_identity(atual.get("maquina"))
+                self._bloquear_recursos_tx(cursor, [resource])
                 cursor.execute(
                     """
-                    SELECT id, operador_inicio, operador_fila
-                    FROM apontamentos_operacionais
-                    WHERE UPPER(maquina) = UPPER(%s)
-                      AND id <> %s
-                      AND status IN ('Em processo', 'Parada', 'Setup', 'Retrabalho')
-                    ORDER BY id
+                    SELECT a.id, a.operador_inicio, a.operador_fila
+                    FROM apontamentos_operacionais a
+                    LEFT JOIN eventos_estado_recurso e
+                      ON e.apontamento_id = a.id
+                     AND e.data_fim IS NULL
+                    WHERE a.id <> %s
+                      AND a.status IN ('Em processo', 'Parada', 'Setup', 'Retrabalho')
+                      AND (
+                          UPPER(a.maquina) = UPPER(%s)
+                          OR UPPER(COALESCE(e.recurso, '')) = UPPER(%s)
+                      )
+                    ORDER BY a.id
                     LIMIT 1
+                    FOR UPDATE OF a
                     """,
-                    (resource, apontamento_id),
+                    (apontamento_id, resource, resource),
                 )
                 occupied = cursor.fetchone()
                 if occupied:

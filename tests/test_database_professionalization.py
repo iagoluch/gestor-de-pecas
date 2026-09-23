@@ -489,10 +489,29 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         self.assertTrue(upgraded_hash.startswith("pbkdf2_sha256$600000$"))
         self.assertNotIn("senha-legada", upgraded_hash)
 
-    def _appointment(self, code="OP-FILA"):
+    def _appointment(self, code="OP-FILA", resource="1303"):
         task_id = self.db.inserir_tarefa("T-" + code)
         self.db.inserir_op_na_tarefa(task_id, code, "Peça", "Aguardando Dobra", 2)
-        return self.db.enfileirar_apontamento_operacional(code, "Peça", task_id, "Dobra", "1303", "IAGO", 2)
+        return self.db.enfileirar_apontamento_operacional(
+            code, "Peça", task_id, "Dobra", resource, "IAGO", 2
+        )
+
+    def test_recurso_exclusivo_recusa_aguardando_para_parada_quando_ja_ocupado(self):
+        primeiro = self._appointment("OP-EXCLUSIVO-1", resource="LASER1")
+        segundo = self._appointment("OP-EXCLUSIVO-2", resource="Laser Ensis 3015")
+        iniciado = self.db.transicionar_apontamento_operador(
+            primeiro["id"], "producao", "IAGO", recurso_exclusivo=True
+        )
+        bloqueado = self.db.transicionar_apontamento_operador(
+            segundo["id"], "parada", "IAGO", motivo="Ajuste",
+            recurso_exclusivo=True,
+        )
+
+        self.assertEqual(iniciado["status"], "Em processo")
+        self.assertTrue(bloqueado["exclusive_resource_conflict"])
+        self.assertEqual(
+            self.db.buscar_apontamento_operacional(segundo["id"])["status"], "Aguardando"
+        )
 
     def test_refugo_da_primeira_peca_e_finalizacao_unitaria_usam_eventos_canonicos(self):
         operation = {

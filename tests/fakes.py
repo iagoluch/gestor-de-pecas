@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import date, datetime, time, timedelta
 
 from app.core.normalization import limpa_codigo, normalizar_data_db
-from app.core.resource_mapping import resource_display_name
+from app.core.resource_mapping import resolve_resource_identity, resource_display_name
 from app.database.schema import SCHEMA_VERSION
 from app.database.welding_repository import WELDING_MANAGEMENT_SECTORS
 from mes.domain import (
@@ -1939,14 +1939,16 @@ class FakeDatabase:
         return_state_value = return_state.value if return_state else None
         if recurso_exclusivo and destination in {
             OperatorState.PRODUCTION,
+            OperatorState.STOPPED,
             OperatorState.SETUP,
             OperatorState.REWORK,
-        } and row["status"] == "Aguardando":
+        }:
+            resource = resolve_resource_identity(row.get("maquina"))
             occupied = next(
                 (
                     item for item in self.appointments
                     if item["id"] != apontamento_id
-                    and item.get("maquina") == row.get("maquina")
+                    and resolve_resource_identity(item.get("maquina")) == resource
                     and item.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"}
                 ),
                 None,
@@ -1954,7 +1956,7 @@ class FakeDatabase:
             if occupied:
                 return {
                     "exclusive_resource_conflict": True,
-                    "resource": row.get("maquina"),
+                    "resource": resource,
                     "operator": occupied.get("operador_inicio")
                     or occupied.get("operador_fila")
                     or "outro operador",
