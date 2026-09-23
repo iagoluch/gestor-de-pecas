@@ -343,8 +343,13 @@ class AtrasoNaoBloqueiaTests(SoldaGerencialBase):
         self.assertEqual(self._linhas()[0]["status"]["value"], WELDING_STATUS_LATE)
 
         fluxo = OperatorFlowService(self.db, "OPERADOR 6D")
+        # O posto recebe a operação já com a quantidade planejada da OP (F17);
+        # aqui ela vem do PCP do fixture (4 peças).
         contexto = dict(
-            op="OP-ATRASADA", setor="Solda Aço", recurso="Estação 7", operacao=operacao
+            op="OP-ATRASADA",
+            setor="Solda Aço",
+            recurso="Estação 7",
+            operacao={**operacao, "quantidade": 4},
         )
         inicio = fluxo.executar("Início", **contexto)
         self.assertTrue(inicio.ok, inicio.message)
@@ -359,7 +364,7 @@ class AtrasoNaoBloqueiaTests(SoldaGerencialBase):
         # 15/09/2026: esquema de qualidade próprio, fora do domínio do
         # Gestor) — Finalizar não tem pendência nenhuma, nem prazo nem atraso.
         final = fluxo.executar(
-            "Finalizado", **contexto, pecas_boas=1, operadores_cracha=["1"]
+            "Finalizado", **contexto, pecas_boas=4, operadores_cracha=["1"]
         )
         self.assertTrue(final.ok, final.message)
 
