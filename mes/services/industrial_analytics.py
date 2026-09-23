@@ -15,6 +15,7 @@ from mes.contracts import AnalyticsFilter
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
 from mes.services.calendar import CalendarService
 from mes.services.management import ManagementService
+from mes.services.shift_parameters import load_manufacturing_rules
 
 
 class IndustrialAnalyticsService:
@@ -22,6 +23,7 @@ class IndustrialAnalyticsService:
         self.db = db
         self._now = now_func or datetime.now
         self.simulation_mode = bool(simulation_mode)
+        self.rules = load_manufacturing_rules(db)
         self.management = management or ManagementService(
             db,
             now_func=self._now,
@@ -540,7 +542,7 @@ class IndustrialAnalyticsService:
                 "reason": "Nenhum recurso habilitado no filtro selecionado.",
             }
 
-        calendar = CalendarService(self.db)
+        calendar = CalendarService(self.db, self.rules)
         breakdown = self.time_breakdown(filters)
         by_resource = {
             str(item.get("recurso") or "").strip().casefold(): item

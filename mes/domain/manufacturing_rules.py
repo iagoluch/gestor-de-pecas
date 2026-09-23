@@ -258,6 +258,7 @@ class ManufacturingRules:
         timestamp: datetime,
         *,
         planned_overtime_windows=None,
+        official_work_window=None,
     ) -> ShiftWindowKind:
         """Classifica um instante em turno / hora extra planejada / fora de turno.
 
@@ -273,7 +274,7 @@ class ManufacturingRules:
         if not isinstance(timestamp, datetime):
             raise TypeError("timestamp deve ser datetime")
         moment = timestamp.time()
-        start, end = cls.official_work_window
+        start, end = official_work_window or cls.official_work_window
         if _time_within(moment, start, end):
             return ShiftWindowKind.OFFICIAL_SHIFT
         for window_start, window_end in planned_overtime_windows or ():

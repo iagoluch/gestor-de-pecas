@@ -13,12 +13,14 @@ from mes.analytics.physical_time import PhysicalInputSegment, consolidate_physic
 from mes.analytics.timeline import build_operator_timeline
 from mes.domain import EventCategory, IssueSeverity, ManufacturingRules
 from mes.services.calendar import CalendarService
+from mes.services.shift_parameters import load_manufacturing_rules
 
 
 class AuditService:
     def __init__(self, db=None, now_func=None):
         self.db = db
         self._now = now_func or datetime.now
+        self.rules = load_manufacturing_rules(db) if db is not None else ManufacturingRules()
 
     def inspect_operational_rows(self, rows):
         issues = []
@@ -206,7 +208,7 @@ class AuditService:
         return issues
 
     def inspect_shift_boundaries(self, rows, *, inicio, fim):
-        """Valida a regra oficial 17:30/21:30 sem usar regra do PCFactory."""
+        """Valida os limites de turno configurados pela Manufatura."""
 
         issues = []
         start_period = _dt(inicio)
@@ -225,7 +227,7 @@ class AuditService:
             day = max(start.date(), start_period.date())
             last_day = min(row_end.date(), end_period.date())
             while day <= last_day:
-                for boundary_time in ManufacturingRules().shift_end_boundaries:
+                for boundary_time in self.rules.shift_end_boundaries:
                     boundary = datetime.combine(day, boundary_time)
                     if not (start <= boundary < row_end and start_period <= boundary <= end_period):
                         continue
@@ -295,7 +297,7 @@ class AuditService:
 
         if self.db is None:
             return []
-        calendar = CalendarService(self.db)
+        calendar = CalendarService(self.db, self.rules)
         issues = []
         state_rows = [dict(row) for row in (states or ())]
         states_by_resource = {}

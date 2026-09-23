@@ -8,7 +8,7 @@ from backend.api.clock import ApplicationClock
 from backend.api.errors import AppError, register_error_handlers
 from mes.analytics.oee import calculate_oee
 from mes.contracts import AnalyticsFilter
-from mes.domain import EventCategory, ManufacturingRules
+from mes.domain import EventCategory, ManufacturingRules, ShiftWindowKind
 from mes.services.andon import AndonService
 from mes.services.shift_boundary import ShiftBoundaryService
 
@@ -449,6 +449,26 @@ class ShiftParametersLoaderTests(unittest.TestCase):
 
         self.assertEqual(rules.official_work_window, (time(7, 0), time(16, 0)))
         self.assertEqual(rules.shift_end_boundaries, (time(16, 0), time(19, 0)))
+
+    def test_consumidores_de_calendario_e_capabilities_usam_o_mesmo_turno(self):
+        from mes.services.calendar import CalendarService
+        from mes.services.frontend_facade import FrontendBackendFacade
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("Oficial", "expediente", "07:00", "16:00", ordem=1),
+            _turno("H2", "hora_extra", "16:00", "19:00", ordem=2),
+        ])
+        rules = load_manufacturing_rules(db)
+        calendar = CalendarService(db, rules)
+
+        self.assertEqual(
+            calendar.shift_window_kind("RECURSO", datetime(2026, 9, 3, 16, 30)),
+            ShiftWindowKind.PLANNED_OVERTIME,
+        )
+        capabilities = FrontendBackendFacade(db).capabilities()
+        self.assertEqual(capabilities["manufacturing_rules"]["official_work_window"], ["07:00", "16:00"])
+        self.assertEqual(capabilities["manufacturing_rules"]["shift_end_boundaries"], ["16:00", "19:00"])
 
     def test_terceiro_turno_encadeado_apos_o_h2_tambem_vira_limite(self):
         from mes.services.shift_parameters import load_manufacturing_rules

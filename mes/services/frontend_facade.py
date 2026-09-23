@@ -35,6 +35,7 @@ from mes.services.calendar import CalendarService
 from mes.services.industrial_analytics import IndustrialAnalyticsService
 from mes.services.management import ManagementService
 from mes.services.management_insights import ManagementInsightsService
+from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.traceability import TraceabilityService
 from mes.services.welding import WeldingManagementService
 
@@ -57,6 +58,7 @@ class FrontendBackendFacade:
         self.db = db
         self._now = now_func or datetime.now
         self.simulation_mode = bool(simulation_mode)
+        self.rules = load_manufacturing_rules(db)
         self.management = ManagementService(
             db,
             now_func=self._now,
@@ -76,6 +78,11 @@ class FrontendBackendFacade:
             simulation_mode=self.simulation_mode,
         )
         self.audit_service = AuditService(db, now_func=self._now)
+        # Todos os consumidores da fachada usam o mesmo snapshot de parâmetros
+        # do turno; não deixe a UI anunciar uma janela diferente da auditoria
+        # e do cálculo de calendário.
+        self.analytics.rules = self.rules
+        self.audit_service.rules = self.rules
         self.traceability = TraceabilityService(db)
         self.andon_service = AndonService(
             db,
@@ -90,7 +97,7 @@ class FrontendBackendFacade:
     def capabilities(self):
         """Expõe o contrato que a UI deve obedecer sem duplicar regra de negócio."""
 
-        rules = ManufacturingRules()
+        rules = self.rules
         return {
             "contract_version": FRONTEND_CONTRACT_VERSION,
             "schema_version": SCHEMA_VERSION,
@@ -130,7 +137,10 @@ class FrontendBackendFacade:
                 "automatic_stop_is_planned": rules.automatic_stop_is_planned(),
                 "simultaneous_ops_duplicate_physical_time": False,
                 # Calendário operacional (Wave 6A)
-                "out_of_shift_window": ["17:30", "08:00"],
+                "out_of_shift_window": [
+                    rules.official_work_window[1].strftime("%H:%M"),
+                    rules.official_work_window[0].strftime("%H:%M"),
+                ],
                 "planned_overtime_source": "excecoes_calendario_produtivo:disponivel_extra",
                 "planned_overtime_is_fixed_second_shift": False,
                 "clock_blocks_appointment": False,
@@ -275,7 +285,7 @@ class FrontendBackendFacade:
         # Instanciado uma vez por consulta: o serviço já memoiza turnos e
         # exceções por recurso, então a classificação de janela não multiplica
         # consulta por card do Andon.
-        calendar = CalendarService(self.db)
+        calendar = CalendarService(self.db, self.rules)
         states_loader = getattr(self.db, "listar_estados_recurso_atuais", None)
         states = list(states_loader(
             setor=filters.setor,

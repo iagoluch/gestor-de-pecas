@@ -34,6 +34,11 @@ commit `4a60564`.
   no PostgreSQL, compartilhando o contador entre workers e sobrevivendo a
   reinícios; a janela expira o contador sem bloquear o operador. A migration
   48 cria `login_throttle`, com teste de persistência e expiração.
+- Os consumidores de turno deixaram de reconstruir `08:00–17:30` por conta
+  própria: `parametros_turno` agora alimenta a mesma instância de regras usada
+  pelo calendário, pela auditoria e pelo contrato de capabilities da UI. O
+  fallback global de calendário e os limites de auditoria acompanham a edição
+  administrativa sem reinício.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e

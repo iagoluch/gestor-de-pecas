@@ -23,8 +23,9 @@ UNAVAILABLE_EXCEPTION_TYPE = "indisponivel"
 
 
 class CalendarService:
-    def __init__(self, db):
+    def __init__(self, db, rules=None):
         self.db = db
+        self.rules = rules or ManufacturingRules()
         # O calendário é imutável durante uma execução do caso de uso. O cache
         # vive somente nesta instância e evita repetir a mesma consulta de
         # turno/intervalo/exceção para cada dia e recurso auditado.
@@ -353,7 +354,9 @@ class CalendarService:
             return []
         operational = self.operational_intervals(resource_code, inicio, fim)
         if not operational and not self._turns(resource_code):
-            operational = _official_window_intervals(inicio, fim)
+            operational = _official_window_intervals(
+                inicio, fim, self.rules.official_work_window
+            )
         return _subtract_many([(inicio, fim)], operational)
 
     def shift_window_kind(self, resource_code, timestamp):
@@ -375,7 +378,11 @@ class CalendarService:
                 return ShiftWindowKind.PLANNED_OVERTIME
         if turns:
             return ShiftWindowKind.OUT_OF_SHIFT
-        return ManufacturingRules.shift_window_kind(timestamp)
+        return ManufacturingRules.shift_window_kind(
+            timestamp,
+            planned_overtime_windows=self.rules.overtime_windows,
+            official_work_window=self.rules.official_work_window,
+        )
 
     def _exceptions(self, turns, inicio, fim):
         calendar_codes = {
@@ -447,10 +454,10 @@ def _exception_bounds(row):
     return start, end
 
 
-def _official_window_intervals(inicio, fim):
+def _official_window_intervals(inicio, fim, official_work_window=None):
     """Janela oficial da Manufatura para recursos ainda sem calendário."""
 
-    start_time, end_time = ManufacturingRules.official_work_window
+    start_time, end_time = official_work_window or ManufacturingRules.official_work_window
     intervals = []
     day = inicio.date() - timedelta(days=1)
     last_day = fim.date()
