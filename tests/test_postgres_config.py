@@ -38,10 +38,11 @@ class PostgresConfigTests(unittest.TestCase):
         config = load_postgres_config(testing=True, environ={
             "DATABASE_URL": "postgresql://app:pw@db/prod",
             "TEST_DATABASE_URL": "postgresql://app:pw@db/test",
+            "GESTOR_EXPECTED_DATABASE": "test",
         })
         self.assertEqual(config.safe_target["dbname"], "test")
 
-    def test_integracao_rejeita_nome_sem_marcador_de_teste(self):
+    def test_integracao_exige_identidade_explicita_do_banco(self):
         with self.assertRaises(DatabaseConfigurationError):
             load_postgres_config(testing=True, environ={
                 "TEST_DATABASE_URL": "postgresql://app:pw@db/gestor_pecas",

@@ -568,6 +568,12 @@ antes de abrir a transação. Uma versão declarada sem migration agora produz
 erro de configuração explícito, em vez de um `KeyError` tardio após iniciar a
 atualização do schema.
 
+### 2.25 Banco de teste exige identidade literal (23/09/2026)
+
+`TEST_DATABASE_URL` não é mais aceito apenas porque o nome contém `test`.
+Ele exige `GESTOR_EXPECTED_DATABASE` e compara o alvo literalmente, mantendo
+também a recusa quando o DSN coincide com o banco operacional.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

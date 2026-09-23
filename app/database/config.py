@@ -116,9 +116,9 @@ def load_postgres_config(*, testing=False, environ=None):
     parsed = conninfo_to_dict(dsn)
     expected_database = str(env.get("GESTOR_EXPECTED_DATABASE") or "").strip()
     actual_database = str(parsed.get("dbname") or "").strip()
-    if testing and "test" not in actual_database.casefold():
+    if testing and not expected_database:
         raise DatabaseConfigurationError(
-            "Execução recusada: TEST_DATABASE_URL deve apontar para um banco cujo nome contenha 'test'."
+            "Execução recusada: GESTOR_EXPECTED_DATABASE é obrigatório para TEST_DATABASE_URL."
         )
     if expected_database and actual_database.casefold() != expected_database.casefold():
         raise DatabaseConfigurationError(
