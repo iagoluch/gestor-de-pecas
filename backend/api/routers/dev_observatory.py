@@ -11,8 +11,9 @@ propósito: as duas devem poder mudar, quebrar ou girar sem afetar uma a outra
 
 Sobre o ambiente REAL: **somente leitura**, garantida pelo PostgreSQL e
 verificada na abertura da conexão (``backend/observability/readonly_db.py``).
-Nenhum endpoint deste módulo escreve em banco — nem no TESTE — e nada aqui fala
-com TOTVS ou SigmaNEST.
+Os dados observados continuam somente leitura — inclusive no REAL — e nada
+aqui fala com TOTVS ou SigmaNEST. O login grava apenas o contador técnico do
+freio de autenticação na tabela compartilhada de throttling.
 """
 
 from __future__ import annotations
@@ -30,8 +31,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.dependencies.auth import require_dev_observatory_user
 from backend.api.dependencies.filters import analytics_filter
+from backend.api.database import get_database
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
+from backend.api.security.login_throttle import login_throttle_key
 from backend.integrations.totvs_soap import _arrived_through_public_host
 from backend.observability import metrics as metrics_module
 from backend.observability.shift_report import (
@@ -238,17 +241,37 @@ def _credential_matches(sent: str, configured: str) -> bool:
 
 
 @router.post("/login")
-def dev_observatory_login(payload: DevObservatoryLoginRequest, request: Request):
+def dev_observatory_login(
+    payload: DevObservatoryLoginRequest,
+    request: Request,
+    database=Depends(get_database),
+):
     settings = request.app.state.settings
     now = time.monotonic()
     client_key = _login_client_key(request)
-    remaining = _login_lockout_remaining(client_key, now=now)
-    if remaining:
-        raise AppError(
-            "dev_observatory_login_blocked",
-            f"Muitas tentativas seguidas. Aguarde {remaining}s para tentar de novo.",
-            status_code=429,
-        )
+    persistent_key = login_throttle_key(request, payload.username)
+    persistent_lookup = getattr(database, "obter_falhas_login", None)
+    if callable(persistent_lookup):
+        if int(
+            persistent_lookup(
+                persistent_key,
+                janela_segundos=LOGIN_LOCKOUT_SECONDS,
+            )
+            or 0
+        ) >= LOGIN_MAX_FAILURES:
+            raise AppError(
+                "dev_observatory_login_blocked",
+                "Muitas tentativas seguidas. Aguarde alguns minutos para tentar de novo.",
+                status_code=429,
+            )
+    else:
+        remaining = _login_lockout_remaining(client_key, now=now)
+        if remaining:
+            raise AppError(
+                "dev_observatory_login_blocked",
+                f"Muitas tentativas seguidas. Aguarde {remaining}s para tentar de novo.",
+                status_code=429,
+            )
     configured_username = settings.dev_observatory_login_username
     configured_password = settings.dev_observatory_login_password
     # As duas comparações são feitas sempre: avaliar a senha só quando o usuário
@@ -257,13 +280,24 @@ def dev_observatory_login(payload: DevObservatoryLoginRequest, request: Request)
     password_ok = _credential_matches(payload.password, configured_password)
     valid = bool(configured_username) and bool(configured_password) and username_ok and password_ok
     if not valid:
-        _register_login_failure(client_key, now=now)
+        persistent_register = getattr(database, "registrar_falha_login", None)
+        if callable(persistent_register):
+            persistent_register(
+                persistent_key,
+                janela_segundos=LOGIN_LOCKOUT_SECONDS,
+            )
+        else:
+            _register_login_failure(client_key, now=now)
         raise AppError(
             "dev_observatory_invalid_credentials",
             "Usuário ou senha inválidos.",
             status_code=401,
         )
-    _clear_login_failures(client_key)
+    persistent_clear = getattr(database, "limpar_falhas_login", None)
+    if callable(persistent_clear):
+        persistent_clear(persistent_key)
+    else:
+        _clear_login_failures(client_key)
     token, _claims = request.app.state.dev_observatory_session_signer.issue(
         user_id=0, username=payload.username, role="dev_observatory",
     )

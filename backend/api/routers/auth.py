@@ -18,6 +18,7 @@ from backend.api.database import get_database
 from backend.api.dependencies.auth import get_current_user, require_csrf
 from backend.api.errors import AppError
 from backend.api.schemas.auth import LoginRequest, SessionUser
+from backend.api.security.login_throttle import login_throttle_key
 
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
@@ -36,18 +37,19 @@ _login_failures: dict[str, tuple[int, float]] = {}
 _login_failures_lock = threading.Lock()
 
 
-def _login_throttle_key(request: Request, username: str) -> str:
-    client = request.client
-    ip = str(getattr(client, "host", "") or "desconhecido")
-    return f"{ip}:{username.strip().casefold()}"
-
-
 def _login_delay_seconds(key: str, *, now: float) -> float:
     with _login_failures_lock:
         failures, last_seen = _login_failures.get(key, (0, 0.0))
         if failures == 0 or now - last_seen > LOGIN_DELAY_WINDOW_SECONDS:
             return 0.0
         return min(LOGIN_DELAY_MAX_SECONDS, LOGIN_DELAY_BASE_SECONDS * (2 ** (failures - 1)))
+
+
+def _login_delay_for_failures(failures: int) -> float:
+    failures = int(failures or 0)
+    if failures <= 0:
+        return 0.0
+    return min(LOGIN_DELAY_MAX_SECONDS, LOGIN_DELAY_BASE_SECONDS * (2 ** (failures - 1)))
 
 
 def _register_login_failure(key: str, *, now: float) -> None:
@@ -77,9 +79,20 @@ def _cookie_options(request: Request):
 
 @router.post("/login", response_model=SessionUser)
 async def login(payload: LoginRequest, request: Request, database=Depends(get_database)):
-    now = time.monotonic()
-    throttle_key = _login_throttle_key(request, payload.username)
-    delay = _login_delay_seconds(throttle_key, now=now)
+    throttle_key = login_throttle_key(request, payload.username)
+    persistent_lookup = getattr(database, "obter_falhas_login", None)
+    if callable(persistent_lookup):
+        failures = await anyio.to_thread.run_sync(
+            partial(
+                persistent_lookup,
+                throttle_key,
+                janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
+            ),
+            limiter=request.app.state.auth_thread_limiter,
+        )
+        delay = _login_delay_for_failures(failures)
+    else:
+        delay = _login_delay_seconds(throttle_key, now=time.monotonic())
     if delay:
         await anyio.sleep(delay)
     # O hash da senha (PBKDF2, 600 mil iterações) é caro de propósito — é o
@@ -93,13 +106,31 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         limiter=request.app.state.auth_thread_limiter,
     )
     if not user:
-        _register_login_failure(throttle_key, now=time.monotonic())
+        persistent_register = getattr(database, "registrar_falha_login", None)
+        if callable(persistent_register):
+            await anyio.to_thread.run_sync(
+                partial(
+                    persistent_register,
+                    throttle_key,
+                    janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
+                ),
+                limiter=request.app.state.auth_thread_limiter,
+            )
+        else:
+            _register_login_failure(throttle_key, now=time.monotonic())
         raise AppError(
             "invalid_credentials",
             "Usuário ou senha inválidos.",
             status_code=401,
         )
-    _clear_login_failures(throttle_key)
+    persistent_clear = getattr(database, "limpar_falhas_login", None)
+    if callable(persistent_clear):
+        await anyio.to_thread.run_sync(
+            partial(persistent_clear, throttle_key),
+            limiter=request.app.state.auth_thread_limiter,
+        )
+    else:
+        _clear_login_failures(throttle_key)
     role = normalize_user_level(user.get("nivel"))
     if role is None:
         raise AppError(

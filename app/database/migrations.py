@@ -103,6 +103,7 @@ EXPECTED_TABLES = (
     "parametros_turno",
     "telegram_chats_descobertos",
     "telegram_digest_envios",
+    "login_throttle",
 )
 
 BASELINE_STATEMENTS = (
@@ -2239,6 +2240,19 @@ USER_SESSION_VERSION_STATEMENTS = (
 )
 
 
+LOGIN_THROTTLE_DESCRIPTION = "contador persistente de atraso progressivo do login"
+LOGIN_THROTTLE_STATEMENTS = (
+    """
+    CREATE TABLE login_throttle (
+        throttle_key TEXT PRIMARY KEY,
+        failures INTEGER NOT NULL CHECK (failures >= 0),
+        last_seen_epoch DOUBLE PRECISION NOT NULL
+    )
+    """,
+    "CREATE INDEX idx_login_throttle_last_seen ON login_throttle (last_seen_epoch)",
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2289,6 +2303,7 @@ MIGRATIONS = {
     45: (TELEGRAM_BOT_CURSOR_DESCRIPTION, TELEGRAM_BOT_CURSOR_STATEMENTS),
     46: (TOTVS_OUTBOX_ORDERING_DESCRIPTION, TOTVS_OUTBOX_ORDERING_STATEMENTS),
     47: (USER_SESSION_VERSION_DESCRIPTION, USER_SESSION_VERSION_STATEMENTS),
+    48: (LOGIN_THROTTLE_DESCRIPTION, LOGIN_THROTTLE_STATEMENTS),
 }
 
 

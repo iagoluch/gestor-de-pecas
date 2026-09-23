@@ -75,6 +75,14 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         self.assertEqual(self.db.obter_cursor_telegram_bot("factory_bot"), 42)
         self.assertEqual(self.db.avancar_cursor_telegram_bot("factory_bot", 17), 42)
 
+    def test_freio_de_login_persiste_e_expira_por_janela(self):
+        key = "127.0.0.1:operador"
+        self.assertEqual(self.db.obter_falhas_login(key, agora=1000, janela_segundos=300), 0)
+        self.assertEqual(self.db.registrar_falha_login(key, agora=1000, janela_segundos=300), 1)
+        self.assertEqual(self.db.registrar_falha_login(key, agora=1001, janela_segundos=300), 2)
+        self.assertEqual(self.db.obter_falhas_login(key, agora=1100, janela_segundos=300), 2)
+        self.assertEqual(self.db.obter_falhas_login(key, agora=1302, janela_segundos=300), 0)
+
     def test_migration_13_mantem_contexto_historico_nulo(self):
         item = self._appointment("OP-MIGRATION-13")
         self.assertIsNotNone(

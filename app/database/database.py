@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import logging
 import os
+import time as epoch_time
 
 from psycopg.errors import UniqueViolation
 
@@ -255,6 +256,57 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations")
             return int(cursor.fetchone()["version"])
+
+    def obter_falhas_login(self, throttle_key, *, agora=None, janela_segundos=300):
+        """Retorna falhas recentes do login, compartilhadas entre workers."""
+
+        agora = float(epoch_time.time() if agora is None else agora)
+        janela_segundos = float(janela_segundos)
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT failures, last_seen_epoch
+                FROM login_throttle
+                WHERE throttle_key = %s
+                """,
+                (str(throttle_key),),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return 0
+            if agora - float(row["last_seen_epoch"]) > janela_segundos:
+                cursor.execute("DELETE FROM login_throttle WHERE throttle_key = %s", (str(throttle_key),))
+                return 0
+            return int(row["failures"])
+
+    def registrar_falha_login(self, throttle_key, *, agora=None, janela_segundos=300):
+        """Incrementa atomicamente o atraso do login e retorna o novo contador."""
+
+        agora = float(epoch_time.time() if agora is None else agora)
+        janela_segundos = float(janela_segundos)
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO login_throttle (throttle_key, failures, last_seen_epoch)
+                VALUES (%s, 1, %s)
+                ON CONFLICT (throttle_key) DO UPDATE SET
+                    failures = CASE
+                        WHEN %s - login_throttle.last_seen_epoch > %s THEN 1
+                        ELSE login_throttle.failures + 1
+                    END,
+                    last_seen_epoch = EXCLUDED.last_seen_epoch
+                RETURNING failures
+                """,
+                (str(throttle_key), agora, agora, janela_segundos),
+            )
+            return int(cursor.fetchone()["failures"])
+
+    def limpar_falhas_login(self, throttle_key):
+        """Remove o contador após autenticação bem-sucedida."""
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("DELETE FROM login_throttle WHERE throttle_key = %s", (str(throttle_key),))
+            return cursor.rowcount > 0
 
     def _hash_senha(self, senha, salt=None):
         salt_bytes = os.urandom(32) if salt is None else bytes.fromhex(salt)

@@ -30,6 +30,10 @@ commit `4a60564`.
   senha, nível ou ativação incrementa essa versão e revoga tokens anteriores.
   A migration 47 adiciona a coluna e mantém tokens antigos fora do acesso até
   um novo login.
+- O atraso progressivo do login agora persiste por chave de cliente e usuário
+  no PostgreSQL, compartilhando o contador entre workers e sobrevivendo a
+  reinícios; a janela expira o contador sem bloquear o operador. A migration
+  48 cria `login_throttle`, com teste de persistência e expiração.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e
