@@ -581,6 +581,19 @@ O long polling do bot persiste o próximo `update_id` em
 um reinício consulta a partir do cursor confirmado em vez de voltar ao início
 da fila do Telegram.
 
+### 2.27 Andon preserva recursos ativos sem painel prévio (23/09/2026)
+
+Montagem passou a ter painel próprio quando houver recurso ativo e um recurso
+com setor ainda não classificado aparece em `Não classificado`, mantendo o
+nome recebido como grupo auditável. Nenhum recurso é promovido por semelhança
+de texto. A página Web respeita a ordem e os painéis retornados pelo backend,
+em vez de manter uma segunda lista de setores; painéis extras usam o ícone
+oficial genérico de painéis.
+
+Validação dirigida: `tests.test_andon_redesign` (16 testes),
+`web/src/test/andon.test.tsx` (15 testes), `npm run build` e detector
+Impeccable sem achados.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

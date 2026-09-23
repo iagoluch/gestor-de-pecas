@@ -38,7 +38,9 @@ STATE_LABELS = {
 # setor canônico e identidades de Corte já aprovadas; não existe classificação
 # por semelhança de texto. Destaque é um posto operacional de Corte, não uma
 # máquina inventada nem um quinto setor visual.
-ANDON_PANEL_ORDER = ("Corte", "Caldeiraria", "Solda", "Pintura")
+ANDON_UNCLASSIFIED_PANEL = "Não classificado"
+ANDON_DEFAULT_PANEL_ORDER = ("Corte", "Caldeiraria", "Solda", "Pintura")
+ANDON_PANEL_ORDER = (*ANDON_DEFAULT_PANEL_ORDER, "Montagem", ANDON_UNCLASSIFIED_PANEL)
 # Wave 6F — os cinco setores que substituíram a antiga "Solda" continuam em um
 # único painel "Solda" e viram sub-grupos dele, exatamente como Laser/Plasma/
 # Destaque fazem dentro de Corte. O painel é a leitura de chão de fábrica
@@ -56,6 +58,7 @@ ANDON_PANEL_BY_SECTOR = {
     "usinagem": "Caldeiraria",
     "serra": "Caldeiraria",
     "pintura": "Pintura",
+    "montagem": "Montagem",
     **{sector: "Solda" for sector in ANDON_WELDING_GROUP_BY_SECTOR},
 }
 ANDON_GROUP_BY_SECTOR = {
@@ -63,6 +66,7 @@ ANDON_GROUP_BY_SECTOR = {
     "usinagem": "Usinagem",
     "serra": "Serra",
     "pintura": "Pintura",
+    "montagem": "Montagem",
     **ANDON_WELDING_GROUP_BY_SECTOR,
 }
 ANDON_CUT_GROUP_BY_IDENTITY = {
@@ -77,6 +81,8 @@ ANDON_GROUP_ORDER = {
     "Caldeiraria": {"Dobra": 0, "Usinagem": 1, "Serra": 2},
     "Solda": {name: index for index, name in enumerate(ANDON_WELDING_GROUP_BY_SECTOR.values())},
     "Pintura": {"Pintura": 0},
+    "Montagem": {"Montagem": 0},
+    ANDON_UNCLASSIFIED_PANEL: {},
 }
 ACTIVE_ANDON_CATEGORIES = {
     EventCategory.PRODUCTION.value,
@@ -275,7 +281,12 @@ class AndonService:
         panel_names = (
             (selected_panel,)
             if filters.setor and selected_panel
-            else ANDON_PANEL_ORDER if not filters.setor else ()
+            else (
+                panel
+                for panel in ANDON_PANEL_ORDER
+                if panel in ANDON_DEFAULT_PANEL_ORDER
+                or any(resource["panel"] == panel for resource in ordered)
+            ) if not filters.setor else ()
         )
         sectors = []
         for panel_name in panel_names:
@@ -476,7 +487,10 @@ class AndonService:
         sector_key = _key(resource.get("sector"))
         panel = ANDON_PANEL_BY_SECTOR.get(sector_key)
         if panel is None:
-            return None
+            # Recurso ativo sem classificação aprovada não pode sumir do
+            # quadro. Ele segue auditável no painel explícito, sem ser
+            # promovido a um setor conhecido por semelhança de texto.
+            return ANDON_UNCLASSIFIED_PANEL, str(resource.get("sector") or "Setor não informado").strip()
         if panel != "Corte":
             return panel, ANDON_GROUP_BY_SECTOR[sector_key]
 

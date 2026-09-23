@@ -96,7 +96,9 @@ function snapshot(states: Array<ReturnType<typeof resource>> = [
   resource("SOLDA-01", "Solda", "atividade_sem_op"),
   resource("PINTURA-01", "Pintura", "producao"),
 ], selectedPanel?: string): AndonSnapshot {
-  const panelNames = selectedPanel ? [selectedPanel] : ["Corte", "Caldeiraria", "Solda", "Pintura"];
+  const panelNames = selectedPanel
+    ? [selectedPanel]
+    : Array.from(new Set(["Corte", "Caldeiraria", "Solda", "Pintura", ...states.map((item) => item.panel ?? item.sector)]));
   const sectors = panelNames.map((name) => {
     const resources = states.filter((item) => item.panel === name);
     const groupNames = Array.from(new Set(resources.map((item) => item.group ?? name)));
@@ -315,6 +317,28 @@ describe("Andon Geral Web", () => {
     expect(container.querySelectorAll('.andon-card[data-active="true"] .andon-card__oee')).toHaveLength(activeResources.length);
     expect(screen.getAllByText("OP-154872 • 20").length).toBeGreaterThan(1);
     expect(screen.getByText("Aguardando material")).toBeInTheDocument();
+  });
+
+  it("mantém visíveis os painéis adicionais definidos pelo snapshot", async () => {
+    const montagem = resource("MONT-01", "Montagem", "producao");
+    const pendente = resource("SEM-SETOR", "Setor pendente", "parada", "Cadastro pendente");
+    pendente.panel = "Não classificado";
+    pendente.group = "Setor pendente";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/auth/session")) return authResponse();
+      return new Response(JSON.stringify(snapshot([montagem, pendente])), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const { container } = renderAndon(fetchMock);
+
+    await waitFor(() => expect(container.querySelector('[data-panel="Montagem"]')).toBeInTheDocument());
+    expect(container.querySelector('[data-panel="Não classificado"]')).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Montagem", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Não classificado", level: 2 })).toBeInTheDocument();
+    expect(container.querySelector('[data-panel="Montagem"] [data-sector="Montagem"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-panel="Não classificado"] [data-sector="Não classificado"]')).toBeInTheDocument();
   });
 
   it("compõe duas colunas independentes e reserva a capacidade de cada painel", async () => {

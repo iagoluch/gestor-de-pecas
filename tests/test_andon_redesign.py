@@ -130,6 +130,23 @@ class AndonActiveResourcesTests(unittest.TestCase):
         self.assertEqual(groups["Corte"], ["Laser", "Plasma"])
         self.assertEqual(groups["Caldeiraria"], ["Dobra", "Usinagem", "Serra"])
 
+    def test_montagem_e_setor_sem_classificacao_ativa_nao_sao_descartados(self):
+        self.service.db.resources.extend([
+            {"codigo": "MONT-01", "nome": "Posto de montagem", "tipo_setor": "Montagem", "ordem": 1},
+            {"codigo": "SEM-SETOR", "nome": "Recurso pendente", "tipo_setor": None, "ordem": 2},
+        ])
+
+        snapshot = self.snapshot(self.states + [
+            {"recurso": "MONT-01", "setor": "Montagem", "categoria": "producao", "inicio": self.now},
+            {"recurso": "SEM-SETOR", "setor": "Setor pendente", "categoria": "parada", "inicio": self.now},
+        ])
+        panels = {sector["name"]: sector for sector in snapshot["sectors"]}
+
+        self.assertEqual(panels["Montagem"]["groups"][0]["name"], "Montagem")
+        self.assertEqual(panels["Montagem"]["resources"][0]["code"], "MONT-01")
+        self.assertEqual(panels["Não classificado"]["groups"][0]["name"], "Setor pendente")
+        self.assertEqual(panels["Não classificado"]["resources"][0]["code"], "SEM-SETOR")
+
     def test_oee_disponibilidade_performance_e_ftt_permanecem_por_recurso(self):
         resources = self.resources(self.snapshot())
         for index, code in enumerate(("LASER1", "PLASMA", "DOBRA1", "CNC-01", "SERRA1", "SOLDA1", "SOLDA2", "PINT.L"), 1):

@@ -13,7 +13,6 @@ import type { MetricValue } from "../types/api";
 import type { AndonResource, AndonSnapshot } from "../types/andon";
 import { formatDuration } from "../utils/format";
 
-const ANDON_PANEL_ORDER = ["Corte", "Caldeiraria", "Solda", "Pintura"];
 // Cada coluna administra a própria distribuição vertical: o painel de topo usa
 // a altura exigida pelo conteúdo e o painel seguinte assume o restante. Isso
 // substitui o antigo quadrante 2x2, que impunha alturas simétricas.
@@ -39,11 +38,6 @@ const PANEL_ICONS: Record<string, string> = {
   Solda: assets.operator.navigation.Solda,
   Pintura: assets.operator.navigation.Pintura,
 };
-
-function sectorOrder(name: string) {
-  const index = ANDON_PANEL_ORDER.indexOf(name);
-  return index === -1 ? ANDON_PANEL_ORDER.length : index;
-}
 
 function boardColumns(sectors: AndonSnapshot["sectors"]) {
   const assigned = new Set<string>();
@@ -221,7 +215,7 @@ function SectorPanel({ sector, elapsed, transitions, onOpen }: {
       style={{ "--andon-panel-rows": maximumGroupLoad } as CSSProperties}
     >
       <header className="andon-sector-panel__header">
-        <div><img src={PANEL_ICONS[sector.name]} alt="" aria-hidden="true" /><h2 id={`andon-sector-${sector.name}`}>{sector.name}</h2></div>
+        <div><img src={PANEL_ICONS[sector.name] ?? assets.navigation.panels} alt="" aria-hidden="true" /><h2 id={`andon-sector-${sector.name}`}>{sector.name}</h2></div>
         <strong>RECURSOS ATIVOS <span>({count})</span></strong>
       </header>
       {count === 0 ? (
@@ -293,10 +287,9 @@ export function AndonPage() {
   }
 
   const data = query.data;
-  const sectors = [...data.sectors].sort((left, right) => {
-    const rank = sectorOrder(left.name) - sectorOrder(right.name);
-    return rank || left.name.localeCompare(right.name, "pt-BR");
-  });
+  // A ordem do quadro é um contrato do backend. Assim, um setor novo ou ainda
+  // não classificado continua visível sem uma segunda lista de setores na UI.
+  const sectors = data.sectors;
   const resources = sectors.flatMap((sector) => sector.resources);
   const columns = boardColumns(sectors);
   const boardStyle = { "--andon-column-count": columns.length } as CSSProperties;
