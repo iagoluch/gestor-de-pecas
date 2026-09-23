@@ -574,6 +574,13 @@ atualização do schema.
 Ele exige `GESTOR_EXPECTED_DATABASE` e compara o alvo literalmente, mantendo
 também a recusa quando o DSN coincide com o banco operacional.
 
+### 2.26 Cursor do Telegram sobrevive a reinícios (23/09/2026)
+
+O long polling do bot persiste o próximo `update_id` em
+`telegram_bot_cursors` (migration 45) após cada atualização processada. Assim,
+um reinício consulta a partir do cursor confirmado em vez de voltar ao início
+da fila do Telegram.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
