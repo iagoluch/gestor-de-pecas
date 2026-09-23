@@ -181,7 +181,7 @@ class ProductionOrderOnDemandSyncService:
         gateway: ProductionOrderRequestGateway | None = None,
         model_gateway=None,
         company_id: str | None = None,
-        branch_id: str | None = None,
+        branch_ids: tuple[str, ...] = (),
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
         negative_ttl_seconds: int = DEFAULT_NEGATIVE_TTL_SECONDS,
@@ -193,7 +193,9 @@ class ProductionOrderOnDemandSyncService:
         self.gateway = gateway
         self.model_gateway = model_gateway
         self.company_id = str(company_id or "").strip() or None
-        self.branch_id = str(branch_id or "").strip() or None
+        self.branch_ids = tuple(
+            str(branch).strip() for branch in branch_ids if str(branch).strip()
+        )
         self.timeout_seconds = max(float(timeout_seconds), 0.0)
         self.poll_interval_seconds = max(float(poll_interval_seconds), 0.05)
         self.negative_ttl_seconds = max(int(negative_ttl_seconds), 0)
@@ -303,9 +305,19 @@ class ProductionOrderOnDemandSyncService:
     # -------------------------------------------------------------- interno
 
     def _lead(self, codigo: str, solicitacao_id: int, started: datetime) -> OnDemandSyncOutcome:
-        result = self.gateway.request_production_order(
-            company_id=self.company_id, branch_id=self.branch_id, number=codigo
-        )
+        # Uma OP existe em uma única filial no Protheus; sem saber qual, tenta
+        # cada filial configurada em ordem e para na primeira que não devolver
+        # "não encontrada". Erros de transporte/indisponibilidade não avançam
+        # a varredura — não faz sentido multiplicar tentativas numa queda real.
+        branches = self.branch_ids or (None,)
+        resolved_branch_id = branches[0]
+        for index, branch_id in enumerate(branches):
+            result = self.gateway.request_production_order(
+                company_id=self.company_id, branch_id=branch_id, number=codigo
+            )
+            resolved_branch_id = branch_id
+            if not result.not_found or index == len(branches) - 1:
+                break
 
         if result.unavailable_reason:
             self.repository.finalizar_solicitacao_sync_op(
@@ -399,7 +411,7 @@ class ProductionOrderOnDemandSyncService:
             self.repository.finalizar_solicitacao_sync_op(
                 solicitacao_id=solicitacao_id, status="DONE", agora=self._now()
             )
-            self._sync_product_model_best_effort(found)
+            self._sync_product_model_best_effort(found, branch_id=resolved_branch_id)
             return OnDemandSyncOutcome(
                 op=codigo,
                 status=STATUS_SINCRONIZADA,
@@ -412,7 +424,7 @@ class ProductionOrderOnDemandSyncService:
             self.repository.finalizar_solicitacao_sync_op(
                 solicitacao_id=solicitacao_id, status="DONE", agora=self._now()
             )
-            self._sync_product_model_best_effort(incomplete)
+            self._sync_product_model_best_effort(incomplete, branch_id=resolved_branch_id)
             return OnDemandSyncOutcome(
                 op=codigo,
                 status=STATUS_SEM_ROTEIRO,
@@ -488,7 +500,7 @@ class ProductionOrderOnDemandSyncService:
             elapsed_seconds=self._elapsed(started),
         )
 
-    def _sync_product_model_best_effort(self, order: dict) -> None:
+    def _sync_product_model_best_effort(self, order: dict, *, branch_id: str | None = None) -> None:
         """Busca o MODELO do produto após uma OP nascer, sem bloquear o operador.
 
         ``B1_ZMODELO`` só tem sentido para conjunto soldado — é o campo que a
@@ -526,7 +538,7 @@ class ProductionOrderOnDemandSyncService:
                 return
         try:
             result = self.model_gateway.request_product_model(
-                company_id=self.company_id, branch_id=self.branch_id, product_code=produto_codigo
+                company_id=self.company_id, branch_id=branch_id, product_code=produto_codigo
             )
         except Exception:  # noqa: BLE001 - falha de transporte nunca propaga, mas fica logada
             logger.exception(

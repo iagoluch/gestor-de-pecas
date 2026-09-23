@@ -181,7 +181,7 @@ class WebSettings:
     totvs_op_pull_poll_interval_ms: int = 500
     totvs_op_pull_negative_ttl_seconds: int = 60
     totvs_op_pull_company_id: str = ""
-    totvs_op_pull_branch_id: str = ""
+    totvs_op_pull_branch_ids: tuple[str, ...] = ()
     # Pendência 2 do piloto (14/09/2026): avisa o supervisor quando a outbox
     # TOTVS para em ERROR (ex.: OP já totalizada). Reaproveita o mesmo bot já
     # configurado em ``telegram_bot_token``; só falta o chat do supervisor. Sem
@@ -572,8 +572,8 @@ class WebSettings:
             totvs_op_pull_company_id=_text_option(
                 env.get("GESTOR_TOTVS_OP_PULL_COMPANY_ID"), default=""
             ),
-            totvs_op_pull_branch_id=_text_option(
-                env.get("GESTOR_TOTVS_OP_PULL_BRANCH_ID"), default=""
+            totvs_op_pull_branch_ids=_csv(
+                env.get("GESTOR_TOTVS_OP_PULL_BRANCH_ID"), default=()
             ),
             totvs_outbox_telegram_chat_id=_text_option(
                 env.get("GESTOR_TOTVS_OUTBOX_TELEGRAM_CHAT_ID"), default=""

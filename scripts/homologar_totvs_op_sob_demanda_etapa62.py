@@ -84,7 +84,7 @@ def _build(db, endpoint, company, branch, timeout):
         ),
         gateway=gateway,
         company_id=company,
-        branch_id=branch,
+        branch_ids=(branch,),
         timeout_seconds=timeout + 10,
         poll_interval_seconds=0.2,
         negative_ttl_seconds=30,
@@ -102,7 +102,12 @@ def main() -> int:
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--op", required=True)
     parser.add_argument("--company", default=os.environ.get("GESTOR_TOTVS_OP_PULL_COMPANY_ID", "01"))
-    parser.add_argument("--branch", default=os.environ.get("GESTOR_TOTVS_OP_PULL_BRANCH_ID", "010004"))
+    # GESTOR_TOTVS_OP_PULL_BRANCH_ID agora é uma lista (ex.: "010001,010004");
+    # este script testa uma filial por vez, então usa só a primeira como padrão.
+    parser.add_argument(
+        "--branch",
+        default=os.environ.get("GESTOR_TOTVS_OP_PULL_BRANCH_ID", "010004").split(",")[0].strip(),
+    )
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
 

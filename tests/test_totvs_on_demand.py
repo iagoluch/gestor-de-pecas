@@ -133,15 +133,21 @@ class FakeRepository:
 
 
 class RecordingGateway:
-    def __init__(self, result: ProductionOrderRequestResult, *, on_call=None):
+    def __init__(self, result: ProductionOrderRequestResult, *, on_call=None, results=None):
         self.result = result
         self.calls = []
         self._on_call = on_call
+        # `results`: uma sequência opcional consumida em ordem (um item por
+        # chamada), para simular respostas diferentes por filial na varredura
+        # multi-filial. Sem isso, todo call devolve o `result` fixo de sempre.
+        self._results = list(results) if results is not None else None
 
     def request_production_order(self, *, company_id, branch_id, number):
         self.calls.append({"company_id": company_id, "branch_id": branch_id, "number": number})
         if self._on_call is not None:
             self._on_call(number)
+        if self._results is not None:
+            return self._results.pop(0) if self._results else self.result
         return self.result
 
 
@@ -208,12 +214,12 @@ class LeaderInFlightRepository(HeaderOnlyRepository):
 
 def _service(repository, gateway=None, ingestion=None, clock=None, **kwargs):
     clock = clock or FakeClock()
+    kwargs.setdefault("branch_ids", ("010004",))
     return ProductionOrderOnDemandSyncService(
         repository,
         ingestion_service=ingestion if ingestion is not None else RecordingIngestion(),
         gateway=gateway,
         company_id="01",
-        branch_id="010004",
         now_func=clock,
         sleep_func=clock.sleep,
         **kwargs,
@@ -284,6 +290,40 @@ class OnDemandDomainTests(unittest.TestCase):
         call = gateway.calls[0]
         unique_id = "|".join([call["company_id"], call["branch_id"], call["number"]])
         self.assertEqual(unique_id, REAL_OP_UNIQUE_ID)
+
+    def test_varre_proxima_filial_quando_nao_encontrada_na_primeira(self):
+        """Sem saber a filial certa, tenta cada uma até achar a OP."""
+
+        repo = FakeRepository()
+        order = {"codigo_op": REAL_OP_NUMBER}
+        ingestion = RecordingIngestion(repo, REAL_OP_NUMBER, order)
+        gateway = RecordingGateway(
+            ProductionOrderRequestResult(not_found=True),
+            results=[
+                ProductionOrderRequestResult(not_found=True),
+                ProductionOrderRequestResult(
+                    accepted=True, delivery=DELIVERY_INLINE, message_xml="<TOTVSMessage/>"
+                ),
+            ],
+        )
+        outcome = _service(
+            repo, gateway, ingestion, branch_ids=("010001", "010004")
+        ).sync_production_order_on_demand(REAL_OP_NUMBER)
+        self.assertEqual(outcome.status, STATUS_SINCRONIZADA)
+        self.assertEqual([call["branch_id"] for call in gateway.calls], ["010001", "010004"])
+
+    def test_para_na_primeira_filial_indisponivel_sem_varrer_as_demais(self):
+        """Erro de transporte não deve multiplicar tentativas por filial."""
+
+        repo = FakeRepository()
+        gateway = RecordingGateway(
+            ProductionOrderRequestResult(unavailable_reason="timeout")
+        )
+        outcome = _service(
+            repo, gateway, branch_ids=("010001", "010004")
+        ).sync_production_order_on_demand(REAL_OP_NUMBER)
+        self.assertEqual(outcome.status, STATUS_INDISPONIVEL)
+        self.assertEqual(len(gateway.calls), 1)
 
     def test_op_inexistente_nao_cria_nada(self):
         repo = FakeRepository()
@@ -619,7 +659,7 @@ class OnDemandPostgresBase(unittest.TestCase):
             ingestion_service=self.ingestion,
             gateway=gateway,
             company_id="01",
-            branch_id="010004",
+            branch_ids=("010004",),
             timeout_seconds=kwargs.pop("timeout_seconds", 5),
             poll_interval_seconds=0.05,
             **kwargs,
@@ -747,7 +787,7 @@ class OnDemandPostgresTests(OnDemandPostgresBase):
                     ),
                     gateway=gateway,
                     company_id="01",
-                    branch_id="010004",
+                    branch_ids=("010004",),
                     timeout_seconds=8,
                     poll_interval_seconds=0.05,
                 )

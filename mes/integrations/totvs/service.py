@@ -272,7 +272,9 @@ def build_totvs_ingestion_service(repository, settings) -> TotvsProductionOrderI
         parser=TotvsMessageParser(max_xml_bytes=settings.totvs_max_xml_bytes),
         mapper=TotvsProductionOrderMapper(
             resolver,
-            default_branch_id=getattr(settings, "totvs_op_pull_branch_id", "") or None,
+            default_branch_id=next(
+                iter(getattr(settings, "totvs_op_pull_branch_ids", ()) or ()), None
+            ),
         ),
         identity=build_gestor_identity(settings),
     )

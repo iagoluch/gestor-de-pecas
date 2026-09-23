@@ -223,7 +223,7 @@ def build_on_demand_sync_service(
         gateway=gateway,
         model_gateway=model_gateway,
         company_id=getattr(settings, "totvs_op_pull_company_id", "") or None,
-        branch_id=getattr(settings, "totvs_op_pull_branch_id", "") or None,
+        branch_ids=getattr(settings, "totvs_op_pull_branch_ids", ()) or (),
         timeout_seconds=float(getattr(settings, "totvs_op_pull_timeout_seconds", 25)),
         poll_interval_seconds=(
             float(getattr(settings, "totvs_op_pull_poll_interval_ms", 500)) / 1000.0
