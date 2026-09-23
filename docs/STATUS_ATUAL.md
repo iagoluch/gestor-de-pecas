@@ -26,6 +26,10 @@ commit `4a60564`.
 - Exceções de recurso divergente e etapa anterior pendente exigem agora um
   crachá com a designação já canônica de responsável (`autorizador_retrabalho`);
   um crachá meramente ativo não autoriza a exceção.
+- Sessões principais agora carregam a versão de sessão do usuário; mudança de
+  senha, nível ou ativação incrementa essa versão e revoga tokens anteriores.
+  A migration 47 adiciona a coluna e mantém tokens antigos fora do acesso até
+  um novo login.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e

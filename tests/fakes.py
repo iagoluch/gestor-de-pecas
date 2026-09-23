@@ -202,7 +202,8 @@ class FakeDatabase:
             return None
         user = {
             "id": self._id("users"), "nome": nome, "senha": senha, "nivel": nivel,
-            "ativo": True, "data_criacao": datetime.now().replace(microsecond=0),
+            "ativo": True, "session_version": 0,
+            "data_criacao": datetime.now().replace(microsecond=0),
         }
         self.users.append(user)
         return user["id"]
@@ -211,7 +212,7 @@ class FakeDatabase:
         user = next((item for item in self.users if item["nome"] == nome and item["ativo"]), None)
         if not user or user["senha"] != senha:
             return None
-        return {key: user[key] for key in ("id", "nome", "nivel")}
+        return {key: user[key] for key in ("id", "nome", "nivel", "session_version")}
 
     def usuario_existe(self, nome):
         return any(item["nome"] == nome for item in self.users)
@@ -231,7 +232,9 @@ class FakeDatabase:
         user = self.obter_usuario_por_id(user_id)
         if not user:
             return False
-        next(item for item in self.users if item["id"] == user_id)["nivel"] = level
+        target = next(item for item in self.users if item["id"] == user_id)
+        target["nivel"] = level
+        target["session_version"] = int(target.get("session_version") or 0) + 1
         return True
 
     def resetar_senha_usuario(self, user_id, password):
@@ -239,6 +242,7 @@ class FakeDatabase:
         if not user:
             return False
         user["senha"] = password
+        user["session_version"] = int(user.get("session_version") or 0) + 1
         return True
 
     def ativar_desativar_usuario(self, user_id, active):
@@ -246,6 +250,7 @@ class FakeDatabase:
         if not user:
             return False
         user["ativo"] = bool(active)
+        user["session_version"] = int(user.get("session_version") or 0) + 1
         return True
 
     def criar_conversa_ia(self, user_id, title):

@@ -288,6 +288,15 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(session.status_code, 200)
         self.assertTrue(session.json()["management_access"])
 
+    def test_troca_de_senha_revoga_sessao_emitida_antes(self):
+        self.login_manager()
+        user = next(row for row in self.db.users if row["nome"] == "Gestor Web")
+        self.db.resetar_senha_usuario(user["id"], "senha-nova")
+
+        session = self.client.get("/api/v1/auth/session")
+        self.assertEqual(session.status_code, 401)
+        self.assertEqual(session.json()["code"], "session_revoked")
+
     def test_credencial_invalida_tem_erro_padronizado(self):
         response = self.client.post(
             "/api/v1/auth/login",

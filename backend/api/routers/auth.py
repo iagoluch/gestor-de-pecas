@@ -123,6 +123,7 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         user_id=session_user.id,
         username=session_user.name,
         role=session_user.role,
+        session_version=int(user.get("session_version") or 0),
     )
     options = _cookie_options(request)
     response = JSONResponse(content=session_user.model_dump())

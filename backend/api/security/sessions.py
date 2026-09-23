@@ -31,6 +31,7 @@ class SessionClaims:
     expires_at: int
     csrf: str
     session_id: str
+    session_version: int = 0
 
 
 class SessionSigner:
@@ -38,7 +39,15 @@ class SessionSigner:
         self._secret = secret.encode("utf-8")
         self.ttl_seconds = ttl_seconds
 
-    def issue(self, *, user_id: int, username: str, role: str, now: int | None = None):
+    def issue(
+        self,
+        *,
+        user_id: int,
+        username: str,
+        role: str,
+        session_version: int = 0,
+        now: int | None = None,
+    ):
         issued_at = int(time.time() if now is None else now)
         claims = SessionClaims(
             user_id=int(user_id),
@@ -48,6 +57,7 @@ class SessionSigner:
             expires_at=issued_at + self.ttl_seconds,
             csrf=secrets.token_urlsafe(24),
             session_id=secrets.token_urlsafe(18),
+            session_version=int(session_version),
         )
         payload = json.dumps(
             asdict(claims), ensure_ascii=False, separators=(",", ":"), sort_keys=True
@@ -79,4 +89,3 @@ class SessionSigner:
                 status_code=401,
             )
         return claims
-

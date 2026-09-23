@@ -32,6 +32,12 @@ def get_current_user(request: Request, database=Depends(get_database)) -> Sessio
             "O usuário da sessão não está ativo.",
             status_code=401,
         )
+    if int(claims.session_version) != int(row.get("session_version") or 0):
+        raise AppError(
+            "session_revoked",
+            "A sessão foi invalidada. Entre novamente.",
+            status_code=401,
+        )
     role = normalize_user_level(row.get("nivel"))
     if role is None:
         raise AppError(

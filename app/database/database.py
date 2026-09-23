@@ -308,7 +308,7 @@ class Database(
     def autenticar_usuario(self, nome, senha):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, nome, senha_hash, nivel FROM usuarios WHERE nome = %s AND ativo IS TRUE",
+                "SELECT id, nome, senha_hash, nivel, session_version FROM usuarios WHERE nome = %s AND ativo IS TRUE",
                 (nome,),
             )
             row = cursor.fetchone()
@@ -6026,23 +6026,32 @@ class Database(
 
     def obter_usuario_por_id(self, usuario_id):
         with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT id, nome, nivel, ativo FROM usuarios WHERE id = %s", (usuario_id,))
+            cursor.execute(
+                "SELECT id, nome, nivel, ativo, session_version FROM usuarios WHERE id = %s",
+                (usuario_id,),
+            )
             return _as_dict(cursor.fetchone())
 
     def atualizar_nivel_usuario(self, usuario_id, novo_nivel):
         with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute("UPDATE usuarios SET nivel = %s WHERE id = %s", (novo_nivel, usuario_id))
+            cursor.execute(
+                "UPDATE usuarios SET nivel = %s, session_version = session_version + 1 WHERE id = %s",
+                (novo_nivel, usuario_id),
+            )
             return cursor.rowcount == 1
 
     def resetar_senha_usuario(self, usuario_id, nova_senha):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE usuarios SET senha_hash = %s WHERE id = %s",
+                "UPDATE usuarios SET senha_hash = %s, session_version = session_version + 1 WHERE id = %s",
                 (self._hash_senha(nova_senha), usuario_id),
             )
             return cursor.rowcount == 1
 
     def ativar_desativar_usuario(self, usuario_id, ativo):
         with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute("UPDATE usuarios SET ativo = %s WHERE id = %s", (bool(ativo), usuario_id))
+            cursor.execute(
+                "UPDATE usuarios SET ativo = %s, session_version = session_version + 1 WHERE id = %s",
+                (bool(ativo), usuario_id),
+            )
             return cursor.rowcount == 1
