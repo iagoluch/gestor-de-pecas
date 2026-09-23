@@ -33,6 +33,12 @@ def get_current_user(request: Request, database=Depends(get_database)) -> Sessio
             status_code=401,
         )
     role = normalize_user_level(row.get("nivel"))
+    if role is None:
+        raise AppError(
+            "session_user_role_invalid",
+            "A conta não possui um perfil de acesso válido.",
+            status_code=403,
+        )
     operator_sector = operator_sector_for_user_level(role)
     request.state.session_claims = claims
     return SessionUser(

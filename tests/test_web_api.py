@@ -298,6 +298,18 @@ class WebApiTests(unittest.TestCase):
         self.assertIn("request_id", response.json())
         self.assertNotIn("traceback", response.text.casefold())
 
+    def test_perfil_desconhecido_nao_recebe_permissao_operacional_padrao(self):
+        user = next(row for row in self.db.users if row["nome"] == "Operador Web")
+        user["nivel"] = "perfil-legado-invalido"
+
+        response = self.client.post(
+            "/api/v1/auth/login",
+            json={"username": "Operador Web", "password": "senha-operador"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "user_role_invalid")
+
     def test_operador_nao_acessa_area_gerencial(self):
         self.client.post(
             "/api/v1/auth/login",

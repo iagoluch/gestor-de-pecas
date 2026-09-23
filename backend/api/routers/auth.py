@@ -101,6 +101,12 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         )
     _clear_login_failures(throttle_key)
     role = normalize_user_level(user.get("nivel"))
+    if role is None:
+        raise AppError(
+            "user_role_invalid",
+            "A conta não possui um perfil de acesso válido.",
+            status_code=403,
+        )
     operator_sector = operator_sector_for_user_level(role)
     session_user = SessionUser(
         id=int(user["id"]),

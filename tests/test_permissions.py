@@ -58,7 +58,9 @@ class PermissionMatrixTests(unittest.TestCase):
         self.assertNotIn("operador_solda", USER_LEVELS)
         self.assertIn("andon", USER_LEVELS)
         self.assertEqual(normalize_user_level("comum"), "operador_destaque")
-        self.assertEqual(normalize_user_level("nivel_desconhecido"), "operador_destaque")
+        self.assertIsNone(normalize_user_level("nivel_desconhecido"))
+        self.assertEqual(navigation_for_level("nivel_desconhecido"), ())
+        self.assertEqual(consultation_tabs_for_level("nivel_desconhecido"), ())
         for level in (
             "operador_destaque", "operador_dobra", "operador_usinagem",
             "operador_serra", "operador_corte", "operador_pintura", "estacao1aco",

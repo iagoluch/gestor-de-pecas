@@ -553,6 +553,14 @@ para liberar o portão de qualidade e a finalização sem nova quantidade passa 
 fechar a operação. A prova dirigida cobre o fluxo em memória, o PostgreSQL em
 schema descartável e o planejamento da outbox.
 
+### 2.23 Perfis desconhecidos falham fechados (23/09/2026)
+
+Somente o nível legado explícito `comum` continua compatível com
+`operador_destaque`. Qualquer outro perfil fora do catálogo não recebe mais
+essa permissão por fallback: login e revalidação da sessão retornam 403, e as
+funções de navegação/permissão não concedem acesso. A cobertura HTTP inclui uma
+conta persistida com nível inválido.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

@@ -127,15 +127,15 @@ def normalize_user_level(level):
     normalized = str(level or "").strip().lower()
     if normalized == "comum":
         return DEFAULT_USER_LEVEL
-    return normalized if normalized in USER_LEVELS else DEFAULT_USER_LEVEL
+    return normalized if normalized in USER_LEVELS else None
 
 
 def navigation_for_level(level):
-    return NAVIGATION_BY_LEVEL[normalize_user_level(level)]
+    return NAVIGATION_BY_LEVEL.get(normalize_user_level(level), ())
 
 
 def consultation_tabs_for_level(level):
-    return CONSULTATION_TABS_BY_LEVEL[normalize_user_level(level)]
+    return CONSULTATION_TABS_BY_LEVEL.get(normalize_user_level(level), ())
 
 
 def can_manage_users(level):
@@ -152,7 +152,8 @@ def can_access_andon_web(level):
 
 
 def operator_sector_for_user_level(level):
-    return operator_sector_for_level(normalize_user_level(level))
+    normalized = normalize_user_level(level)
+    return operator_sector_for_level(normalized) if normalized else None
 
 
 def is_sector_operator(level):
