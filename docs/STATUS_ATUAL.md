@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 23/09/2026.
+**Atualizado em:** 23/09/2026 (fechamento da auditoria F1–F21 — ver §2.37).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -91,7 +91,7 @@ Arquivos-chave: `app/core/operator_sectors.py`, `app/core/resource_mapping.py`
 **Não reabrir esta investigação** sem fato novo — a especificação foi
 aprovada sem ajuste pelo usuário.
 
-### 1.2 Auditoria de segurança (14/09/2026) — 1 crítico corrigido, 3 pendências aguardando decisão
+### 1.2 Auditoria de segurança (14/09/2026) — 1 crítico corrigido; as 3 pendências foram resolvidas depois (ver nota ao fim da seção)
 
 Relatório completo: `docs/AUDITORIA_SEGURANCA_2026-09-14.md`.
 
@@ -116,6 +116,17 @@ Relatório completo: `docs/AUDITORIA_SEGURANCA_2026-09-14.md`.
    schema.
 3. `.env` não define `GESTOR_WEB_SESSION_SECRET` nem
    `GESTOR_DEVOBS_SESSION_SECRET` — sessões caem a cada restart do processo.
+
+**Situação conferida contra o código em 23/09/2026 — as três estão fechadas:**
+1. Freio do login principal: atraso progressivo persistido por cliente+usuário
+   em `login_throttle` (commit `779427f`, migration 48; F6).
+2. IDOR da Qualidade: `QualityService._exigir_setor`
+   (`mes/services/quality.py:110`) revalida o setor dono da inspeção em cada
+   escrita e recusa com `qualidade_inspecao_outro_setor`; coberto em
+   `tests/test_quality_inspection.py`.
+3. Secrets de sessão: `GESTOR_WEB_SESSION_SECRET` e
+   `GESTOR_DEVOBS_SESSION_SECRET` estão preenchidos no `.env` do TESTE; a
+   revogação por versão de sessão veio em `f52c37c` (migration 47; F5).
 
 Verificado como correto e não precisa mexer: SQL parametrizado, sem
 subprocess/eval/pickle, XXE bloqueado, path traversal protegido, CSRF em
@@ -195,7 +206,10 @@ Notas completas em memória do desenvolvedor; principais decisões fechadas:
   TOTVS não mandar `branch_id`, usar `"4"` como padrão em vez de string vazia
   (`app/database/database.py:439`) — **implementado no commit `4a60564`**
   ("default de filial TOTVS"), conferir se cobre exatamente esse ponto antes
-  de dar como fechado.
+  de dar como fechado. **Atualização 23/09/2026:** o pull sob demanda passou a
+  aceitar lista de filiais (`GESTOR_TOTVS_OP_PULL_BRANCH_ID` em CSV) e tenta
+  cada uma em ordem, parando na primeira que encontra a OP ou no primeiro erro
+  real de transporte (commit `5e91f56`, `mes/integrations/totvs/on_demand.py`).
 - Retry/reconexão TOTVS: já resolvido antes desta reunião (outbox
   transacional + worker em background, backoff 1/2/5/10/30/60min).
 
@@ -221,6 +235,10 @@ para a notificação `FUNCTIONAL` fechada na §2.9); e o
 default de filial TOTVS mencionado acima.
 
 ## 2. Working tree com alterações não commitadas (verificar antes de mexer)
+
+> **Obsoleto em 23/09/2026:** o trabalho descrito abaixo já foi commitado e
+> o working tree está limpo (conferido com `git status` no fechamento da
+> auditoria F1–F21). O parágrafo fica só como histórico.
 
 Em 15/09/2026 o `git status` mostra trabalho em andamento, aparentemente uma
 reorganização da navegação em abas ("painéis") agrupando Chamadas/Crachás
@@ -705,6 +723,16 @@ Validação dirigida: `tests.test_backup_banco_teste` e
 `tests.test_resetar_banco_teste` (10 testes) passaram, além do dry-run e do
 backup TESTE efetivo.
 
+Complemento (commit `1c4842c`): `--verificar` confere manifesto, tamanho,
+SHA-256 e `pg_restore --list`; `--restaurar` só aceita banco descartável
+`gestor_restore_*` vazio e confirmado literalmente, e restaura em transação
+única; log JSON em stderr e códigos de saída 0/1/2/3. Ensaio real em
+23/09/2026: backup de 5.102.867 bytes verificado e restaurado em
+`gestor_restore_20260923` (253 tabelas na origem e no restaurado), alvo
+`gestor_pecas` recusado com exit 2, reexecução sobre o alvo já preenchido
+recusada com exit 2, banco de ensaio removido em seguida. Runbook para a
+infra em `docs/BACKUP_TESTE.md`.
+
 ### 2.34 Instância `:8001` reiniciada com o código atual (23/09/2026)
 
 O processo TESTE em `:8001` estava rodando código anterior às correções de
@@ -742,6 +770,34 @@ Protheus** e inspecionar o `StatusOrderType` real devolvido. Isso resolveria
 F18 com evidência empírica, sem depender de contrato TOTVS — mas exige o
 usuário indicar uma OP real nessa condição; não implementado nesta janela.
 
+**Reclassificado em 23/09/2026 — F18 = RECLASSIFICADO / NÃO ERA BUG.** A regra
+de negócio foi confirmada pelo usuário: não existe estado operacional
+"cancelado"; Protheus é planejamento e o MES é execução; a execução já
+registrada no MES nunca é apagada, invalidada ou interrompida retroativamente
+quando o Protheus encerra ou exclui a OP; uma recusa funcional no outbound vira
+notificação ao supervisor, preservando o fato do MES. Portanto não há
+`StatusOrderType` terminal a interpretar e o caminho empírico acima deixa de
+ser necessário. O código já cumpre a regra:
+
+- `mes/integrations/totvs/on_demand.py:244-246` — OP existente localmente
+  retorna antes de qualquer chamada ao ERP; um 404 do Protheus nunca alcança
+  uma OP local.
+- `mes/integrations/totvs/on_demand.py:338-351` — `not_found` só encerra a
+  solicitação de sync como `NOT_FOUND`; não cria nem desativa nada.
+- `mes/integrations/totvs/outbox.py:187-196` — rejeição de negócio
+  (ex.: `A680OPTOT`) vira `FUNCTIONAL`/`ERROR` sem retry.
+- `app/database/totvs_outbox_repository.py:289` (`concluir_item_outbound_totvs`)
+  — grava só `totvs_outbox`/`totvs_outbox_attempts`; nenhum apontamento é
+  tocado.
+- `mes/services/totvs_outbox_worker.py:224-226` — item em `ERROR` aciona
+  `_notify_error` (canal Alertas, §2.9).
+
+Testes que fixam a regra (commit `b51cc06`):
+`tests/test_totvs_outbox.py::test_rejeicao_funcional_preserva_o_fato_do_mes`
+(fotografa as tabelas do MES antes/depois de uma rejeição funcional) e
+`tests/test_totvs_on_demand.py::test_op_local_nao_e_desativada_mesmo_que_o_erp_responda_404`.
+Não implementar exclusão/cancelamento por inferência nem desativar OP por 404.
+
 Nota sobre prioridade: o receptor SOAP `PcfIntegService` foi a *primeira*
 forma de sincronização (documentada em
 `docs/INTEGRACAO_TOTVS_PRODUCTION_ORDER_V1.md`), mas hoje o canal
@@ -749,40 +805,90 @@ efetivamente em uso é o pull via `GPOPSYNC` (Etapa 7B, homologado
 03/09/2026). O gate do CIDR do SOAP (item 8) portanto trava um canal legado
 que segue existindo no código por segurança, não o caminho operacional atual.
 
+### 2.37 Fechamento da auditoria F1–F21 (23/09/2026)
+
+Cada item tem um único status. Hashes são os commits de correção/prova.
+
+| Item | Status | Evidência |
+| --- | --- | --- |
+| F1 SCHEMA_VERSION | CORRIGIDO E PROVADO | `cd19478`; código e TESTE em 49 |
+| F2 normalização de papéis | CORRIGIDO E PROVADO | `6d3eeac` (§2.23) |
+| F3 caminho do banco de produção | CORRIGIDO E PROVADO | `506a92f` (§2.25) |
+| F4 autenticação do receptor SOAP | CORRIGIDO E PROVADO | `8f0aa6c` (§2.31); ativação depende do CIDR do Protheus (item 8 da §3) |
+| F5 revogação de sessão | CORRIGIDO E PROVADO | `f52c37c`, migration 47 |
+| F6 throttle do login | CORRIGIDO E PROVADO | `779427f`, migration 48 |
+| F7 identidade do operador | CORRIGIDO E PROVADO | `b3b0fb8` (§2.30) |
+| F8 cursor do Telegram | CORRIGIDO E PROVADO | `d429d9d`, `455de35`, `56d7102`, `212f114`, migration 45 |
+| F9 papel/CSRF do Dev Observatory | CORRIGIDO E PROVADO | `76117cb`, `8f0aa6c`, role `gestor_devobs` (§2.35) |
+| F10 OP unitária com 1ª peça refugada | CORRIGIDO E PROVADO | `fb85084`, migration 44 |
+| F11 refugo canônico da 1ª peça | CORRIGIDO E PROVADO | `fb85084` (§2.22) |
+| F12 exclusividade de recurso | CORRIGIDO E PROVADO | `3ec7ddf` |
+| F13 escritores do calendário | CORRIGIDO E PROVADO | `34fc44b` |
+| F14 crachá de exceção | CORRIGIDO E PROVADO | `7dfbf07` |
+| F15 `parametros_turno` | CORRIGIDO E PROVADO | `fe1b87e` |
+| F16 catálogo de setores/Andon | CORRIGIDO E PROVADO | `05ebe2a` (§2.27) |
+| F17 teto de quantidade = planejado | CORRIGIDO E PROVADO | `b403551`; teste legado alinhado em `be1ea9c` |
+| F18 ciclo de vida da OP no TOTVS | RECLASSIFICADO / NÃO ERA BUG | regra confirmada; testes `b51cc06` (§2.36) |
+| F19 ordem causal da outbox | CORRIGIDO E PROVADO | `4ecac64`, migration 46; testes alinhados em `3620594` e `16061d3` |
+| F20 deploy preserva runtime | CORRIGIDO E PROVADO | `7727432`, `412fa13`; `scripts/test_deploy_mirror.ps1` |
+| F21 backup/DR | CAPACIDADE IMPLEMENTADA — OPERAÇÃO DEPENDE DA INFRA | `76c2cac`, `1c4842c`; runbook `docs/BACKUP_TESTE.md` |
+
+Correções desta rodada de fechamento:
+
+- `aef9943` — contrato único de datas de período (`422 invalid_date`) também
+  para datas com fuso, histórico da Qualidade e relatório personalizado
+  (fecha o 500 da §3 item 5, junto com `efa636a`).
+- `16061d3` — o script de homologação da Etapa 7A quebrou com `5e91f56`
+  (`branch_id` → `branch_ids`) e ainda supunha que as 4 obrigações da OP
+  andassem num só ciclo, contrariando F19. Alinhado: um item por OP por ciclo.
+- `be1ea9c` — teste de Solda "OP atrasada continua executável" passava operação
+  sem quantidade planejada, recusada desde F17.
+
+Comportamento que o operador de infra precisa saber (F19): numa mesma OP, a
+outbox entrega **um evento por ciclo**, na ordem; um item em `RETRY`/`ERROR`
+segura os seguintes da mesma OP até virar `SENT`. OPs diferentes não se
+bloqueiam.
+
+Gate executado no TESTE (nunca no REAL) em 23/09/2026: pytest completo com
+PostgreSQL TESTE, vitest, `tsc -b` + `vite build`, E2E Playwright
+(`tests/test_e2e_smoke.py` contra o preview `:8010`), bandit, pip-audit,
+`npm audit --audit-level=high`, gitleaks, `git diff --check`, versão de schema
+(código 49 = TESTE 49), `scripts/test_deploy_mirror.ps1` e backup+verificação+
+ensaio de restauração do TESTE (§2.33). Resultado final do pytest após
+`16061d3`/`be1ea9c`: 1262 passed, 1 skipped, 2058 subtests, 0 falhas; vitest
+183/183; build, auditorias e E2E sem falhas.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
    (§1.3) — decisão de chão de fábrica.
-2. Segurança: freio no login principal, IDOR na Qualidade, secrets de sessão
-   ausentes no `.env` (§1.2) — aguardando decisão do usuário.
+2. ~~Segurança: freio no login principal, IDOR na Qualidade, secrets de sessão
+   ausentes no `.env` (§1.2)~~ — **FECHADO**: `779427f` (F6), `_exigir_setor`
+   na Qualidade, secrets preenchidos + `f52c37c` (F5). Ver nota em §1.2.
 3. Breakpoint de 1024px na Solda: manter 1180px ou reverter para 900px?
    (§1.4) — baixo risco, decisão de uso real.
 4. Todas as pendências antigas do `ROADMAP.md` seção 5 (cadastro de recursos,
    Montagem, ingestão do MODELO da Solda, `prazo_entrega` sem origem, filtro
    de setor em Crachás) continuam abertas — nada disso foi resolvido nesta
    janela.
-5. **Bug real encontrado por fuzzing (Schemathesis, auditoria Claude Code de
-   20/09/2026):** `GET /api/v1/audit/appointments` retorna `500 Internal
-   Server Error` em vez de `422` quando o parâmetro de data `fim` recebe uma
-   data implausível (ex.: ano 0263) — o endpoint não valida limites
-   plausíveis antes de processar. Reproduzir com:
-   `curl 'http://127.0.0.1:8010/api/v1/audit/appointments?fim=0263-10-17T17%3A14%3A48Z'`
-   contra o preview visual. Não corrigido — fora do escopo daquela auditoria
-   (infraestrutura de CI/dev, não regra de negócio).
-6. **F18 — ciclo de vida de OP no TOTVS:** falta contrato/exemplo oficial que
-   defina `StatusOrderType` terminal e o evento corporativo de exclusão. Não
-   desativar OP por inferência de payloads mistos. Caminho empírico
-   disponível via `GPOPSYNC` contra uma OP real cancelada — ver §2.36;
-   depende do usuário indicar a OP.
-7. **F21 — backup/DR — decisões tomadas 23/09/2026:** RPO 8/8h (confirmado
-   pelo usuário); retenção recomendada: janela rolante de 21 backups (7 dias
-   × 3/dia), sem hierarquia diária/semanal (destino ainda é a própria VM, não
-   protege contra perda de disco — hierarquia longa só compensa com destino
-   externo); destino externo: adiado, "a princípio" fica na própria VM,
-   revisitar quando houver decisão de mover para fora; restore drill:
-   responsabilidade da infra, não do Gestor de Peças. Rotação/agendamento
-   ainda não implementados em código — aguardando confirmação se o usuário
-   quer que isso seja automatizado aqui ou feito pela infra também.
+5. ~~**Bug real encontrado por fuzzing (Schemathesis, 20/09/2026):**
+   `GET /api/v1/audit/appointments?fim=0263-10-17T17:14:48Z` retornava 500~~
+   — **FECHADO** em `efa636a` + `aef9943`: contrato único
+   `validated_business_datetime` (`backend/api/dependencies/filters.py`)
+   rejeita ano < 2000 ou > ano atual + 1 com `422 invalid_date` e normaliza
+   datas com fuso para horário local; aplicado a `analytics_filter` (auditoria,
+   OPs e demais filtros gerenciais), histórico da Qualidade e relatório
+   personalizado. Testes em `tests/test_web_api.py`.
+6. ~~**F18 — ciclo de vida de OP no TOTVS**~~ — **RECLASSIFICADO / NÃO ERA
+   BUG** (§2.36): regra de negócio confirmada, execução do MES nunca é
+   desfeita pelo ERP; testes em `b51cc06`.
+7. **F21 — backup/DR — CAPACIDADE IMPLEMENTADA — OPERAÇÃO DEPENDE DA INFRA.**
+   O app entrega backup, verificação e restauração segura
+   (`scripts/backup_banco_teste.py`, `76c2cac` + `1c4842c`, §2.33) e o
+   runbook `docs/BACKUP_TESTE.md`. Decisões já tomadas: RPO 8/8h; retenção de
+   21 backups (7 dias × 3/dia). Ficam com a infraestrutura, não com o
+   repositório: agendamento, retenção, cópia fora da VM, monitoramento,
+   controle de acesso, ensaio periódico de restauração e aprovação de RPO/RTO.
 8. **F4/F9 — ativação operacional:** a role PostgreSQL somente-leitura do
    Dev Observatory foi provisionada e verificada em 23/09/2026 (§2.35) — essa
    parte está feita. Falta apenas registrar o IP/CIDR real do servidor
