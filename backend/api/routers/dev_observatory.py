@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 import html
+import hmac
 import secrets
 import threading
 import time
@@ -183,6 +184,28 @@ def _dev_observatory_cookie_options(request: Request) -> dict:
     }
 
 
+def _require_dev_observatory_csrf(request: Request) -> None:
+    """Protege mutações usando o token da sessão exclusiva do observatório."""
+
+    settings = request.app.state.settings
+    token = request.cookies.get(settings.dev_observatory_cookie_name)
+    if not token:
+        raise AppError(
+            "dev_observatory_authentication_required",
+            "Entre no Dev Observatory para continuar.",
+            status_code=401,
+        )
+    claims = request.app.state.dev_observatory_session_signer.decode(token)
+    header = str(request.headers.get("X-CSRF-Token") or "")
+    cookie = str(request.cookies.get(settings.dev_observatory_csrf_cookie_name) or "")
+    if not header or not cookie or not hmac.compare_digest(header, claims.csrf) or not hmac.compare_digest(cookie, claims.csrf):
+        raise AppError(
+            "csrf_validation_failed",
+            "A confirmação de segurança da sessão é obrigatória.",
+            status_code=403,
+        )
+
+
 # Freio de adivinhação de senha. Atrás desta única credencial estão stack
 # trace, catálogo do PostgreSQL e leitura do ambiente REAL — e o Gestor é
 # publicado por hostname externo (``GESTOR_WEB_PUBLIC_HOST``). Sem freio, a
@@ -298,7 +321,7 @@ def dev_observatory_login(
         persistent_clear(persistent_key)
     else:
         _clear_login_failures(client_key)
-    token, _claims = request.app.state.dev_observatory_session_signer.issue(
+    token, claims = request.app.state.dev_observatory_session_signer.issue(
         user_id=0, username=payload.username, role="dev_observatory",
     )
     response = JSONResponse(content={"username": payload.username})
@@ -306,6 +329,12 @@ def dev_observatory_login(
         settings.dev_observatory_cookie_name,
         token,
         httponly=True,
+        **_dev_observatory_cookie_options(request),
+    )
+    response.set_cookie(
+        settings.dev_observatory_csrf_cookie_name,
+        claims.csrf,
+        httponly=False,
         **_dev_observatory_cookie_options(request),
     )
     response.headers["Cache-Control"] = "no-store"
@@ -318,6 +347,12 @@ def dev_observatory_logout(request: Request):
     response = Response(status_code=204)
     response.delete_cookie(
         settings.dev_observatory_cookie_name,
+        path="/",
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
+    response.delete_cookie(
+        settings.dev_observatory_csrf_cookie_name,
         path="/",
         secure=settings.cookie_secure,
         samesite="strict",
@@ -497,11 +532,7 @@ def report_content(
     )
 
 
-# Sem `require_csrf`: esse guard lê o CSRF da sessão PRINCIPAL, que este
-# router não usa mais. SameSite=Strict no cookie de sessão do observatório já
-# barra o POST vindo de outra origem, proporcional ao risco de uma ferramenta
-# interna de um único operador.
-@router.post("/reports")
+@router.post("/reports", dependencies=[Depends(_require_dev_observatory_csrf)])
 def generate_report(
     payload: ReportRequest,
     request: Request,

@@ -216,6 +216,7 @@ class WebSettings:
     dev_observatory_login_password: str = field(default="", repr=False)
     dev_observatory_session_secret: str = field(default="", repr=False)
     dev_observatory_cookie_name: str = "gestor_devobs_session"
+    dev_observatory_csrf_cookie_name: str = "gestor_devobs_csrf"
     dev_observatory_session_ttl_seconds: int = 43_200
 
     @property

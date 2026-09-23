@@ -639,6 +639,17 @@ forjar uma violação histórica.
 Validação dirigida: `tests.test_operator_flow` e dois testes PostgreSQL de
 `test_database_professionalization` (32 testes no total) passaram.
 
+### 2.29 Dev Observatory exige CSRF próprio (23/09/2026)
+
+O POST de geração de relatórios do Dev Observatory agora exige o token CSRF
+emitido junto com a sessão exclusiva da ferramenta. O guard não reutiliza o
+cookie da sessão principal; compara o header e o cookie legível com o token
+assinado da sessão do observatório. Logout remove os dois cookies. O relatório
+continua sendo uma projeção somente leitura, sem escrita de dados operacionais.
+
+Validação dirigida: `tests.test_dev_observatory` (20 testes) passou, incluindo
+a recusa explícita de POST sem CSRF.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

@@ -184,6 +184,11 @@ class DevObservatoryApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.text)
 
+    def _dev_csrf(self):
+        return {
+            "X-CSRF-Token": self.client.cookies.get("gestor_devobs_csrf"),
+        }
+
     # ------------------------------------------------------------------
     def test_login_e_independente_da_tabela_usuarios(self):
         """O ponto central desta rodada: logar como admin do Gestor de Peças
@@ -338,8 +343,16 @@ class DevObservatoryApiTests(unittest.TestCase):
         self.assertEqual(len(janelas["windows"]), 3)
 
         hoje = date.today().isoformat()
+        sem_csrf = self.client.post(
+            "/api/v1/dev-observatory/reports",
+            json={"day": hoje, "shift": "turno"},
+        )
+        self.assertEqual(sem_csrf.status_code, 403, sem_csrf.text)
+        self.assertEqual(sem_csrf.json()["code"], "csrf_validation_failed")
+
         gerado = self.client.post(
             "/api/v1/dev-observatory/reports",
+            headers=self._dev_csrf(),
             json={"day": hoje, "shift": "turno"},
         )
         self.assertEqual(gerado.status_code, 200, gerado.text)
@@ -358,6 +371,7 @@ class DevObservatoryApiTests(unittest.TestCase):
 
         repetido = self.client.post(
             "/api/v1/dev-observatory/reports",
+            headers=self._dev_csrf(),
             json={"day": hoje, "shift": "turno"},
         )
         self.assertEqual(repetido.status_code, 409)
@@ -365,6 +379,7 @@ class DevObservatoryApiTests(unittest.TestCase):
 
         forcado = self.client.post(
             "/api/v1/dev-observatory/reports",
+            headers=self._dev_csrf(),
             json={"day": hoje, "shift": "turno", "force": True},
         )
         self.assertEqual(forcado.status_code, 200, forcado.text)
