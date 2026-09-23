@@ -715,6 +715,40 @@ config via `.env`). Confirmado após reinício: `GET /health` → `200`;
 correto, nenhum CIDR foi configurado). Nenhuma credencial de escrita foi
 apontada para o Dev Observatory nesta janela.
 
+### 2.35 Role somente-leitura do Dev Observatory provisionada (23/09/2026)
+
+Usuário autorizou explicitamente mexer no banco REAL nesta janela (sistema
+ainda não roda na fábrica). Criada a role `gestor_devobs` em `gestor_pecas`
+via `CREATE ROLE ... NOSUPERUSER NOCREATEDB` + `GRANT SELECT` em todas as
+tabelas do schema `public` + `ALTER DEFAULT PRIVILEGES` + `default_transaction_read_only=on`,
+exatamente como documentado em `backend/observability/readonly_db.py`.
+`GESTOR_DEVOBS_REAL_DATABASE_URL` preenchida no `.env` real. Verificado
+manualmente contra o servidor, replicando a prova do próprio código
+(`verify_read_only`): `elevated_role=False`, `database_create=False`,
+`CREATE TEMP TABLE` recusado em transação read-only, `SELECT` funcionando
+normalmente. Backend `:8001` reiniciado para carregar a nova variável.
+Gate F4/F9 fica reduzido a apenas o CIDR do SOAP (item 8 abaixo).
+
+### 2.36 F18 — GPOPSYNC não resolve, mas abre um caminho empírico (23/09/2026)
+
+`fontes/10-PCP/GPOPSYNC.prw` (canal de pull homologado, hoje o mecanismo
+principal de sincronização — ver nota abaixo) reaproveita a mesma cadeia
+oficial (`MATA650PPI → PCPa650PPI → MATI650`) que já alimenta o receptor
+SOAP passivo. Não monta `StatusOrderType` por conta própria, então puxar uma
+OP qualquer por ele devolveria o mesmo valor `"1"` já observado — não é uma
+segunda fonte de dado. O que ele permite, e que a doc oficial não: puxar sob
+demanda uma OP que o usuário confirme estar **cancelada/excluída no
+Protheus** e inspecionar o `StatusOrderType` real devolvido. Isso resolveria
+F18 com evidência empírica, sem depender de contrato TOTVS — mas exige o
+usuário indicar uma OP real nessa condição; não implementado nesta janela.
+
+Nota sobre prioridade: o receptor SOAP `PcfIntegService` foi a *primeira*
+forma de sincronização (documentada em
+`docs/INTEGRACAO_TOTVS_PRODUCTION_ORDER_V1.md`), mas hoje o canal
+efetivamente em uso é o pull via `GPOPSYNC` (Etapa 7B, homologado
+03/09/2026). O gate do CIDR do SOAP (item 8) portanto trava um canal legado
+que segue existindo no código por segurança, não o caminho operacional atual.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?
@@ -737,13 +771,24 @@ apontada para o Dev Observatory nesta janela.
    (infraestrutura de CI/dev, não regra de negócio).
 6. **F18 — ciclo de vida de OP no TOTVS:** falta contrato/exemplo oficial que
    defina `StatusOrderType` terminal e o evento corporativo de exclusão. Não
-   desativar OP por inferência de payloads mistos.
-7. **F21 — backup/DR:** o backup local TESTE existe e tem verificação de
-   formato, mas faltam RPO, retenção, destino externo e a janela/responsável
-   para teste periódico de restauração em banco descartável.
-8. **F4/F9 — ativação operacional:** registrar o IP/CIDR real do servidor
-   Protheus e provisionar uma role PostgreSQL apenas de leitura para o Dev
-   Observatory; enquanto ausentes, ambas as superfícies permanecem fechadas.
+   desativar OP por inferência de payloads mistos. Caminho empírico
+   disponível via `GPOPSYNC` contra uma OP real cancelada — ver §2.36;
+   depende do usuário indicar a OP.
+7. **F21 — backup/DR — decisões tomadas 23/09/2026:** RPO 8/8h (confirmado
+   pelo usuário); retenção recomendada: janela rolante de 21 backups (7 dias
+   × 3/dia), sem hierarquia diária/semanal (destino ainda é a própria VM, não
+   protege contra perda de disco — hierarquia longa só compensa com destino
+   externo); destino externo: adiado, "a princípio" fica na própria VM,
+   revisitar quando houver decisão de mover para fora; restore drill:
+   responsabilidade da infra, não do Gestor de Peças. Rotação/agendamento
+   ainda não implementados em código — aguardando confirmação se o usuário
+   quer que isso seja automatizado aqui ou feito pela infra também.
+8. **F4/F9 — ativação operacional:** a role PostgreSQL somente-leitura do
+   Dev Observatory foi provisionada e verificada em 23/09/2026 (§2.35) — essa
+   parte está feita. Falta apenas registrar o IP/CIDR real do servidor
+   Protheus em `GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS`; enquanto ausente, o
+   receptor SOAP passivo permanece fechado (canal legado — ver nota em
+   §2.36 sobre o GPOPSYNC ser o canal ativo hoje).
 
 ## 4. O que NÃO fazer (reforço das regras já em `AGENTS.md`)
 
