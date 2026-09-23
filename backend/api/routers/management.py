@@ -14,6 +14,9 @@ from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import (
     AutomaticPauseRequest,
     OperatorBadgeRequest,
+    ProductiveCalendarRequest,
+    ProductiveResourceCalendarRequest,
+    ProductiveShiftRequest,
     ShiftParameterRequest,
     UserAccountRequest,
 )
@@ -212,6 +215,75 @@ def delete_shift_parameter(
         )
     request.app.state.realtime.publish("shift_parameters")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Calendário produtivo por recurso. Os métodos de persistência já existiam,
+# mas sem uma chamada administrativa o catálogo anunciado em capabilities
+# permanecia sempre no fallback global.
+# ---------------------------------------------------------------------------
+@router.post("/productive-calendars", dependencies=[Depends(require_csrf)])
+def save_productive_calendar(
+    payload: ProductiveCalendarRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    row = database.salvar_calendario_produtivo(
+        payload.codigo,
+        payload.nome,
+        timezone=payload.timezone,
+        ativo=payload.ativo,
+    )
+    request.app.state.realtime.publish("productive_calendars")
+    return {"ok": True, "item": row}
+
+
+@router.post(
+    "/productive-calendars/{calendario_codigo}/turns",
+    dependencies=[Depends(require_csrf)],
+)
+def save_productive_shift(
+    calendario_codigo: str,
+    payload: ProductiveShiftRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    try:
+        row = database.salvar_turno_produtivo(
+            calendario_codigo,
+            payload.nome,
+            payload.dia_semana,
+            payload.hora_inicio,
+            payload.hora_fim,
+            cruza_meia_noite=payload.cruza_meia_noite,
+            minutos_intervalo=payload.minutos_intervalo,
+            ativo=payload.ativo,
+        )
+    except ValueError as exc:
+        raise AppError("invalid_productive_shift", str(exc)) from exc
+    request.app.state.realtime.publish("productive_calendars")
+    return {"ok": True, "item": row}
+
+
+@router.post("/resource-calendars", dependencies=[Depends(require_csrf)])
+def bind_productive_resource_calendar(
+    payload: ProductiveResourceCalendarRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    row = database.vincular_calendario_recurso(
+        payload.recurso_codigo,
+        payload.calendario_codigo,
+        capacidade_valor=payload.capacidade_valor,
+        capacidade_unidade=payload.capacidade_unidade,
+    )
+    if row is None:
+        raise AppError("resource_not_found", "Recurso não encontrado no catálogo.", status_code=404)
+    request.app.state.realtime.publish("productive_calendars")
+    return {"ok": True, "item": row}
 
 
 # ---------------------------------------------------------------------------

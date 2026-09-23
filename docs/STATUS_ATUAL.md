@@ -39,6 +39,11 @@ commit `4a60564`.
   pelo calendário, pela auditoria e pelo contrato de capabilities da UI. O
   fallback global de calendário e os limites de auditoria acompanham a edição
   administrativa sem reinício.
+- O calendário produtivo por recurso ganhou escritores administrativos reais:
+  admin pode cadastrar calendário, turnos semanais e vínculo recurso-calendário
+  por `/management/productive-calendars` e `/management/resource-calendars`,
+  com CSRF e publicação de invalidação. O caminho deixou de depender só de
+  seeds/testes.
 
 Quando este arquivo crescer demais ou a próxima wave fechar, seu conteúdo deve
 ser incorporado ao `ROADMAP.md` (por quem estiver trabalhando no projeto) e

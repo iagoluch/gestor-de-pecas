@@ -50,6 +50,36 @@ class ShiftParameterRequest(BaseModel):
     ordem: int = Field(default=1, ge=1, le=99)
 
 
+class ProductiveCalendarRequest(BaseModel):
+    """Cadastro do calendário que pode ser vinculado a recursos físicos."""
+
+    codigo: str = Field(min_length=1, max_length=60)
+    nome: str = Field(min_length=1, max_length=120)
+    timezone: str = Field(default="America/Sao_Paulo", min_length=1, max_length=80)
+    ativo: bool = True
+
+
+class ProductiveShiftRequest(BaseModel):
+    """Janela semanal de um calendário produtivo."""
+
+    nome: str = Field(min_length=1, max_length=80)
+    dia_semana: int = Field(ge=0, le=6)
+    hora_inicio: time
+    hora_fim: time
+    cruza_meia_noite: bool = False
+    minutos_intervalo: int = Field(default=0, ge=0, le=1440)
+    ativo: bool = True
+
+
+class ProductiveResourceCalendarRequest(BaseModel):
+    """Vínculo entre recurso físico, calendário e capacidade temporal."""
+
+    recurso_codigo: str = Field(min_length=1, max_length=120)
+    calendario_codigo: str = Field(min_length=1, max_length=60)
+    capacidade_valor: float | None = Field(default=None, ge=0)
+    capacidade_unidade: str | None = Field(default=None, max_length=40)
+
+
 class OperatorBadgeRequest(BaseModel):
     """Crachá do chão de fábrica, mantido pela tela dos gestores (Wave 5).
 
