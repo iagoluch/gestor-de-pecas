@@ -949,16 +949,18 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
             worker_name="processo-novo",
             now_func=lambda: futuro,
         ).run_once()
-        # O PENDING antigo sai no primeiro ciclo, sem intervenção manual.
+        # O abandonado é recuperado para RETRY. Como A e B são da mesma OP,
+        # a ordem causal (F19, 4ecac64) segura B atrás de A: nada sai ainda.
         self.assertEqual(primeiro.recovered, 1)
-        self.assertEqual(primeiro.sent, len(pendentes))
-
-        # O abandonado voltou para RETRY e sai quando o backoff vence.
+        self.assertEqual(primeiro.sent, 0)
         recuperado = reiniciado.buscar_item_outbound_totvs(abandonado["id"])
         self.assertEqual(recuperado["status"], OutboxStatus.RETRY.value)
         self.assertEqual(
             recuperado["idempotency_key"], abandonado["idempotency_key"]
         )
+
+        # Vencido o backoff, A sai primeiro e só então libera B — sem
+        # intervenção manual e sem perder nenhuma mensagem.
         segundo = TotvsOutboxWorker(
             reiniciado,
             gateway=gateway,
@@ -969,6 +971,15 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
         entregue = reiniciado.buscar_item_outbound_totvs(abandonado["id"])
         self.assertEqual(entregue["status"], OutboxStatus.SENT.value)
         self.assertEqual(entregue["internal_id"], "783199")
+        # Os PENDING de B são da mesma OP: cada ciclo libera o próximo da fila.
+        for _ in pendentes:
+            ciclo = TotvsOutboxWorker(
+                reiniciado,
+                gateway=gateway,
+                worker_name="processo-novo",
+                now_func=lambda: futuro + timedelta(minutes=5),
+            ).run_once()
+            self.assertEqual(ciclo.sent, 1)
         self.assertEqual(
             self._scalar(
                 "SELECT COUNT(*) AS total FROM totvs_outbox WHERE status <> 'SENT'"
