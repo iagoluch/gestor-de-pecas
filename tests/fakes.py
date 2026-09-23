@@ -2984,6 +2984,20 @@ class FakeDatabase:
             key=lambda row: row["sequencia"],
         )
 
+    def buscar_inspecao_da_peca(self, peca_id):
+        peca = next(
+            (row for row in self.quality_pieces if row["id"] == int(peca_id)), None
+        )
+        if peca is None:
+            return None
+        return next(
+            (
+                dict(row) for row in self.quality_inspections
+                if row["id"] == peca.get("inspecao_id")
+            ),
+            None,
+        )
+
     def _setor_origem_inspecao(self, sessao):
         """Setor que produziu a peça de uma inspeção já aberta."""
 

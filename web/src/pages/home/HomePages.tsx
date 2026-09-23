@@ -65,10 +65,10 @@ export function HomeSectorsPage() {
   const title = "Management View — Setores";
   const subtitle = "Comparação operacional por setor.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
   return (
-    <PageFrame sectionId="home" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="home" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         {(query.data?.highlights ?? []).map((highlight, index) => (
           <MetricCard
@@ -108,11 +108,11 @@ export function HomeAlertsPage() {
   const title = "Management View — Alertas";
   const subtitle = "Desvios e inconsistências que exigem atenção, sem inventar confiança estatística.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   if (!data) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><EmptyState /></PageFrame>;
   return (
-    <PageFrame sectionId="home" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="home" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Críticos" value={formatNumber(data.by_severity.critical ?? 0)} accent="danger" />
         <MetricCard label="Erros" value={formatNumber(data.by_severity.error ?? 0)} accent="danger" />

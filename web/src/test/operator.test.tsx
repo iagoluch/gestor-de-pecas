@@ -406,7 +406,12 @@ describe("fluxo Web do operador", () => {
       }
       if (path.includes("/operator/drawings")) return json({ available: false, message: "Nenhum desenho disponível para esta peça." });
       if (path.includes("/operator/first-piece") && method === "POST") {
-        return json({ ok: true, message: "Primeira peça aprovada. Lote liberado para produção.", code: "primeira_peca_conforme", data: { ...gate, setup_registrado: true, liberado: true } });
+        // O mock precisa refletir a liberação nas próximas leituras (GET
+        // deste endpoint e no roteiro de operations), senão o botão Setup
+        // nunca "vê" que o portão foi liberado e fica preso habilitado.
+        gate.setup_registrado = true;
+        gate.liberado = true;
+        return json({ ok: true, message: "Primeira peça aprovada. Lote liberado para produção.", code: "primeira_peca_conforme", data: { ...gate } });
       }
       if (path.includes("/operator/first-piece")) {
         return json({
@@ -451,8 +456,8 @@ describe("fluxo Web do operador", () => {
           requires_confirmation: false,
           produto_codigo: "PECA-GATE",
           quantidade_planejada: 10,
-          pode_finalizar: options.liberado ?? false,
-          exige_gate_primeira_peca: !options.liberado,
+          pode_finalizar: gate.liberado,
+          exige_gate_primeira_peca: !gate.liberado,
           primeira_peca: gate,
         }] });
       }
@@ -471,6 +476,10 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
     fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
     await screen.findByText("Início registrado com sucesso.");
+    // O botão Setup só habilita depois que `cards.reload()` traz o card em
+    // "Em processo"; clicar antes disso (com o botão ainda disabled) não
+    // dispara nada.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     // O conteúdo do popup chega do backend: espere o checklist (ou o cadastro
@@ -559,7 +568,7 @@ describe("fluxo Web do operador", () => {
       await screen.findByText("Retorno registrado com sucesso.");
     }
     await waitFor(() => expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled());
-    expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled());
   });
 
   it("não pede confirmação de Setup dentro do popup", async () => {

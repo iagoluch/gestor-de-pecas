@@ -91,12 +91,12 @@ export function ManagementShiftsPage() {
   if (query.loading && !query.data) {
     return <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}><LoadingState /></PageFrame>;
   }
-  if (query.error) {
+  if (query.error && !query.data) {
     return <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   }
 
   return (
-    <PageFrame
+    <PageFrame staleError={query.error}
       sectionId="dev"
       title={title}
       subtitle={subtitle}

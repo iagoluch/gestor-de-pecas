@@ -24,7 +24,7 @@ from mes.services.cut import CutService
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.management import ManagementService
 from mes.services.operator_flow import OperatorFlowService
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 ROOT = Path(__file__).resolve().parents[1]

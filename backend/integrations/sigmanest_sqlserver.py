@@ -25,7 +25,9 @@ Garantias de segurança:
 
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime
+import logging
 import os
 import re
 from typing import Iterable
@@ -37,6 +39,8 @@ from mes.integrations.sigmanest.models import (
     SigmaNestTask,
 )
 
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_ODBC_DRIVER = "ODBC Driver 18 for SQL Server"
 
@@ -144,8 +148,12 @@ class SigmaNestSqlServerGateway:
             conexao.timeout = int(
                 str(os.environ.get("SIGMANEST_QUERY_TIMEOUT") or "30").strip()
             )
-        except (AttributeError, ValueError):
-            pass
+        except (AttributeError, ValueError) as exc:
+            LOGGER.warning(
+                "Timeout de consulta do SigmaNEST não aplicado (SIGMANEST_QUERY_TIMEOUT): %s; "
+                "consultas ficam sem limite de execução.",
+                exc,
+            )
         return conexao
 
     @staticmethod
@@ -164,7 +172,9 @@ class SigmaNestSqlServerGateway:
             for codigo in (tarefas or ())
             if str(codigo or "").strip()
         }
-        with self._abrir() as conexao:
+        # ``with`` de uma conexão pyodbc só faz commit/rollback, não fecha:
+        # ``closing`` devolve a conexão ao SQL Server também em caso de erro.
+        with closing(self._abrir()) as conexao:
             cursor = conexao.cursor()
             cursor.execute(_SQL_PLANOS, desde, desde)
             planos = self._linhas(cursor)

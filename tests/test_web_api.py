@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from dataclasses import replace
+from pathlib import Path
 from datetime import date, datetime, time
 from io import BytesIO
 from unittest.mock import patch
@@ -16,7 +17,7 @@ from backend.api.config import WebSettings
 from backend.api.main import create_app
 from mes.services.operator_flow import OperatorFlowService
 from tests.fakes import FakeDatabase
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 class _Cursor:
@@ -259,6 +260,24 @@ class WebApiTests(unittest.TestCase):
         serialized = json.dumps(response.json()).casefold()
         self.assertNotIn("password", serialized)
         self.assertNotIn("database_url", serialized)
+
+    def test_respostas_levam_headers_de_seguranca(self):
+        response = self.client.get("/api/v1/system/health")
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
+        self.assertIn("camera=()", response.headers["Permissions-Policy"])
+        # Implantação sem HTTPS declarado (cookie_secure=False) não recebe HSTS.
+        self.assertNotIn("Strict-Transport-Security", response.headers)
+
+    def test_hsts_so_quando_implantacao_declara_https(self):
+        settings = replace(_settings(), cookie_secure=True)
+        client = TestClient(create_app(settings=settings, database_factory=lambda: self.db))
+        self.addCleanup(client.close)
+        response = client.get("/api/v1/system/health")
+        hsts = response.headers["Strict-Transport-Security"]
+        self.assertIn("max-age=", hsts)
+        self.assertNotIn("includeSubDomains", hsts)
 
     def test_login_usa_cookie_http_only_e_nao_retorna_senha(self):
         response = self.login_manager()
@@ -1635,6 +1654,32 @@ class QualityWebApiTests(unittest.TestCase):
                 self.assertEqual(arquivo.status_code, 200, arquivo.text)
                 self.assertEqual(arquivo.headers["content-type"], "application/pdf")
                 self.assertIn("inline", arquivo.headers["content-disposition"])
+                self.assertTrue(arquivo.content.startswith(b"%PDF-"))
+
+    def test_desenho_do_operador_com_nome_acentuado_nao_quebra_o_header(self):
+        """Nome fora do latin-1 derrubava o header (500); agora vira filename* (RFC 5987)."""
+
+        self.db.buscar_op_planejada = lambda codigo: (
+            {"produto_codigo": "PROD-API"} if codigo == "OP-QUAL-API" else None
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            nome = "PROD-API_revisão_Ω.pdf"
+            (Path(directory) / nome).write_bytes(b"%PDF-1.4 conteudo de teste")
+            settings = replace(_settings(), operator_drawing_roots=directory)
+            app = create_app(settings=settings, database_factory=lambda: self.db)
+            with TestClient(app) as client:
+                client.post(
+                    "/api/v1/auth/login",
+                    json={"username": "Operador Dobra", "password": "senha-dobra"},
+                )
+                arquivo = client.get(
+                    "/api/v1/operator/drawings/file", params={"op": "OP-QUAL-API"}
+                )
+                self.assertEqual(arquivo.status_code, 200, arquivo.text)
+                disposicao = arquivo.headers["content-disposition"]
+                self.assertTrue(disposicao.startswith("inline;"), disposicao)
+                self.assertIn("filename*=utf-8''", disposicao)
+                self.assertEqual(arquivo.headers["cache-control"], "private, max-age=60")
                 self.assertTrue(arquivo.content.startswith(b"%PDF-"))
 
 

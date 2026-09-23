@@ -5,6 +5,7 @@ import { AndonResourceDrawer } from "../components/AndonResourceDrawer";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useForceLightTheme } from "../hooks/useForceLightTheme";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
 import { assets } from "../config/assets";
@@ -74,12 +75,6 @@ function useSnapshotClock(clock: AndonSnapshot["clock"] | undefined) {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [clock?.now, clock?.running]);
-
-  const now = useMemo(() => {
-    const base = clock?.now ? new Date(clock.now) : new Date();
-    if (Number.isNaN(base.getTime())) return new Date();
-    return new Date(base.getTime() + elapsed * 1000);
-  }, [clock?.now, elapsed]);
   return elapsed;
 }
 
@@ -105,9 +100,14 @@ function stateSignature(resource: AndonResource) {
 function useResourceTransitions(snapshot: AndonSnapshot | null) {
   const [transitions, setTransitions] = useState<Record<string, "enter" | "update">>({});
   const previous = useRef<Map<string, string> | null>(null);
+  // O reset fica fora do cleanup do efeito: um snapshot seguinte sem mudanças
+  // não pode cancelar o reset do anterior e deixar a animação presa.
+  const resetTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(resetTimer.current), []);
 
   useEffect(() => {
-    if (!snapshot) return undefined;
+    if (!snapshot) return;
     const current = new Map<string, string>();
     const changed: Record<string, "enter" | "update"> = {};
     for (const sector of snapshot.sectors) {
@@ -122,10 +122,10 @@ function useResourceTransitions(snapshot: AndonSnapshot | null) {
       }
     }
     previous.current = current;
-    if (!Object.keys(changed).length) return undefined;
+    if (!Object.keys(changed).length) return;
     setTransitions(changed);
-    const timer = window.setTimeout(() => setTransitions({}), 1500);
-    return () => window.clearTimeout(timer);
+    window.clearTimeout(resetTimer.current);
+    resetTimer.current = window.setTimeout(() => setTransitions({}), 1500);
   }, [snapshot]);
 
   return transitions;
@@ -258,6 +258,7 @@ function SectorPanel({ sector, elapsed, transitions, onOpen }: {
 }
 
 export function AndonPage() {
+  useForceLightTheme();
   const { user } = useAuth();
   const query = useApiQuery<AndonSnapshot>("/api/v1/andon", { ignoreLiveTick: true });
   const realtime = useRealtimeStatus();

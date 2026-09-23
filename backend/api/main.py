@@ -81,6 +81,9 @@ from mes.services.telegram_digest import (
 )
 from mes.services.totvs_outbox_worker import TotvsOutboxWorker
 
+_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+_HSTS_POLICY = "max-age=15552000"
+
 
 def _default_database_factory(*, now_func=None, environment="development"):
     from app.database import Database
@@ -228,7 +231,9 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
             )
             for update in updates:
                 offset = int(update.get("update_id", 0)) + 1
-                reply = service.handle_update(update)
+                # ``handle_update`` consulta o PostgreSQL de forma síncrona;
+                # fora do laço de eventos ele não congela as demais requisições.
+                reply = await asyncio.to_thread(service.handle_update, update)
                 if reply is not None:
                     if reply.callback_query_id:
                         await asyncio.to_thread(
@@ -382,7 +387,7 @@ async def _shift_boundary_loop(application: FastAPI) -> None:
             # novamente. Uma pausa não pode ficar sem scheduler até o restart.
             service = None
             logging.exception("Falha controlada ao aplicar pausas e limites de turno.")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(5.0)
 
 
 async def _dev_observatory_loop(application: FastAPI) -> None:
@@ -658,6 +663,14 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        # Nenhuma tela usa câmera, microfone, localização ou periféricos do
+        # navegador; negar explicitamente limita o estrago de um script injetado.
+        response.headers["Permissions-Policy"] = _PERMISSIONS_POLICY
+        if resolved_settings.cookie_secure:
+            # Só quando a implantação declara HTTPS (mesmo critério do cookie
+            # Secure). Sem includeSubDomains para não afetar outros hosts do
+            # domínio; navegadores ignoram o header em respostas HTTP puras.
+            response.headers["Strict-Transport-Security"] = _HSTS_POLICY
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
             response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"

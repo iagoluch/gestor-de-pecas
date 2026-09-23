@@ -24,7 +24,7 @@ from mes.integrations.totvs.mapper import TotvsActivityClassification
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.quality import QualityInspectionService
 from tests.fakes import FakeDatabase
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 def _operacao(**extra):

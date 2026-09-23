@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 import { Link } from "react-router-dom";
 import type { InsightEvidence, KpiExplanation, ManagementException } from "../types/api";
 import { availabilityLabel, formatDateTime, formatHours, formatNumber, humanize } from "../utils/format";
@@ -152,30 +153,22 @@ export function ManagementInsightDrawer({
   exception?: ManagementException | null;
   onClose: () => void;
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const open = Boolean(explanation || exception);
-  useEffect(() => {
-    if (!open) return undefined;
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  useDialogFocus(drawerRef, open, onClose);
   if (!open) return null;
   const title = explanation ? `Entenda o ${explanation.label}` : exception?.title ?? "Detalhes da exceção";
   return (
     <div className="insight-drawer-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <aside className="insight-drawer" role="dialog" aria-modal="true" aria-labelledby="insight-drawer-title">
+      <aside ref={drawerRef} className="insight-drawer" role="dialog" aria-modal="true" aria-labelledby="insight-drawer-title">
         <header>
           <div>
             <small>{explanation ? "KPI explicável" : "Exceção gerencial"}</small>
             <h2 id="insight-drawer-title">{title}</h2>
           </div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Fechar explicação">×</button>
+          <button type="button" onClick={onClose} aria-label="Fechar explicação">×</button>
         </header>
         <div className="insight-drawer__body">
           {explanation ? <KpiBody explanation={explanation} /> : exception ? <ExceptionBody exception={exception} /> : null}

@@ -261,7 +261,18 @@ class TelegramFactoryDigestScheduler:
             return outcomes
         for frequencia in DIGEST_FREQUENCIES:
             for destination in self.destinations:
-                outcomes.append(self._processar(frequencia, destination, agora_local))
+                try:
+                    outcome = self._processar(frequencia, destination, agora_local)
+                except Exception:  # noqa: BLE001 - um resumo com falha não pode bloquear os demais
+                    LOGGER.exception(
+                        "Falha ao montar/enviar o resumo %s do destino %s no Telegram.",
+                        frequencia,
+                        destination.key,
+                    )
+                    outcome = DigestOutcome(
+                        frequencia, destination.key, sent=False, reason="erro"
+                    )
+                outcomes.append(outcome)
         return outcomes
 
     def _processar(

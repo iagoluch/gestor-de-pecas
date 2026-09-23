@@ -306,7 +306,14 @@ def piece_detail(
     database=Depends(get_database),
 ):
     _sector(user)
-    return {"peca_id": peca_id, "cotas": _service(database, user, request).detalhar_peca(peca_id)}
+    cotas = _service(database, user, request).detalhar_peca(peca_id)
+    if cotas is None:
+        raise AppError(
+            "quality_piece_not_found",
+            "Peça não encontrada.",
+            status_code=404,
+        )
+    return {"peca_id": peca_id, "cotas": cotas}
 
 
 @router.get("/drawings/{produto}")

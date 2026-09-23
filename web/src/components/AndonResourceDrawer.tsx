@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 import type { MetricValue } from "../types/api";
 import type { AndonResource } from "../types/andon";
 import { availabilityLabel, formatDateTime, formatDuration } from "../utils/format";
@@ -34,16 +35,10 @@ export function AndonResourceDrawer({
   simulationOnly: boolean;
   onClose: () => void;
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!resource) return undefined;
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, resource]);
+  const drawerRef = useRef<HTMLElement>(null);
+  // Depende só de o drawer estar aberto: cada snapshot novo do Andon traz um
+  // objeto `resource` novo, e isso não pode devolver o foco ao botão Fechar.
+  useDialogFocus(drawerRef, resource !== null, onClose);
 
   if (!resource) return null;
   const operation = resource.operation;
@@ -59,13 +54,13 @@ export function AndonResourceDrawer({
     <div className="insight-drawer-backdrop andon-detail-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <aside className="insight-drawer andon-detail-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <aside ref={drawerRef} className="insight-drawer andon-detail-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <header>
           <div>
             <small>Detalhes do recurso • {resource.sector}</small>
             <h2 id={titleId}>Indicadores de {resource.name}</h2>
           </div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Fechar indicadores">×</button>
+          <button type="button" onClick={onClose} aria-label="Fechar indicadores">×</button>
         </header>
 
         <div className="insight-drawer__body">

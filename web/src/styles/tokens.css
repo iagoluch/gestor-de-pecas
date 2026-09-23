@@ -1,3 +1,9 @@
+/* Sistema de design — MES industrial.
+   Neutros frios e calmos, uma única cor de ação (azul), estados operacionais
+   com significado fixo (verde produz, vermelho para, amarelo alerta, ciano
+   setup) e a barra lateral azul-marinho como identidade da marca.
+   As escalas abaixo (espaço, tipo, raio, elevação) são a régua de todas as
+   telas; valores soltos no CSS devem preferir um degrau daqui. */
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* color-scheme decide as cores que o próprio navegador pinta (fundo de
@@ -10,26 +16,55 @@
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --bg: #f5f7fa;
+  -webkit-font-smoothing: antialiased;
+
+  /* Superfícies e texto */
+  --bg: #f2f5f9;
   --surface: #ffffff;
-  --surface-alt: #f1f3f6;
-  --border: #c7d3e2;
-  --divider: #dde5ef;
-  --text: #081630;
-  --muted: #71809d;
-  --primary: #0866f5;
-  --primary-hover: #075bd8;
-  --primary-soft: #e8f2ff;
+  --surface-alt: #f5f7fa;
+  --surface-hover: #eef3f9;
+  --border: #d5dde8;
+  --border-strong: #b3c0d1;
+  --divider: #e5eaf1;
+  --text: #0b1a33;
+  /* #5a6a85 sobre branco = 5,4:1 e sobre --bg = 5,0:1 (antes #71809d ficava
+     em ~3,9:1, abaixo do mínimo para texto de apoio). */
+  --muted: #5a6a85;
+  --track: #e5eaf1;
+
+  /* Ação */
+  --primary: #0a63e8;
+  --primary-hover: #0852c4;
+  --primary-soft: #e8f1fe;
+  /* Preenchimento sólido com texto branco por cima (botão primário, aba
+     ativa, seleção). No claro é o próprio --primary; no escuro é mais fundo
+     que o --primary de texto, para o branco manter contraste. */
+  --primary-fill: var(--primary);
+  --primary-fill-hover: var(--primary-hover);
+  --primary-ink: #ffffff;
+  --focus-ring: 0 0 0 3px rgba(10, 99, 232, .26);
+
+  /* Estados operacionais — mesmos significados em todas as telas */
   --accent: #16a34a;
-  --accent-soft: #eaf8ef;
+  --accent-soft: #e9f7ee;
   --warning: #f59e0b;
-  --warning-soft: #fff6e6;
+  --warning-soft: #fff6e5;
   --danger: #ef3340;
   --danger-soft: #fff0f1;
   --danger-ink: #9f1d2a;
   --danger-border: #f2b8bf;
   --warning-ink: #8a5700;
   --success-ink: #11823b;
+  /* Estados operacionais do apontamento: a mesma identidade dos botoes do
+     operador, para que o Andon leia igual ao posto. */
+  --state-setup: #0cc0df;
+  --state-setup-soft: #e6f8fc;
+  --state-rework: #7a2f00;
+  --state-rework-soft: #f5ebe4;
+  --purple: #7047e8;
+  --teal: #20a7a1;
+  --orange: #ff7100;
+
   /* A barra lateral mantém a mesma identidade azul-marinho nos dois temas —
      é a cor de marca, não um token de superfície que deva clarear. */
   --sidebar: #001e3f;
@@ -37,21 +72,53 @@
   --sidebar-button: #082c55;
   --sidebar-hover: #0c3765;
   --sidebar-border: #0a426f;
-  --purple: #7047e8;
-  --teal: #20a7a1;
-  /* Estados operacionais do apontamento: a mesma identidade dos botoes do
-     operador, para que o Andon leia igual ao posto. */
-  --state-setup: #0cc0df;
-  --state-setup-soft: #e6f8fc;
-  --state-rework: #7a2f00;
-  --state-rework-soft: #f5ebe4;
-  --orange: #ff7100;
-  --radius-control: 5px;
+  --sidebar-text: #c3d2e8;
+  --sidebar-text-muted: #86a0c4;
+  --sidebar-text-faint: #6582a6;
+  --sidebar-ok: #42d85a;
+
+  /* Espaço (base 4px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Tipo — razão curta (~1.15) própria de interface de operação */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --tracking-tight: -.015em;
+  --tracking-caps: .04em;
+
+  /* Raio */
+  --radius-sm: 4px;
+  --radius-control: 6px;
   --radius-card: 10px;
   --radius-panel: 12px;
-  --shadow-card: 0 1px 2px rgba(8, 22, 48, .05), 0 1px 3px rgba(8, 22, 48, .06);
-  --shadow-hover: 0 10px 24px rgba(8, 22, 48, .12);
+  --radius-pill: 999px;
+
+  /* Elevação: 1 = cartão em repouso, 2 = cartão em foco/hover,
+     3 = camada sobreposta (drawer, popup, calendário). */
+  --shadow-1: 0 1px 2px rgba(11, 26, 51, .05), 0 1px 3px rgba(11, 26, 51, .04);
+  --shadow-2: 0 2px 4px rgba(11, 26, 51, .05), 0 8px 20px rgba(11, 26, 51, .08);
+  --shadow-3: 0 12px 32px rgba(11, 26, 51, .16), 0 2px 6px rgba(11, 26, 51, .08);
+  --shadow-card: var(--shadow-1);
+  --shadow-hover: var(--shadow-2);
+  --scrim: rgba(0, 18, 39, .48);
+
+  /* Movimento */
   --ease: cubic-bezier(.22, 1, .36, 1);
+  --duration-fast: 120ms;
+  --duration: 180ms;
 }
 
 /* Modo escuro — só a gestão/operador (telas de TV do Andon/Solda ficam de
@@ -59,20 +126,27 @@
    fábrica e usam cores fixas e saturadas, não o sistema de tema).
    [data-theme="dark"] é setado pelo botão na barra lateral e lembrado em
    localStorage; sem escolha explícita, o tema segue o do sistema
-   operacional via prefers-color-scheme. */
+   operacional via prefers-color-scheme. Os dois blocos abaixo precisam ficar
+   idênticos. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0b1524;
-    --surface: #13233a;
-    --surface-alt: #0f1d30;
-    --border: #26394f;
-    --divider: #1e2f44;
-    --text: #edf2fa;
-    --muted: #93a3bd;
-    --primary: #4c8cff;
-    --primary-hover: #6ba0ff;
-    --primary-soft: #16375f;
+    --bg: #0a1322;
+    --surface: #111e32;
+    --surface-alt: #0e1a2c;
+    --surface-hover: #172841;
+    --border: #243650;
+    --border-strong: #354b6b;
+    --divider: #1b2b42;
+    --text: #e9eff8;
+    --muted: #98a8c1;
+    --track: #1e3049;
+    --primary: #5b95ff;
+    --primary-hover: #7aa9ff;
+    --primary-soft: #15325a;
+    --primary-fill: #2563eb;
+    --primary-fill-hover: #1d4fd0;
+    --focus-ring: 0 0 0 3px rgba(91, 149, 255, .35);
     --accent: #3ecb77;
     --accent-soft: #123a24;
     --warning: #fbbf24;
@@ -87,22 +161,30 @@
     --state-setup-soft: #0f3540;
     --state-rework: #ffb37a;
     --state-rework-soft: #3a2415;
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3);
-    --shadow-hover: 0 10px 24px rgba(0, 0, 0, .45);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .25);
+    --shadow-2: 0 2px 4px rgba(0, 0, 0, .3), 0 10px 24px rgba(0, 0, 0, .4);
+    --shadow-3: 0 14px 36px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .35);
+    --scrim: rgba(2, 8, 18, .64);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0b1524;
-  --surface: #13233a;
-  --surface-alt: #0f1d30;
-  --border: #26394f;
-  --divider: #1e2f44;
-  --text: #edf2fa;
-  --muted: #93a3bd;
-  --primary: #4c8cff;
-  --primary-hover: #6ba0ff;
-  --primary-soft: #16375f;
+  --bg: #0a1322;
+  --surface: #111e32;
+  --surface-alt: #0e1a2c;
+  --surface-hover: #172841;
+  --border: #243650;
+  --border-strong: #354b6b;
+  --divider: #1b2b42;
+  --text: #e9eff8;
+  --muted: #98a8c1;
+  --track: #1e3049;
+  --primary: #5b95ff;
+  --primary-hover: #7aa9ff;
+  --primary-soft: #15325a;
+  --primary-fill: #2563eb;
+  --primary-fill-hover: #1d4fd0;
+  --focus-ring: 0 0 0 3px rgba(91, 149, 255, .35);
   --accent: #3ecb77;
   --accent-soft: #123a24;
   --warning: #fbbf24;
@@ -117,6 +199,8 @@
   --state-setup-soft: #0f3540;
   --state-rework: #ffb37a;
   --state-rework-soft: #3a2415;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3);
-  --shadow-hover: 0 10px 24px rgba(0, 0, 0, .45);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .25);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, .3), 0 10px 24px rgba(0, 0, 0, .4);
+  --shadow-3: 0 14px 36px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .35);
+  --scrim: rgba(2, 8, 18, .64);
 }

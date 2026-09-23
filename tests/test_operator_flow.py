@@ -3,7 +3,7 @@ import unittest
 from app.core.operator_sectors import operator_route_resource_label
 from mes.services.operator_flow import OperatorFlowService, OperatorState, validate_transition
 from tests.fakes import FakeDatabase
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 class OperatorFlowTests(unittest.TestCase):

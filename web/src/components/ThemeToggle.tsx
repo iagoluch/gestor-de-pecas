@@ -1,18 +1,19 @@
 import { useTheme } from "../hooks/useTheme";
 
-export function ThemeToggle() {
+export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
+  const label = dark ? "Tema claro" : "Tema escuro";
   return (
     <button
       type="button"
-      className="theme-toggle"
+      className={compact ? "theme-toggle theme-toggle--icon" : "theme-toggle"}
       onClick={toggle}
       aria-label={dark ? "Mudar para tema claro" : "Mudar para tema escuro"}
-      title={dark ? "Tema claro" : "Tema escuro"}
+      title={label}
     >
       {dark ? <SunIcon /> : <MoonIcon />}
-      <span>{dark ? "Tema claro" : "Tema escuro"}</span>
+      {compact ? null : <span>{label}</span>}
     </button>
   );
 }

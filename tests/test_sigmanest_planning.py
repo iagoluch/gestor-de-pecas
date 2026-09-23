@@ -278,6 +278,49 @@ class SigmaNestSegurancaTests(unittest.TestCase):
                 )
 
 
+class _ConexaoOdbcFalsa:
+    """Imita pyodbc: ``__exit__`` não fecha a conexão, só ``close()`` fecha."""
+
+    def __init__(self, *, falhar=False):
+        self.fechada = False
+        self._falhar = falhar
+        self.description = [("coluna",)]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def cursor(self):
+        return self
+
+    def execute(self, *_args):
+        if self._falhar:
+            raise RuntimeError("consulta falhou")
+
+    def fetchall(self):
+        return []
+
+    def close(self):
+        self.fechada = True
+
+
+class SigmaNestConexaoTests(unittest.TestCase):
+    def test_leitura_fecha_a_conexao_odbc(self):
+        conexao = _ConexaoOdbcFalsa()
+        gateway = SigmaNestSqlServerGateway("DSN=fake", connect=lambda _dsn: conexao)
+        gateway.ler_planejamento()
+        self.assertTrue(conexao.fechada)
+
+    def test_falha_na_consulta_tambem_fecha_a_conexao(self):
+        conexao = _ConexaoOdbcFalsa(falhar=True)
+        gateway = SigmaNestSqlServerGateway("DSN=fake", connect=lambda _dsn: conexao)
+        with self.assertRaises(RuntimeError):
+            gateway.ler_planejamento()
+        self.assertTrue(conexao.fechada)
+
+
 class _GatewayFixo:
     """Gateway determinístico no formato exato produzido pelo adaptador real."""
 

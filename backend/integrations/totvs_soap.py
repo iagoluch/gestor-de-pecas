@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from xml.etree.ElementTree import ParseError  # nosec B405 -- só o tipo de exceção; parse real usa defusedxml (SafeElementTree) abaixo
 from xml.sax.saxutils import escape  # nosec B406 -- só escape() de string, não faz parse de XML
@@ -110,6 +111,12 @@ def _extract_business_xml(body: bytes) -> str:
     return payload
 
 
+def _process_business_xml(state, business_xml: str):
+    database = state.database_manager.get()
+    service = state.totvs_service_factory(database)
+    return service.handle_message(business_xml)
+
+
 async def _read_limited_body(request: Request, maximum: int) -> bytes | None:
     content = bytearray()
     async for chunk in request.stream():
@@ -201,9 +208,9 @@ async def receive_message(request: Request):
         business_xml = _extract_business_xml(body)
         if len(business_xml.encode("utf-8")) > settings.totvs_max_xml_bytes:
             return _fault("payload_too_large", "pXmlDocument excede o limite configurado.")
-        database = request.app.state.database_manager.get()
-        service = request.app.state.totvs_service_factory(database)
-        outcome = service.handle_message(business_xml)
+        # Banco e processamento são bloqueantes: rodam fora do event loop, numa
+        # única thread, como qualquer rota síncrona do FastAPI.
+        outcome = await asyncio.to_thread(_process_business_xml, request.app.state, business_xml)
     except ValueError as exc:
         return _fault("invalid_soap_envelope", str(exc))
     except TotvsIntegrationError as exc:

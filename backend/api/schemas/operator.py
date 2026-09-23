@@ -15,9 +15,9 @@ class OperatorActionRequest(BaseModel):
     operation_number: str | None = Field(default=None, max_length=40)
     stop_reason_code: str | None = Field(default=None, max_length=40)
     comment: str | None = Field(default=None, max_length=1000)
-    good: int = Field(default=0, ge=0)
-    scrap: int = Field(default=0, ge=0)
-    rework: int = Field(default=0, ge=0)
+    good: int = Field(default=0, ge=0, le=100_000)
+    scrap: int = Field(default=0, ge=0, le=100_000)
+    rework: int = Field(default=0, ge=0, le=100_000)
     lot: str | None = Field(default=None, max_length=120)
     scrap_reason: str | None = Field(default=None, max_length=240)
     root_cause: str | None = Field(default=None, max_length=240)
@@ -84,7 +84,7 @@ class CuttingActionRequest(BaseModel):
 class HighlightActionRequest(BaseModel):
     # Escopo do apontamento: nulo é a tarefa inteira, preenchido é uma
     # chapa já cortada — o fluxo oficial permite os dois.
-    plan_hash: str | None = None
+    plan_hash: str | None = Field(default=None, max_length=256)
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     # "Retomar" é a retomada física do posto após uma parada registrada sem

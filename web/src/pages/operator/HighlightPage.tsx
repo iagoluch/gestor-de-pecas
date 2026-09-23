@@ -313,8 +313,9 @@ export function HighlightPage() {
           {resourceState?.motivo || "Atividade diária"} em andamento neste posto. Finalize para voltar a apontar.
         </p>
       ) : null}
-      {task.loading && loadedTask ? <LoadingState label="Carregando tarefa…" /> : task.error ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (
+      {task.loading && loadedTask && !task.data ? <LoadingState label="Carregando tarefa…" /> : task.error && !task.data ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (
         <div className="highlight-detail">
+          {task.error ? <p className="operator-notice operator-notice--stale" role="alert">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</p> : null}
           <header><div><small>Tarefa selecionada</small><h2>{task.data.task.codigo_tarefa}</h2></div><span className="operator-state">{plans.length} plano(s) liberado(s)</span></header>
           <dl className="highlight-metrics"><div><dt>Material</dt><dd>{task.data.task.material ?? "Não informado"}</dd></div><div><dt>Espessura</dt><dd>{task.data.task.espessura ?? "Não informada"}</dd></div><div><dt>Tempo em destaque</dt><dd>{formatDuration(task.data.timing.execution_seconds)}</dd></div></dl>
 

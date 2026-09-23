@@ -289,19 +289,22 @@ export function CuttingPage({ resource }: { resource: string }) {
       </div>
       {stopped ? <p className="operator-notice operator-notice--error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</p> : null}
       {activityInProgress ? <p className="operator-notice">{queue.data?.resource_state?.motivo || "Atividade diária"} em andamento neste recurso. Finalize para iniciar um corte.</p> : null}
-      {queue.loading && !queue.data ? <LoadingState label="Carregando fila do Corte…" /> : queue.error ? <ErrorState error={queue.error} onRetry={queue.reload} /> : queue.data?.items.length ? (
-        <div className="cutting-queue">
-          {queue.data.items.map((item, index) => (
-            <CuttingTaskCard
-              key={`${item.codigo_tarefa}-${item.plano_hash}-${index}`}
-              item={item}
-              busy={busy}
-              collapsed={!expanded.has(String(item.codigo_tarefa ?? index))}
-              onToggle={() => toggleTask(String(item.codigo_tarefa ?? index))}
-              onStart={(planHash) => void action({ action: "Início", plan_hash: planHash })}
-            />
-          ))}
-        </div>
+      {queue.loading && !queue.data ? <LoadingState label="Carregando fila do Corte…" /> : queue.error && !queue.data ? <ErrorState error={queue.error} onRetry={queue.reload} /> : queue.data?.items.length ? (
+        <>
+          {queue.error ? <p className="operator-notice operator-notice--stale" role="alert">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</p> : null}
+          <div className="cutting-queue">
+            {queue.data.items.map((item, index) => (
+              <CuttingTaskCard
+                key={`${item.codigo_tarefa}-${item.plano_hash}-${index}`}
+                item={item}
+                busy={busy}
+                collapsed={!expanded.has(String(item.codigo_tarefa ?? index))}
+                onToggle={() => toggleTask(String(item.codigo_tarefa ?? index))}
+                onStart={(planHash) => void action({ action: "Início", plan_hash: planHash })}
+              />
+            ))}
+          </div>
+        </>
       ) : <EmptyState title={appliedSearch ? "Nenhuma tarefa corresponde ao filtro" : "Nenhum plano na fila"} detail={appliedSearch ? "Limpe o filtro para ver toda a fila do recurso." : "Assim que uma tarefa entrar no planejamento, ela aparece aqui automaticamente."} />}
       {activityPrompt ? (
         <OperatorDialog title="Atividade diária" size="compact" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={() => setActivityPrompt(null)}>
@@ -315,7 +318,7 @@ export function CuttingPage({ resource }: { resource: string }) {
       {stopOpen ? <CutStopDialog resource={resource} reasons={reasons.data?.items ?? []} onCancel={() => setStopOpen(false)} onConfirm={(code, comment) => void action({ action: "Parada", stop_reason_code: code, comment })} /> : null}
       {historyOpen ? (
         <OperatorDialog title="Histórico do Corte" size="wide" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={() => setHistoryOpen(false)}>
-          {history.loading ? <LoadingState label="Carregando histórico…" /> : history.error ? <ErrorState error={history.error} onRetry={history.reload} /> : history.data?.items.length ? (
+          {history.loading ? <LoadingState label="Carregando histórico…" /> : history.error && !history.data ? <ErrorState error={history.error} onRetry={history.reload} /> : history.data?.items.length ? (
             <div className="table-scroll">
               <table>
                 <thead><tr><th>Tarefa</th><th>Programa / plano</th><th>Chapa / repetição</th><th>Máquina</th><th>OPs</th><th>Qtd.</th><th>Publicado SigmaNEST</th><th>Início</th><th>Fim</th><th>Realizado</th><th>Estado final</th></tr></thead>

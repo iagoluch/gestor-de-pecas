@@ -87,8 +87,6 @@ export function AppShell({ children }: PropsWithChildren) {
           })}
         </nav>
         <div className="sidebar__footer">
-          <ThemeToggle />
-          <LogoutButton />
           <div className="status-card">
             <div className="status-card__clock">
               <img src={assets.clock} alt="" aria-hidden="true" />
@@ -96,6 +94,10 @@ export function AppShell({ children }: PropsWithChildren) {
                 <SystemClock />
               </div>
             </div>
+          </div>
+          <div className="sidebar__quick-actions">
+            <ThemeToggle compact />
+            <LogoutButton compact />
           </div>
           <small className="sidebar__credit">Desenvolvido por:<br />Iago Luchtenberg da Silva</small>
         </div>

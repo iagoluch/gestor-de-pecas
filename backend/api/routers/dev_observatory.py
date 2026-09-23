@@ -32,6 +32,7 @@ from backend.api.dependencies.auth import require_dev_observatory_user
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
+from backend.integrations.totvs_soap import _arrived_through_public_host
 from backend.observability import metrics as metrics_module
 from backend.observability.shift_report import (
     build_report,
@@ -46,8 +47,34 @@ from mes.contracts import AnalyticsFilter
 from mes.services.frontend_facade import FrontendBackendFacade
 
 
-router = APIRouter(prefix="/dev-observatory", tags=["Dev Observatory"])
-page_router = APIRouter(prefix="/dev-observatory", include_in_schema=False)
+def _reject_if_public_host(request: Request) -> None:
+    """Ferramenta de desenvolvedor: nunca deve responder pelo túnel público.
+
+    Mesmo com login próprio (``require_dev_observatory_user``), esse login usa
+    credencial e segredo de sessão separados do principal — uma segunda linha
+    de defesa mais fraca por design. Bloquear no hostname publicado (mesmo
+    contrato de ``backend/integrations/totvs_soap.py``) impede que a superfície
+    fique exposta na internet mesmo se aquela credencial for adivinhada.
+    """
+
+    if _arrived_through_public_host(request):
+        raise AppError(
+            "dev_observatory_internal_only",
+            "O Dev Observatory responde somente na rede interna.",
+            status_code=403,
+        )
+
+
+router = APIRouter(
+    prefix="/dev-observatory",
+    tags=["Dev Observatory"],
+    dependencies=[Depends(_reject_if_public_host)],
+)
+page_router = APIRouter(
+    prefix="/dev-observatory",
+    include_in_schema=False,
+    dependencies=[Depends(_reject_if_public_host)],
+)
 
 PAGE_DIR = Path(__file__).resolve().parents[2] / "observability" / "page"
 

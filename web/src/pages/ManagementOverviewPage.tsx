@@ -52,7 +52,7 @@ export function ManagementOverviewPage() {
   };
 
   if (query.loading) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><LoadingState label="Carregando visão gerencial…" /></PageFrame>;
-  if (query.error) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   if (!query.data) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><EmptyState state="sem_registros" /></PageFrame>;
 
   const data = query.data;
@@ -62,7 +62,7 @@ export function ManagementOverviewPage() {
   const hasQuantityRecords = data.production.availability !== "sem_registros";
   const quantityText = (value: number) => hasQuantityRecords ? value.toLocaleString("pt-BR") : humanizeSystemState("sem_registros");
   return (
-    <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
+    <PageFrame staleError={query.error} sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
         <div className="metric-grid metric-grid--five">
           <MetricCard
             label="Produção boa"

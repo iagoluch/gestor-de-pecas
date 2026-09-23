@@ -121,7 +121,9 @@ export function ManagementChamadasPage() {
       </PageFrame>
     );
   }
-  const erroCarregamento = historicoQuery.error ?? (isAdmin ? contatosQuery.error : null);
+  const erroAtualizacao = historicoQuery.error ?? (isAdmin ? contatosQuery.error : null);
+  const semDados = !historicoQuery.data || (isAdmin && !contatosQuery.data);
+  const erroCarregamento = semDados ? erroAtualizacao : null;
   if (erroCarregamento) {
     return (
       <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
@@ -139,6 +141,7 @@ export function ManagementChamadasPage() {
       title={title}
       subtitle={subtitle}
       filters={false}
+      staleError={erroAtualizacao}
       actions={
         isAdmin ? (
           <button type="button" className="button button--primary" onClick={() => setEditando({ ...NOVO })}>

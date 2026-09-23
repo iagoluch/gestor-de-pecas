@@ -1,4 +1,5 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import { useRef, type PropsWithChildren, type ReactNode } from "react";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 
 export function OperatorDialog({
   title,
@@ -7,9 +8,12 @@ export function OperatorDialog({
   onCancel,
   size = "standard",
 }: PropsWithChildren<{ title: string; context?: ReactNode; onCancel: () => void; size?: "compact" | "standard" | "wide" }>) {
+  const sectionRef = useRef<HTMLElement>(null);
+  useDialogFocus(sectionRef, true, onCancel);
+
   return (
     <div className="operator-dialog-backdrop" role="presentation">
-      <section className={`operator-dialog operator-dialog--${size}`} role="dialog" aria-modal="true" aria-labelledby="operator-dialog-title">
+      <section ref={sectionRef} tabIndex={-1} className={`operator-dialog operator-dialog--${size}`} role="dialog" aria-modal="true" aria-labelledby="operator-dialog-title">
         <header>
           <h2 id="operator-dialog-title">{title}</h2>
           <button type="button" aria-label="Fechar" onClick={onCancel}>×</button>

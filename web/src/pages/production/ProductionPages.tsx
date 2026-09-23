@@ -55,7 +55,7 @@ export function ProductionOrdersPage() {
   const title = "Produção — Ordens de Produção";
   const subtitle = "Plano corporativo em leitura e execução real do Gestor, sem permitir edição do planejamento.";
   if (query.loading && !query.data) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar OP, produto ou recurso" />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   // Somatório das linhas já entregues pelo backend: apresentação, não regra.
   const orderTotals = (data?.items ?? []).reduce(
@@ -74,7 +74,7 @@ export function ProductionOrdersPage() {
     { planned: 0, good: 0, scrap: 0, attended: 0, balance: 0 },
   );
   return (
-    <PageFrame sectionId="production" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar OP, produto ou recurso" />}>
+    <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar OP, produto ou recurso" />}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Ordens no filtro" value={formatNumber(data?.page.total ?? 0)} />
         <MetricCard label="Quantidade planejada" value={formatNumber(orderTotals.planned)} detail="Somatório das OPs do filtro" accent="primary" />
@@ -113,7 +113,7 @@ export function ProductionCompletedPage() {
   const title = "Produção — Produção Realizada";
   const subtitle = "Somente peças boas compõem a produção; perdas permanecem em grandezas separadas.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const sectors = data?.sectors ?? [];
   const productionAvailability = data?.production.availability ?? "dados_insuficientes";
@@ -121,7 +121,7 @@ export function ProductionCompletedPage() {
   const quantityText = (value: number | null | undefined) => hasQuantityRecords ? formatNumber(value) : humanizeSystemState("sem_registros");
   const lossBase = Number(data?.production.good ?? 0) + Number(data?.production.scrap ?? 0);
   return (
-    <PageFrame sectionId="production" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Produção boa" value={quantityText(data?.production.good)} detail={data?.production.reason ?? undefined} availability={productionAvailability} accent="success" />
         <MetricCard label="Refugo" value={quantityText(data?.production.scrap)} availability={productionAvailability} accent="danger" />
@@ -161,7 +161,7 @@ export function ProductionPlanActualPage() {
   const title = "Produção — Planejado × Realizado";
   const subtitle = "Comparação somente leitura entre o plano corporativo e a execução registrada.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
   const comparison = rows.reduce(
     (acc, row) => ({
@@ -175,7 +175,7 @@ export function ProductionPlanActualPage() {
     { planned: 0, good: 0, scrap: 0, rework: 0, attended: 0, balance: 0 },
   );
   return (
-    <PageFrame sectionId="production" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Quantidade planejada" value={formatNumber(comparison.planned)} detail={`${formatNumber(query.data?.page.total ?? 0)} comparações no filtro`} accent="primary" />
         <MetricCard label="Realizado (boas)" value={formatNumber(comparison.good)} accent="success" />

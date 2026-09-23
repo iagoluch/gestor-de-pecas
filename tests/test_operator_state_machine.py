@@ -10,7 +10,7 @@ from mes.domain import (
 )
 from mes.services.operator_flow import OperatorFlowService
 from tests.fakes import FakeDatabase
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 class OperatorStateMachineTests(unittest.TestCase):

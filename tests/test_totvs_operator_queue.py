@@ -46,7 +46,7 @@ from mes.services.cut import CutService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.production import ProductionService
 from mes.services.quality import QualityInspectionService
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 ROOT = Path(__file__).resolve().parents[1]

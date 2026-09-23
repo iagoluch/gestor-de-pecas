@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time
 import logging
+import threading
+import time as time_module
 
 from mes.contracts import AnalyticsFilter
+from mes.domain.industrial import EventCategory
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.telegram_digest import canonical_sectors_for_panel
 from mes.services.telegram_intents import front_from_text, parse_telegram_intent
@@ -20,6 +23,15 @@ from mes.services.telegram_presenter import (
 
 
 LOGGER = logging.getLogger(__name__)
+
+# Tentativas de /vincular sem crachá válido, por chat — sem este freio, o
+# comando permite sondar números de crachá até acertar um vínculo alheio
+# (achado B1 da auditoria de segurança de 2026-09-23, mesmo espírito do
+# atraso de login em backend/api/routers/auth.py).
+_LINK_ATTEMPT_LIMIT = 5
+_LINK_ATTEMPT_WINDOW_SECONDS = 600
+_link_failures: dict[str, list[float]] = {}
+_link_failures_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -218,11 +230,20 @@ class TelegramFactoryBotService:
             (item for item in snapshot.get("sectors") or () if item.get("name") == expected),
             None,
         )
-        counts = {"production": 0, "downtime": 0, "setup": 0, "rework": 0}
+        # O estado de cada recurso vem com a categoria física canônica
+        # (``producao``/``parada``...), a mesma que o resumo do Andon traduz
+        # para estas chaves em ``AndonService``.
+        keys = {
+            EventCategory.PRODUCTION.value: "production",
+            EventCategory.DOWNTIME.value: "downtime",
+            EventCategory.SETUP.value: "setup",
+            EventCategory.REWORK.value: "rework",
+        }
+        counts = dict.fromkeys(keys.values(), 0)
         for resource in (panel or {}).get("resources") or ():
-            category = (resource.get("state") or {}).get("category")
-            if category in counts:
-                counts[category] += 1
+            key = keys.get((resource.get("state") or {}).get("category"))
+            if key is not None:
+                counts[key] += 1
         return counts
 
     def _production_data(self, front: str | None = None) -> dict:
@@ -265,16 +286,44 @@ class TelegramFactoryBotService:
         badge = rest.strip()
         if not badge:
             return self.presenter.link_badge(now=self._now())
+        if self._link_rate_limited(chat_id):
+            return self.presenter.link_badge(
+                now=self._now(),
+                message="Muitas tentativas de vínculo. Tente novamente em alguns minutos.",
+            )
         operator = self.db.vincular_telegram_operador(badge, chat_id)
         if operator is None:
+            self._register_link_failure(chat_id)
             return self.presenter.link_badge(
                 now=self._now(), message=f"Crachá {badge} não encontrado ou inativo."
             )
+        self._clear_link_failures(chat_id)
         return self.presenter.link_badge(
             now=self._now(), success=True,
             message=(f"Pronto, {operator.get('nome')}! Este chat foi vinculado ao crachá "
                      f"{operator.get('cracha')}."),
         )
+
+    @staticmethod
+    def _link_rate_limited(chat_id: str) -> bool:
+        now = time_module.monotonic()
+        with _link_failures_lock:
+            attempts = [t for t in _link_failures.get(chat_id, ()) if now - t <= _LINK_ATTEMPT_WINDOW_SECONDS]
+            _link_failures[chat_id] = attempts
+            return len(attempts) >= _LINK_ATTEMPT_LIMIT
+
+    @staticmethod
+    def _register_link_failure(chat_id: str) -> None:
+        now = time_module.monotonic()
+        with _link_failures_lock:
+            attempts = [t for t in _link_failures.get(chat_id, ()) if now - t <= _LINK_ATTEMPT_WINDOW_SECONDS]
+            attempts.append(now)
+            _link_failures[chat_id] = attempts
+
+    @staticmethod
+    def _clear_link_failures(chat_id: str) -> None:
+        with _link_failures_lock:
+            _link_failures.pop(chat_id, None)
 
     def _view_me(self, chat_id: str, _rest: str = "") -> TelegramView:
         operator = self._operator(chat_id)
@@ -283,19 +332,25 @@ class TelegramFactoryBotService:
             operator=operator, participations=participations, now=self._now()
         )
 
-    def _view_factory(self, _chat_id: str, _rest: str = "") -> TelegramView:
+    def _view_factory(self, chat_id: str, _rest: str = "") -> TelegramView:
+        if not self._operator(chat_id):
+            return self.presenter.link_badge(now=self._now())
         snapshot = self._snapshot()
         return self.presenter.factory(
             summary=snapshot.get("summary") or {}, stopped=self._stopped(snapshot),
             now=self._now(),
         )
 
-    def _view_production(self, _chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
+    def _view_production(self, chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
+        if not self._operator(chat_id):
+            return self.presenter.link_badge(now=self._now())
         return self.presenter.production(
             front=front, data=self._production_data(front), now=self._now()
         )
 
-    def _view_stops(self, _chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
+    def _view_stops(self, chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
+        if not self._operator(chat_id):
+            return self.presenter.link_badge(now=self._now())
         snapshot = self._snapshot()
         counts = {key: self._front_summary(snapshot, key)["downtime"] for key in FRONTS}
         counts["all"] = int((snapshot.get("summary") or {}).get("downtime") or 0)
@@ -307,7 +362,9 @@ class TelegramFactoryBotService:
     def _view_fronts(self, _chat_id: str, _rest: str = "") -> TelegramView:
         return self.presenter.fronts()
 
-    def _view_front(self, _chat_id: str, *, front: str) -> TelegramView:
+    def _view_front(self, chat_id: str, *, front: str) -> TelegramView:
+        if not self._operator(chat_id):
+            return self.presenter.link_badge(now=self._now())
         snapshot = self._snapshot()
         return self.presenter.front(
             front=front, summary=self._front_summary(snapshot, front),
@@ -315,6 +372,8 @@ class TelegramFactoryBotService:
         )
 
     def _view_resources(self, chat_id: str, rest: str = "", *, front: str | None = None) -> TelegramView:
+        if not self._operator(chat_id):
+            return self.presenter.link_badge(now=self._now())
         front = front or front_from_text(rest)
         if not front:
             return self._view_fronts(chat_id)

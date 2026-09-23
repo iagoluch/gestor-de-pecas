@@ -30,12 +30,15 @@ normal. Não há caminho paralelo.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
 from app.core.normalization import limpa_codigo
 from mes.integrations.totvs.errors import TotvsIntegrationError
+
+logger = logging.getLogger(__name__)
 
 
 # Estados finais devolvidos ao chamador. São de negócio, nunca técnicos: a Tela
@@ -514,13 +517,23 @@ class ProductionOrderOnDemandSyncService:
             try:
                 if not verificar_solda(codigo_op):
                     return
-            except Exception:  # pragma: no cover - checagem auxiliar nunca propaga
+            except Exception:  # noqa: BLE001 - checagem auxiliar nunca propaga, mas fica logada
+                logger.exception(
+                    "Falha ao checar operação de Solda da OP %s ao sincronizar modelo do produto %s (best-effort)",
+                    codigo_op,
+                    produto_codigo,
+                )
                 return
         try:
             result = self.model_gateway.request_product_model(
                 company_id=self.company_id, branch_id=self.branch_id, product_code=produto_codigo
             )
-        except Exception:  # pragma: no cover - falha de transporte nunca propaga
+        except Exception:  # noqa: BLE001 - falha de transporte nunca propaga, mas fica logada
+            logger.exception(
+                "Falha ao consultar modelo do produto %s no TOTVS (best-effort, OP %s)",
+                produto_codigo,
+                codigo_op,
+            )
             return
         if not result.accepted:
             return
@@ -529,7 +542,12 @@ class ProductionOrderOnDemandSyncService:
             return
         try:
             atualizar(produto_codigo, result.modelo or "")
-        except Exception:  # pragma: no cover - gravação auxiliar nunca propaga
+        except Exception:  # noqa: BLE001 - gravação auxiliar nunca propaga, mas fica logada
+            logger.exception(
+                "Falha ao gravar modelo do produto %s obtido do TOTVS (best-effort, OP %s)",
+                produto_codigo,
+                codigo_op,
+            )
             return
 
     def _lookup_incomplete_header(self, codigo: str) -> dict | None:

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import json
+import logging
 
 from psycopg.types.json import Jsonb
 
@@ -25,6 +26,9 @@ from mes.integrations.totvs.outbox import (
     OutboxStatus,
     next_attempt_at,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 OUTBOX_COLUMNS = """
@@ -293,17 +297,36 @@ class TotvsOutboxRepositoryMixin:
         ``next_attempt_at`` recebe o backoff crescente quando o item volta para
         ``RETRY``. ``idempotency_key`` e ``payload_xml`` nunca são tocados: a
         mensagem lógica continua a mesma.
+
+        Só conclui enquanto a reserva ainda é deste worker (``SENDING`` com o
+        mesmo ``lease_owner``). Se o lease expirou e o item já foi recuperado
+        ou re-reservado por outro worker, devolve ``None`` sem gravar nada: o
+        dono atual da reserva decide o desfecho e a entrega continua *at least
+        once* com a mesma ``idempotency_key``.
         """
 
         instante = (now or self._now()).replace(microsecond=0)
         final = _status_value(status)
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT attempts FROM totvs_outbox WHERE id = %s FOR UPDATE",
-                (int(outbox_id),),
+                """
+                SELECT attempts FROM totvs_outbox
+                WHERE id = %(id)s
+                  AND status = 'SENDING'
+                  AND (%(worker)s::text IS NULL OR lease_owner = %(worker)s::text)
+                FOR UPDATE
+                """,
+                {"id": int(outbox_id), "worker": worker},
             )
             current = cursor.fetchone()
             if current is None:
+                logger.warning(
+                    "Conclusão do item %s da outbox TOTVS descartada: a reserva "
+                    "não pertence mais ao worker %s (lease expirado ou item "
+                    "re-reservado).",
+                    outbox_id,
+                    worker,
+                )
                 return None
             tentativas = int(current["attempts"] or 0)
             proximo = (

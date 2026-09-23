@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections import Counter
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -14,6 +15,8 @@ from backend.api.dependencies.filters import PageParams, analytics_filter, pagin
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 
+
+LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/operations", tags=["Consulta operacional"])
 
@@ -127,6 +130,7 @@ async def stream(
     refresh_seconds = interval or request.app.state.settings.stream_interval_seconds
 
     async def events():
+        falhando = False
         while True:
             if await request.is_disconnected():
                 break
@@ -137,10 +141,15 @@ async def stream(
                     incluir_recursos_sem_demanda_de_contas=True,
                 )
                 data = json.dumps(jsonable_encoder(snapshot), ensure_ascii=False, separators=(",", ":"))
+                falhando = False
                 yield f"event: snapshot\ndata: {data}\n\n"
             except asyncio.CancelledError:
                 break
             except Exception:
+                # Uma entrada por episódio de falha, não uma a cada intervalo.
+                if not falhando:
+                    LOGGER.exception("Falha ao montar snapshot do stream operacional")
+                falhando = True
                 yield "event: error\ndata: {\"code\":\"stream_unavailable\",\"message\":\"Atualização temporariamente indisponível.\"}\n\n"
             await asyncio.sleep(refresh_seconds)
 

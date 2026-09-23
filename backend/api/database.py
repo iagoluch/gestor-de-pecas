@@ -57,6 +57,10 @@ class DatabaseManager:
                 "schema_version": schema_version,
             }
         except Exception as exc:
+            # Loga só a transição para indisponível: o health é consultado em
+            # polling e repetir o mesmo aviso a cada chamada só gera ruído.
+            if self._last_error is None:
+                logging.warning("Health do PostgreSQL falhou: %s", exc)
             self._last_error = exc
             return {
                 "status": "unavailable",

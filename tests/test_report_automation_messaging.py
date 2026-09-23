@@ -86,7 +86,7 @@ class ReportAutomationMessagingTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             closed_report_period("quinzenal", local),
-            (datetime(2026, 8, 12), datetime(2026, 8, 26)),
+            (datetime(2026, 8, 1), datetime(2026, 8, 16)),
         )
 
     async def test_restart_e_multiplos_ciclos_nao_duplicam_arquivo_nem_envio(self):

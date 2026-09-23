@@ -25,10 +25,17 @@ def closed_report_period(frequency: str, local_now: datetime) -> tuple[datetime,
     if normalized == "semanal":
         return week_start - timedelta(days=7), week_start
     if normalized == "quinzenal":
-        # Janela corrida de 14 dias terminando hoje, não o calendário
-        # 1-15/16-fim de mês: mais simples e sempre compara o mesmo tamanho
-        # de período mês a mês.
-        return today - timedelta(days=14), today
+        # Quinzena fechada do calendário (1-15 / 16-fim do mês anterior),
+        # mesmo padrão de janela fixa das demais frequências — evita que a
+        # chave de idempotência mude todo dia (bug: janela móvel de 14 dias
+        # disparava o envio diariamente em vez de 2x/mês).
+        if current.day <= 15:
+            first_half_start = today.replace(day=1)
+            second_half_start = first_half_start - timedelta(days=1)
+            second_half_start = second_half_start.replace(day=16)
+            return second_half_start, first_half_start
+        second_half_start = today.replace(day=16)
+        return today.replace(day=1), second_half_start
     if normalized == "mensal":
         month_end = today.replace(day=1)
         return (month_end - timedelta(days=1)).replace(day=1), month_end
@@ -46,7 +53,10 @@ class ReportScheduler:
         if utc_now.tzinfo is None:
             utc_now = utc_now.replace(tzinfo=timezone.utc)
         results: list[dict] = []
-        for schedule in self.repository.listar_agendamentos_relatorio(enabled_only=True):
+        agendamentos = await asyncio.to_thread(
+            self.repository.listar_agendamentos_relatorio, enabled_only=True
+        )
+        for schedule in agendamentos:
             schedule_id = int(schedule["id"])
             try:
                 try:

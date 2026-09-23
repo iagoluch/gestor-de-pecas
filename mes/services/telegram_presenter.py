@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 
+from mes.domain.industrial import EventCategory
+
 
 FRONTS = {
     "corte": ("✂️", "Corte"),
@@ -357,8 +359,8 @@ class TelegramPresenter:
         icon, label = FRONTS[front]
         lines = _header(icon, f"Recursos · {label}")
         state_icons = {
-            "production": "🟢", "downtime": "🔴", "setup": "🟡",
-            "rework": "🟡", "queue": "⚪", "out_of_shift": "⚪",
+            EventCategory.PRODUCTION.value: "🟢", EventCategory.DOWNTIME.value: "🔴",
+            EventCategory.SETUP.value: "🟡", EventCategory.REWORK.value: "🟡",
         }
         if not items:
             lines.append("⚪ Nenhum recurso cadastrado neste setor.")

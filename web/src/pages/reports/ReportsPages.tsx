@@ -167,8 +167,8 @@ function ReportPage({ type }: { type: ReportType }) {
   const query = useApiQuery<JsonRecord>(`/api/v1/reports/${type}?${filters.query}`);
   const copy = labels[type];
   if (query.loading) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}><LoadingState /></PageFrame>;
-  if (query.error) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
-  return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}>{query.data ? <ReportContent type={type} payload={query.data} /> : <EmptyState />}</PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  return <PageFrame staleError={query.error} sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}>{query.data ? <ReportContent type={type} payload={query.data} /> : <EmptyState />}</PageFrame>;
 }
 
 export const ManagementReportPage = () => <ReportPage type="gerencial" />;

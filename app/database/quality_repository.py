@@ -802,6 +802,20 @@ class QualityRepositoryMixin:
             )
             return _rows(cursor)
 
+    def buscar_inspecao_da_peca(self, peca_id):
+        """Inspeção dona de uma peça, para revalidar o recorte de setor na leitura."""
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT s.* FROM qualidade_pecas_inspecionadas p
+                JOIN qualidade_inspecoes s ON s.id = p.inspecao_id
+                WHERE p.id = %s
+                """,
+                (int(peca_id),),
+            )
+            return _as_dict(cursor.fetchone())
+
     # Setor de origem de uma inspeção já aberta. A sessão passou a **gravar** a
     # origem na abertura (é o que permite revalidar o recorte de setor na
     # escrita); a derivação pelo roteiro fica como retaguarda das linhas

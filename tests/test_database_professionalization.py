@@ -23,7 +23,7 @@ from mes.contracts import AnalyticsFilter
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.production import ProductionService
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
@@ -1128,6 +1128,39 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         self.assertTrue(self.db.despachar_tarefa(task_id, "IAGO"))
         self.assertEqual(self.db.buscar_tarefa_por_id(task_id)["status"], "Despachado")
         self.assertEqual(self.db.get_current_ops()[0]["setor"], "Romi 300")
+
+    def test_migration_43_semeia_pausas_dos_cinco_setores_da_solda(self):
+        for setor in ("Solda Aço", "Solda Alumínio", "Solda Robô", "Proj. Ferramentaria", "Protótipo"):
+            pausas = self.db.listar_pausas_automaticas(tipo_setor=setor)
+            self.assertEqual(
+                [p["nome"] for p in pausas], ["Almoço", "Café"], msg=f"setor: {setor}"
+            )
+
+    def test_novo_setor_ganha_pausas_padrao_ao_entrar_no_catalogo(self):
+        self.db.publicar_recursos_pcfactory(
+            [{"codigo": "R-SETOR-NOVO", "nome": "Recurso Setor Novo", "tipo_setor": "Setor Inédito"}],
+            fonte="teste_auto_provisionamento",
+        )
+        pausas = self.db.listar_pausas_automaticas(tipo_setor="Setor Inédito")
+        self.assertEqual([p["nome"] for p in pausas], ["Almoço", "Café"])
+        self.assertEqual(str(pausas[0]["hora_inicio"])[:5], "12:10")
+
+    def test_setor_ja_configurado_nao_eh_sobrescrito_por_novo_recurso(self):
+        self.db.salvar_pausa_automatica(
+            tipo_setor="Setor Gerenciado", nome="Almoço",
+            hora_inicio="13:00", hora_fim="13:30", ordem=1,
+        )
+        self.db.salvar_pausa_automatica(
+            tipo_setor="Setor Gerenciado", nome="Café",
+            hora_inicio="16:00", hora_fim="16:10", ativo=False, ordem=2,
+        )
+        self.db.publicar_recursos_pcfactory(
+            [{"codigo": "R-SETOR-GERENCIADO", "nome": "Outro Recurso", "tipo_setor": "Setor Gerenciado"}],
+            fonte="teste_auto_provisionamento",
+        )
+        pausas = self.db.listar_pausas_automaticas(tipo_setor="Setor Gerenciado", somente_ativas=False)
+        self.assertEqual(len(pausas), 2)
+        self.assertEqual(str(pausas[0]["hora_inicio"])[:5], "13:00")
 
 
 def datetime_from(text):

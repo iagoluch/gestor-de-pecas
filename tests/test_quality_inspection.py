@@ -42,7 +42,7 @@ from mes.integrations.totvs.service import TotvsProductionOrderIngestionService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.quality import QualityInspectionService
 from tests.fakes import FakeDatabase
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -330,6 +330,13 @@ class QualityRuleTests(unittest.TestCase):
             medidas=_medidas(("125,0", "CONFORME")),
         )
         self.assertTrue(registrada.ok, registrada.message)
+
+        # Regressão IDOR M2: a leitura da rastreabilidade de uma peça também
+        # revalida o setor dono, não apenas a escrita — trocar o peca_id na
+        # URL não pode vazar a medição de outro setor.
+        peca_id = self.db.listar_pecas_inspecionadas(estado["id"])[0]["id"]
+        self.assertIsNone(intruso.detalhar_peca(peca_id))
+        self.assertIsNotNone(dono.detalhar_peca(peca_id))
 
     def test_inspecao_legada_sem_origem_continua_visivel_a_todos(self):
         """Linha anterior à migração não bloqueia o operador que a assumir."""

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 import unittest
 
 from app.core.operator_sectors import (
@@ -27,14 +28,20 @@ from app.core.operator_sectors import (
 )
 from app.core.resource_mapping import station_matches_route, station_resource_code
 from mes.contracts import AnalyticsFilter, ReportError
-from mes.domain.quality_measures import evaluate_measure, parse_tolerance
+from mes.domain.quality_measures import (
+    cota_publica,
+    evaluate_measure,
+    parse_decimal,
+    parse_tolerance,
+    resolve_checklist_measures,
+)
 from mes.services.frontend_facade import FACADE_REPORT_TYPES, FrontendBackendFacade
 from mes.services.management import ManagementService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.operator_participation import OperatorParticipationService
 from mes.services.traceability import TraceabilityService
 from tests.fakes import FakeDatabase
-from tests.wave5_helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca
 
 
 def _servico_com_roteiro(*, primeira_peca_liberada=True):
@@ -378,6 +385,152 @@ class ConformidadeAutomaticaTests(unittest.TestCase):
             evaluate_measure("12.1", "12.0 ± 0.2").status,
             evaluate_measure("12,1", "12,0 +/- 0,2").status,
         )
+
+
+class ParseDecimalTests(unittest.TestCase):
+    """`parse_decimal` é a base de toda a conformidade automática: se ela
+    aceitar ou recusar o texto errado, o resto do cálculo herda o erro."""
+
+    def test_none_e_vazio_nao_sao_numero(self):
+        self.assertIsNone(parse_decimal(None))
+        self.assertIsNone(parse_decimal(""))
+        self.assertIsNone(parse_decimal("   "))
+
+    def test_texto_nao_numerico_e_recusado(self):
+        self.assertIsNone(parse_decimal("abc"))
+        self.assertIsNone(parse_decimal("12,0,0"))
+        self.assertIsNone(parse_decimal("1e5"))  # notação científica não é aceita
+
+    def test_inteiro_e_decimal_passam_direto(self):
+        self.assertEqual(parse_decimal(12), Decimal(12))
+        valor = Decimal("3.5")
+        self.assertIs(parse_decimal(valor), valor)
+
+    def test_numero_negativo_com_virgula_ou_ponto(self):
+        self.assertEqual(parse_decimal("-12,5"), Decimal("-12.5"))
+        self.assertEqual(parse_decimal("-12.5"), Decimal("-12.5"))
+
+    def test_espacos_nas_bordas_sao_ignorados(self):
+        self.assertEqual(parse_decimal("  12,5  "), Decimal("12.5"))
+
+
+class ParseToleranceEdgeCasesTests(unittest.TestCase):
+    """Casos de borda do padrão cadastrado que a Melhoria 1 depende."""
+
+    def test_margem_negativa_no_padrao_vira_valor_absoluto(self):
+        # "12,0 +/- -0,2" é um padrão mal digitado, mas a margem não pode
+        # inverter o sentido da faixa (limite inferior > superior).
+        referencia, margem = parse_tolerance("12,0 +/- -0,2")
+        self.assertEqual(referencia, Decimal("12.0"))
+        self.assertEqual(margem, Decimal("0.2"))
+
+    def test_referencia_negativa(self):
+        referencia, margem = parse_tolerance("-5,0 +/- 0,5")
+        self.assertEqual(referencia, Decimal("-5.0"))
+        self.assertEqual(margem, Decimal("0.5"))
+        self.assertEqual(
+            evaluate_measure("-4,6", "-5,0 +/- 0,5").status, "CONFORME"
+        )
+        self.assertEqual(
+            evaluate_measure("-4,4", "-5,0 +/- 0,5").status, "NAO_CONFORME"
+        )
+
+    def test_padrao_vazio_ou_so_espaco_nao_e_numerico(self):
+        self.assertIsNone(parse_tolerance(""))
+        self.assertIsNone(parse_tolerance("   "))
+        self.assertIsNone(parse_tolerance(None))
+
+    def test_margem_com_texto_invalido_recusa_o_padrao_inteiro(self):
+        self.assertIsNone(parse_tolerance("12,0 +/- abc"))
+        self.assertIsNone(parse_tolerance("abc +/- 0,2"))
+
+
+class ResolveChecklistMeasuresTests(unittest.TestCase):
+    """`resolve_checklist_measures` é a autoridade única do checklist
+    (Qualidade e portão de primeira peça consomem a mesma função) e não
+    tinha nenhum teste direto antes desta rodada."""
+
+    TEMPLATE = [
+        {"id": 1, "sequencia": 1, "descricao": "Cota A", "padrao": "12,0 +/- 0,2"},
+        {"id": 2, "sequencia": 2, "descricao": "Cota B", "padrao": "conforme gabarito"},
+    ]
+
+    def test_medidas_dentro_e_fora_da_faixa(self):
+        medidas = [
+            {"sequencia": 1, "medida": "12,1"},
+            {"sequencia": 2, "medida": "ok", "status": "Conforme"},
+        ]
+        resolvidas, erro = resolve_checklist_measures(self.TEMPLATE, medidas)
+        self.assertIsNone(erro)
+        self.assertEqual(resolvidas[0]["status"], "CONFORME")
+        self.assertEqual(resolvidas[1]["status"], "CONFORME")
+
+    def test_cota_do_template_sem_medida_informada_e_erro_do_cliente(self):
+        medidas = [{"sequencia": 1, "medida": "12,1"}]
+        resolvidas, erro = resolve_checklist_measures(self.TEMPLATE, medidas)
+        self.assertIsNone(resolvidas)
+        self.assertEqual(erro.code, "qualidade_medida_ausente")
+
+    def test_medida_de_cota_fora_do_template_e_recusada(self):
+        medidas = [
+            {"sequencia": 1, "medida": "12,1"},
+            {"sequencia": 2, "medida": "ok", "status": "Conforme"},
+            {"sequencia": 99, "medida": "1,0"},
+        ]
+        resolvidas, erro = resolve_checklist_measures(self.TEMPLATE, medidas)
+        self.assertIsNone(resolvidas)
+        self.assertEqual(erro.code, "qualidade_cota_desconhecida")
+
+    def test_sequencia_nao_numerica_e_erro_do_cliente_nao_excecao(self):
+        medidas = [{"sequencia": "abc", "medida": "12,1"}]
+        resolvidas, erro = resolve_checklist_measures(self.TEMPLATE, medidas)
+        self.assertIsNone(resolvidas)
+        self.assertEqual(erro.code, "qualidade_medida_invalida")
+
+    def test_padrao_texto_livre_sem_status_do_cliente_e_recusado(self):
+        # Cota B não tem padrão numérico; sem status explícito não há como
+        # calcular a conformidade, e a função não pode inventar um valor.
+        medidas = [
+            {"sequencia": 1, "medida": "12,1"},
+            {"sequencia": 2, "medida": "ok"},
+        ]
+        resolvidas, erro = resolve_checklist_measures(self.TEMPLATE, medidas)
+        self.assertIsNone(resolvidas)
+        self.assertEqual(erro.code, "qualidade_status_cota_invalido")
+
+    def test_padrao_vira_snapshot_da_cota_resolvida(self):
+        medidas = [
+            {"sequencia": 1, "medida": "12,1"},
+            {"sequencia": 2, "medida": "ok", "status": "Conforme"},
+        ]
+        resolvidas, _ = resolve_checklist_measures(self.TEMPLATE, medidas)
+        self.assertEqual(resolvidas[0]["padrao"], "12,0 +/- 0,2")
+        self.assertEqual(resolvidas[0]["unidade"], "mm")
+
+
+class CotaPublicaTests(unittest.TestCase):
+    """Projeção da cota que a tela consome sem recalcular nada."""
+
+    def test_cota_com_padrao_numerico_expoe_limites(self):
+        publica = cota_publica(
+            {"id": 1, "sequencia": 1, "descricao": "Cota A", "padrao": "12,0 +/- 0,2"}
+        )
+        self.assertEqual(publica["limite_inferior"], 11.8)
+        self.assertEqual(publica["limite_superior"], 12.2)
+        self.assertTrue(publica["conformidade_automatica"])
+
+    def test_cota_com_padrao_texto_livre_nao_tem_limites(self):
+        publica = cota_publica(
+            {"id": 2, "sequencia": 2, "descricao": "Cota B", "padrao": "gabarito"}
+        )
+        self.assertIsNone(publica["limite_inferior"])
+        self.assertIsNone(publica["limite_superior"])
+        self.assertFalse(publica["conformidade_automatica"])
+
+    def test_cota_none_nao_quebra(self):
+        publica = cota_publica(None)
+        self.assertIsNone(publica["padrao"])
+        self.assertFalse(publica["conformidade_automatica"])
 
 
 # ---------------------------------------------------------------------------

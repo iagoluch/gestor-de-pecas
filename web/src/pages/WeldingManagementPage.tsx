@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useForceLightTheme } from "../hooks/useForceLightTheme";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
 import type {
@@ -647,10 +648,26 @@ const MANAGER_TABS = [
 type ManagerTabId = (typeof MANAGER_TABS)[number]["id"];
 
 export function WeldingManagementPage() {
+  useForceLightTheme();
   const { user } = useAuth();
   const query = useApiQuery<WeldingManagementSnapshot>("/api/v1/welding", { ignoreLiveTick: true });
   const realtime = useRealtimeStatus();
   const [tab, setTab] = useState<ManagerTabId>("geral");
+  // Padrão WAI-ARIA de abas: setas/Home/End movem a seleção e o foco.
+  function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const index = MANAGER_TABS.findIndex((item) => item.id === tab);
+    const last = MANAGER_TABS.length - 1;
+    const next = event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+      : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+      : event.key === "Home" ? 0
+      : event.key === "End" ? last
+      : null;
+    if (next === null) return;
+    event.preventDefault();
+    const target = MANAGER_TABS[next].id;
+    setTab(target);
+    document.getElementById(`welding-tab-${target}`)?.focus();
+  }
   // O ciclo da TV é o mesmo mecanismo do Andon: só o perfil dedicado alterna.
   const isTelevision = useTvRotation("/welding-management");
   const pageClass = `welding-page ${isTelevision || user?.role === "andon" ? "welding-page--tv" : "welding-page--manager"}`;
@@ -707,7 +724,7 @@ export function WeldingManagementPage() {
       ) : null}
       {isTelevision ? macros : (
         <>
-          <div className="welding-tabs" role="tablist" aria-label="Visões do acompanhamento da Solda">
+          <div className="welding-tabs" role="tablist" aria-label="Visões do acompanhamento da Solda" onKeyDown={onTabKeyDown}>
             {MANAGER_TABS.map((item) => (
               <button
                 key={item.id}
@@ -716,6 +733,7 @@ export function WeldingManagementPage() {
                 id={`welding-tab-${item.id}`}
                 aria-controls={`welding-panel-${item.id}`}
                 aria-selected={tab === item.id}
+                tabIndex={tab === item.id ? 0 : -1}
                 className={tab === item.id ? "welding-tab welding-tab--active" : "welding-tab"}
                 onClick={() => setTab(item.id)}
               >

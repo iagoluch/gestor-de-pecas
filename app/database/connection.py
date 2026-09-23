@@ -5,44 +5,10 @@ import logging
 import threading
 
 from psycopg import OperationalError
-from psycopg.pq import TransactionStatus
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool, PoolTimeout
 
 from app.database.errors import DatabaseUnavailableError
-
-
-class _ConnectionLease:
-    """Compatibility handle whose close() returns the connection to the pool."""
-
-    def __init__(self, manager, connection):
-        self._manager = manager
-        self._connection = connection
-        self._closed = False
-
-    def __getattr__(self, name):
-        return getattr(self._connection, name)
-
-    def close(self):
-        if self._closed:
-            return
-        try:
-            if self._connection.info.transaction_status != TransactionStatus.IDLE:
-                self._connection.rollback()
-        finally:
-            self._manager.put_connection(self._connection)
-            self._closed = True
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        if exc_type is None:
-            self._connection.commit()
-        else:
-            self._connection.rollback()
-        self.close()
-        return False
 
 
 class PostgresPoolManager:
@@ -134,25 +100,6 @@ class PostgresPoolManager:
         except OperationalError as exc:
             logging.exception("Conexão PostgreSQL perdida")
             raise DatabaseUnavailableError("A conexão com o PostgreSQL foi perdida.") from exc
-
-    def get_connection(self):
-        if self._closed:
-            raise DatabaseUnavailableError("O pool PostgreSQL está encerrado.")
-        try:
-            return _ConnectionLease(
-                self,
-                self.pool.getconn(timeout=self.config.pool_timeout),
-            )
-        except PoolTimeout as exc:
-            raise DatabaseUnavailableError("Tempo esgotado aguardando conexão PostgreSQL.") from exc
-        except OperationalError as exc:
-            raise DatabaseUnavailableError("Não foi possível obter conexão PostgreSQL.") from exc
-
-    def put_connection(self, connection):
-        if self._closed:
-            connection.close()
-            return
-        self.pool.putconn(connection)
 
     def close(self):
         with self._lock:

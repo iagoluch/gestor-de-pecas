@@ -151,7 +151,7 @@ export function ManagementPausesPage() {
   if (query.loading && !query.data) {
     return <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}><LoadingState /></PageFrame>;
   }
-  if (query.error) {
+  if (query.error && !query.data) {
     return <PageFrame sectionId="panels" title={title} subtitle={subtitle} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   }
 
@@ -164,7 +164,7 @@ export function ManagementPausesPage() {
   const mostrarTipo = filtradas.some((item) =>
     tipoDaPausa(item.nome).label.toLocaleLowerCase("pt-BR") !== item.nome.trim().toLocaleLowerCase("pt-BR"));
   return (
-    <PageFrame
+    <PageFrame staleError={query.error}
       sectionId="panels"
       title={title}
       subtitle={subtitle}

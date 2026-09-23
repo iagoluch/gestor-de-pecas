@@ -724,12 +724,15 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         </aside>
       </div>
       <p className="operator-notice" role="status">{message}</p>
-      {cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error ? <ErrorState error={cards.error} onRetry={cards.reload} /> : (
-        <div className="operator-card-columns">
-          <CardSection title="Produção" items={cards.data?.production ?? []} emptyTitle="Nenhuma OP em produção" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} />
-          <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />
-          <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
-        </div>
+      {cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error && !cards.data ? <ErrorState error={cards.error} onRetry={cards.reload} /> : (
+        <>
+          {cards.error ? <p className="operator-notice operator-notice--stale" role="alert">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</p> : null}
+          <div className="operator-card-columns">
+            <CardSection title="Produção" items={cards.data?.production ?? []} emptyTitle="Nenhuma OP em produção" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} />
+            <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />
+            <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
+          </div>
+        </>
       )}
 
       {dialog?.kind === "route" ? (

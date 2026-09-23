@@ -275,6 +275,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_quatro_frentes_atualizar_voltar_e_menu(self):
         service = _fake_service()
+        service.handle_update(_update("/vincular 1"))
         for front in ("corte", "solda", "pintura", "caldeiraria"):
             reply = service.handle_update(_callback(f"gp:front:{front}"))
             callbacks = {button["callback_data"] for row in reply.reply_markup["inline_keyboard"] for button in row}
@@ -287,6 +288,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_botao_recursos_lista_recursos_do_setor(self):
         service = _fake_service()
+        service.handle_update(_update("/vincular 1"))
         reply = service.handle_update(_callback("gp:res:corte"))
         self.assertIn("Recursos · Corte", reply.text)
         self.assertIn("LASER &lt;01&gt;", reply.text)
@@ -294,8 +296,21 @@ class CommandRoutingTests(unittest.TestCase):
         self.assertIn("gp:res:corte", callbacks)
         self.assertIn("gp:front:corte", callbacks)
 
+    def test_frente_conta_e_colore_recursos_pela_categoria_canonica_do_andon(self):
+        service = _fake_service()
+        service.handle_update(_update("/vincular 1"))
+        snapshot = _BotFacade.andon(None)
+        self.assertEqual(
+            service._front_summary(snapshot, "corte"),
+            {"production": 0, "downtime": 1, "setup": 0, "rework": 0},
+        )
+        self.assertEqual(service._front_summary(snapshot, "caldeiraria")["production"], 2)
+        reply = service.handle_update(_callback("gp:res:corte"))
+        self.assertIn("🔴 <b>LASER &lt;01&gt;</b>", reply.text)
+
     def test_comando_recursos_aceita_frente_por_texto_e_pede_frente_quando_ausente(self):
         service = _fake_service()
+        service.handle_update(_update("/vincular 1"))
         reply = service.handle_update(_update("/recursos solda"))
         self.assertIn("Recursos · Solda", reply.text)
         self.assertIn("Solda 01", reply.text)
@@ -304,25 +319,88 @@ class CommandRoutingTests(unittest.TestCase):
         self.assertIn("Escolha uma frente", sem_frente.text)
 
     def test_html_dinamico_e_escapado(self):
-        reply = _fake_service().handle_update(_update("/fabrica"))
+        service = _fake_service()
+        service.handle_update(_update("/vincular 1"))
+        reply = service.handle_update(_update("/fabrica"))
         self.assertIn("LASER &lt;01&gt;", reply.text)
         self.assertIn("Manutenção &amp; ajuste", reply.text)
         self.assertNotIn("LASER <01>", reply.text)
 
     def test_linguagem_natural_e_intent_desconhecida(self):
         service = _fake_service()
+        service.handle_update(_update("/vincular 1"))
         cases = {
             "como tá a fábrica?": "Status da fábrica",
             "tem parada no corte?": "Paradas · Corte",
             "produção da solda": "Produção · Solda",
             "recursos da solda": "Recursos · Solda",
             "como está a pintura?": "Pintura",
-            "meu status": "Vincular crachá",
+            "meu status": "Meu status",
             "o que você sabe fazer?": "Ajuda",
             "frase que não conheço": "Menu principal",
         }
         for text, expected in cases.items():
             self.assertIn(expected, service.handle_update(_update(text)).text)
+
+
+class LinkRateLimitTests(unittest.TestCase):
+    """`/vincular` tem freio de 5 tentativas falhas por 10 min por chat
+    (`_link_rate_limited`/`_register_link_failure`/`_clear_link_failures`,
+    mes/services/telegram_bot.py). O estado é um dict a nível de módulo
+    compartilhado entre testes no mesmo processo — cada teste usa um
+    chat_id próprio para não herdar contagem de outro teste."""
+
+    def setUp(self):
+        import mes.services.telegram_bot as telegram_bot_module
+
+        self._module = telegram_bot_module
+        self._chat_id = f"rate-limit-{id(self)}"
+
+    def tearDown(self):
+        self._module._link_failures.pop(self._chat_id, None)
+
+    def test_quinta_tentativa_com_cracha_errado_ainda_passa_sexta_e_bloqueada(self):
+        service = _fake_service()
+        for _ in range(5):
+            reply = service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
+            self.assertIn("não encontrado", reply.text)
+
+        bloqueado = service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
+        self.assertIn("Muitas tentativas de vínculo", bloqueado.text)
+
+    def test_bloqueio_tambem_recusa_cracha_correto(self):
+        service = _fake_service()
+        for _ in range(5):
+            service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
+
+        reply = service.handle_update(_update("/vincular 1", chat_id=self._chat_id))
+        self.assertIn("Muitas tentativas de vínculo", reply.text)
+        self.assertIsNone(service.db.buscar_operador_por_telegram(self._chat_id))
+
+    def test_vinculo_bem_sucedido_limpa_o_historico_de_falhas(self):
+        service = _fake_service()
+        for _ in range(4):
+            service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
+
+        sucesso = service.handle_update(_update("/vincular 1", chat_id=self._chat_id))
+        self.assertIn("Pronto", sucesso.text)
+
+        # Falhas seguintes recomeçam a contagem do zero, não herdam as 4 antigas.
+        for _ in range(4):
+            reply = service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
+            self.assertIn("não encontrado", reply.text)
+
+    def test_contagem_de_falhas_e_isolada_por_chat(self):
+        service = _fake_service()
+        outro_chat = f"{self._chat_id}-outro"
+        try:
+            for _ in range(5):
+                service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
+
+            reply = service.handle_update(_update("/vincular 1", chat_id=outro_chat))
+            self.assertIn("Pronto", reply.text)
+        finally:
+            self._module._link_failures.pop(outro_chat, None)
 
 
 class IntentParserTests(unittest.TestCase):
@@ -342,7 +420,7 @@ class DigestPeriodTests(unittest.TestCase):
         # (já coberto em tests/test_report_automation_messaging.py).
         local = datetime(2026, 9, 16, 19, 0)
         start, end = closed_report_period("quinzenal", local)
-        self.assertEqual((end - start).days, 14)
+        self.assertEqual((start, end), (datetime(2026, 9, 1), datetime(2026, 9, 16)))
 
 
 class _FakeFacade:
@@ -542,6 +620,42 @@ class DigestSchedulerTests(unittest.TestCase):
                 "diario", "quinzenal", "mensal",
                 "diario:corte", "quinzenal:corte", "mensal:corte",
             },
+        )
+
+    def test_falha_em_um_destino_nao_bloqueia_os_demais(self):
+        db = _DigestDb()
+        sent = []
+
+        def sender(**message):
+            if message["chat_id"] == "-1000":
+                raise RuntimeError("falha simulada")
+            sent.append(message)
+            return True
+
+        scheduler = TelegramFactoryDigestScheduler(
+            db,
+            bot_token="token",
+            destinations=(
+                DigestDestination("global", "Fábrica", "-1000"),
+                DigestDestination("corte", "Corte", "-1001", ("Corte",)),
+            ),
+            run_time=time(18, 0),
+            timezone=ZoneInfo("America/Sao_Paulo"),
+            now_func=lambda: datetime(2026, 9, 16, 19, 0),
+            sender=sender,
+        )
+        scheduler.facade = _FakeFacade()
+        now = datetime(2026, 9, 16, 19, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+        with self.assertLogs("mes.services.telegram_digest", level="ERROR"):
+            outcomes = scheduler.run_due(local_now=now)
+
+        self.assertEqual(len(outcomes), 6)
+        self.assertEqual(len(sent), 3)
+        self.assertTrue(all(o.reason == "erro" for o in outcomes if o.destination == "global"))
+        self.assertTrue(all(o.sent for o in outcomes if o.destination == "corte"))
+        self.assertEqual(
+            set(db.sent_periods), {"diario:corte", "quinzenal:corte", "mensal:corte"}
         )
 
 

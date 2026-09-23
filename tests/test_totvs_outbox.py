@@ -851,6 +851,41 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
         historico = self.db.listar_tentativas_outbound_totvs(item["id"])
         self.assertEqual([row["outcome"] for row in historico], ["abandonado"])
 
+    def test_worker_com_lease_perdido_nao_sobrescreve_o_novo_dono(self):
+        self._produce_and_finish("10", boas=10)
+        lento = self.db.reservar_lote_outbound_totvs(worker="w-lento", lease_seconds=10)[0]
+        futuro = self.db._now() + timedelta(minutes=10)
+        self.assertEqual(len(self.db.recuperar_envios_abandonados_totvs(now=futuro)), 1)
+        novo = self.db.reservar_lote_outbound_totvs(
+            worker="w-novo", now=futuro + timedelta(minutes=5)
+        )[0]
+        self.assertEqual(novo["id"], lento["id"])
+
+        # O worker lento termina o POST depois de perder o lease: nada é gravado.
+        atrasado = TotvsOutboxWorker(
+            self.db,
+            gateway=_client(lambda r: httpx.Response(503, text="indisponivel")),
+            worker_name="w-lento",
+        ).deliver(lento)
+        self.assertIsNone(atrasado)
+        item = self.db.buscar_item_outbound_totvs(lento["id"])
+        self.assertEqual(item["status"], OutboxStatus.SENDING.value)
+        self.assertEqual(item["lease_owner"], "w-novo")
+        self.assertEqual(item["attempts"], 2)
+        self.assertEqual(
+            [row["outcome"] for row in self.db.listar_tentativas_outbound_totvs(lento["id"])],
+            ["abandonado"],
+        )
+
+        # O dono atual conclui normalmente.
+        final = TotvsOutboxWorker(
+            self.db,
+            gateway=_client(lambda r: httpx.Response(200, text=ACK_OK)),
+            worker_name="w-novo",
+        ).deliver(novo)
+        self.assertEqual(final["status"], OutboxStatus.SENT.value)
+        self.assertIsNone(final["lease_owner"])
+
     def test_reinicio_processa_pending_antigo_sem_perder_mensagem(self):
         # Item A: abandonado em SENDING quando o processo anterior morreu.
         self._produce_and_finish("10", boas=10)

@@ -59,8 +59,8 @@ export function TraceabilityOrderPage() {
   );
   if (query.loading) return <TraceLoading title={title} subtitle={subtitle} search={search} setSearch={setSearch} />;
   return (
-    <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filters={false} actions={<OrderSearch value={search} onChange={setSearch} />}>
-      {!op ? <EmptyState title="Informe uma OP" detail="A rastreabilidade mostra por onde a OP passou, com quantidades e eventos." /> : query.error ? <ErrorState error={query.error} onRetry={query.reload} /> : (
+    <PageFrame staleError={query.error} sectionId="traceability" title={title} subtitle={subtitle} filters={false} actions={<OrderSearch value={search} onChange={setSearch} />}>
+      {!op ? <EmptyState title="Informe uma OP" detail="A rastreabilidade mostra por onde a OP passou, com quantidades e eventos." /> : query.error && !query.data ? <ErrorState error={query.error} onRetry={query.reload} /> : (
         <>
           <div className="metric-grid metric-grid--four">
             <MetricCard label="Situação atual" value={String(query.data?.operations?.[(query.data?.operations.length ?? 1) - 1]?.status ?? "Não disponível")} detail={`OP ${query.data?.op ?? op}`} accent="primary" />
@@ -103,8 +103,8 @@ export function TraceabilityTimelinePage() {
   const subtitle = "Máquina → OP → operação → evento → operador → registro original, em ordem cronológica.";
   if (query.loading) return <TraceLoading title={title} subtitle={subtitle} search={search} setSearch={setSearch} />;
   return (
-    <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filters={false} actions={<OrderSearch value={search} onChange={setSearch} />}>
-      {!op ? <EmptyState title="Informe uma OP" detail="A linha do tempo não combina registros de OPs diferentes." /> : query.error ? <ErrorState error={query.error} onRetry={query.reload} /> : (
+    <PageFrame staleError={query.error} sectionId="traceability" title={title} subtitle={subtitle} filters={false} actions={<OrderSearch value={search} onChange={setSearch} />}>
+      {!op ? <EmptyState title="Informe uma OP" detail="A linha do tempo não combina registros de OPs diferentes." /> : query.error && !query.data ? <ErrorState error={query.error} onRetry={query.reload} /> : (
         <SectionCard title={`Eventos cronológicos da OP ${op}`} className="section-card--table">
           <DataTable
             rows={query.data?.timeline ?? []}
@@ -144,7 +144,7 @@ export function TraceabilityNestingPage() {
   const title = "Rastreabilidade — Lote / Material / Nesting";
   const subtitle = "Cada nesting preserva tempo total e tempo dentro do período filtrado como grandezas distintas.";
   if (query.loading && !query.data) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}><LoadingState /></PageFrame>;
-  if (query.error) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const nesting = (data?.items ?? []).reduce(
     (acc, row) => ({
@@ -154,7 +154,7 @@ export function TraceabilityNestingPage() {
     { previsto: 0, real: 0 },
   );
   return (
-    <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}>
+    <PageFrame staleError={query.error} sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Nestings no filtro" value={formatNumber(data?.count ?? 0)} />
         <MetricCard label="Tempo previsto" value={formatDuration(nesting.previsto)} accent="primary" />

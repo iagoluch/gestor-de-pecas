@@ -9,6 +9,7 @@ só avisa; a resolução continua manual, feita pelo supervisor.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import Callable
 
@@ -16,6 +17,31 @@ import httpx
 
 
 DEFAULT_TIMEOUT_SECONDS = 10.0
+
+# A Bot API exige o token no PATH da URL, e o httpx registra cada requisição
+# ("HTTP Request: POST https://api.telegram.org/bot<TOKEN>/...") em INFO. Se o
+# nível de log for elevado algum dia, o token iria parar em arquivo de log.
+_TELEGRAM_TOKEN_IN_URL = re.compile(r"(api\.telegram\.org/bot)[^/\s\"']+")
+
+
+class _TelegramTokenRedactor(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "api.telegram.org/bot" in message:
+            record.msg = _TELEGRAM_TOKEN_IN_URL.sub(r"\1***", message)
+            record.args = ()
+        return True
+
+
+def install_telegram_log_redaction() -> None:
+    """Mascara o token do bot nos logs do httpx (idempotente)."""
+
+    logger = logging.getLogger("httpx")
+    if not any(isinstance(item, _TelegramTokenRedactor) for item in logger.filters):
+        logger.addFilter(_TelegramTokenRedactor())
+
+
+install_telegram_log_redaction()
 
 
 def _telegram_request_result(

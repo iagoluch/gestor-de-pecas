@@ -55,7 +55,7 @@ export function OperatorPortalPage() {
     if (context.data?.resources.length === 1) setResource(context.data.resources[0]);
   }, [context.data]);
   if (context.loading) return <div className="app-loading"><LoadingState label="Preparando o posto…" /></div>;
-  if (context.error) return <div className="app-loading"><ErrorState error={context.error} onRetry={context.reload} /></div>;
+  if (context.error && !context.data) return <div className="app-loading"><ErrorState error={context.error} onRetry={context.reload} /></div>;
   if (!context.data) return null;
 
   const sector = context.data.sector;

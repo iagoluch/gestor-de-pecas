@@ -331,13 +331,13 @@ export function AnalyticsOeePage() {
   const title = "Análises — OEE";
   const subtitle = "Disponibilidade × Performance × FTT do período selecionado.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const components = data?.components ?? {};
   const extended = data?.extended_metrics ?? {};
   const losses = data?.losses_breakdown ?? {};
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="OEE" value={metric(components.oee)} detail={components.oee?.reason ?? data?.reason ?? undefined} accent="purple" availability={metricState(components.oee)} />
         <MetricCard label="Disponibilidade" value={metric(components.availability)} detail={components.availability?.reason ?? undefined} accent="success" availability={metricState(components.availability)} />
@@ -388,11 +388,11 @@ export function AnalyticsHoursPage() {
   const title = "Análises — Horas & Utilização";
   const subtitle = "Tempo físico consolidado sem multiplicar a máquina por OPs simultâneas.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const resources = (data?.by_resource ?? []).map((row) => ({ label: String(row.recurso), value: Number(row.producao ?? 0), detail: formatHours(Number(row.producao ?? 0)) }));
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Tempo físico" value={formatHours(data?.physical_seconds)} />
         <MetricCard label="Tempo atribuído bruto" value={formatHours(data?.raw_attributed_timeline_seconds)} accent="teal" />
@@ -441,7 +441,7 @@ function SegmentPage() {
   );
   const query = useApiQuery<SegmentSummary>(`/api/v1/analytics/${endpoint}?${filters.query}`);
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>{toggle}<ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>{toggle}<ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const reasons = (data?.by_reason ?? []).map((row) => ({
     label: String(row.motivo ?? "Não informado"),
@@ -455,7 +455,7 @@ function SegmentPage() {
   }));
   const topResource = resourceRanking[0];
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       {toggle}
       <div className="metric-grid metric-grid--four">
         <MetricCard label={`Tempo total de ${isStop ? "parada" : "setup"}`} value={formatHours(data?.total_seconds)} accent={isStop ? "danger" : "teal"} />
@@ -499,14 +499,14 @@ export function AnalyticsQualityPage() {
   const title = "Análises — Qualidade";
   const subtitle = "Peças boas, refugo e retrabalho em fontes separadas, com FTT explícito.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const scrap = (data?.scrap_reasons ?? []).map((row) => ({
     label: String(row.motivo ?? row.razao ?? "Não informado"),
     value: Number(row.quantidade ?? row.count ?? 0),
   }));
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Produção boa" value={formatNumber(data?.totals.boa)} accent="success" />
         <MetricCard label="Refugo" value={formatNumber(data?.totals.refugo)} accent="danger" />
@@ -595,7 +595,7 @@ export function AnalyticsStandardPage() {
   const title = "Análises — Tempo Padrão × Real";
   const subtitle = "Tempo padrão e execução real por OP/operação com fonte temporal identificada.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
   const standard = rows.reduce(
     (acc, row) => {
@@ -607,7 +607,7 @@ export function AnalyticsStandardPage() {
     { comparable: 0, expected: 0, real: 0 },
   );
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Comparações" value={formatNumber(rows.length)} detail={rows.length ? `${formatNumber(standard.comparable)} com tempo padrão cadastrado` : undefined} />
         <MetricCard label="Tempo padrão acumulado" value={standard.comparable ? formatHours(standard.expected) : "Não configurado"} availability={standard.comparable ? "disponivel" : "nao_configurado"} accent="warning" />
@@ -648,7 +648,7 @@ export function AnalyticsChronoPage() {
   const title = "Análises — Cronoanálise";
   const subtitle = "Distribuição do tempo real por peça, agrupada por produto, operação e recurso.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const groups = query.data?.groups ?? [];
   const bars = groups.slice(0, 10).map((row) => ({ label: `${row.produto} • ${row.operacao}`, value: row.media_segundos_por_peca, detail: formatDuration(row.media_segundos_por_peca) }));
   const samples = groups.reduce((total, row) => total + row.amostras, 0);
@@ -659,7 +659,7 @@ export function AnalyticsChronoPage() {
     mostVariable: [...groups].sort((left, right) => right.desvio_padrao_segundos_por_peca - left.desvio_padrao_segundos_por_peca)[0],
   };
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Grupos analisados" value={formatNumber(groups.length)} detail={groups.length ? `${formatNumber(chrono.samples)} execuções medidas` : undefined} />
         <MetricCard label="Ciclo médio por peça" value={groups.length ? formatDuration(chrono.average) : "Dados insuficientes"} availability={groups.length ? "disponivel" : "dados_insuficientes"} accent="success" />
@@ -696,11 +696,11 @@ export function AnalyticsCapacityPage() {
   const title = "Análises — Capacidade & Gargalos";
   const subtitle = "Quanto do tempo disponível pelo calendário produtivo virou trabalho, e onde está o gargalo.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const configured = data?.availability !== "nao_configurado";
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard
           label="Utilização do período"
@@ -757,12 +757,12 @@ export function AnalyticsReliabilityPage() {
   const title = "Análises — Confiabilidade";
   const subtitle = "Quebras de equipamento no período: com que frequência param e quanto tempo levam para voltar.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const measurable = data?.availability === "disponivel" || data?.availability === "parcial";
   const critical = data?.por_recurso?.[0];
   return (
-    <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard
           label="MTBF"

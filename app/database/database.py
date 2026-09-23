@@ -209,15 +209,17 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_try_advisory_lock(%s) AS acquired", (CATALOG_SYNC_LOCK_ID,))
             acquired = bool(cursor.fetchone()["acquired"])
+            # Sessão-level: o lock sobrevive a commits nesta conexão. Sem o
+            # commit aqui, a conexão fica "idle in transaction" no pool pela
+            # duração inteira da sincronização (que pode levar segundos),
+            # segurando um slot do pool sem necessidade.
+            connection.commit()
             try:
                 yield acquired
             finally:
                 if acquired:
                     cursor.execute("SELECT pg_advisory_unlock(%s)", (CATALOG_SYNC_LOCK_ID,))
-
-    def connect(self):
-        """Compatibility lease; prefer ``with db.connection()`` in new code."""
-        return self._pool.get_connection()
+                    connection.commit()
 
     def close(self):
         if self._closed:
@@ -228,12 +230,6 @@ class Database(
     def create_tables(self):
         with self.connection() as connection:
             return apply_migrations(connection)
-
-    def ensure_indices(self):
-        return self.create_tables()
-
-    def ensure_schema_version(self):
-        return self.create_tables()
 
     def obter_schema_version(self):
         with self.connection() as connection, connection.cursor() as cursor:
@@ -281,7 +277,7 @@ class Database(
                     VALUES (%s, %s, %s, TRUE, %s)
                     RETURNING id
                     """,
-                    (nome, self._hash_senha(senha), nivel, agora_db()),
+                    (nome, self._hash_senha(senha), nivel, self._now()),
                 )
                 return int(cursor.fetchone()["id"])
         except UniqueViolation as exc:
@@ -332,7 +328,7 @@ class Database(
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (op, tipo, setor, motivo, int(quantidade), operador, _period_value(data_hora) or agora_db(), peca, tarefa_id),
+                (op, tipo, setor, motivo, int(quantidade), operador, _period_value(data_hora) or self._now(), peca, tarefa_id),
             )
             return int(cursor.fetchone()["id"])
 
@@ -347,7 +343,7 @@ class Database(
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (tipo, origem, referencia, mensagem, operador, detalhes, _period_value(data_hora) or agora_db()),
+                (tipo, origem, referencia, mensagem, operador, detalhes, _period_value(data_hora) or self._now()),
             )
             return int(cursor.fetchone()["id"])
 
@@ -473,7 +469,7 @@ class Database(
     def publicar_catalogo_pcp(self, registros, sincronizado_em=None):
         """Publish one validated PCP snapshot without touching operational rows."""
 
-        sincronizado_em = normalizar_data_db(sincronizado_em) or agora_db()
+        sincronizado_em = normalizar_data_db(sincronizado_em) or self._now()
         normalizados = []
         codigos = set()
         for item in registros:
@@ -582,7 +578,7 @@ class Database(
     ):
         """Publish task, program, and task/OP snapshots in one transaction."""
 
-        sincronizado_em = normalizar_data_db(sincronizado_em) or agora_db()
+        sincronizado_em = normalizar_data_db(sincronizado_em) or self._now()
         tarefas_rows = []
         tarefas_ids = set()
         for item in tarefas:
@@ -1174,7 +1170,7 @@ class Database(
     def iniciar_apontamento_corte(
         self, plano_hash, maquina, operador, data_minima, data_inicio=None
     ):
-        inicio = _period_value(data_inicio) or agora_db()
+        inicio = _period_value(data_inicio) or self._now()
         cutoff = normalizar_data_db(data_minima)
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -1235,7 +1231,7 @@ class Database(
             return dict(started)
 
     def finalizar_apontamento_corte(self, apontamento_id, operador, data_fim=None):
-        fim = _period_value(data_fim) or agora_db()
+        fim = _period_value(data_fim) or self._now()
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -1262,7 +1258,7 @@ class Database(
     ):
         """Finish one nesting and start the next at the same instant atomically."""
 
-        transicao = _period_value(momento) or agora_db()
+        transicao = _period_value(momento) or self._now()
         cutoff = normalizar_data_db(data_minima)
         try:
             with self.connection() as connection, connection.cursor() as cursor:
@@ -1354,7 +1350,16 @@ class Database(
                     "finalizado": dict(finished),
                     "iniciado": dict(started),
                 }
-        except UniqueViolation:
+        except UniqueViolation as exc:
+            # A transação inteira foi desfeita; o chamador trata ``None`` como
+            # "transição recusada". O log preserva qual índice recusou, porque
+            # o mesmo bloco cobre o nesting e o estado físico do recurso.
+            logging.warning(
+                "Avanço de nesting recusado por unicidade (apontamento=%s, plano=%s, constraint=%s)",
+                apontamento_id,
+                proximo_plano_hash,
+                exc.diag.constraint_name,
+            )
             return None
 
     def listar_planos_corte_legado_sem_apontamento(self):
@@ -1490,7 +1495,7 @@ class Database(
         tarefa_id,
     ):
         """Atomically persist an OP correction and its audit history."""
-        now = agora_db()
+        now = self._now()
         quantidade_esperada = int(quantidade_esperada)
         nova_quantidade = int(nova_quantidade)
         with self.connection() as connection, connection.cursor() as cursor:
@@ -1760,7 +1765,7 @@ class Database(
                     str(item.get("tipo_setor") or "").strip() or None,
                     bool(item.get("habilitado", True)),
                     str(item.get("fonte") or fonte).strip() or fonte,
-                    agora_db(),
+                    self._now(),
                 )
             )
         if not rows:
@@ -1802,7 +1807,44 @@ class Database(
                 """,
                 rows,
             )
+            setores_novos = {row[2] for row in rows if row[2]}
+            if setores_novos:
+                self._garantir_pausas_padrao(cursor, setores_novos)
         return len(rows)
+
+    def _garantir_pausas_padrao(self, cursor, tipos_setor):
+        """Semeia Almoço/Café padrão para setor que nunca teve pausa configurada.
+
+        Um setor sem nenhuma linha em ``pausas_automaticas_setor`` nunca foi
+        visto pela tela de configuração; um setor com linhas (mesmo todas
+        inativas) já passou por decisão gerencial e não é mexido aqui.
+        """
+
+        cursor.execute(
+            "SELECT DISTINCT UPPER(tipo_setor) AS setor FROM pausas_automaticas_setor"
+        )
+        ja_configurados = {row["setor"] for row in cursor.fetchall()}
+        pendentes = [
+            setor for setor in tipos_setor
+            if setor.strip().upper() not in ja_configurados
+        ]
+        if not pendentes:
+            return
+        linhas = [
+            (setor, nome, inicio, fim, ordem, "AUTO (novo setor)")
+            for setor in pendentes
+            for ordem, (inicio, fim, nome) in enumerate(
+                ManufacturingRules.automatic_breaks, start=1
+            )
+        ]
+        cursor.executemany(
+            """
+            INSERT INTO pausas_automaticas_setor
+                (tipo_setor, nome, hora_inicio, hora_fim, ordem, atualizado_por)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            linhas,
+        )
 
     def listar_status_recursos(
         self,
@@ -1858,7 +1900,7 @@ class Database(
         etapa_anterior_pendente_confirmada=False,
     ):
         operacao = dict(operacao or {})
-        entrada = _period_value(data_entrada) or agora_db()
+        entrada = _period_value(data_entrada) or self._now()
         try:
             with self.connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
@@ -2110,7 +2152,7 @@ class Database(
             raise ValueError(f"Estado de apontamento inválido: {estado}")
         if destino == OperatorState.QUEUED:
             raise ValueError(f"Estado de apontamento inválido: {estado}")
-        instante = _period_value(data_hora) or agora_db()
+        instante = _period_value(data_hora) or self._now()
         boas = max(0, int(quantidade_boa or 0))
         refugos = max(0, int(quantidade_refugo or 0))
         retrabalhos = max(0, int(quantidade_retrabalho or 0))
@@ -2841,6 +2883,17 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
+                SELECT DISTINCT recurso FROM eventos_estado_recurso
+                WHERE data_fim IS NULL
+                  AND tipo_interrupcao = 'intervalo_programado'
+                  AND automatico IS TRUE
+                """
+            )
+            self._bloquear_recursos_tx(
+                cursor, [row["recurso"] for row in cursor.fetchall()]
+            )
+            cursor.execute(
+                """
                 SELECT * FROM eventos_estado_recurso
                 WHERE data_fim IS NULL
                   AND tipo_interrupcao = 'intervalo_programado'
@@ -3036,6 +3089,22 @@ class Database(
         executando = sorted(EXECUTING_APPOINTMENT_STATUSES)
         changed = []
         with self.connection() as connection, connection.cursor() as cursor:
+            # Superconjunto dos candidatos abaixo: trava os recursos antes das
+            # linhas para seguir a ordem canônica (ver _bloquear_recursos_tx).
+            cursor.execute(
+                """
+                SELECT DISTINCT recurso FROM eventos_estado_recurso
+                WHERE data_fim IS NULL
+                  AND categoria = 'fora_turno'
+                  AND automatico IS TRUE
+                  AND tipo_interrupcao = 'fim_turno'
+                  AND data_inicio < %s
+                """,
+                (instante,),
+            )
+            self._bloquear_recursos_tx(
+                cursor, [row["recurso"] for row in cursor.fetchall()]
+            )
             cursor.execute(
                 """
                 SELECT e.*
@@ -3541,6 +3610,29 @@ class Database(
             "Retrabalho": "retrabalho",
         }.get(str(status or "").strip())
 
+    @staticmethod
+    def _bloquear_recursos_tx(cursor, recursos):
+        """Toma os advisory locks de vários recursos em ordem determinística.
+
+        A ordem canônica de locks do estado físico é: advisory lock do recurso
+        e só depois a linha aberta em ``eventos_estado_recurso`` (ver
+        ``_transicionar_estado_recurso_tx``). Rotinas em lote que leem várias
+        linhas com ``FOR UPDATE`` precisam chamar isto antes da leitura; do
+        contrário invertem a ordem e entram em deadlock com o apontamento do
+        operador que chega no mesmo instante no mesmo recurso.
+        """
+
+        identidades = sorted({
+            resolve_resource_identity(recurso).upper()
+            for recurso in recursos
+            if resolve_resource_identity(recurso)
+        })
+        for identidade in identidades:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
+                (identidade,),
+            )
+
     def _estado_recurso_aberto_tx(self, cursor, recurso, *, instante=None):
         """Retorna o estado físico aberto mais recente do recurso.
 
@@ -3565,7 +3657,7 @@ class Database(
         current = rows[0]
         stray_ids = [row["id"] for row in rows[1:]]
         if stray_ids:
-            fechamento = _period_value(instante) or current.get("data_inicio") or agora_db()
+            fechamento = _period_value(instante) or current.get("data_inicio") or self._now()
             cursor.execute(
                 "UPDATE eventos_estado_recurso SET data_fim = %s WHERE id = ANY(%s)",
                 (fechamento, stray_ids),
@@ -3610,7 +3702,7 @@ class Database(
         planejado=None, automatico=False, tipo_interrupcao=None,
         tipo_atividade=None, apontamento_id=None, evento_apontamento_id=None,
     ):
-        instante = _period_value(data_hora) or agora_db()
+        instante = _period_value(data_hora) or self._now()
         resource = resolve_resource_identity(recurso)
         if not resource:
             raise ValueError("Recurso é obrigatório para registrar estado.")
@@ -3801,7 +3893,7 @@ class Database(
         fatos operacionais.
         """
 
-        instante = _period_value(data_hora) or agora_db()
+        instante = _period_value(data_hora) or self._now()
         with self.connection() as connection, connection.cursor() as cursor:
             return self._transicionar_estado_recurso_tx(
                 cursor,
@@ -3828,7 +3920,7 @@ class Database(
             )
 
     def encerrar_estado_recurso(self, recurso, *, data_hora=None, somente_origem=None):
-        instante = _period_value(data_hora) or agora_db()
+        instante = _period_value(data_hora) or self._now()
         with self.connection() as connection, connection.cursor() as cursor:
             return self._encerrar_estado_recurso_tx(
                 cursor, recurso, instante, somente_origem=somente_origem
@@ -3986,7 +4078,7 @@ class Database(
         qty = int(quantidade or 0)
         if qty <= 0:
             return None
-        instante = _period_value(data_hora) or agora_db()
+        instante = _period_value(data_hora) or self._now()
 
         def _insert(conn):
             with conn.cursor() as cursor:
@@ -4394,7 +4486,7 @@ class Database(
         participação que já estava aberta em vez de criar uma segunda.
         """
 
-        inicio = _period_value(data_inicio) or agora_db()
+        inicio = _period_value(data_inicio) or self._now()
         with self.connection() as connection, connection.cursor() as cursor:
             if apontamento_id is not None:
                 cursor.execute(
@@ -4472,7 +4564,7 @@ class Database(
         quem continuou.
         """
 
-        fim = _period_value(data_fim) or agora_db()
+        fim = _period_value(data_fim) or self._now()
         query = """
             UPDATE participacoes_operador
             SET data_fim = %s
@@ -4528,7 +4620,7 @@ class Database(
             return [dict(row) for row in cursor.fetchall()]
 
     def finalizar_participacao_operador(self, participacao_id, data_fim=None):
-        fim = _period_value(data_fim) or agora_db()
+        fim = _period_value(data_fim) or self._now()
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -4948,7 +5040,7 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             if timestamp_field:
                 query = f"UPDATE tarefas SET status = %s, {timestamp_field} = %s WHERE id = %s"  # nosec B608 -- timestamp_field só pode ser um dos 3 valores fixos do dict `fields` (allowlist), nunca o `status` bruto
-                cursor.execute(query, (status, agora_db(), tarefa_id))
+                cursor.execute(query, (status, self._now(), tarefa_id))
             else:
                 cursor.execute("UPDATE tarefas SET status = %s WHERE id = %s", (status, tarefa_id))
             return cursor.rowcount == 1
@@ -4970,7 +5062,7 @@ class Database(
         if not timestamp_field:
             raise ValueError(f"Transição de tarefa inválida: {novo_status}")
 
-        now = agora_db()
+        now = self._now()
         params = [novo_status, now, tarefa_id]
         if status_esperado is None:
             status_clause = "(status IS NULL OR BTRIM(status) = '')"
@@ -5283,7 +5375,7 @@ class Database(
         destino = str(acao or "").strip().lower()
         if destino not in {"inicio", "parada", "fim"}:
             raise ValueError(f"Ação de destaque inválida: {acao}")
-        instante = _period_value(data_hora) or agora_db()
+        instante = _period_value(data_hora) or self._now()
         operador = str(operador or "").strip()
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -5549,7 +5641,7 @@ class Database(
     def despachar_tarefa(
         self, tarefa_id, operador, maquinas_dobra=None, maquinas_usinagem=None, maquinas_serra=None
     ):
-        now = agora_db()
+        now = self._now()
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT id, status FROM tarefas WHERE id = %s FOR UPDATE", (tarefa_id,))
             tarefa = cursor.fetchone()
@@ -5771,7 +5863,7 @@ class Database(
             return [dict(row) for row in cursor.fetchall()]
 
     def counts_overview(self, maquinas_dobra=None, maquinas_usinagem=None, maquinas_serra=None):
-        inicio = datetime.combine(datetime.now().date(), time.min)
+        inicio = datetime.combine(self._now().date(), time.min)
         fim = inicio + timedelta(days=1)
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -5806,7 +5898,7 @@ class Database(
         dias = int(dias)
         if dias <= 0:
             return []
-        hoje = datetime.now().date()
+        hoje = self._now().date()
         primeiro_dia = hoje - timedelta(days=dias - 1)
         inicio = datetime.combine(primeiro_dia, time.min)
         fim = datetime.combine(hoje + timedelta(days=1), time.min)

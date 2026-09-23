@@ -31,7 +31,7 @@ export function AuditAppointmentsPage() {
   const title = "Auditoria — Apontamentos";
   const subtitle = "Registros operacionais e referências de origem para conferência.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
   // Auditoria responde quem/quando/o quê. A contagem abaixo apenas resume as
   // linhas já entregues pelo backend; nenhum indicador é recalculado aqui.
@@ -41,7 +41,7 @@ export function AuditAppointmentsPage() {
     operadores: new Set(rows.map((row) => row.operador_inicio).filter(Boolean)).size,
   };
   return (
-    <PageFrame sectionId="audit" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="audit" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Apontamentos" value={formatNumber(query.data?.page.total ?? 0)} />
         <MetricCard label="Finalizados" value={formatNumber(resumo.finalizados)} detail={rows.length ? `${formatNumber(rows.length - resumo.finalizados)} ainda em aberto` : undefined} accent="success" />
@@ -78,10 +78,10 @@ export function AuditIssuesPage() {
   const title = "Auditoria — Inconsistências";
   const subtitle = "Conflitos e lacunas preservados como evidência, sem reescrever histórico.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   return (
-    <PageFrame sectionId="audit" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="audit" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Críticas" value={formatNumber(data?.by_severity.critical ?? 0)} accent="danger" />
         <MetricCard label="Erros" value={formatNumber(data?.by_severity.error ?? 0)} accent="danger" />
@@ -114,10 +114,10 @@ export function AuditReliabilityPage() {
   const title = "Auditoria — Confiabilidade dos Dados";
   const subtitle = "Qualidade das fontes e cobertura observada, sem percentual inventado.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   return (
-    <PageFrame sectionId="audit" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="audit" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Registros analisados" value={formatNumber(data?.records_analyzed)} />
         <MetricCard label="Estados físicos" value={formatNumber(data?.resource_states_analyzed)} accent="success" />

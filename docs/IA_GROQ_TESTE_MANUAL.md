@@ -52,7 +52,7 @@ explícita estiver ativa:
 
 ```powershell
 $env:GESTOR_AI_REAL_TEST = "true"
-C:\Python314\python.exe scripts\test_groq_tool_call_real.py
+C:\Python314\python.exe scripts\verificar_groq_tool_call_real.py
 ```
 
 O primeiro passo disponibiliza exclusivamente `get_factory_status`; o script

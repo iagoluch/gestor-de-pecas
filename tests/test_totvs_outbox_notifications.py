@@ -115,6 +115,23 @@ class OutboxTelegramNotifierWiringTests(unittest.TestCase):
         self.assertEqual(cycle.failed, 1)
 
 
+class TelegramTokenLogRedactionTests(unittest.TestCase):
+    def test_log_do_httpx_nao_expoe_token_do_bot(self):
+        import httpx
+        import logging
+
+        # Mesmo formato que o httpx usa em INFO para cada requisição.
+        url = httpx.URL("https://api.telegram.org/bot123456:SEGREDO-do-bot/sendMessage")
+        with self.assertLogs("httpx", level="INFO") as captured:
+            logging.getLogger("httpx").info(
+                'HTTP Request: %s %s "%s %d %s"', "POST", url, "HTTP/1.1", 200, "OK"
+            )
+        output = "\n".join(captured.output)
+        self.assertNotIn("SEGREDO-do-bot", output)
+        self.assertNotIn("123456:", output)
+        self.assertIn("api.telegram.org/bot***/sendMessage", output)
+
+
 class BuildOutboxErrorNotifierTests(unittest.TestCase):
     def test_sem_token_ou_chat_id_devolve_none(self):
         self.assertIsNone(build_outbox_error_notifier(bot_token="", chat_id="-100"))

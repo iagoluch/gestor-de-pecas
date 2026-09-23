@@ -503,13 +503,14 @@ def drawing_file(
             status_code=404,
             details={"reason": lookup.reason},
         )
+    # O nome vem do disco da engenharia (acentos, aspas): o Starlette monta o
+    # Content-Disposition com escape e filename* (RFC 5987), sem quebrar o header.
     return FileResponse(
         lookup.path,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{lookup.selected.filename}"',
-            "Cache-Control": "private, max-age=60",
-        },
+        filename=lookup.selected.filename,
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, max-age=60"},
     )
 
 

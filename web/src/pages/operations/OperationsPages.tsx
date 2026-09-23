@@ -57,7 +57,7 @@ export function OperationsOverviewPage() {
   const title = "Consulta Operacional — Visão Geral";
   const subtitle = "Situação física atual dos recursos e OPs associadas no dia corrente, com atualização incremental.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} filters={false} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   if (!data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false} filters={false}><EmptyState /></PageFrame>;
   const resources = stream.snapshot?.resources ?? data.resources;
@@ -66,7 +66,7 @@ export function OperationsOverviewPage() {
   const activeSector = sectors.includes(selectedSector) ? selectedSector : sectors[0] ?? "";
   const sectorResources = resources.filter((resource) => (resource.setor ?? "Setor não informado") === activeSector);
   return (
-    <PageFrame
+    <PageFrame staleError={query.error}
       sectionId="operations"
       title={title}
       subtitle={subtitle}
@@ -113,10 +113,10 @@ export function OperationsResourcesPage() {
   const title = "Consulta Operacional — Recursos";
   const subtitle = "Estado, OP, operador e duração por recurso físico no dia corrente.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   return (
-    <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}>
+    <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle} period={false}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Recursos no filtro" value={formatNumber(data?.page.total ?? 0)} />
         <MetricCard label="Em produção agora" value={formatNumber(producingCount(data?.summary))} accent="success" />
@@ -156,7 +156,7 @@ export function OperationsOrdersPage() {
   const title = "Consulta Operacional — OPs em Andamento";
   const subtitle = "Execuções do dia corrente, mantendo quantidade boa, refugo e retrabalho separados.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
   // Somatório de linhas já entregues pelo backend: apresentação, não regra.
   const totals = rows.reduce(
@@ -168,7 +168,7 @@ export function OperationsOrdersPage() {
     { good: 0, scrap: 0, stopped: 0 },
   );
   return (
-    <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}>
+    <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle} period={false}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="OPs em andamento" value={formatNumber(query.data?.page.total ?? 0)} />
         <MetricCard label="Peças boas hoje" value={formatNumber(totals.good)} detail="Somente peças boas" accent="success" />
@@ -209,7 +209,7 @@ export function OperationsTimePage() {
   const title = "Consulta Operacional — Tempo MES";
   const subtitle = "Tempo físico consolidado por categoria, setor e recurso.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error) return <PageFrame sectionId="operations" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const sectorBars = (data?.by_sector ?? []).map((row) => ({
     label: String(row.setor ?? "Não informado"),
@@ -217,7 +217,7 @@ export function OperationsTimePage() {
     detail: formatHours(Number(row.producao ?? 0)),
   }));
   return (
-    <PageFrame sectionId="operations" title={title} subtitle={subtitle}>
+    <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Tempo produtivo" value={formatHours(Number(data?.totals?.producao ?? 0) + Number(data?.totals?.setup ?? 0))} detail="Produção e setup" accent="success" />
         <MetricCard label="Tempo parado" value={formatHours(data?.totals?.parada)} accent="danger" />

@@ -7,6 +7,10 @@ from pathlib import Path
 import httpx
 
 from mes.contracts.messaging import MessagingError
+from mes.integrations.notifications.telegram import install_telegram_log_redaction
+
+# Mesmo token no PATH da URL que o módulo de notificações: mascara nos logs.
+install_telegram_log_redaction()
 
 
 class TelegramProvider:

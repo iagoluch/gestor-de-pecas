@@ -243,7 +243,7 @@
 .welding-pie figcaption i { width: 10px; height: 10px; border-radius: 2px; }
 .welding-pie figcaption span[data-tone="late"] i { background: var(--danger); }
 .welding-pie figcaption span[data-tone="due"] i { background: var(--accent); }
-.welding-pie figcaption span[data-tone="done"] i { background: var(--primary); }
+.welding-pie figcaption span[data-tone="done"] i { background: var(--primary-fill); }
 .welding-pie figcaption span[data-tone="unknown"] i { background: var(--muted); }
 .welding-pie figcaption b { font-weight: 600; }
 .welding-pie figcaption em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
@@ -322,7 +322,7 @@
 }
 .welding-barchart__bar i[data-tone="late"] { background: var(--danger); }
 .welding-barchart__bar i[data-tone="due"] { background: var(--accent); }
-.welding-barchart__bar i[data-tone="done"] { background: var(--primary); }
+.welding-barchart__bar i[data-tone="done"] { background: var(--primary-fill); }
 .welding-barchart__label {
   /* Os MACROs compartilham o prefixo "CONJ. SOLD.": cortados numa linha só
      ficavam todos iguais. Três linhas, sempre reservadas em todos os grupos,

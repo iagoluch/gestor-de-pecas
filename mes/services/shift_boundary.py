@@ -7,6 +7,7 @@ uma futura API Web pode executar a mesma regra por scheduler/backend.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
 
 from mes.domain.manufacturing_rules import (
     AUTOMATIC_BREAK_INTERRUPTION_TYPE,
@@ -79,20 +80,31 @@ class ShiftBoundaryService:
         if callable(loader):
             try:
                 rows = list(loader(somente_ativas=True) or [])
-            except Exception:  # pragma: no cover - configuração indisponível
-                rows = []
-            if rows:
-                return tuple(
-                    (
-                        row["hora_inicio"],
-                        row["hora_fim"],
-                        str(row.get("nome") or "Intervalo").strip(),
-                        str(row.get("tipo_setor") or "").strip() or None,
-                    )
-                    for row in rows
-                    if row.get("hora_inicio") is not None
-                    and row.get("hora_fim") is not None
+            except Exception:
+                # Erro de leitura (ex.: banco indisponível): usa a lista fixa
+                # para a fábrica inteira, para não deixar de aplicar pausa
+                # nenhuma por causa de uma falha transitória de infraestrutura.
+                logging.exception(
+                    "Falha ao ler as pausas automáticas configuradas; usando a lista padrão."
                 )
+                return tuple(
+                    (start, end, name, None)
+                    for start, end, name in self.rules.automatic_breaks
+                )
+            # Configuração lida com sucesso: lista vazia é uma decisão
+            # gerencial válida (setor desativou todas as pausas) e deve ser
+            # respeitada, não substituída pela lista fixa da fábrica inteira.
+            return tuple(
+                (
+                    row["hora_inicio"],
+                    row["hora_fim"],
+                    str(row.get("nome") or "Intervalo").strip(),
+                    str(row.get("tipo_setor") or "").strip() or None,
+                )
+                for row in rows
+                if row.get("hora_inicio") is not None
+                and row.get("hora_fim") is not None
+            )
         return tuple(
             (start, end, name, None) for start, end, name in self.rules.automatic_breaks
         )

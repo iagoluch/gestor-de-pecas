@@ -284,6 +284,10 @@ class SigmaNestSyncService:
         try:
             tarefas_antes, planos_antes = self._identidades_projetadas()
         except Exception:  # pragma: no cover - repositório sem as tabelas
+            # Sem a foto anterior, todas as tarefas do ciclo contam como novas.
+            logging.exception(
+                "Falha ao ler as identidades já projetadas do SigmaNEST; contadores de novidade podem ficar inflados."
+            )
             tarefas_antes, planos_antes = set(), set()
         correlacoes, desconhecidas = SigmaNestPlanningService.correlacionar(
             snapshot, conhecidas

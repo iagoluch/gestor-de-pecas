@@ -132,7 +132,7 @@ export function ManagementBadgesPage() {
       </PageFrame>
     );
   }
-  if (query.error) {
+  if (query.error && !query.data) {
     return (
       <PageFrame sectionId="dev" title={title} subtitle={subtitle} filters={false}>
         <ErrorState error={query.error} onRetry={query.reload} />
@@ -144,7 +144,7 @@ export function ManagementBadgesPage() {
     ? `${filtrados.length} de ${items.length} crachás no recorte atual`
     : `${items.length} crachás cadastrados`;
   return (
-    <PageFrame
+    <PageFrame staleError={query.error}
       sectionId="dev"
       title={title}
       subtitle={subtitle}

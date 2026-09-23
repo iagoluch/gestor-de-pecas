@@ -95,7 +95,7 @@ export function QualityInspectionPage({
   }, [inspectionId]);
 
   if (inspection.loading && !data) return <LoadingState label="Abrindo inspeção…" />;
-  if (inspection.error) return <ErrorState error={inspection.error} onRetry={inspection.reload} />;
+  if (inspection.error && !data) return <ErrorState error={inspection.error} onRetry={inspection.reload} />;
   if (!data) return null;
 
   // Produto sem cotas cadastradas abre direto no cadastro, sem piscar o

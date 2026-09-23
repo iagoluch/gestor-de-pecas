@@ -351,14 +351,11 @@ class ManufacturingRules:
             return False
         if cls.state_is_no_demand(category=category, operation=operation):
             return True
-        # Compatibilidade com o marcador criado na abertura do turno. A regra
-        # principal já cobre qualquer fila sem OP, mesmo sem esse marcador.
+        # Retorno explícito da abertura do turno: a regra acima já decidiu
+        # (fila sem OP é sem demanda). Qualquer outro estado com esse marcador
+        # não cai na leitura por janela/categoria abaixo.
         if explicit_shift_return:
-            return cls.state_is_no_demand(
-                category=category,
-                interruption_type=SHIFT_START_NO_DEMAND_TYPE,
-                operation=operation,
-            )
+            return False
         if cls.is_operational_window(window_kind):
             return False
         if category in (None, ""):

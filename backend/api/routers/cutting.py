@@ -135,6 +135,10 @@ def _sync_state(request: Request, database) -> dict:
         try:
             persistida = (leitor() or {}).get("ultima_sincronizacao")
         except Exception:  # pragma: no cover - catálogo indisponível
+            LOGGER.warning(
+                "Falha ao ler a última sincronização SigmaNEST persistida; usando o estado em memória.",
+                exc_info=True,
+            )
             persistida = None
     memoria = estado.get("ultima_sincronizacao")
     if persistida and (memoria is None or persistida > memoria):

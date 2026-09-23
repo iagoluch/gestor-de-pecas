@@ -23,11 +23,14 @@ decidir o texto exibido ao usuário é de quem chama.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 
 import httpx
 
 from mes.integrations.totvs.transport import transport_failure_kind
+
+LOGGER = logging.getLogger(__name__)
 
 
 DEFAULT_TIMEOUT_SECONDS = 20.0
@@ -130,8 +133,13 @@ class ProtheusProductModelGateway:
         try:
             timeout = float(raw_timeout)
         except ValueError:
-            timeout = DEFAULT_TIMEOUT_SECONDS
+            timeout = 0.0
         if timeout <= 0:
+            LOGGER.warning(
+                "GESTOR_TOTVS_MODEL_PULL_TIMEOUT_SECONDS inválido (%r); usando %ss.",
+                raw_timeout,
+                DEFAULT_TIMEOUT_SECONDS,
+            )
             timeout = DEFAULT_TIMEOUT_SECONDS
         verify_raw = str(environ.get("GESTOR_TOTVS_MODEL_PULL_VERIFY_TLS") or "1").strip()
         # Mesma credencial REST das demais publicações GESTORPECAS*, salvo

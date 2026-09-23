@@ -395,6 +395,37 @@ describe("KPIs gerenciais da Wave 2", () => {
     expect(screen.queryByText("Dobra1")).not.toBeInTheDocument();
   });
 
+  it("mantém os dados na tela quando uma atualização falha e sinaliza que podem estar desatualizados", async () => {
+    const refreshListeners: Array<(event: MessageEvent) => void> = [];
+    vi.stubGlobal("EventSource", class {
+      addEventListener(type: string, listener: (event: MessageEvent) => void) {
+        if (type === "refresh") refreshListeners.push(listener);
+      }
+      close() {}
+    });
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls += 1;
+      if (calls > 1) {
+        return new Response(JSON.stringify({ detail: "indisponível" }), { status: 503, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        periodo: {},
+        agora: "2026-09-16T10:00:00",
+        summary: { resources: 1, active_operations: 0, by_category: {} },
+        resources: [{ recurso: "DOBRA1", setor: "Dobra", categoria: "fila", ops_ativas: [], quantidade_ops_ativas: 0 }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+
+    render(<MemoryRouter><FilterProvider><OperationsOverviewPage /></FilterProvider></MemoryRouter>);
+    expect(await screen.findByText("Dobra1")).toBeInTheDocument();
+
+    refreshListeners.forEach((listener) => listener(new MessageEvent("refresh", { data: JSON.stringify({ topic: "operations" }) })));
+
+    expect(await screen.findByText(/Os dados exibidos podem estar desatualizados/)).toBeInTheDocument();
+    expect(screen.getByText("Dobra1")).toBeInTheDocument();
+  });
+
   it("a Consulta Operacional mostra estado e parada, não a fonte do dado", async () => {
     vi.stubGlobal("fetch", jsonOnce({
       periodo: {},

@@ -952,8 +952,16 @@ class QualityInspectionService:
         ]
 
     def detalhar_peca(self, peca_id):
-        """Rastreabilidade de uma unidade: cotas, padrões usados e medidas."""
+        """Rastreabilidade de uma unidade: cotas, padrões usados e medidas.
 
+        Revalida o setor dono da inspeção antes de devolver as medidas —
+        mesma fronteira de ``_exigir_setor``, para que trocar o id na URL não
+        vaze a rastreabilidade de uma peça de outro setor.
+        """
+
+        sessao = self.db.buscar_inspecao_da_peca(peca_id)
+        if sessao is None or self._exigir_setor(sessao) is not None:
+            return None
         cotas = [dict(row) for row in (self.db.listar_resultados_cota(peca_id) or ())]
         detalhes = []
         for cota in cotas:
@@ -961,7 +969,7 @@ class QualityInspectionService:
             # os limites são recompostos dele, nunca do template atual.
             avaliacao = evaluate_measure(
                 cota.get("medida"), cota.get("padrao_snapshot")
-            )
+            ).as_public()
             detalhes.append({
                 "sequencia": int(cota.get("sequencia") or 0),
                 "descricao": cota.get("descricao_snapshot"),
@@ -969,9 +977,9 @@ class QualityInspectionService:
                 "unidade": cota.get("unidade_snapshot"),
                 "medida": cota.get("medida"),
                 "status": cota.get("status"),
-                "referencia": avaliacao.as_public()["referencia"],
-                "margem": avaliacao.as_public()["margem"],
-                "limite_inferior": avaliacao.as_public()["limite_inferior"],
-                "limite_superior": avaliacao.as_public()["limite_superior"],
+                "referencia": avaliacao["referencia"],
+                "margem": avaliacao["margem"],
+                "limite_inferior": avaliacao["limite_inferior"],
+                "limite_superior": avaliacao["limite_superior"],
             })
         return detalhes

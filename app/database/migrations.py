@@ -2157,6 +2157,41 @@ ATIVIDADE_SEM_OP_STATEMENTS = (
 )
 
 
+# ----------------------------------------------------------------------
+# O desmembramento da Solda em cinco setores (scripts/desmembrar_setor_solda.py,
+# Wave 6F) só RENOMEIA "Solda" -> "Solda Aço" em pausas_automaticas_setor; os
+# quatro setores novos (Solda Alumínio, Solda Robô, Proj. Ferramentaria,
+# Protótipo) nunca ganharam linha própria. Sem elas, ShiftBoundaryService trata
+# a lista vazia como decisão gerencial deliberada (nenhuma pausa automática) em
+# vez de "nunca configurado" — os operadores desses postos não têm Almoço/Café
+# aplicados. O guard NOT EXISTS cobre os dois estados possíveis do ambiente: se
+# o script de desmembramento já rodou, "Solda Aço" é pulada (já tem linhas); se
+# ainda não rodou, os cinco setores são semeados juntos.
+# ----------------------------------------------------------------------
+PAUSAS_SOLDA_DESMEMBRADA_DESCRIPTION = (
+    "pausas automáticas padrão para os setores da Solda desmembrada"
+)
+
+PAUSAS_SOLDA_DESMEMBRADA_STATEMENTS = (
+    """
+    INSERT INTO pausas_automaticas_setor (tipo_setor, nome, hora_inicio, hora_fim, ordem, atualizado_por)
+    SELECT setor.nome, pausa.nome, pausa.inicio, pausa.fim, pausa.ordem, 'MIGRATION 43'
+    FROM (VALUES
+        ('Solda Aço'), ('Solda Alumínio'), ('Solda Robô'),
+        ('Proj. Ferramentaria'), ('Protótipo')
+    ) AS setor(nome)
+    CROSS JOIN (VALUES
+        ('Almoço', TIME '12:10', TIME '12:52', 1),
+        ('Café', TIME '15:30', TIME '15:45', 2)
+    ) AS pausa(nome, inicio, fim, ordem)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM pausas_automaticas_setor p
+        WHERE UPPER(p.tipo_setor) = UPPER(setor.nome)
+    )
+    """,
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2202,6 +2237,7 @@ MIGRATIONS = {
     40: (TELEGRAM_DISCOVERED_CHATS_DESCRIPTION, TELEGRAM_DISCOVERED_CHATS_STATEMENTS),
     41: (TELEGRAM_CUT_MESSAGES_DESCRIPTION, TELEGRAM_CUT_MESSAGES_STATEMENTS),
     42: (ATIVIDADE_SEM_OP_DESCRIPTION, ATIVIDADE_SEM_OP_STATEMENTS),
+    43: (PAUSAS_SOLDA_DESMEMBRADA_DESCRIPTION, PAUSAS_SOLDA_DESMEMBRADA_STATEMENTS),
 }
 
 

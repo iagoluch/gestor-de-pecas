@@ -1,5 +1,7 @@
 """Fluxo operacional de Destaque por tarefa."""
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
 from backend.api.database import get_database
@@ -15,6 +17,8 @@ from mes.services.operator_flow import OperatorFlowService
 from mes.services.task_lookup import TarefaLookupService
 from mes.services.telegram_alerts import schedule_resource_stop_alert
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/highlight", tags=["Destaque"])
 
@@ -51,7 +55,8 @@ def _cutting_queue(database, operador, codigo_tarefa):
         return []
     try:
         linhas = CutService(database, operador).listar_consulta(search=codigo)
-    except Exception:  # pragma: no cover - fila indisponível não bloqueia o Destaque
+    except Exception:  # noqa: BLE001 - fila indisponível não bloqueia o Destaque, mas fica logada
+        logger.exception("Falha ao consultar fila de Corte da tarefa %s para o Destaque", codigo)
         return []
     return [
         {

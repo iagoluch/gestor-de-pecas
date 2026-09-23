@@ -115,7 +115,8 @@ class AIService:
                 f"A pergunta deve ter no máximo {MAX_AI_MESSAGE_CHARS} caracteres.",
             )
 
-        conversation = self.repository.obter_conversa_ia(
+        conversation = await asyncio.to_thread(
+            self.repository.obter_conversa_ia,
             conversation_id,
             context.user_id,
             message_limit=1,
@@ -135,7 +136,8 @@ class AIService:
                 )
             user_message = last
         else:
-            user_message = self.repository.adicionar_mensagem_ia(
+            user_message = await asyncio.to_thread(
+                self.repository.adicionar_mensagem_ia,
                 conversation_id,
                 context.user_id,
                 "user",
@@ -147,7 +149,8 @@ class AIService:
                     "Conversa não encontrada.",
                 )
             if not existing_messages and str(conversation.get("title")) == "Nova conversa":
-                self.repository.atualizar_titulo_conversa_ia(
+                await asyncio.to_thread(
+                    self.repository.atualizar_titulo_conversa_ia,
                     conversation_id,
                     context.user_id,
                     self._title_from_question(question),
@@ -158,12 +161,15 @@ class AIService:
             {"message": "Preparando a consulta…", "user_message_id": user_message.get("id")},
         )
 
-        history = self.repository.obter_conversa_ia(
+        history = await asyncio.to_thread(
+            self.repository.obter_conversa_ia,
             conversation_id,
             context.user_id,
             message_limit=self.config.max_history_messages,
         )
-        knowledge = self.repository.listar_conhecimento_ia_validado(limit=20)
+        knowledge = await asyncio.to_thread(
+            self.repository.listar_conhecimento_ia_validado, limit=20
+        )
         rounds = 0
         limit_reached = False
         selected_tools = self.tools.select_schemas(question)
@@ -325,7 +331,8 @@ class AIService:
                     "A Groq não produziu uma resposta válida. Tente novamente.",
                     retryable=True,
                 )
-            assistant_message = self.repository.adicionar_mensagem_ia(
+            assistant_message = await asyncio.to_thread(
+                self.repository.adicionar_mensagem_ia,
                 conversation_id,
                 context.user_id,
                 "assistant",

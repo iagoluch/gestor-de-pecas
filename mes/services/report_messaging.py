@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 import logging
 from typing import Any
@@ -64,9 +65,12 @@ class ReportMessagingService:
                 status_code=503,
             )
 
-        record, path = self.report_service.get(str(report_id), user_id=int(user_id))
-        destination = self.repository.obter_destino_mensagem(
-            int(destination_id), int(user_id), provider="telegram"
+        record, path = await asyncio.to_thread(
+            self.report_service.get, str(report_id), user_id=int(user_id)
+        )
+        destination = await asyncio.to_thread(
+            self.repository.obter_destino_mensagem,
+            int(destination_id), int(user_id), provider="telegram",
         )
         if not destination:
             raise MessagingError(
@@ -76,7 +80,9 @@ class ReportMessagingService:
             )
 
         key = str(idempotency_key or f"report:{report_id}:destination:{destination_id}")
-        existing = self.repository.obter_entrega_relatorio_por_idempotencia(key)
+        existing = await asyncio.to_thread(
+            self.repository.obter_entrega_relatorio_por_idempotencia, key
+        )
         if existing and existing.get("status") == "enviado":
             return self._view(existing)
         if int((existing or {}).get("attempt") or 0) >= 10:
@@ -87,7 +93,8 @@ class ReportMessagingService:
             )
         attempt = int((existing or {}).get("attempt") or 0) + 1
         requested_at = self._now().replace(microsecond=0)
-        delivery = self.repository.registrar_entrega_relatorio(
+        delivery = await asyncio.to_thread(
+            self.repository.registrar_entrega_relatorio,
             report_id=str(report_id),
             requested_by=int(user_id),
             destination_id=int(destination_id),
@@ -109,7 +116,8 @@ class ReportMessagingService:
                 ),
             )
         except MessagingError as exc:
-            delivery = self.repository.registrar_entrega_relatorio(
+            delivery = await asyncio.to_thread(
+                self.repository.registrar_entrega_relatorio,
                 report_id=str(report_id),
                 requested_by=int(user_id),
                 destination_id=int(destination_id),
@@ -126,7 +134,8 @@ class ReportMessagingService:
             )
             raise
         except Exception as exc:
-            delivery = self.repository.registrar_entrega_relatorio(
+            delivery = await asyncio.to_thread(
+                self.repository.registrar_entrega_relatorio,
                 report_id=str(report_id),
                 requested_by=int(user_id),
                 destination_id=int(destination_id),
@@ -148,7 +157,8 @@ class ReportMessagingService:
                 retryable=True,
             ) from exc
 
-        delivery = self.repository.registrar_entrega_relatorio(
+        delivery = await asyncio.to_thread(
+            self.repository.registrar_entrega_relatorio,
             report_id=str(report_id),
             requested_by=int(user_id),
             destination_id=int(destination_id),
