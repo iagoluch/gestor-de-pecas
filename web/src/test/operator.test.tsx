@@ -40,7 +40,7 @@ describe("fluxo Web do operador", () => {
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     // Posto com recurso único não pede escolha: o operador entra direto na
     // bancada do próprio recurso.
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     expect(screen.queryByRole("heading", { name: "Selecione o recurso" })).not.toBeInTheDocument();
     expect(document.querySelector(".operator-profile > i")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
@@ -65,10 +65,10 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByRole("heading", { name: "Selecione o recurso" });
-    expect(screen.getByText("Dobra", { selector: ".operator-sector-link strong" })).toBeInTheDocument();
+    expect(document.querySelector(".operator-topbar__machine")).not.toBeInTheDocument();
     expect(screen.queryByText("Management View — Visão Geral")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1303" }));
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     expect(await screen.findByRole("heading", { name: "Histórico" })).toBeInTheDocument();
     expect(screen.getByText("Tempo parado: 00:03:21")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Ver mais" })).toHaveLength(3);
@@ -99,7 +99,7 @@ describe("fluxo Web do operador", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     const input = screen.getByLabelText("Código da OP");
     fireEvent.change(input, { target: { value: "OP-CLEAR" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
@@ -133,7 +133,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - Gasparini" });
+    await screen.findByText("Gasparini");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-ROTA" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
 
@@ -191,7 +191,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("EventSource", SseStub);
 
     const { container } = render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - Gasparini" });
+    await screen.findByText("Gasparini");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-OVERRIDE" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
 
@@ -256,7 +256,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-091" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
@@ -279,7 +279,7 @@ describe("fluxo Web do operador", () => {
     }));
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Corte - Laser Ensis 3015" });
+    await screen.findByText("Laser Ensis 3015");
     // A tarefa chega recolhida — expande para ver os planos.
     const toggle = (await screen.findByRole("heading", { name: "T-CORTE" })).closest("button");
     if (!toggle) throw new Error("toggle da tarefa T-CORTE não encontrado");
@@ -312,7 +312,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     fireEvent.click(screen.getByRole("button", { name: "Parada" }));
     // A busca do motivo filtra a lista pelo texto digitado.
     fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "quebra" } });
@@ -348,7 +348,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     await screen.findByText(/Recurso parado — 0029 - Quebra de ferramenta/);
     // Sem OP carregada não existe apontamento: a retomada é do próprio recurso.
     fireEvent.click(screen.getByRole("button", { name: "Retomar" }));
@@ -470,7 +470,7 @@ describe("fluxo Web do operador", () => {
   async function abrirPortao(options: { configuravel?: boolean; setupRegistrado?: boolean } = {}) {
     const context = gateBackend(options);
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
@@ -507,7 +507,7 @@ describe("fluxo Web do operador", () => {
   it("não bloqueia o Iniciar na Caldeiraria: o portão é do Finalizar", async () => {
     const { calls } = gateBackend();
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
@@ -523,7 +523,7 @@ describe("fluxo Web do operador", () => {
   it("recusa o Finalizar antes da conferência e manda apontar o Setup", async () => {
     gateBackend({ recusaFinalizar: true });
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
@@ -618,7 +618,7 @@ describe("fluxo Web do operador", () => {
     }));
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Solda Aço - Estação 1" });
+    await screen.findByText("Estação 1");
     expect(screen.queryByRole("heading", { name: "Selecione o recurso" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Voltar" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Ações operacionais")).toHaveClass("operator-actions");
@@ -667,7 +667,7 @@ describe("fluxo Web do operador", () => {
     }));
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Solda Aço - Estação 6" });
+    await screen.findByText("Estação 6");
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-SOLDA" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "10 - SOLDA — Atual" });
@@ -717,7 +717,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Usinagem - Romi D 1000" });
+    await screen.findByText("Romi D 1000");
     expect(await screen.findByText("OP: A9716901001")).toBeInTheDocument();
     expect(screen.getByText("BRACO ARTICULACAO")).toBeInTheDocument();
     // A tela não exibe nenhuma marca de origem corporativa para o operador.
@@ -752,7 +752,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Usinagem - Romi D 1000" });
+    await screen.findByText("Romi D 1000");
     fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "PCMIXQ01001" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
 
@@ -779,7 +779,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Usinagem - Romi D 1000" });
+    await screen.findByText("Romi D 1000");
     fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "ZZ999" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
 
@@ -798,7 +798,7 @@ describe("fluxo Web do operador", () => {
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByRole("heading", { name: "Selecione o recurso" });
     expect(await screen.findByText("Nenhum posto configurado para este setor")).toBeInTheDocument();
-    expect(screen.getByText("Montagem", { selector: ".operator-sector-link strong" })).toBeInTheDocument();
+    expect(document.querySelector(".operator-topbar__machine")).not.toBeInTheDocument();
   });
 
   it("retoma o Destaque parado sem tarefa carregada", async () => {
@@ -952,7 +952,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("EventSource", SseStub);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Corte - Laser Ensis 3015" });
+    await screen.findByText("Laser Ensis 3015");
     expect(await screen.findByText("Nenhum plano na fila")).toBeInTheDocument();
     // A pesquisa não é mais o mecanismo que descobre/importa a tarefa.
     expect(screen.queryByRole("button", { name: "Buscar" })).not.toBeInTheDocument();
@@ -1015,7 +1015,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Corte - Laser Ensis 3015" });
+    await screen.findByText("Laser Ensis 3015");
     // O horário é do backend, não do último refresh do React.
     expect(await screen.findByText((texto) => texto.startsWith("Última sincronização:") && texto.includes("04/09/2026"))).toBeInTheDocument();
 
@@ -1042,7 +1042,7 @@ describe("fluxo Web do operador", () => {
     }));
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Corte - Laser Ensis 3015" });
+    await screen.findByText("Laser Ensis 3015");
     expect(await screen.findByText("T-LOCAL")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Atualizar tarefas" }));
@@ -1079,7 +1079,7 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Corte - Laser Ensis 3015" });
+    await screen.findByText("Laser Ensis 3015");
     // O histórico só é consultado quando o operador pede.
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/cutting/history"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Histórico" }));

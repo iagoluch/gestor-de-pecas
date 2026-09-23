@@ -26,48 +26,49 @@ export function OperatorShell({
   navigation?: OperatorNavItem[];
   activeNav?: string;
 }>) {
-  const navIcon = assets.operator.navigation[sector as keyof typeof assets.operator.navigation];
-  const title = resource && resource !== sector ? `${sector} - ${resource}` : sector;
-  // Sem navegação declarada o posto continua exibindo apenas o próprio setor,
-  // exatamente como antes da aba Qualidade existir.
-  const items: OperatorNavItem[] = navigation?.length
-    ? navigation
-    : [{ key: sector, label: sector, icon: navIcon, onSelect: () => undefined }];
+  const items = navigation ?? [];
   const current = activeNav ?? items[0]?.key;
   const hasTabs = items.length > 1;
+  const resourceLabel = sector.toLocaleLowerCase().startsWith("solda") ? "Estação" : "Máquina";
+  const selectedResource = resource === sector ? resource : <><span>{sector} - </span><span>{resource}</span></>;
   return (
     <div className="operator-shell">
-      <header className="operator-topbar">
+      <header className={`operator-topbar ${resource ? "operator-topbar--with-machine" : ""}`}>
         <div className="operator-topbar__brand">
           <img src={assets.operator.logo} alt="Gestor de Peças" />
-          <small className="sidebar__credit">Iago Luchtenberg da Silva</small>
+          <small className="operator-topbar__credit">Powered by Iago Luchtenberg</small>
         </div>
         <div className="operator-topbar__clock"><img src={assets.clock} alt="" /><SystemClock /></div>
-        {resource ? <div className="operator-topbar__machine"><strong>{title}</strong></div> : <div />}
+        {resource ? (
+          onBack ? (
+            <button type="button" className="operator-topbar__machine" onClick={onBack} title={`Trocar ${resourceLabel.toLocaleLowerCase()}`}>
+              <span>{resourceLabel}</span><strong>{selectedResource}</strong>
+            </button>
+          ) : (
+            <div className="operator-topbar__machine"><span>{resourceLabel}</span><strong>{selectedResource}</strong></div>
+          )
+        ) : <div />}
         <div className="operator-topbar__actions">
           <ThemeToggle compact />
           <LogoutButton compact />
         </div>
       </header>
-      {hasTabs || onBack ? (
+      {hasTabs ? (
         <nav className="operator-tabs" aria-label="Áreas do posto">
-          {onBack ? <button type="button" className="operator-back" onClick={onBack} aria-label="Voltar">‹</button> : null}
-          {hasTabs
-            ? items.map((item) => {
-                const active = item.key === current;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`operator-tab ${active ? "operator-tab--active" : ""}`}
-                    aria-current={active ? "page" : undefined}
-                    onClick={item.onSelect}
-                  >
-                    {item.icon ? <img src={item.icon} alt="" /> : null}<span>{item.label}</span>
-                  </button>
-                );
-              })
-            : null}
+          {items.map((item) => {
+            const active = item.key === current;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className={`operator-tab ${active ? "operator-tab--active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                onClick={item.onSelect}
+              >
+                {item.icon ? <img src={item.icon} alt="" /> : null}<span>{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
       ) : null}
       <main className="operator-main">

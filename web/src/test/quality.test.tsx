@@ -178,7 +178,7 @@ describe("aba Qualidade do operador", () => {
   it("não existe mais no posto: o operador entra pelo Iniciar", async () => {
     backend();
     renderOperator();
-    await screen.findByRole("heading", { name: "Dobra - 1303" });
+    await screen.findByText("1303");
     expect(screen.queryByRole("button", { name: "Qualidade" })).not.toBeInTheDocument();
     // O Setup continua sendo botão do posto: ele aponta o tempo de preparação.
     expect(screen.getByRole("button", { name: "Setup" })).toBeInTheDocument();

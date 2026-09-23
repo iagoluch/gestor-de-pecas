@@ -803,26 +803,27 @@ tbody tr:last-child > td { border-bottom: 0; }
 
 /* Posto do operador — barra superior enxuta; o espaço da tela é do apontamento. */
 .operator-shell { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
-.operator-topbar { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 22px; height: 56px; padding: 0 22px; color: white; background: var(--sidebar); }
-.operator-topbar__brand { position: relative; display: flex; align-items: center; }
-.operator-topbar__brand img { height: 28px; width: auto; object-fit: contain; }
-.operator-topbar__brand .sidebar__credit { position: absolute; left: 0; top: 100%; padding-top: 1px; font-size: 9px; white-space: nowrap; }
+.operator-topbar { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 22px; height: 72px; padding: 0 22px; color: white; background: var(--sidebar); }
+.operator-topbar__brand { display: grid; gap: 2px; }
+.operator-topbar__brand img { height: 32px; width: auto; object-fit: contain; }
+.operator-topbar__credit { display: block; color: var(--sidebar-text-faint); font-size: 9px; line-height: 1; letter-spacing: .08em; white-space: nowrap; }
 .operator-topbar__clock { display: flex; align-items: center; gap: 8px; padding-left: 22px; border-left: 1px solid var(--sidebar-border); }
-.operator-topbar__clock img { width: 20px; height: 20px; }
-.operator-topbar__clock strong { display: block; font-size: 13px; line-height: 1.1; }
-.operator-topbar__clock small { display: block; font-size: 9px; opacity: .75; }
-.operator-topbar__machine { min-width: 0; justify-self: center; text-align: center; overflow: hidden; }
-.operator-topbar__machine strong { display: block; font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.operator-topbar__actions { display: flex; align-items: center; gap: 6px; }
+.operator-topbar__clock img { width: 24px; height: 24px; }
+.operator-topbar__clock strong { display: block; font-size: 17px; line-height: 1.1; }
+.operator-topbar__clock small { display: block; font-size: 11px; opacity: .75; }
+.operator-topbar__machine { position: absolute; left: 50%; transform: translateX(-50%); min-width: 0; max-width: calc(100% - 420px); display: grid; gap: 1px; padding: 0; border: 0; color: white; background: transparent; text-align: center; overflow: hidden; }
+.operator-topbar__machine span { color: var(--sidebar-text-muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.operator-topbar__machine strong { display: block; font-size: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.operator-topbar__machine { cursor: pointer; }
+button.operator-topbar__machine:hover strong, button.operator-topbar__machine:focus-visible strong { text-decoration: underline; text-underline-offset: 3px; }
+.operator-topbar__actions { grid-column: 4; justify-self: end; display: flex; align-items: center; gap: 6px; }
 .operator-tabs { display: flex; align-items: center; gap: 8px; padding: 8px 22px; border-bottom: 1px solid var(--divider); background: var(--surface); overflow-x: auto; }
 .operator-tab { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: var(--radius-control); color: var(--text); background: var(--surface-alt); font-weight: 600; font-size: 14px; white-space: nowrap; transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
 .operator-tab img { width: 20px; height: 20px; object-fit: contain; }
 .operator-tab--active { color: white; background: var(--primary-fill); }
 .operator-tab:hover:not(.operator-tab--active) { background: var(--primary-soft); }
 .operator-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.operator-back { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--primary); background: var(--surface); font-size: 28px; line-height: 1; transition: border-color var(--duration-fast) ease, background-color var(--duration-fast) ease; }
-.operator-back:hover { border-color: var(--primary); background: var(--primary-soft); }
-.operator-content { flex: 1; padding: clamp(14px, 1.4vw, 27px); }
+.operator-content { flex: 1; padding: clamp(24px, 2vw, 38px) clamp(14px, 1.4vw, 27px) clamp(14px, 1.4vw, 27px); }
 .operator-content > section { min-height: 100%; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-1); }
 
 .operator-selection { display: flex; flex-direction: column; align-items: center; padding: 31px 28px; }
@@ -1341,11 +1342,18 @@ tbody tr:last-child > td { border-bottom: 0; }
 }
 
 @media (max-width: 650px) {
-  .operator-topbar { grid-template-columns: auto 1fr auto; gap: 10px; height: 48px; padding: 0 12px; }
-  .operator-topbar__brand img { height: 22px; }
-  .operator-topbar__brand .sidebar__credit { display: none; }
-  .operator-topbar__clock { display: none; }
-  .operator-topbar__machine { grid-column: 2; font-size: 13px; }
+  .operator-topbar { grid-template-columns: auto 1fr auto; gap: 10px; height: 56px; padding: 0 12px; }
+  .operator-topbar--with-machine { grid-template-rows: 56px 28px; height: 84px; }
+  .operator-topbar__brand img { height: 24px; }
+  .operator-topbar__credit { font-size: 8px; }
+  .operator-topbar__clock { gap: 5px; padding-left: 0; border-left: 0; justify-self: center; }
+  .operator-topbar__clock img { width: 16px; height: 16px; }
+  .operator-topbar__clock strong { font-size: 13px; }
+  .operator-topbar__clock small { font-size: 9px; }
+  .operator-topbar__machine { position: static; grid-column: 1 / -1; grid-row: 2; width: 100%; max-width: none; transform: none; }
+  .operator-topbar__machine span { display: none; }
+  .operator-topbar__machine strong { font-size: 14px; }
+  .operator-topbar__actions { grid-column: 3; }
   .operator-tabs { padding: 6px 12px; }
   .operator-content { padding: 8px; }
   .operator-resource-grid, .operator-selection--welding .operator-resource-grid { grid-template-columns: 1fr; }

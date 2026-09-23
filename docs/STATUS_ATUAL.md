@@ -14,6 +14,11 @@ commit `4a60564`.
 
 ### Atualização de auditoria — 23/09/2026
 
+- O posto do operador passou a usar uma barra superior enxuta em todas as
+  telas compartilhadas por `OperatorShell`: logo, data/hora, setor e recurso
+  selecionado no centro e ações compactas. Em Solda, o recurso é identificado
+  como **Estação**; nos demais postos, como **Máquina**. A troca permanece no
+  próprio identificador central, sem restaurar a sidebar.
 - A outbox TOTVS agora preserva a ordem causal por OP: evento em `RETRY`,
   `SENDING` ou `ERROR` bloqueia qualquer posterior da mesma OP; somente
   `SENT` libera a sequência. A migration 46 normaliza itens anteriores para
