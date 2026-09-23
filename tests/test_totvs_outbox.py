@@ -351,6 +351,22 @@ class OutboxPlannerTests(unittest.TestCase):
         self.assertIn("<ReportQuantity>5</ReportQuantity>", request.payload_xml)
         self.assertIn("<WasteCode>RP</WasteCode>", request.payload_xml)
 
+    def test_refugo_da_primeira_peca_entra_na_mesma_outbox_canonica(self):
+        event = canonical_event(
+            state="primeira_peca_refugo",
+            good_quantity=Decimal("0"),
+            scrap_quantity=Decimal("1"),
+            event_reason="REFUGO DA PRIMEIRA PEÇA",
+        )
+        config = OutboundEnqueueConfig(
+            enabled=True, waste_codes={"REFUGO DA PRIMEIRA PEÇA": "RP"}
+        )
+        requests = plan_execution_event(event, config=config)
+
+        self.assertEqual([item.event_type for item in requests], [EVENT_PRODUCTION_APPOINTMENT])
+        self.assertIn("<ApprovedQuantity>0</ApprovedQuantity>", requests[0].payload_xml)
+        self.assertIn("<ScrapQuantity>1</ScrapQuantity>", requests[0].payload_xml)
+
     def test_inicio_com_quantidade_zero_e_opt_in(self):
         inicio = canonical_event(
             state="producao",

@@ -311,7 +311,7 @@ class FirstPieceServiceTests(unittest.TestCase):
         self.assertFalse(recusa.ok)
         self.assertEqual(recusa.code, "primeira_peca_cracha_inativo")
 
-    def test_refugo_da_primeira_peca_nao_exige_cracha_e_pede_outra_peca(self):
+    def test_refugo_sem_apontamento_ativo_e_recusado_sem_descartar_a_peca(self):
         db, servico = self._servico()
         self._ciclo_ate_producao(servico)
         servico.marcar_setup(op="OP-PP", operacao=self.OPERACAO)
@@ -322,7 +322,8 @@ class FirstPieceServiceTests(unittest.TestCase):
             operacao=self.OPERACAO,
             resultado="REFUGO",
         )
-        self.assertTrue(refugo.ok)
+        self.assertFalse(refugo.ok)
+        self.assertEqual(refugo.code, "primeira_peca_apontamento_pendente")
         self.assertIsNone(
             servico.bloqueio_ativo(op="OP-PP", setor="Dobra", operacao=self.OPERACAO)
         )

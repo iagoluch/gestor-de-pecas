@@ -1252,6 +1252,14 @@ class FakeDatabase:
         if linha is None or linha["bloqueio_ativo"]:
             return None
         momento = instante or datetime.now().replace(microsecond=0)
+        apontamento = None
+        if str(resultado).strip().upper() == "REFUGO":
+            apontamento_id = linha.get("apontamento_id")
+            apontamento = next(
+                (row for row in self.appointments if row["id"] == apontamento_id), None
+            )
+            if apontamento is None:
+                raise ValueError("O refugo da primeira peça exige um apontamento operacional ativo.")
         linha.update(
             status=str(resultado).strip().upper(),
             resultado=str(resultado).strip().upper(),
@@ -1266,6 +1274,13 @@ class FakeDatabase:
             setup_registrado_em=None if bloquear else linha.get("setup_registrado_em"),
             atualizada_em=momento,
         )
+        if str(resultado).strip().upper() == "REFUGO":
+            apontamento["quantidade_refugo"] = int(apontamento.get("quantidade_refugo") or 0) + 1
+            self.operator_events.append(
+                {"id": self._id("operator_events"), "apontamento_id": apontamento_id,
+                 "estado": "primeira_peca_refugo", "quantidade_boa": 0,
+                 "quantidade_refugo": 1, "operador": operador, "data_hora": momento}
+            )
         return dict(linha)
 
     def liberar_primeira_peca_bloqueada(

@@ -46,7 +46,7 @@ AGGREGATE_EXECUTION_EVENT = "execution_event"
 AGGREGATE_PRODUCTION_ORDER = "production_order"
 
 # Estados canônicos que carregam resultado produtivo apontável.
-_QUANTITY_STATES = frozenset({"parcial", "finalizado"})
+_QUANTITY_STATES = frozenset({"parcial", "finalizado", "primeira_peca_refugo"})
 # Estados canônicos que podem iniciar a execução no recurso.
 _START_STATES = frozenset({"producao", "setup"})
 

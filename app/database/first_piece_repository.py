@@ -228,40 +228,69 @@ class FirstPieceRepositoryMixin:
         """
 
         momento = instante or datetime.now().replace(microsecond=0)
+        decisao = str(resultado).strip().upper()
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 UPDATE qualidade_primeira_peca
-                   SET status = %s,
-                       resultado = %s,
-                       inspecionada_em = %s,
-                       inspecionada_por = %s,
-                       observacao = %s,
-                       bloqueio_ativo = %s,
-                       bloqueio_ocorrencia = %s,
+                   SET status = %s, resultado = %s, inspecionada_em = %s,
+                       inspecionada_por = %s, observacao = %s,
+                       bloqueio_ativo = %s, bloqueio_ocorrencia = %s,
                        bloqueio_em = CASE WHEN %s THEN %s ELSE NULL END,
                        setup_registrado_em = CASE WHEN %s THEN NULL ELSE setup_registrado_em END,
                        atualizada_em = %s
-                 WHERE id = %s
-                   AND bloqueio_ativo IS FALSE
+                 WHERE id = %s AND bloqueio_ativo IS FALSE
                 RETURNING *
                 """,
                 (
-                    str(resultado).strip().upper(),
-                    str(resultado).strip().upper(),
-                    momento,
-                    str(operador or "Operador").strip(),
-                    _texto(observacao, 500),
-                    bool(bloquear),
-                    _texto(ocorrencia, 60) if bloquear else None,
-                    bool(bloquear),
-                    momento,
-                    bool(bloquear),
-                    momento,
-                    int(primeira_peca_id),
+                    decisao, decisao, momento, str(operador or "Operador").strip(),
+                    _texto(observacao, 500), bool(bloquear),
+                    _texto(ocorrencia, 60) if bloquear else None, bool(bloquear),
+                    momento, bool(bloquear), momento, int(primeira_peca_id),
                 ),
             )
-            return _as_dict(cursor.fetchone())
+            primeira_peca = _as_dict(cursor.fetchone())
+            if primeira_peca is None or decisao != FIRST_PIECE_SCRAP:
+                return primeira_peca
+
+            apontamento_id = primeira_peca.get("apontamento_id")
+            if not apontamento_id:
+                raise ValueError("O refugo da primeira peça exige um apontamento operacional ativo.")
+            cursor.execute("SELECT * FROM apontamentos_operacionais WHERE id = %s FOR UPDATE", (apontamento_id,))
+            apontamento = _as_dict(cursor.fetchone())
+            if apontamento is None:
+                raise ValueError("Apontamento operacional da primeira peça não encontrado.")
+            atendida = int(apontamento.get("quantidade_boa") or 0) + int(apontamento.get("quantidade_refugo") or 0)
+            if atendida >= int(apontamento.get("quantidade") or 0):
+                raise ValueError("O refugo excede a quantidade prevista da OP.")
+            cursor.execute(
+                "UPDATE apontamentos_operacionais SET quantidade_refugo = quantidade_refugo + 1 WHERE id = %s RETURNING *",
+                (apontamento_id,),
+            )
+            apontamento = _as_dict(cursor.fetchone())
+            cursor.execute(
+                """
+                INSERT INTO eventos_apontamento_operador (
+                    apontamento_id, estado, motivo, comentario, quantidade_boa,
+                    quantidade_refugo, operador, data_hora
+                ) VALUES (%s, 'primeira_peca_refugo', %s, %s, 0, 1, %s, %s)
+                RETURNING id
+                """,
+                (apontamento_id, "Refugo da primeira peça", _texto(observacao, 500), str(operador or "Operador").strip(), momento),
+            )
+            evento_id = cursor.fetchone()["id"]
+            self.registrar_evento_quantidade(
+                "refugo", 1, apontamento["op"],
+                numero_operacao=apontamento.get("numero_operacao"), produto_codigo=apontamento.get("produto_codigo"),
+                recurso=apontamento.get("maquina"), tipo_setor=apontamento.get("tipo_setor"),
+                operador=str(operador or "Operador").strip(), motivo="Refugo da primeira peça",
+                comentario=_texto(observacao, 500), data_hora=momento, origem="primeira_peca",
+                referencia_origem=f"evento_apontamento:{evento_id}", connection=connection,
+            )
+            self._enfileirar_outbound_totvs_tx(
+                cursor, evento_id=evento_id, codigo_op=apontamento.get("op"), execucao_concluida=False,
+            )
+            return primeira_peca
 
     def liberar_primeira_peca_bloqueada(
         self, primeira_peca_id, *, cracha, nome, instante=None

@@ -313,6 +313,12 @@ class FirstPieceService:
                 "Aponte o Setup desta operação antes de aprovar a primeira peça.",
                 self._publico(linha),
             )
+        if decisao == FIRST_PIECE_SCRAP and not linha.get("apontamento_id"):
+            return _fail(
+                "primeira_peca_apontamento_pendente",
+                "Inicie a operação antes de registrar o refugo da primeira peça.",
+                self._publico(linha),
+            )
 
         atualizada = self.db.registrar_inspecao_primeira_peca(
             linha["id"],
@@ -339,14 +345,6 @@ class FirstPieceService:
             )
             codigo = "primeira_peca_retrabalho"
         elif decisao == FIRST_PIECE_SCRAP:
-            creditar = getattr(self.db, "registrar_refugo_primeira_peca", None)
-            if callable(creditar):
-                try:
-                    creditar(atualizada.get("apontamento_id"))
-                except Exception:  # pragma: no cover - não pode derrubar o apontamento
-                    logging.exception(
-                        "Falha ao creditar o refugo da primeira peça da OP %s.", op
-                    )
             self._alertas.primeira_peca_refugada(contexto)
             mensagem = (
                 "Primeira peça refugada. Produza e inspecione outra primeira peça; "

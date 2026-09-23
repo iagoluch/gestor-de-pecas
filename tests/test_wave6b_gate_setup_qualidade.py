@@ -640,6 +640,35 @@ class QuantidadesDoLoteTests(unittest.TestCase):
         self.assertEqual(int(final.data["quantidade_refugo"]), 1)
         self.assertEqual(int(final.data["saldo_restante"] or 0), 0)
 
+    def test_op_unitaria_refugada_e_depois_conforme_finaliza_sem_nova_quantidade(self):
+        """O refugo esgota o saldo; a nova peça só libera o portão de qualidade."""
+
+        db, fluxo, contexto = cenario("Dobra", quantidade=1)
+        servico = FirstPieceService(db, "OPERADOR 6B")
+        refugo = servico.registrar_checklist(
+            **contexto,
+            medidas=medidas("13,0", "40,0"),
+            destino="REFUGO",
+            cracha_responsavel="SIM99",
+        )
+        self.assertTrue(refugo.ok, refugo.message)
+        self.assertEqual(db.appointments[0]["quantidade_refugo"], 1)
+        self.assertEqual(
+            db.operator_events[-1]["estado"], "primeira_peca_refugo"
+        )
+
+        self.assertTrue(servico.registrar_producao(**contexto).ok)
+        conforme = servico.inspecionar(**contexto, resultado="CONFORME")
+        self.assertTrue(conforme.ok, conforme.message)
+        final = fluxo.executar("Finalizado", **contexto, operadores_cracha=["1"])
+
+        self.assertTrue(final.ok, final.message)
+        self.assertEqual(db.appointments[0]["status"], "Finalizado")
+        self.assertEqual(
+            (db.appointments[0]["quantidade_boa"], db.appointments[0]["quantidade_refugo"]),
+            (0, 1),
+        )
+
     def test_retrabalho_pendente_nao_consome_o_saldo(self):
         db, fluxo, contexto = cenario("Dobra", quantidade=10)
         FirstPieceService(db, "OPERADOR 6B").registrar_checklist(

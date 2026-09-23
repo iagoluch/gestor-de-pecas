@@ -540,6 +540,19 @@ tentativas de 3 segundos e timeout por requisição. O ensaio
 que código obsoleto é removido, enquanto dados de runtime permanecem após dois
 espelhamentos consecutivos. Commit: `7727432`.
 
+### 2.22 Refugo da primeira peça é canônico e atômico (23/09/2026)
+
+O descarte da primeira peça deixou de atualizar apenas o saldo do apontamento.
+Na mesma transação ele agora grava o estado `primeira_peca_refugo`, o evento
+canônico de quantidade e a obrigação da outbox TOTVS quando ela estiver
+habilitada. A migration 44 registra o novo estado permitido. Se não existir
+apontamento operacional, o refugo é recusado sem gravar uma decisão parcial.
+
+Em OP unitária, refugo esgota o saldo planejado; uma nova peça conforme serve
+para liberar o portão de qualidade e a finalização sem nova quantidade passa a
+fechar a operação. A prova dirigida cobre o fluxo em memória, o PostgreSQL em
+schema descartável e o planejamento da outbox.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

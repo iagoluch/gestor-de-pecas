@@ -21,6 +21,7 @@ from app.database.migrations import (
 )
 from mes.contracts import AnalyticsFilter
 from mes.services.frontend_facade import FrontendBackendFacade
+from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.production import ProductionService
 from tests.helpers import liberar_primeira_peca
@@ -453,6 +454,55 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         task_id = self.db.inserir_tarefa("T-" + code)
         self.db.inserir_op_na_tarefa(task_id, code, "Peça", "Aguardando Dobra", 2)
         return self.db.enfileirar_apontamento_operacional(code, "Peça", task_id, "Dobra", "1303", "IAGO", 2)
+
+    def test_refugo_da_primeira_peca_e_finalizacao_unitaria_usam_eventos_canonicos(self):
+        operation = {
+            "numero_operacao": "20",
+            "codigo_recurso": "DOBRA3",
+            "descricao_operacao": "DOBRA",
+            "produto_codigo": "P-UNITARIA",
+            "produto_descricao": "Peça unitária",
+            "quantidade": 1,
+        }
+        flow = OperatorFlowService(self.db, "OPERADOR TESTE")
+        self.db.cadastrar_operador_apontamento("1", "Operador teste", fonte="teste")
+        context = {
+            "op": "OP-UNITARIA-REFUGO",
+            "setor": "Dobra",
+            "recurso": "1303",
+            "operacao": operation,
+        }
+        self.assertTrue(flow.executar("Início", **context).ok)
+        appointment = self.db.listar_apontamentos_por_op(context["op"])[0]
+        first_piece = FirstPieceService(self.db, "OPERADOR TESTE")
+        first_piece.garantir(**context, apontamento_id=appointment["id"])
+        self.assertIsNotNone(
+            first_piece.marcar_setup(
+                op=context["op"], operacao=operation
+            )
+        )
+        self.assertTrue(first_piece.registrar_producao(**context).ok)
+        scrap = first_piece.inspecionar(**context, resultado="REFUGO")
+        self.assertTrue(scrap.ok, scrap.message)
+
+        appointment = self.db.buscar_apontamento_operacional(appointment["id"])
+        self.assertEqual(appointment["quantidade_refugo"], 1)
+        events = self.db.listar_eventos_apontamento_operador(appointment["id"])
+        scrap_event = next(event for event in events if event["estado"] == "primeira_peca_refugo")
+        quantity_events = self.db.listar_eventos_quantidade_periodo(
+            datetime(2000, 1, 1), datetime(2100, 1, 1), op=context["op"]
+        )
+        self.assertEqual(
+            [(event["tipo"], event["quantidade"], event["referencia_origem"])
+             for event in quantity_events],
+            [("refugo", 1, f"evento_apontamento:{scrap_event['id']}")],
+        )
+
+        self.assertTrue(first_piece.registrar_producao(**context).ok)
+        self.assertTrue(first_piece.inspecionar(**context, resultado="CONFORME").ok)
+        finished = flow.executar("Finalizado", **context, operadores_cracha=["1"])
+        self.assertTrue(finished.ok, finished.message)
+        self.assertEqual(finished.data["status"], "Finalizado")
 
     def test_apontamento_impede_duplicado_e_grava_transicoes_com_historico(self):
         item = self._appointment()

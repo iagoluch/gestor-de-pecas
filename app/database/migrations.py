@@ -2192,6 +2192,24 @@ PAUSAS_SOLDA_DESMEMBRADA_STATEMENTS = (
 )
 
 
+PRIMEIRA_PECA_REFUGO_EVENT_DESCRIPTION = (
+    "evento canônico de refugo da primeira peça"
+)
+
+PRIMEIRA_PECA_REFUGO_EVENT_STATEMENTS = (
+    "ALTER TABLE eventos_apontamento_operador DROP CONSTRAINT IF EXISTS ck_eventos_apontamento_operador_estado",
+    "ALTER TABLE eventos_apontamento_operador DROP CONSTRAINT IF EXISTS eventos_apontamento_operador_estado_check",
+    """
+    ALTER TABLE eventos_apontamento_operador
+    ADD CONSTRAINT ck_eventos_apontamento_operador_estado
+    CHECK (estado IN (
+        'fila', 'producao', 'parada', 'setup', 'retrabalho',
+        'parcial', 'finalizado', 'fora_turno', 'primeira_peca_refugo'
+    ))
+    """,
+)
+
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2238,6 +2256,7 @@ MIGRATIONS = {
     41: (TELEGRAM_CUT_MESSAGES_DESCRIPTION, TELEGRAM_CUT_MESSAGES_STATEMENTS),
     42: (ATIVIDADE_SEM_OP_DESCRIPTION, ATIVIDADE_SEM_OP_STATEMENTS),
     43: (PAUSAS_SOLDA_DESMEMBRADA_DESCRIPTION, PAUSAS_SOLDA_DESMEMBRADA_STATEMENTS),
+    44: (PRIMEIRA_PECA_REFUGO_EVENT_DESCRIPTION, PRIMEIRA_PECA_REFUGO_EVENT_STATEMENTS),
 }
 
 

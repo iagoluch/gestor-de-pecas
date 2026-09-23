@@ -1221,18 +1221,27 @@ class OperatorFlowService:
                         )
             total_lote = boas + refugos
             boas_anteriores = int(atual.get("quantidade_boa") or 0)
+            refugos_anteriores = int(atual.get("quantidade_refugo") or 0)
             previsto = int(atual.get("quantidade") or 0)
             quality_rework_only = bool(
                 str(setor or "").casefold() == "qualidade"
                 and retrabalhos > 0
             )
-            if total_lote <= 0 and not quality_rework_only and not inspecao_marcador:
+            atendimento_previo = ManufacturingRules.attended_quantity(
+                boas_anteriores, refugos_anteriores
+            )
+            finalizacao_de_saldo_esgotado = atendimento_previo >= previsto
+            if (
+                total_lote <= 0
+                and not quality_rework_only
+                and not inspecao_marcador
+                and not finalizacao_de_saldo_esgotado
+            ):
                 return OperatorFlowResult(
                     False,
                     "Informe ao menos uma peça boa ou um refugo.",
                     "quantidade_invalida",
                 )
-            refugos_anteriores = int(atual.get("quantidade_refugo") or 0)
             quantidade_atendida = ManufacturingRules.attended_quantity(
                 boas_anteriores + boas,
                 refugos_anteriores + refugos,
