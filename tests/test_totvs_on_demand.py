@@ -241,6 +241,18 @@ class OnDemandDomainTests(unittest.TestCase):
         self.assertFalse(outcome.requested)
         self.assertEqual(repo.requests, {})
 
+    def test_op_local_nao_e_desativada_mesmo_que_o_erp_responda_404(self):
+        """F18: OP já presente no MES nunca é reconsultada; um 404 do ERP
+        (OP encerrada/excluída depois) não desativa nem apaga a execução."""
+
+        repo = FakeRepository({REAL_OP_NUMBER: {"codigo_op": REAL_OP_NUMBER}})
+        gateway = RecordingGateway(ProductionOrderRequestResult(not_found=True))
+        outcome = _service(repo, gateway).sync_production_order_on_demand(REAL_OP_NUMBER)
+        self.assertEqual(outcome.status, STATUS_LOCAL)
+        self.assertEqual(gateway.calls, [])
+        self.assertIn(REAL_OP_NUMBER, repo.orders)
+        self.assertEqual(repo.requests, {})
+
     def test_op_ausente_solicita_totvs(self):
         repo = FakeRepository()
         order = {"codigo_op": REAL_OP_NUMBER}

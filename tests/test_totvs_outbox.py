@@ -846,6 +846,25 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
         # Um novo ciclo não reserva o item recusado.
         self.assertEqual(self._run_worker_with(lambda r: httpx.Response(200)).reserved, 0)
 
+    def test_rejeicao_funcional_preserva_o_fato_do_mes(self):
+        """F18: o Protheus planeja, o MES executa. Uma recusa posterior do ERP
+        (OP totalizada/encerrada) fica só na outbox; o apontamento já
+        registrado não é apagado, invalidado nem interrompido."""
+        self._produce_and_finish("10", boas=10)
+        antes = self._facts_snapshot()
+        self._run_worker_with(lambda r: httpx.Response(200, text=ACK_FUNCTIONAL_ERROR))
+        depois = self._facts_snapshot()
+        for tabela in ("totvs_outbox", "totvs_outbox_attempts"):
+            antes.pop(tabela), depois.pop(tabela)
+        self.assertEqual(depois, antes)
+        self.assertEqual(self._appointment()["status"], "Finalizado")
+        self.assertEqual(self._appointment()["quantidade_boa"], 10)
+        ativas = self._scalar(
+            "SELECT COUNT(*) AS total FROM catalogo_operacoes_op WHERE codigo_op = %s AND ativo IS TRUE",
+            (self.op,),
+        )
+        self.assertGreater(ativas, 0)
+
     # -- 11: concorrência ---------------------------------------------
     def test_dois_workers_simultaneos_nao_reservam_a_mesma_linha(self):
         self._produce_and_finish("10", boas=10)
