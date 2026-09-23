@@ -73,6 +73,20 @@ class OperatorFlowTests(unittest.TestCase):
         )
         self.assertTrue(valid.ok)
 
+    def test_inicio_recusa_operacao_sem_quantidade_planejada(self):
+        _db, service, operation = self._service()
+
+        result = service.executar(
+            "Início",
+            op="OP-OPERADOR",
+            setor="Dobra",
+            recurso="1303",
+            operacao={**operation, "quantidade": None},
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, "quantidade_planejada_indisponivel")
+
     def test_recurso_exclusivo_bloqueia_corrida_na_transacao(self):
         db, service, first_operation = self._service()
         second_task = db.inserir_tarefa("T-OPERADOR-2")

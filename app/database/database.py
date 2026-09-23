@@ -586,6 +586,27 @@ class Database(
                 (sincronizado_em,),
             )
             inativados = cursor.rowcount
+            # A quantidade do apontamento é o teto que protege a escrita de
+            # produção. Enquanto a execução estiver aberta, ela acompanha o
+            # planejamento corporativo mais recente; histórico finalizado não
+            # é reescrito. Se o PCP reduzir o plano abaixo do já atendido,
+            # preserva-se o atendido como teto efetivo para não fabricar uma
+            # violação do CHECK nem permitir produção adicional.
+            cursor.execute(
+                """
+                UPDATE apontamentos_operacionais apontamento
+                SET quantidade = GREATEST(
+                    pcp.quantidade,
+                    apontamento.quantidade_boa + apontamento.quantidade_refugo
+                )
+                FROM catalogo_pcp_ops pcp
+                WHERE pcp.codigo_op = apontamento.op
+                  AND pcp.ativo IS TRUE
+                  AND apontamento.status IN (
+                      'Aguardando', 'Em processo', 'Parada', 'Setup', 'Retrabalho'
+                  )
+                """
+            )
         return {
             "lidos": len(normalizados),
             "inseridos": int(counts["inseridos"]),
@@ -1914,13 +1935,19 @@ class Database(
         tipo_setor,
         maquina,
         operador,
-        quantidade=1,
+        quantidade=None,
         data_entrada=None,
         operacao=None,
         etapa_anterior_pendente_confirmada=False,
     ):
         operacao = dict(operacao or {})
         entrada = _period_value(data_entrada) or self._now()
+        try:
+            quantidade_planejada = int(quantidade)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Quantidade planejada do apontamento é obrigatória.") from exc
+        if quantidade_planejada <= 0:
+            raise ValueError("Quantidade planejada do apontamento deve ser maior que zero.")
         try:
             with self.connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
@@ -1938,7 +1965,7 @@ class Database(
                     """,
                     (
                         limpa_codigo(op), peca or "", tarefa_id, str(tipo_setor or "").strip(),
-                        str(maquina or "").strip(), max(1, int(quantidade or 1)), operador,
+                        str(maquina or "").strip(), quantidade_planejada, operador,
                         entrada,
                         operacao.get("id") or operacao.get("catalogo_operacao_id"),
                         operacao.get("numero_operacao") or operacao.get("codigo"),

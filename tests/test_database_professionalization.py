@@ -181,6 +181,39 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         )
         self.assertEqual(len(self.db.get_op_timeline("OP-OPERACIONAL")), 1)
 
+    def test_quantidade_do_apontamento_ativo_acompanha_pcp_sem_reescrever_historico(self):
+        base = {
+            "codigo_op": "OP-TETO-PCP",
+            "produto_codigo": "P-TETO",
+            "produto_descricao": "Peça do teto",
+            "unidade": "PC",
+            "data_emissao": "2026-09-23",
+        }
+        self.db.publicar_catalogo_pcp([{**base, "quantidade": 3}])
+        appointment = self.db.enfileirar_apontamento_operacional(
+            "OP-TETO-PCP", "P-TETO", None, "Dobra", "1303", "IAGO", quantidade=3
+        )
+
+        self.db.publicar_catalogo_pcp([{**base, "quantidade": 8}])
+        self.assertEqual(
+            self.db.buscar_apontamento_operacional(appointment["id"])["quantidade"], 8
+        )
+
+        self.db.transicionar_apontamento_operador(appointment["id"], "producao", "IAGO")
+        self.db.transicionar_apontamento_operador(
+            appointment["id"], "finalizado", "IAGO", quantidade_boa=8
+        )
+        self.db.publicar_catalogo_pcp([{**base, "quantidade": 12}])
+        self.assertEqual(
+            self.db.buscar_apontamento_operacional(appointment["id"])["quantidade"], 8
+        )
+
+    def test_apontamento_sem_quantidade_planejada_eh_recusado(self):
+        with self.assertRaisesRegex(ValueError, "Quantidade planejada"):
+            self.db.enfileirar_apontamento_operacional(
+                "OP-SEM-QTD", "Peça", None, "Dobra", "1303", "IAGO"
+            )
+
     def test_roteiro_importado_continua_visivel_quando_catalogo_inativa_op(self):
         now = datetime.now().replace(microsecond=0)
         self.db.publicar_catalogo_pcp(

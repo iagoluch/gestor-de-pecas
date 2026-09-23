@@ -594,6 +594,18 @@ Validação dirigida: `tests.test_andon_redesign` (16 testes),
 `web/src/test/andon.test.tsx` (15 testes), `npm run build` e detector
 Impeccable sem achados.
 
+### 2.28 Teto de produção acompanha o planejamento PCP (23/09/2026)
+
+O Início não transforma mais quantidade ausente em teto de uma peça: a OP é
+recusada com estado operacional explicado. A quantidade persistida em um
+apontamento ainda ativo acompanha a revisão do catálogo PCP; apontamento já
+finalizado não é reescrito. Se o PCP reduzir a quantidade abaixo do que já foi
+atendido, o teto efetivo preserva o atendido e impede produção adicional, sem
+forjar uma violação histórica.
+
+Validação dirigida: `tests.test_operator_flow` e dois testes PostgreSQL de
+`test_database_professionalization` (32 testes no total) passaram.
+
 ## 3. Pendências abertas consolidadas (não bloqueiam código, aguardam decisão)
 
 1. Roteiro de Pintura com posto repetido: uma operação apontável ou duas?

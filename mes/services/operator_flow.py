@@ -1106,6 +1106,17 @@ class OperatorFlowService:
             )
             if recusa_gate is not None:
                 return recusa_gate
+            quantidade_planejada = operacao.get("quantidade")
+            try:
+                quantidade_planejada = int(quantidade_planejada)
+            except (TypeError, ValueError):
+                quantidade_planejada = 0
+            if quantidade_planejada <= 0:
+                return OperatorFlowResult(
+                    False,
+                    "A quantidade planejada desta OP não está disponível. Atualize o planejamento antes de iniciar.",
+                    "quantidade_planejada_indisponivel",
+                )
             contexto = self.db.buscar_op_por_codigo(codigo)
             atual = self.db.enfileirar_apontamento_operacional(
                 codigo,
@@ -1114,7 +1125,7 @@ class OperatorFlowService:
                 setor,
                 recurso,
                 self.operador,
-                quantidade=operacao.get("quantidade") or 1,
+                quantidade=quantidade_planejada,
                 operacao=operacao,
                 data_entrada=self._now(),
                 etapa_anterior_pendente_confirmada=bool(
