@@ -17,4 +17,4 @@ groq>=1.6,<2
 # Driver ODBC usado somente para LER o banco SigmaNEST (planejamento de Corte).
 # O produto importa pyodbc sob demanda: sem ele o Gestor sobe normalmente e
 # apenas a sincronização do Corte fica indisponível.
-pyodbc>=5.1,<6
+pyodbc>=5.3.0,<6
