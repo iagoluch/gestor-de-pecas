@@ -346,17 +346,18 @@ class CalendarService:
         """Complemento da janela operacional dentro do recorte.
 
         Fora de turno é grandeza de calendário: não é disponibilidade e não é
-        parada da máquina. Sem calendário cadastrado, a janela oficial da
-        Manufatura (08:00–17:30) é a referência.
+        parada da máquina. Sem calendário cadastrado, o recurso herda os
+        horários globais vigentes em ``parametros_turno``. Isso mantém o
+        estado corrente, o recorte temporal e os limites automáticos na mesma
+        referência, sem fingir que o recurso passou a ter calendário próprio
+        para fins de capacidade.
         """
 
         if fim <= inicio:
             return []
         operational = self.operational_intervals(resource_code, inicio, fim)
         if not operational and not self._turns(resource_code):
-            operational = _official_window_intervals(
-                inicio, fim, self.rules.official_work_window
-            )
+            operational = _default_operational_intervals(inicio, fim, self.rules)
         return _subtract_many([(inicio, fim)], operational)
 
     def shift_window_kind(self, resource_code, timestamp):
@@ -472,6 +473,22 @@ def _official_window_intervals(inicio, fim, official_work_window=None):
             intervals.append((start, end))
         day += timedelta(days=1)
     return merge_intervals(intervals)
+
+
+def _default_operational_intervals(inicio, fim, rules):
+    """Janelas globais para recurso ainda sem calendário próprio.
+
+    A configuração global de turno é a referência de fallback do produto.
+    Ela pode incluir H1/H2 configurados em ``parametros_turno``; não cria nem
+    cadastra hora extra específica para o recurso, apenas evita que leituras
+    diferentes tratem o mesmo recurso sem vínculo como dentro e fora de turno
+    ao mesmo tempo.
+    """
+
+    windows = _official_window_intervals(inicio, fim, rules.official_work_window)
+    for overtime_window in rules.overtime_windows:
+        windows.extend(_official_window_intervals(inicio, fim, overtime_window))
+    return merge_intervals(windows)
 
 
 def _subtract_many(intervals, cuts):

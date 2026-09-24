@@ -149,6 +149,104 @@ class AutomaticBreakTests(unittest.TestCase):
         self.assertTrue(all(setor is None for *_ignorado, setor in configuradas))
 
 
+class ContinuousResourceRepositoryFake(BreakRepositoryFake):
+    def __init__(self):
+        super().__init__()
+        self.resources = [{
+            "codigo": "RECURSO-NOVO",
+            "nome": "Recurso novo",
+            "tipo_setor": "Dobra",
+            "aliases": ["RECURSO-NOVO", "Recurso novo"],
+            "calendario_codigo": None,
+        }]
+        self.states = []
+
+    def listar_recursos_ativos_scheduler(self):
+        return [dict(row) for row in self.resources]
+
+    def listar_estados_recurso_atuais(self, **_kwargs):
+        return [dict(row) for row in self.states if row.get("data_fim") is None]
+
+    def listar_recursos_ativos_no_instante(self, _moment):
+        return []
+
+    def listar_turnos_recurso(self, _resource):
+        return []
+
+    def transicionar_estado_recurso(self, recurso, categoria, **kwargs):
+        current = next(
+            (row for row in self.states if row["recurso"] == recurso and row.get("data_fim") is None),
+            None,
+        )
+        if current:
+            current["data_fim"] = kwargs["data_hora"]
+        row = {
+            "id": len(self.states) + 1,
+            "recurso": recurso,
+            "categoria": categoria,
+            **kwargs,
+        }
+        self.states.append(row)
+        return row
+
+
+class ContinuousResourceStateTests(unittest.TestCase):
+    def test_primeiro_ciclo_cria_sem_demanda_e_recurso_futuro_entra_sozinho(self):
+        db = ContinuousResourceRepositoryFake()
+        service = ShiftBoundaryService(db)
+
+        first = service.apply_due(datetime(2026, 9, 24, 10, 0))
+        self.assertEqual(
+            [(row["recurso"], row["categoria"]) for row in first["initialized_resources"]],
+            [("RECURSO-NOVO", "fila")],
+        )
+
+        db.resources.append({
+            "codigo": "RECURSO-FUTURO",
+            "nome": "Recurso futuro",
+            "tipo_setor": "Serra",
+            "aliases": ["RECURSO-FUTURO", "Recurso futuro"],
+            "calendario_codigo": None,
+        })
+        second = service.apply_due(datetime(2026, 9, 24, 10, 0, 5))
+        self.assertEqual(
+            [(row["recurso"], row["categoria"]) for row in second["initialized_resources"]],
+            [("RECURSO-FUTURO", "fila")],
+        )
+
+    def test_primeiro_ciclo_fora_do_turno_cria_fora_turno(self):
+        db = ContinuousResourceRepositoryFake()
+        service = ShiftBoundaryService(db)
+
+        result = service.apply_due(datetime(2026, 9, 24, 23, 0))
+
+        self.assertEqual(result["initialized_resources"][0]["categoria"], "fora_turno")
+
+    def test_calendario_proprio_gera_limites_do_recurso_em_vez_do_global(self):
+        db = ContinuousResourceRepositoryFake()
+        db.resources[0]["calendario_codigo"] = "CAL-REDUZIDO"
+        db.listar_turnos_recurso = lambda _resource: [{
+            "id": 1,
+            "dia_semana": 3,  # quinta-feira, 24/09/2026
+            "hora_inicio": time(7, 0),
+            "hora_fim": time(16, 0),
+            "cruza_meia_noite": False,
+            "calendario_codigo": "CAL-REDUZIDO",
+        }]
+        service = ShiftBoundaryService(db)
+
+        events = service.due_resource_calendar_events(
+            datetime(2026, 9, 24, 16, 5), service.active_resource_profiles()
+        )
+
+        self.assertTrue(any(
+            moment == datetime(2026, 9, 24, 16, 0)
+            and kind == "fim"
+            and profiles[0]["codigo"] == "RECURSO-NOVO"
+            for moment, kind, profiles in events
+        ))
+
+
 class _PausaConfiguradaFake(BreakRepositoryFake):
     """Configuração gerencial por setor, como a migration 23 persiste."""
 
@@ -469,6 +567,35 @@ class ShiftParametersLoaderTests(unittest.TestCase):
         capabilities = FrontendBackendFacade(db).capabilities()
         self.assertEqual(capabilities["manufacturing_rules"]["official_work_window"], ["07:00", "16:00"])
         self.assertEqual(capabilities["manufacturing_rules"]["shift_end_boundaries"], ["16:00", "19:00"])
+
+    def test_recurso_sem_calendario_herda_horarios_globais_no_estado_temporal(self):
+        from mes.services.calendar import CalendarService
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("Oficial", "expediente", "07:00", "16:00", ordem=1),
+            _turno("H2", "hora_extra", "16:00", "19:00", ordem=2),
+        ])
+        rules = load_manufacturing_rules(db)
+        calendar = CalendarService(db, rules)
+        inicio = datetime(2026, 9, 3, 15, 0)
+        fim = datetime(2026, 9, 3, 20, 0)
+
+        # Não há vínculo de calendário para RECURSO-NOVO. Ainda assim, a
+        # leitura temporal segue o mesmo expediente/H2 vigente no sistema.
+        self.assertEqual(
+            calendar.out_of_shift_intervals("RECURSO-NOVO", inicio, fim),
+            [(datetime(2026, 9, 3, 19, 0), fim)],
+        )
+        self.assertIs(
+            calendar.shift_window_kind("RECURSO-NOVO", datetime(2026, 9, 3, 16, 30)),
+            ShiftWindowKind.PLANNED_OVERTIME,
+        )
+        # A herança temporal não inventa cadastro para capacidade/OEE.
+        self.assertEqual(
+            calendar.period_summary("RECURSO-NOVO", inicio, fim)["availability"],
+            "nao_configurado",
+        )
 
     def test_terceiro_turno_encadeado_apos_o_h2_tambem_vira_limite(self):
         from mes.services.shift_parameters import load_manufacturing_rules

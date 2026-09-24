@@ -1841,6 +1841,49 @@ class Database(
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
+    def listar_recursos_ativos_scheduler(self):
+        """Inventário canônico que deve possuir linha do tempo contínua.
+
+        A origem é sempre o catálogo habilitado. Assim, um recurso novo passa
+        a participar das automações no primeiro ciclo do scheduler, sem lista
+        estática nem necessidade de um apontamento anterior. Aliases oficiais
+        são agrupados antes de qualquer escrita para não criar duas timelines
+        para a mesma máquina.
+        """
+
+        grouped = {}
+        for raw in self.listar_recursos_pcfactory(somente_habilitados=True):
+            row = dict(raw)
+            code = str(row.get("codigo") or "").strip()
+            canonical = resolve_resource_identity(code)
+            if not canonical:
+                continue
+            key = canonical.casefold()
+            current = grouped.setdefault(
+                key,
+                {
+                    "codigo": canonical,
+                    "nome": str(row.get("nome") or code).strip() or canonical,
+                    "tipo_setor": str(row.get("tipo_setor") or "").strip() or None,
+                    "aliases": set(),
+                    "calendario_codigo": row.get("calendario_codigo"),
+                    "sincronizado_em": row.get("sincronizado_em"),
+                },
+            )
+            current["aliases"].update(
+                value for value in (canonical, code, str(row.get("nome") or "").strip())
+                if value
+            )
+            sector = str(row.get("tipo_setor") or "").strip()
+            if sector and not current.get("tipo_setor"):
+                current["tipo_setor"] = sector
+            if row.get("calendario_codigo") and not current.get("calendario_codigo"):
+                current["calendario_codigo"] = row.get("calendario_codigo")
+        return [
+            {**item, "aliases": sorted(item["aliases"], key=str.casefold)}
+            for _key, item in sorted(grouped.items())
+        ]
+
     def publicar_recursos_pcfactory(self, recursos, *, fonte="PC Factory D0021"):
         """Atualiza o catálogo por código exato, sem classificar por prefixo."""
 
@@ -2961,13 +3004,33 @@ class Database(
                 (instante,),
             )
             ja_aplicados = {row["recurso"] for row in cursor.fetchall()}
+        candidates = {
+            resolve_resource_identity(row.get("codigo")): {
+                "recurso": resolve_resource_identity(row.get("codigo")),
+                "tipo_setor": row.get("tipo_setor"),
+            }
+            for row in self.listar_recursos_ativos_scheduler()
+            if resolve_resource_identity(row.get("codigo"))
+            and (
+                row.get("sincronizado_em") is None
+                or _period_value(row.get("sincronizado_em")) <= instante
+            )
+        }
+        # Preserva postos operacionais legítimos ainda não publicados no
+        # catálogo corporativo (ex.: estação de Solda em execução).
         for row in self.listar_recursos_ativos_no_instante(instante):
+            resource = resolve_resource_identity(row.get("recurso"))
+            if resource:
+                candidates.setdefault(resource, dict(row))
+
+        for row in candidates.values():
             if alvo and str(row.get("tipo_setor") or "").strip().casefold() != alvo:
                 continue
-            if str(row["recurso"] or "").upper() in ja_aplicados:
+            resource = resolve_resource_identity(row.get("recurso"))
+            if str(resource or "").upper() in ja_aplicados:
                 continue
             state = self.transicionar_estado_recurso(
-                row["recurso"],
+                resource,
                 "parada",
                 tipo_setor=row.get("tipo_setor"),
                 operador=operador,
@@ -2979,17 +3042,23 @@ class Database(
                 automatico=True,
                 tipo_interrupcao="intervalo_programado",
             )
-            if state:
+            if state and not state.get("retroativo_ignorado"):
                 changed.append(dict(state))
         return changed
 
     def finalizar_intervalo_automatico(
         self, data_hora, nome, *, operador="SISTEMA", tipo_setor=None
     ):
-        """Retoma automaticamente somente recursos ainda parados pelo intervalo."""
+        """Restaura o snapshot anterior dos recursos ainda no intervalo.
+
+        A pausa automática é somente um recorte temporal. No fim, Produção
+        volta para a mesma OP, uma Parada volta com seu motivo/status e Recurso
+        sem demanda volta para a fila sem OP. Nenhuma OP é criada ou escolhida
+        por inferência. Se o recurso não possuía snapshot (recurso cadastrado
+        durante a pausa), o estado seguro é Recurso sem demanda.
+        """
 
         instante = _period_value(data_hora)
-        reason = f"Retomada automática — {str(nome or 'intervalo programado').strip()}"
         alvo = str(tipo_setor or "").strip().casefold()
         resumed = []
         with self.connection() as connection, connection.cursor() as cursor:
@@ -3021,67 +3090,47 @@ class Database(
                 resource = current["recurso"]
                 cursor.execute(
                     """
-                    SELECT status, tipo_setor
-                    FROM apontamentos_operacionais
-                    WHERE UPPER(maquina) = UPPER(%s)
-                      AND status IN ('Em processo', 'Setup', 'Retrabalho')
-                      AND data_inicio IS NOT NULL AND data_inicio <= %s
-                      AND (data_fim IS NULL OR data_fim > %s)
-                    ORDER BY id
-                    """,
-                    (resource, instante, instante),
-                )
-                appointments = [dict(row) for row in cursor.fetchall()]
-                cursor.execute(
-                    """
-                    SELECT 1 FROM apontamentos_corte
-                    WHERE UPPER(maquina) = UPPER(%s)
-                      AND status = 'Em processo'
-                      AND data_inicio IS NOT NULL AND data_inicio <= %s
-                      AND (data_fim IS NULL OR data_fim > %s)
+                    SELECT *
+                    FROM eventos_estado_recurso
+                    WHERE UPPER(recurso) = UPPER(%s)
+                      AND id <> %s
+                      AND data_fim = %s
+                    ORDER BY data_inicio DESC, id DESC
                     LIMIT 1
                     """,
-                    (resource, instante, instante),
+                    (resource, current["id"], current["data_inicio"]),
                 )
-                has_cut = cursor.fetchone() is not None
-                category_by_status = {
-                    "Em processo": "producao",
-                    "Setup": "setup",
-                    "Retrabalho": "retrabalho",
+                previous = _as_dict(cursor.fetchone()) or {
+                    "categoria": "fila",
+                    "tipo_setor": current.get("tipo_setor"),
+                    "operador": operador,
+                    "motivo": "Recurso sem demanda",
+                    "origem": "sincronizacao_recurso_sem_demanda",
+                    "automatico": True,
+                    "tipo_interrupcao": "recurso_sem_demanda",
                 }
-                categories = {
-                    category_by_status[row.get("status")]
-                    for row in appointments
-                    if row.get("status") in category_by_status
-                }
-                if has_cut:
-                    categories.add("producao")
-                if not categories:
-                    closed = self._encerrar_estado_recurso_tx(cursor, resource, instante)
-                    if closed:
-                        resumed.append(dict(closed))
-                    continue
-                category = next(iter(categories)) if len(categories) == 1 else "desconhecido"
-                sector_values = {
-                    str(row.get("tipo_setor") or "").strip()
-                    for row in appointments
-                    if str(row.get("tipo_setor") or "").strip()
-                }
-                if has_cut:
-                    sector_values.add("Corte")
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
                     resource,
-                    category,
-                    tipo_setor=(next(iter(sector_values)) if len(sector_values) == 1 else None),
-                    operador=operador,
-                    motivo=reason,
+                    previous["categoria"],
+                    tipo_setor=previous.get("tipo_setor") or current.get("tipo_setor"),
+                    operador=previous.get("operador") or operador,
+                    codigo_status_recurso=previous.get("codigo_status_recurso"),
+                    op=previous.get("op"),
+                    numero_operacao=previous.get("numero_operacao"),
+                    produto_codigo=previous.get("produto_codigo"),
+                    motivo=previous.get("motivo"),
+                    causa_raiz=previous.get("causa_raiz"),
+                    comentario=previous.get("comentario"),
                     data_hora=instante,
                     origem="intervalo_programado_fim",
-                    referencia_origem=current.get("referencia_origem"),
-                    planejado=None,
-                    automatico=True,
-                    tipo_interrupcao="retomada_intervalo_programado",
+                    referencia_origem=f"restaura_evento:{previous.get('id') or current.get('id')}",
+                    planejado=previous.get("planejado"),
+                    automatico=bool(previous.get("automatico")),
+                    tipo_interrupcao=previous.get("tipo_interrupcao"),
+                    tipo_atividade=previous.get("tipo_atividade"),
+                    apontamento_id=previous.get("apontamento_id"),
+                    evento_apontamento_id=previous.get("evento_apontamento_id"),
                 )
                 if state:
                     resumed.append(dict(state))
@@ -3094,6 +3143,8 @@ class Database(
         operador="SISTEMA",
         motivo="Fim de turno — interrupção programada automática",
         tipo_interrupcao="fim_turno",
+        recursos=None,
+        excluir_recursos=None,
     ):
         """Fecha o dia dos recursos que já estavam ociosos no limite de turno.
 
@@ -3105,11 +3156,11 @@ class Database(
         fica sem linha aberta (ou com uma categoria antiga) e o recurso
         simplesmente some do Andon em vez de aparecer como "Sem demanda".
 
-        Só entram recursos com histórico físico prévio (``eventos_estado_recurso``);
-        cadastro nunca usado não vira card por conta desta rotina. Recurso com
-        apontamento ou corte em execução no instante fica de fora — quem
-        cobre esse caso é a interrupção específica da OP/nesting, que
-        preserva os dados coletados em vez de fabricar um segundo evento.
+        A fonte é o catálogo habilitado, incluindo recursos nunca usados. Um
+        recurso futuro entra automaticamente assim que for publicado. O
+        histórico físico permanece como compatibilidade para postos reais que
+        ainda não chegaram ao catálogo. Recurso em execução fica de fora — a
+        interrupção específica da OP/nesting preserva seus dados.
         """
 
         instante = _period_value(data_hora)
@@ -3123,10 +3174,18 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
+                WITH candidatos AS (
+                    SELECT codigo AS recurso, tipo_setor, 0 AS prioridade
+                    FROM catalogo_recursos_pcfactory
+                    WHERE habilitado IS TRUE AND sincronizado_em <= %s
+                    UNION ALL
+                    SELECT recurso, tipo_setor, 1 AS prioridade
+                    FROM eventos_estado_recurso
+                    WHERE recurso IS NOT NULL AND recurso <> '' AND data_inicio <= %s
+                )
                 SELECT DISTINCT ON (UPPER(e.recurso)) e.recurso, e.tipo_setor
-                FROM eventos_estado_recurso e
+                FROM candidatos e
                 WHERE e.recurso IS NOT NULL AND e.recurso <> ''
-                  AND e.data_inicio <= %s
                   AND NOT EXISTS (
                       SELECT 1 FROM eventos_estado_recurso e2
                       WHERE UPPER(e2.recurso) = UPPER(e.recurso)
@@ -3147,18 +3206,32 @@ class Database(
                         AND c.data_inicio IS NOT NULL AND c.data_inicio <= %s
                         AND (c.data_fim IS NULL OR c.data_fim > %s)
                   )
-                ORDER BY UPPER(e.recurso), e.id DESC
+                ORDER BY UPPER(e.recurso), e.prioridade
                 """,
                 (
-                    instante, tipo_interrupcao, instante, executando,
+                    instante, instante, tipo_interrupcao, instante, executando,
                     instante, instante, instante, instante,
                 ),
             )
             candidatos = [dict(row) for row in cursor.fetchall()]
+            included = {
+                resolve_resource_identity(value).casefold()
+                for value in (recursos or ()) if resolve_resource_identity(value)
+            }
+            excluded = {
+                resolve_resource_identity(value).casefold()
+                for value in (excluir_recursos or ()) if resolve_resource_identity(value)
+            }
             for candidato in candidatos:
+                identity = resolve_resource_identity(candidato["recurso"])
+                key = identity.casefold()
+                if included and key not in included:
+                    continue
+                if key in excluded:
+                    continue
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
-                    candidato["recurso"],
+                    identity,
                     "fora_turno",
                     tipo_setor=candidato.get("tipo_setor"),
                     operador=operador,
@@ -3181,6 +3254,8 @@ class Database(
         operador="SISTEMA",
         motivo="Retorno do turno — recurso sem demanda",
         tipo_interrupcao="retorno_turno_sem_demanda",
+        recursos=None,
+        excluir_recursos=None,
     ):
         """Encerra o fora de turno e publica ausência de demanda às 08:00.
 
@@ -3214,9 +3289,24 @@ class Database(
                 """,
                 (instante,),
             )
-            self._bloquear_recursos_tx(
-                cursor, [row["recurso"] for row in cursor.fetchall()]
-            )
+            included = {
+                resolve_resource_identity(value).casefold()
+                for value in (recursos or ()) if resolve_resource_identity(value)
+            }
+            excluded = {
+                resolve_resource_identity(value).casefold()
+                for value in (excluir_recursos or ()) if resolve_resource_identity(value)
+            }
+            selected = [
+                row["recurso"] for row in cursor.fetchall()
+                if (
+                    (not included or resolve_resource_identity(row["recurso"]).casefold() in included)
+                    and resolve_resource_identity(row["recurso"]).casefold() not in excluded
+                )
+            ]
+            if not selected:
+                return []
+            self._bloquear_recursos_tx(cursor, selected)
             cursor.execute(
                 """
                 SELECT e.*
@@ -3226,6 +3316,7 @@ class Database(
                   AND e.automatico IS TRUE
                   AND e.tipo_interrupcao = 'fim_turno'
                   AND e.data_inicio < %s
+                  AND UPPER(e.recurso) = ANY(%s)
                   AND NOT EXISTS (
                       SELECT 1
                       FROM apontamentos_operacionais a
@@ -3248,7 +3339,8 @@ class Database(
                 FOR UPDATE
                 """,
                 (
-                    instante, executando, instante, instante,
+                    instante, [str(value).upper() for value in selected],
+                    executando, instante, instante,
                     instante, instante,
                 ),
             )

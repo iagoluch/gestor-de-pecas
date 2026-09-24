@@ -30,6 +30,29 @@ RESOURCE_FRIENDLY_NAMES = {
 }
 
 
+# Nomes operacionais que prevalecem sobre rótulos legados do catálogo
+# corporativo. Eles não alteram o código do recurso, a operação nem o
+# histórico: apenas garantem que toda projeção backend publique o nome do
+# posto físico realmente existente. INSPE2/PREP chegam do PC Factory como
+# "INSPEÇÃO PINTURA"/"PREPARAÇÃO PINTURA", enquanto os postos oficiais são
+# "Inspeção Final"/"Preparação". ROBO P e ROBO S são códigos de roteiro do
+# único posto "Robô 1"; seus nomes cadastrais não representam recursos
+# físicos adicionais.
+#
+# Este mapa é deliberadamente separado de RESOURCE_FRIENDLY_NAMES. Aquele
+# também participa da whitelist da aba Capacidade; colocar os dois códigos de
+# roteiro do robô lá faria recursos sem demanda real aparecerem nessa aba.
+RESOURCE_OPERATIONAL_NAMES = {
+    "INSPE2": "Inspeção Final",
+    "PREP": "Preparação",
+    "ROBO P": "Robô 1",
+    "ROBO S": "Robô 1",
+}
+
+
+RESOURCE_DISPLAY_NAMES = {**RESOURCE_FRIENDLY_NAMES, **RESOURCE_OPERATIONAL_NAMES}
+
+
 # Identidades canônicas: um mesmo recurso físico recebido com código
 # corporativo diferente. O alias vale para **elegibilidade e leitura**; o
 # ``codigo_recurso`` gravado na operação continua sendo o do roteiro, nunca é
@@ -145,16 +168,34 @@ def resource_display_name(code, catalog_name=None):
     normalized = normalize_resource_code(code)
     if not normalized:
         return ""
-    friendly = RESOURCE_FRIENDLY_NAMES.get(normalized)
+    friendly = RESOURCE_DISPLAY_NAMES.get(normalized)
     if friendly:
         return friendly
     exact_catalog_name = str(catalog_name or "").strip()
     return exact_catalog_name or str(code).strip()
 
 
-_RESOURCE_DISPLAY_TO_CODE = {
-    name.casefold(): code for code, name in RESOURCE_FRIENDLY_NAMES.items()
-}
+def _unique_display_names_to_code():
+    """Inverte apenas nomes que identificam um único código.
+
+    O posto Robô 1 atende dois códigos de roteiro. Escolher um deles ao receber
+    o nome do posto reescreveria identidade sem evidência; nesse caso a
+    resolução preserva "Robô 1" até o roteiro informar ROBO P ou ROBO S.
+    """
+
+    by_name = {}
+    ambiguous = set()
+    for code, name in RESOURCE_DISPLAY_NAMES.items():
+        key = name.casefold()
+        previous = by_name.get(key)
+        if previous is not None and previous != code:
+            ambiguous.add(key)
+        else:
+            by_name[key] = code
+    return {name: code for name, code in by_name.items() if name not in ambiguous}
+
+
+_RESOURCE_DISPLAY_TO_CODE = _unique_display_names_to_code()
 
 
 def resolve_resource_identity(value):
@@ -185,7 +226,7 @@ def resolve_resource_identity(value):
     if not text:
         return text
     normalized = normalize_resource_code(text)
-    if normalized in OFFICIAL_RESOURCE_ALIASES or normalized in RESOURCE_FRIENDLY_NAMES:
+    if normalized in OFFICIAL_RESOURCE_ALIASES or normalized in RESOURCE_DISPLAY_NAMES:
         return canonical_resource_code(normalized)
     code = _RESOURCE_DISPLAY_TO_CODE.get(text.casefold())
     return canonical_resource_code(code) if code else text

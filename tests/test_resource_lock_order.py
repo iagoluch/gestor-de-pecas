@@ -94,7 +94,8 @@ class ResourceLockOrderTests(unittest.TestCase):
         self.assertNotIn("scheduler_error", result)
         self.assertEqual(result["operator"], "ok")
         self.assertEqual(len(result["scheduler"]), 1)
-        self.assertEqual(result["scheduler"][0]["data_fim"], datetime(2026, 9, 23, 13, 0))
+        self.assertEqual(result["scheduler"][0]["categoria"], "producao")
+        self.assertEqual(result["scheduler"][0]["data_inicio"], datetime(2026, 9, 23, 13, 0))
 
     def test_retorno_do_turno_nao_entra_em_deadlock_com_o_operador(self):
         self.db.transicionar_estado_recurso(
@@ -111,3 +112,75 @@ class ResourceLockOrderTests(unittest.TestCase):
         self.assertNotIn("scheduler_error", result)
         self.assertEqual(result["operator"], "ok")
         self.assertEqual([row["categoria"] for row in result["scheduler"]], ["fila"])
+
+    def test_fim_da_pausa_restaura_snapshot_de_producao_parada_e_sem_demanda(self):
+        casos = (
+            {
+                "recurso": "RESTAURA-PRODUCAO",
+                "categoria": "producao",
+                "op": "OP-PAUSA-1",
+                "numero_operacao": "20",
+                "motivo": None,
+            },
+            {
+                "recurso": "RESTAURA-PARADA",
+                "categoria": "parada",
+                "op": "OP-PAUSA-2",
+                "motivo": "Aguardando liberação da Qualidade",
+            },
+            {
+                "recurso": "RESTAURA-SEM-DEMANDA",
+                "categoria": "fila",
+                "op": None,
+                "motivo": "Recurso sem demanda",
+                "automatico": True,
+                "tipo_interrupcao": "retorno_turno_sem_demanda",
+            },
+        )
+        for case in casos:
+            kwargs = dict(case)
+            resource = kwargs.pop("recurso")
+            category = kwargs.pop("categoria")
+            self.db.transicionar_estado_recurso(
+                resource, category, tipo_setor="Dobra",
+                data_hora=datetime(2026, 9, 23, 11, 0), **kwargs,
+            )
+            self.db.transicionar_estado_recurso(
+                resource, "parada", tipo_setor="Dobra",
+                data_hora=datetime(2026, 9, 23, 12, 10),
+                motivo="Intervalo automático — Almoço", planejado=True,
+                automatico=True, tipo_interrupcao="intervalo_programado",
+                origem="intervalo_programado_inicio",
+            )
+
+        resumed = self.db.finalizar_intervalo_automatico(
+            datetime(2026, 9, 23, 12, 52), "Almoço", tipo_setor="Dobra"
+        )
+        by_resource = {row["recurso"]: row for row in resumed}
+
+        self.assertEqual(by_resource["RESTAURA-PRODUCAO"]["categoria"], "producao")
+        self.assertEqual(by_resource["RESTAURA-PRODUCAO"]["op"], "OP-PAUSA-1")
+        self.assertEqual(by_resource["RESTAURA-PARADA"]["categoria"], "parada")
+        self.assertEqual(
+            by_resource["RESTAURA-PARADA"]["motivo"],
+            "Aguardando liberação da Qualidade",
+        )
+        self.assertEqual(by_resource["RESTAURA-SEM-DEMANDA"]["categoria"], "fila")
+        self.assertIsNone(by_resource["RESTAURA-SEM-DEMANDA"]["op"])
+
+    def test_pausa_automatica_inclui_recurso_habilitado_nunca_usado(self):
+        self.db.publicar_recursos_pcfactory([{
+            "codigo": "NOVO-SEM-HISTORICO",
+            "nome": "Novo sem histórico",
+            "tipo_setor": "Dobra",
+            "habilitado": True,
+        }])
+
+        changed = self.db.iniciar_intervalo_automatico(
+            datetime(2026, 9, 24, 14, 0), "Almoço", tipo_setor="Dobra"
+        )
+
+        state = next(row for row in changed if row["recurso"] == "NOVO-SEM-HISTORICO")
+        self.assertEqual(state["categoria"], "parada")
+        self.assertTrue(state["automatico"])
+        self.assertEqual(state["tipo_interrupcao"], "intervalo_programado")

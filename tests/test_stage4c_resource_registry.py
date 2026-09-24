@@ -19,12 +19,14 @@ from app.database import Database
 from app.core.resource_mapping import (
     OFFICIAL_RESOURCE_ALIASES,
     RESOURCE_FRIENDLY_NAMES,
+    RESOURCE_OPERATIONAL_NAMES,
     SECTOR_OWNED_RESOURCE_SECTORS,
     WELDING_SECTOR_KEYS,
     STATION_RESOURCE_CODES,
     canonical_resource_code,
     normalize_resource_code,
     resource_display_name,
+    resolve_resource_identity,
     station_matches_route,
     station_resource_code,
 )
@@ -113,6 +115,35 @@ class MapaCentralizadoTests(unittest.TestCase):
         self.assertEqual(resource_display_name("LASER"), "LASER")
         self.assertEqual(resource_display_name("LASER", "CORTE LASER"), "CORTE LASER")
         self.assertEqual(resource_display_name("LASER1"), "Laser Ensis 3015")
+
+    def test_nome_operacional_substitui_alias_legado_sem_reescrever_codigo(self):
+        self.assertEqual(
+            RESOURCE_OPERATIONAL_NAMES,
+            {
+                "INSPE2": "Inspeção Final",
+                "PREP": "Preparação",
+                "ROBO P": "Robô 1",
+                "ROBO S": "Robô 1",
+            },
+        )
+        casos = {
+            "INSPE2": ("INSPEÇÃO PINTURA", "Inspeção Final"),
+            "PREP": ("PREPARAÇÃO PINTURA", "Preparação"),
+            "ROBO S": ("SOLDA ROBO CHASSI S", "Robô 1"),
+            "ROBO P": ("SOLDA ROBO CHASSI PRIME", "Robô 1"),
+        }
+        for codigo, (nome_catalogo, nome_esperado) in casos.items():
+            with self.subTest(codigo=codigo):
+                self.assertEqual(
+                    resource_display_name(codigo, nome_catalogo),
+                    nome_esperado,
+                )
+                self.assertEqual(canonical_resource_code(codigo), codigo)
+
+    def test_nome_compartilhado_do_robo_nao_escolhe_codigo_de_roteiro(self):
+        self.assertEqual(resolve_resource_identity("Inspeção Final"), "INSPE2")
+        self.assertEqual(resolve_resource_identity("Preparação"), "PREP")
+        self.assertEqual(resolve_resource_identity("Robô 1"), "Robô 1")
 
     def test_ingestao_totvs_e_tela_do_operador_concordam_sobre_o_mesmo_recurso(self):
         resolver = TotvsResourceResolver(known_resource_sectors=CADASTRO.items())

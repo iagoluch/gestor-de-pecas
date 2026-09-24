@@ -53,8 +53,10 @@ def oee_seconds_by_category(
     intervalo cadastrado do turno já sai da disponibilidade do calendário.
     Parada não planejada permanece e continua penalizando a Disponibilidade.
 
-    ``fora_turno``, ``fila`` e ``sem_demanda`` já não participam do cálculo e
-    permanecem fora aqui também.
+    ``fora_turno`` e ``fila`` não participam do cálculo. ``sem_demanda`` é
+    tempo em que o recurso estava disponível, mas sem programação: permanece
+    na base para resultar em 100% de Disponibilidade e 0% de Performance
+    quando ocupar sozinho o período.
     """
 
     base = {
@@ -81,12 +83,9 @@ def calculate_oee(
     Setup, retrabalho e atividade sem OP permanecem tempo produtivo de apoio.
     Quantidade boa, refugo e retrabalho continuam grandezas separadas.
 
-    Recurso sem demanda e fila **não** compõem o tempo disponível. O recurso
-    sem trabalho atribuído não tinha o que produzir: contá-lo como
-    disponibilidade transformava um dia inteiro de ausência de demanda em
-    perda de Disponibilidade (≈0,1% com produção real registrada) e derrubava
-    o OEE junto. Assim como ``fora_turno``, essas grandezas ficam fora da
-    fórmula e continuam publicadas em ``time_bases`` para leitura gerencial.
+    Recurso sem demanda compõe o tempo disponível e a base de Performance:
+    ele estava apto a trabalhar (Disponibilidade 100%), mas não produziu
+    (Performance 0%). Fila vinculada a OP e fora de turno continuam fora.
     """
 
     def seconds(category: EventCategory) -> float:
@@ -99,6 +98,7 @@ def calculate_oee(
             EventCategory.SETUP,
             EventCategory.REWORK,
             EventCategory.ACTIVITY_WITHOUT_OP,
+            EventCategory.NO_DEMAND,
             EventCategory.DOWNTIME,
             EventCategory.UNKNOWN,
         )
@@ -112,11 +112,12 @@ def calculate_oee(
             EventCategory.SETUP,
             EventCategory.REWORK,
             EventCategory.ACTIVITY_WITHOUT_OP,
+            EventCategory.NO_DEMAND,
         )
     )
-    # Fila e ausência de demanda já saíram da base disponível, então o tempo
-    # operacional coincide com ela. A chave permanece porque Utilização,
-    # Produtividade e AE são publicados a partir destas bases.
+    # Fila já saiu da base disponível. Ausência de demanda permanece porque o
+    # recurso estava disponível, mas sem produção; por isso também compõe a
+    # base da Performance.
     operational_seconds = available_seconds
     productive_gross_seconds = seconds(EventCategory.PRODUCTION)
     supporting_productive_seconds = sum(
@@ -137,13 +138,18 @@ def calculate_oee(
     availability_ratio = worked_seconds / available_seconds if available_seconds > 0 else None
     performance_ratio = productive_net_seconds / worked_seconds if worked_seconds > 0 else None
     ftt_ratio = max(0, int(good_quantity)) / quality_total if quality_total > 0 else None
-    oee_ratio = (
-        availability_ratio * performance_ratio * ftt_ratio
-        if availability_ratio is not None
+    if availability_ratio is not None and performance_ratio == 0:
+        # Sem produção, a Performance zera o produto do OEE mesmo quando o
+        # FTT não é aplicável por inexistir quantidade inspecionada.
+        oee_ratio = 0.0
+    elif (
+        availability_ratio is not None
         and performance_ratio is not None
         and ftt_ratio is not None
-        else None
-    )
+    ):
+        oee_ratio = availability_ratio * performance_ratio * ftt_ratio
+    else:
+        oee_ratio = None
 
     availability = _percent_metric(
         availability_ratio,

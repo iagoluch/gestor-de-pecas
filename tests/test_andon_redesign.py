@@ -322,6 +322,84 @@ class AccountResourceNoDemandTests(unittest.TestCase):
             [],
         )
 
+    def test_codigo_real_e_posto_ativo_nao_geram_alias_em_card_separado(self):
+        repository = AndonRepositoryFake()
+        now = datetime(2026, 9, 24, 10, 45)
+        repository.listar_estados_recurso_atuais = lambda **_kwargs: [
+            {
+                "id": 1,
+                "recurso": "INSPE2",
+                "tipo_setor": "Pintura",
+                "categoria": "fila",
+                "data_inicio": now,
+                "automatico": True,
+            },
+            {
+                "id": 2,
+                "recurso": "PREP",
+                "tipo_setor": "Pintura",
+                "categoria": "fila",
+                "data_inicio": now,
+                "automatico": True,
+            },
+            {
+                "id": 3,
+                "recurso": "ROBO S",
+                "tipo_setor": "Solda Robô",
+                "categoria": "fila",
+                "data_inicio": now,
+                "automatico": True,
+            },
+        ]
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: []
+        repository.listar_usuarios = lambda: [
+            {"nivel": "operador_pintura", "ativo": True},
+            {"nivel": "robo1", "ativo": True},
+        ]
+        repository.resources.extend([
+            {
+                "codigo": "INSPE2",
+                "nome": "INSPEÇÃO PINTURA",
+                "tipo_setor": "Pintura",
+            },
+            {
+                "codigo": "PREP",
+                "nome": "PREPARAÇÃO PINTURA",
+                "tipo_setor": "Pintura",
+            },
+            {
+                "codigo": "ROBO S",
+                "nome": "SOLDA ROBO CHASSI S",
+                "tipo_setor": "Solda Robô",
+            },
+        ])
+        facade = FrontendBackendFacade(repository, now_func=lambda: now)
+        resources = facade.consulta_operacional(
+            AnalyticsFilter(now, now),
+            incluir_recursos_sem_demanda_de_contas=True,
+        )["resources"]
+
+        selected = {
+            item["recurso"]: (item["recurso_nome"], item["fonte"])
+            for item in resources
+            if item["recurso"] in {"INSPE2", "PREP", "ROBO S"}
+        }
+        self.assertEqual(
+            selected,
+            {
+                "INSPE2": ("Inspeção Final", "eventos_estado_recurso"),
+                "PREP": ("Preparação", "eventos_estado_recurso"),
+                "ROBO S": ("Robô 1", "eventos_estado_recurso"),
+            },
+        )
+        self.assertFalse(
+            any(
+                item["fonte"] == "contas_operador_ativas"
+                and item["recurso"] in {"Inspeção Final", "Preparação", "Robô 1"}
+                for item in resources
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
