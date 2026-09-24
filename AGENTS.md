@@ -123,6 +123,15 @@ Não transformar logs, prompts ou relatórios históricos em fonte de verdade at
   presumir OP, produção ou estado físico; uma OP interrompida continua exigindo
   retomada manual.
 - Fora de turno **não** compõe disponibilidade e **não** é parada da máquina.
+- Todo recurso habilitado no catálogo, atual ou futuro, possui linha do tempo
+  contínua pelo scheduler. Dentro da janela operacional, sem programação de
+  produção, o estado é **Recurso sem demanda**; recurso habilitado não pode
+  ficar ausente/ocioso sem tempo. Esse estado entra no OEE como recurso
+  disponível sem produção: 100% de Disponibilidade e 0% de Performance/OEE
+  quando ocupar sozinho o período; sem peça, o FTT continua sem dado.
+- Ao fim de almoço, café ou outra pausa automática, restaurar integralmente o
+  estado imediatamente anterior: mesma OP em Produção, mesma Parada/motivo ou
+  Recurso sem demanda. Não escolher categoria por inferência nem criar OP.
 - Fora de turno é grandeza **global** de calendário: o mesmo intervalo noturno observado em vários setores/recursos não é somado na agregação global (a métrica por recurso/setor permanece).
 - Classificação central de parada em `ManufacturingRules.classify_stop`: **PLANEJADA** (grupo `0002 — PARADA PROGRAMADA` do catálogo PCFactory: intervalo, café, reunião, limpeza, manutenção preventiva, fora de turno sem hora extra) ou **NÃO_PLANEJADA** (todo o resto). A cor deriva da classificação (`planejada` → amarela, `nao_planejada` → vermelha); nenhum componente visual decide cor por grupo de catálogo ou por texto do motivo.
 - "Sem apontamento" e "Recurso s/op" são **sempre** NÃO_PLANEJADA, mesmo que o cadastro diga o contrário.

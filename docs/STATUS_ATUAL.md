@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 23/09/2026 (fechamento da auditoria F1–F21 — ver §2.37).
+**Atualizado em:** 24/09/2026 (fallback de turno global e nomes operacionais de recursos).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -13,6 +13,31 @@ Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 commit `4a60564`.
 
 ### Atualização de auditoria — 23/09/2026
+
+- Decisão da Engenharia de Manufatura (24/09/2026): todo recurso habilitado
+  no catálogo possui linha do tempo contínua desde o primeiro ciclo do
+  scheduler, inclusive recursos cadastrados futuramente. Dentro da janela
+  operacional sem programação, o estado é **Recurso sem demanda**; fora dela,
+  `fora_turno`; almoço, café e outras pausas seguem a configuração do setor.
+  Calendário próprio do recurso prevalece sobre os horários globais. Ao fim
+  da pausa automática, o snapshot anterior é restaurado integralmente:
+  Produção volta para a mesma OP, Parada volta com seu motivo e sem demanda
+  volta sem OP. No OEE, sem demanda representa recurso disponível sem
+  produção: Disponibilidade 100%, Performance 0% e OEE 0% quando esse for o
+  único estado do período; o FTT permanece sem dado quando não houve peça.
+
+- Os rótulos legados do catálogo `INSPEÇÃO PINTURA`, `PREPARAÇÃO
+  PINTURA` e `SOLDA ROBO CHASSI` não representam recursos físicos adicionais.
+  A projeção backend agora publica os postos reais **Inspeção Final**,
+  **Preparação** e **Robô 1** para os códigos `INSPE2`, `PREP` e
+  `ROBO P`/`ROBO S`. Códigos, eventos e apontamentos históricos permanecem
+  intactos; uma nova sincronização do catálogo não recria os cards-alias.
+
+- Recursos sem vínculo a um calendário produtivo próprio agora usam a mesma
+  janela global configurada em `parametros_turno` na leitura de fora de turno
+  (expediente e H1/H2 vigentes). Isso não inventa calendário nem capacidade:
+  análises de disponibilidade continuam marcadas como `nao_configurado` até o
+  vínculo administrativo existir.
 
 - O posto do operador passou a usar uma barra superior enxuta em todas as
   telas compartilhadas por `OperatorShell`: logo, data/hora, setor e recurso
@@ -315,9 +340,11 @@ identificação complementar.
 
 Regra confirmada com o usuário: toda parada automática cadastrada em
 `pausas_automaticas_setor` termina sozinha no `hora_fim` configurado (almoço,
-café ou outra pausa), retomando o estado físico que ainda estiver sustentado
-pela execução. Se o operador tiver declarado outro estado durante a pausa, o
-scheduler não o sobrescreve.
+café ou outra pausa), restaurando o snapshot físico imediatamente anterior.
+Se era Produção, retoma a mesma OP; se era Parada (inclusive aguardando
+Qualidade), volta ao mesmo motivo; se era Recurso sem demanda, volta sem OP.
+Se o operador tiver declarado outro estado durante a pausa, o scheduler não o
+sobrescreve.
 
 A causa da falha era de execução: `ShiftBoundaryService` já calculava os dois
 limites e o repositório já sabia finalizar a pausa, mas o ciclo em
