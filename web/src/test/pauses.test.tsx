@@ -175,6 +175,7 @@ describe("Pausas automáticas — organização e filtros", () => {
   });
 
   it("desativa e reativa pela ação da linha sem mudar o contrato", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     const mock = stubFetch();
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
@@ -192,6 +193,7 @@ describe("Pausas automáticas — organização e filtros", () => {
   });
 
   it("remove a pausa pelo endpoint existente", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     const mock = stubFetch();
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
@@ -201,5 +203,18 @@ describe("Pausas automáticas — organização e filtros", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa removida."));
     expect(mock.mock.calls.some(([path, init]) => String(path).includes("/management/pauses/")
       && (init as RequestInit)?.method === "DELETE")).toBe(true);
+  });
+
+  it("cancela Desativar e Remover quando o usuário não confirma", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const mock = stubFetch();
+    renderPauses();
+    await waitFor(() => expect(linhas()).toBe(4));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Remover" })[0]);
+
+    expect(mock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "POST")).toBe(false);
+    expect(mock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "DELETE")).toBe(false);
   });
 });

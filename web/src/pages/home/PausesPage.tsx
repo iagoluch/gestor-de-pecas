@@ -233,8 +233,8 @@ export function ManagementPausesPage() {
                 render: (row) => (
                   <span className="pause-actions">
                     <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                    <button type="button" disabled={salvando} onClick={() => void salvar({ ...row, ativo: !row.ativo })}>{row.ativo ? "Desativar" : "Ativar"}</button>
-                    <button type="button" disabled={salvando} onClick={() => void remover(row)}>Remover</button>
+                    <button type="button" disabled={salvando} onClick={() => { if (window.confirm(row.ativo ? `Desativar a pausa "${row.nome}"? Ela deixa de valer para os próximos ciclos.` : `Ativar a pausa "${row.nome}"?`)) void salvar({ ...row, ativo: !row.ativo }); }}>{row.ativo ? "Desativar" : "Ativar"}</button>
+                    <button type="button" disabled={salvando} onClick={() => { if (window.confirm(`Remover a pausa "${row.nome}"? Esta ação não pode ser desfeita.`)) void remover(row); }}>Remover</button>
                   </span>
                 ),
               },

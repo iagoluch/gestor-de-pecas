@@ -481,6 +481,8 @@ describe("fluxo Web do operador", () => {
     // dispara nada.
     await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    await screen.findByRole("heading", { name: "Confirmar Setup" });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     // O conteúdo do popup chega do backend: espere o checklist (ou o cadastro
     // de cotas) antes de interagir.
