@@ -3,6 +3,7 @@ import { api, ApiError } from "../../api/client";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { Notice } from "../../components/Notice";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 interface RebuildResult {
   ok: boolean;
@@ -20,6 +21,7 @@ export function ManagementSystemPage() {
   const [status, setStatus] = useState<"idle" | "building" | "done" | "error">("idle");
   const [output, setOutput] = useState("");
   const [duration, setDuration] = useState<number | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   async function reiniciarBuild() {
     setStatus("building");
@@ -55,7 +57,7 @@ export function ManagementSystemPage() {
             type="button"
             className="button button--primary"
             disabled={status === "building"}
-            onClick={() => void reiniciarBuild()}
+            onClick={async () => { if (await confirm({ title: "Reiniciar build", message: "Reconstrói web/dist a partir do código-fonte atual. Leva alguns segundos; quem estiver com o app aberto verá as mudanças ao atualizar a página.", confirmLabel: "Reiniciar build" })) void reiniciarBuild(); }}
           >
             {status === "building" ? "Reconstruindo…" : "Reiniciar build"}
           </button>
@@ -72,6 +74,7 @@ export function ManagementSystemPage() {
         ) : null}
         {output ? <pre className="system-build-log">{output}</pre> : null}
       </SectionCard>
+      {confirmDialog}
     </PageFrame>
   );
 }

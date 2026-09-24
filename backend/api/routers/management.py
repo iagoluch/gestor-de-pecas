@@ -416,6 +416,14 @@ def save_user(
             database.ativar_desativar_usuario(usuario_id, False)
     else:
         usuario_id = payload.id
+        # Quem salva é sempre um admin ativo; barrar só a própria conta já
+        # garante que o sistema nunca fica sem administrador pela tela.
+        if usuario_id == _user.id and (not payload.ativo or payload.nivel != "admin"):
+            raise AppError(
+                "user_self_lockout",
+                "Você não pode desativar nem rebaixar a própria conta. Peça a outro administrador.",
+                status_code=409,
+            )
         database.atualizar_nivel_usuario(usuario_id, payload.nivel)
         database.ativar_desativar_usuario(usuario_id, payload.ativo)
         if payload.senha:

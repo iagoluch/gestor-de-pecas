@@ -8,6 +8,8 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
 import { Notice } from "../../components/Notice";
+import { AsyncButton } from "../../components/AsyncButton";
+import { StationStateBanner, type StationState } from "../../components/StationStateBanner";
 
 /** Uma chapa física do programa: programa + chapa + repetição, vinda do SigmaNEST. */
 interface CuttingSheet {
@@ -183,7 +185,7 @@ interface CuttingSyncState {
   automatica?: boolean;
 }
 
-interface QueueResponse { resource: string; resource_state?: { categoria?: string; motivo?: string } | null; items: CuttingRow[]; sync?: CuttingSyncState }
+interface QueueResponse { resource: string; resource_state?: StationState | null; items: CuttingRow[]; sync?: CuttingSyncState }
 interface HistoryResponse { resource: string; status: string; items: CuttingRow[] }
 
 export function CuttingPage({ resource }: { resource: string }) {
@@ -261,6 +263,7 @@ export function CuttingPage({ resource }: { resource: string }) {
 
   return (
     <section className="cutting-page">
+      <StationStateBanner state={queue.data?.resource_state} />
       {/* A pesquisa é apenas um filtro do que já está na fila. Descobrir uma
           tarefa nova não depende dela: a fila chega sozinha. */}
       <form className="cutting-search" onSubmit={(event) => event.preventDefault()}>
@@ -312,11 +315,11 @@ export function CuttingPage({ resource }: { resource: string }) {
           <p>{activityPrompt === "Início" ? "Iniciar uma atividade diária neste recurso?" : "Finalizar a atividade diária em andamento?"}</p>
           <div className="operator-dialog__actions">
             <button type="button" onClick={() => setActivityPrompt(null)}>Não</button>
-            <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: activityPrompt })}>Sim</button>
+            <AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={busy} onClick={() => action({ action: activityPrompt })}>Sim</AsyncButton>
           </div>
         </OperatorDialog>
       ) : null}
-      {stopOpen ? <CutStopDialog resource={resource} reasons={reasons.data?.items ?? []} onCancel={() => setStopOpen(false)} onConfirm={(code, comment) => void action({ action: "Parada", stop_reason_code: code, comment })} /> : null}
+      {stopOpen ? <CutStopDialog resource={resource} reasons={reasons.data?.items ?? []} onCancel={() => setStopOpen(false)} onConfirm={(code, comment) => action({ action: "Parada", stop_reason_code: code, comment })} /> : null}
       {historyOpen ? (
         <OperatorDialog title="Histórico do Corte" size="wide" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={() => setHistoryOpen(false)}>
           {history.loading ? <LoadingState label="Carregando histórico…" /> : history.error && !history.data ? <ErrorState error={history.error} onRetry={history.reload} /> : history.data?.items.length ? (
@@ -486,9 +489,9 @@ function CuttingPlanBlock({ plano, busy, podeIniciar, onStart }: { plano: Cuttin
   );
 }
 
-function CutStopDialog({ resource, reasons, onCancel, onConfirm }: { resource: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => void }) {
+function CutStopDialog({ resource, reasons, onCancel, onConfirm }: { resource: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => unknown }) {
   const [code, setCode] = useState("");
   const [comment, setComment] = useState("");
   const selected = reasons.find((reason) => reason.codigo === code);
-  return <OperatorDialog title="Parada do Corte" size="wide" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><button type="button" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</button></div></OperatorDialog>;
+  return <OperatorDialog title="Parada do Corte" size="wide" context={<div className="operator-context-line"><span><small>Recurso</small><strong>{resource}</strong></span></div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</AsyncButton></div></OperatorDialog>;
 }

@@ -12,6 +12,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
 import { Notice } from "../../components/Notice";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 interface OperatorBadge {
   id: number;
@@ -77,6 +78,7 @@ export function ManagementBadgesPage() {
   const [editando, setEditando] = useState<OperatorBadge | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const filtros = usePersistentFilters("gestor.filtros.crachas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
@@ -234,13 +236,13 @@ export function ManagementBadgesPage() {
                 render: (row) => (
                   <span className="pause-actions">
                     <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                    <button type="button" disabled={salvando} onClick={() => void salvar({ ...row, ativo: !row.ativo })}>
+                    <button type="button" disabled={salvando} onClick={async () => { if (!row.ativo || await confirm({ title: "Desativar crachá", message: `O crachá ${row.cracha} (${row.nome}) deixa de ser aceito nos terminais até ser ativado de novo.`, confirmLabel: "Desativar crachá", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); }}>
                       {row.ativo ? "Desativar" : "Ativar"}
                     </button>
                     <button
                       type="button"
                       disabled={salvando}
-                      onClick={() => void salvar({ ...row, autorizador_retrabalho: !row.autorizador_retrabalho })}
+                      onClick={async () => { if (!row.autorizador_retrabalho || await confirm({ title: "Remover responsável por retrabalho", message: `${row.nome} deixa de poder autorizar retrabalho no terminal.`, confirmLabel: "Remover responsável", tone: "danger" })) void salvar({ ...row, autorizador_retrabalho: !row.autorizador_retrabalho }); }}
                     >
                       {row.autorizador_retrabalho ? "Remover responsável" : "Tornar responsável"}
                     </button>
@@ -320,6 +322,7 @@ export function ManagementBadgesPage() {
           </form>
         </OperatorDialog>
       ) : null}
+      {confirmDialog}
     </PageFrame>
   );
 }

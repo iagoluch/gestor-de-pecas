@@ -12,6 +12,8 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
 import { Notice } from "../../components/Notice";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { useAuth } from "../../auth/AuthContext";
 
 interface UserAccount {
   id: number;
@@ -37,6 +39,8 @@ interface EditState {
 }
 
 const FILTROS_INICIAIS = { situacao: "", nivel: "", busca: "" };
+// Mesma regra do backend (user_self_lockout): o admin não tira o próprio acesso.
+const PROPRIA_CONTA = "Sua própria conta: peça a outro administrador para desativar ou rebaixar.";
 
 /**
  * Cadastro de usuários — exclusivo da conta admin (decisão do usuário,
@@ -50,6 +54,8 @@ export function ManagementUsersPage() {
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const filtros = usePersistentFilters("gestor.filtros.usuarios", FILTROS_INICIAIS);
+  const { user } = useAuth();
+  const [confirm, confirmDialog] = useConfirm();
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const niveis = query.data?.levels ?? [];
@@ -64,6 +70,19 @@ export function ManagementUsersPage() {
       .filter((item) => !busca || item.nome.toLocaleLowerCase("pt-BR").includes(busca))
       .sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
   }, [items, filtros.values]);
+
+  async function alternarSituacao(row: UserAccount) {
+    const desativar = row.ativo;
+    const confirmado = await confirm({
+      title: desativar ? "Desativar usuário" : "Ativar usuário",
+      message: desativar
+        ? `${row.nome} deixa de conseguir entrar no sistema até ser ativado de novo.`
+        : `${row.nome} volta a conseguir entrar no sistema.`,
+      confirmLabel: desativar ? "Desativar usuário" : "Ativar usuário",
+      tone: desativar ? "danger" : "primary",
+    });
+    if (confirmado) await salvar({ id: row.id, nome: row.nome, nivel: row.nivel, ativo: !row.ativo, senha: "" });
+  }
 
   async function salvar(estado: EditState) {
     setSalvando(true);
@@ -195,8 +214,9 @@ export function ManagementUsersPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={salvando}
-                      onClick={() => void salvar({ id: row.id, nome: row.nome, nivel: row.nivel, ativo: !row.ativo, senha: "" })}
+                      disabled={salvando || (row.id === user?.id && row.ativo)}
+                      title={row.id === user?.id && row.ativo ? PROPRIA_CONTA : undefined}
+                      onClick={() => void alternarSituacao(row)}
                     >
                       {row.ativo ? "Desativar" : "Ativar"}
                     </button>
@@ -234,7 +254,7 @@ export function ManagementUsersPage() {
             </label>
             <label>
               Nível de acesso
-              <select value={editando.nivel} onChange={(event) => setEditando({ ...editando, nivel: event.target.value })}>
+              <select value={editando.nivel} disabled={editando.id === user?.id} onChange={(event) => setEditando({ ...editando, nivel: event.target.value })}>
                 {niveis.map((nivel) => (
                   <option key={nivel} value={nivel}>{humanize(nivel)}</option>
                 ))}
@@ -254,10 +274,12 @@ export function ManagementUsersPage() {
               <input
                 type="checkbox"
                 checked={editando.ativo}
+                disabled={editando.id === user?.id}
                 onChange={(event) => setEditando({ ...editando, ativo: event.target.checked })}
               />
               Ativo
             </label>
+            {editando.id === user?.id ? <Notice>{PROPRIA_CONTA}</Notice> : null}
             <div className="pause-form__actions">
               <button type="button" onClick={() => setEditando(null)}>Cancelar</button>
               <button
@@ -271,6 +293,7 @@ export function ManagementUsersPage() {
           </form>
         </OperatorDialog>
       ) : null}
+      {confirmDialog}
     </PageFrame>
   );
 }

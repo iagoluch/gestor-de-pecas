@@ -164,6 +164,7 @@ describe("Crachás — organização e filtros", () => {
     await waitFor(() => expect(linhas()).toBe(3));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Desativar crachá" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Crachá salvo"));
     let corpo = JSON.parse(String((mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1)?.[1] as RequestInit).body));
     expect(corpo.ativo).toBe(false);

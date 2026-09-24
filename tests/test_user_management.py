@@ -33,7 +33,7 @@ def _management_user():
 
 def _admin_user():
     return SessionUser(
-        id=1, name="Admin Z", role="admin",
+        id=900, name="Admin Z", role="admin",
         management_access=True, andon_access=True, operator_access=False,
     )
 
@@ -133,6 +133,23 @@ class UserManagementApiTests(unittest.TestCase):
 
         atualizado = next(u for u in self.db.users if u["id"] == usuario_id)
         self.assertEqual(atualizado["senha"], "senha-antiga")
+
+    def test_admin_nao_desativa_nem_rebaixa_a_propria_conta(self):
+        admin = _admin_user()
+        admin_id = self.db.criar_usuario("Admin Z", "senha-forte-123", "admin")
+        admin.id = admin_id
+        self._as(admin)
+
+        for mudanca in ({"ativo": False, "nivel": "admin"}, {"ativo": True, "nivel": "gestor"}):
+            resposta = self.client.post(
+                "/api/v1/management/users",
+                json={"id": admin_id, "nome": "Admin Z", **mudanca},
+            )
+            self.assertEqual(resposta.status_code, 409)
+            self.assertEqual(resposta.json()["code"], "user_self_lockout")
+        proprio = next(u for u in self.db.users if u["id"] == admin_id)
+        self.assertTrue(proprio["ativo"])
+        self.assertEqual(proprio["nivel"], "admin")
 
     def test_admin_pode_criar_outra_conta_admin(self):
         self._as(_admin_user())

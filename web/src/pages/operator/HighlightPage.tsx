@@ -8,6 +8,8 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
 import { Notice } from "../../components/Notice";
+import { AsyncButton } from "../../components/AsyncButton";
+import { StationStateBanner } from "../../components/StationStateBanner";
 
 interface HighlightOperation {
   id: number;
@@ -96,7 +98,7 @@ interface HighlightPayload {
 }
 
 /** Estado físico do posto. A parada sem tarefa vive aqui, não na tarefa. */
-interface HighlightResourceState { categoria?: string; motivo?: string; op?: string | null }
+interface HighlightResourceState { categoria?: string; motivo?: string; op?: string | null; data_inicio?: string | null }
 interface HighlightQueueResponse {
   items: HighlightQueueTask[];
   count: number;
@@ -253,6 +255,7 @@ export function HighlightPage() {
   const startsActivity = !stoppedWithoutTask && !activityInProgress && !selectedPlan;
   return (
     <section className="highlight-page">
+      <StationStateBanner state={resourceState} />
       <div className="highlight-search">
         <label>Filtrar tarefas liberadas<input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Tarefa, plano ou material" autoFocus /></label>
         {filterText ? <button type="button" className="button" onClick={() => setFilterText("")}>Limpar filtro</button> : null}
@@ -384,21 +387,21 @@ export function HighlightPage() {
           </section>
         </div>
       ) : null}
-      {dialog === "stop" ? <HighlightStopDialog taskCode={loadedTask || "—"} planLabel={selectedRunning && selectedPlan ? rotuloPlano(selectedPlan, plans) : undefined} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => void action("Parada", { stop_reason_code: code, comment, plan_hash: selectedRunning ? selectedPlan?.plano_hash : null })} /> : null}
-      {dialog === "finish" ? <HighlightFinishDialog taskCode={loadedTask} planLabel={selectedPlan ? rotuloPlano(selectedPlan, plans) : undefined} operations={task.data?.operations ?? []} onCancel={() => setDialog(null)} onConfirm={(badge) => void action("Fim", { badge, plan_hash: selectedPlan?.plano_hash ?? null })} /> : null}
+      {dialog === "stop" ? <HighlightStopDialog taskCode={loadedTask || "—"} planLabel={selectedRunning && selectedPlan ? rotuloPlano(selectedPlan, plans) : undefined} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => action("Parada", { stop_reason_code: code, comment, plan_hash: selectedRunning ? selectedPlan?.plano_hash : null })} /> : null}
+      {dialog === "finish" ? <HighlightFinishDialog taskCode={loadedTask} planLabel={selectedPlan ? rotuloPlano(selectedPlan, plans) : undefined} operations={task.data?.operations ?? []} onCancel={() => setDialog(null)} onConfirm={(badge) => action("Fim", { badge, plan_hash: selectedPlan?.plano_hash ?? null })} /> : null}
       {dialog === "activityStart" || dialog === "activityFinish" ? (
         <OperatorDialog title="Atividade diária" size="compact" onCancel={() => setDialog(null)}>
           <p>{dialog === "activityStart" ? "Iniciar uma atividade diária neste posto?" : "Finalizar a atividade diária em andamento?"}</p>
           <div className="operator-dialog__actions">
             <button type="button" onClick={() => setDialog(null)}>Não</button>
-            <button
-              type="button"
+            <AsyncButton
               className="button button--primary"
+              pendingLabel="Enviando…"
               disabled={busy}
-              onClick={() => void action(dialog === "activityStart" ? "Início" : "Fim", {}, true)}
+              onClick={() => action(dialog === "activityStart" ? "Início" : "Fim", {}, true)}
             >
               Sim
-            </button>
+            </AsyncButton>
           </div>
         </OperatorDialog>
       ) : null}
@@ -448,9 +451,9 @@ function HighlightHistoryCard({ row }: { row: HighlightHistoryRow }) {
   );
 }
 
-function HighlightStopDialog({ taskCode, planLabel, reasons, onCancel, onConfirm }: { taskCode: string; planLabel?: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => void }) {
+function HighlightStopDialog({ taskCode, planLabel, reasons, onCancel, onConfirm }: { taskCode: string; planLabel?: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => unknown }) {
   const [code, setCode] = useState(""); const [comment, setComment] = useState(""); const selected = reasons.find((reason) => reason.codigo === code);
-  return <OperatorDialog title="Parar Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span>{planLabel ? <span><small>Plano</small><strong>{planLabel}</strong></span> : null}</div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><button type="button" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</button></div></OperatorDialog>;
+  return <OperatorDialog title="Parar Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span>{planLabel ? <span><small>Plano</small><strong>{planLabel}</strong></span> : null}</div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</AsyncButton></div></OperatorDialog>;
 }
 
 /**
@@ -458,7 +461,7 @@ function HighlightStopDialog({ taskCode, planLabel, reasons, onCancel, onConfirm
  * não altera a regra canônica de finalização, que continua encerrando a tarefa
  * inteira no backend.
  */
-function HighlightFinishDialog({ taskCode, planLabel, operations, onCancel, onConfirm }: { taskCode: string; planLabel?: string; operations: HighlightOperation[]; onCancel: () => void; onConfirm: (badge: string) => void }) {
+function HighlightFinishDialog({ taskCode, planLabel, operations, onCancel, onConfirm }: { taskCode: string; planLabel?: string; operations: HighlightOperation[]; onCancel: () => void; onConfirm: (badge: string) => unknown }) {
   const [badge, setBadge] = useState("");
   const [search, setSearch] = useState("");
   const [checked, setChecked] = useState<number[]>([]);
@@ -507,7 +510,7 @@ function HighlightFinishDialog({ taskCode, planLabel, operations, onCancel, onCo
       <label>Crachá do operador<input value={badge} onChange={(event) => setBadge(event.target.value)} /></label>
       <div className="operator-dialog__actions">
         <button type="button" onClick={onCancel}>Cancelar</button>
-        <button type="button" className="button button--primary" disabled={!badge.trim() || !allChecked} onClick={() => onConfirm(badge.trim())}>Confirmar fim</button>
+        <AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={!badge.trim() || !allChecked} onClick={() => onConfirm(badge.trim())}>Confirmar fim</AsyncButton>
       </div>
     </OperatorDialog>
   );

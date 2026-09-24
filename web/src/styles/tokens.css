@@ -57,6 +57,7 @@
   /* #0f7a37 sobre --accent-soft = 4,9:1 (o antigo #11823b ficava em 4,4:1). */
   --success-ink: #0f7a37;
   --setup-ink: #0e7490;
+  --info-ink: #0a63e8; /* texto informativo sobre --primary-soft */
   /* Estados operacionais do apontamento: a mesma identidade dos botoes do
      operador, para que o Andon leia igual ao posto. */
   --state-setup: #0cc0df;
@@ -97,7 +98,7 @@
   --sidebar-border: #0a426f;
   --sidebar-text: #c3d2e8;
   --sidebar-text-muted: #86a0c4;
-  --sidebar-text-faint: #6582a6;
+  --sidebar-text-faint: #7a93b8; /* 5,3:1 sobre --sidebar (AX-01) */
   --sidebar-ok: #42d85a;
 
   /* Espaço (base 4px) */
@@ -200,6 +201,7 @@
     --warning-ink: #f2b866;
     --success-ink: #7fe0a0;
     --setup-ink: #3fd4ef;
+  --info-ink: #7aa8ff; /* --primary dava 4,4:1 sobre --primary-soft (AX-01) */
     --state-setup: #3fd4ef;
     --state-setup-soft: #0f3540;
     --state-rework: #ffb37a;
@@ -239,6 +241,7 @@
   --warning-ink: #f2b866;
   --success-ink: #7fe0a0;
   --setup-ink: #3fd4ef;
+  --info-ink: #7aa8ff; /* --primary dava 4,4:1 sobre --primary-soft (AX-01) */
   --state-setup: #3fd4ef;
   --state-setup-soft: #0f3540;
   --state-rework: #ffb37a;

@@ -80,11 +80,12 @@ describe("fluxo Web do operador", () => {
     // o caminho é Retomar: registrar uma segunda parada é recusado pelo
     // backend (`recurso_ja_parado`) e a tela não oferece a ação.
     expect(screen.getByRole("button", { name: "Parada" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
-    await screen.findByText("Início registrado com sucesso.");
-    const actionCall = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
-    expect(actionCall).toBeTruthy();
-    expect(JSON.parse(String(actionCall?.[1]?.body))).toMatchObject({ action: "Início", resource: "1303", op: "OP-101", operation_id: 101 });
+    // OP-03: a OP-091 ainda ocupa o recurso (Parada). Iniciar a OP-101 seria
+    // recusado pelo backend (`operator_resource_occupied`), então a tela trava
+    // o botão e diz por quê — em vez de deixar o operador tentar e errar.
+    expect(screen.getByRole("button", { name: "Iniciar" })).toBeDisabled();
+    expect(screen.getByText(/Recurso em uso pela OP OP-091 \(Parada\)/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST")).toBe(false);
   });
 
   it("limpa a OP carregada e o aviso do gate ao apagar o código", async () => {
@@ -350,6 +351,8 @@ describe("fluxo Web do operador", () => {
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("1303");
     await screen.findByText(/Recurso parado — 0029 - Quebra de ferramenta/);
+    // OP-02: a faixa persistente mostra o estado físico do posto vindo do backend.
+    expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/Parado.*0029 - Quebra de ferramenta/);
     // Sem OP carregada não existe apontamento: a retomada é do próprio recurso.
     fireEvent.click(screen.getByRole("button", { name: "Retomar" }));
     await screen.findByText("Recurso retomado com sucesso.");

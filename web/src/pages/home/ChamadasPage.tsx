@@ -12,6 +12,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { Notice } from "../../components/Notice";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 interface ChamadaContato {
   id: number;
@@ -61,6 +62,7 @@ export function ManagementChamadasPage() {
   const [editando, setEditando] = useState<ChamadaContato | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const filtros = usePersistentFilters("gestor.filtros.chamada-contatos", FILTROS_INICIAIS);
 
   const contatos = useMemo(() => contatosQuery.data?.items ?? [], [contatosQuery.data]);
@@ -236,7 +238,7 @@ export function ManagementChamadasPage() {
                   render: (row) => (
                     <span className="pause-actions">
                       <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                      <button type="button" disabled={salvando} onClick={() => void salvar({ ...row, ativo: !row.ativo })}>
+                      <button type="button" disabled={salvando} onClick={async () => { if (!row.ativo || await confirm({ title: "Desativar contato", message: `${row.nome} deixa de receber as chamadas até ser ativado de novo.`, confirmLabel: "Desativar contato", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); }}>
                         {row.ativo ? "Desativar" : "Ativar"}
                       </button>
                       {row.padrao_gestao ? null : (
@@ -244,7 +246,7 @@ export function ManagementChamadasPage() {
                           Tornar padrão da gestão
                         </button>
                       )}
-                      <button type="button" disabled={salvando} onClick={() => void remover(row.id)}>Remover</button>
+                      <button type="button" disabled={salvando} onClick={async () => { if (await confirm({ title: "Remover contato", message: `${row.nome} será removido dos contatos de chamada. Esta ação não pode ser desfeita.`, confirmLabel: "Remover contato", tone: "danger" })) void remover(row.id); }}>Remover</button>
                     </span>
                   ),
                 },
@@ -387,6 +389,7 @@ export function ManagementChamadasPage() {
           </form>
         </OperatorDialog>
       ) : null}
+      {confirmDialog}
     </PageFrame>
   );
 }

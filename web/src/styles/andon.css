@@ -57,7 +57,7 @@ body:has(.andon-page--single-view) #root {
 .andon-board {
   --andon-column-count: 2;
   --andon-board-gap: 10px;
-  --andon-card-height: 122px;
+  --andon-card-height: 140px;
   --andon-cards-gap: 6px;
   --andon-group-width: 250px;
   --andon-panel-chrome: 100px;
@@ -99,7 +99,7 @@ body:has(.andon-page--single-view) #root {
   min-width: 0;
   min-height: calc(
     var(--andon-panel-chrome, 100px)
-    + var(--andon-panel-rows) * var(--andon-card-height, 122px)
+    + var(--andon-panel-rows) * var(--andon-card-height, 140px)
     + (var(--andon-panel-rows) - 1) * var(--andon-cards-gap, 6px)
   );
   display: grid;
@@ -246,7 +246,7 @@ body:has(.andon-page--single-view) #root {
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--andon-card-width)), 1fr));
-  grid-auto-rows: minmax(0, var(--andon-card-height, 122px));
+  grid-auto-rows: minmax(0, var(--andon-card-height, 140px));
   align-content: start;
   gap: 6px;
   padding: 6px;
@@ -635,7 +635,7 @@ body:has(.andon-page--single-view) #root {
   .andon-page--single-view .andon-content { padding: 8px 10px 10px; }
   .andon-page--single-view .andon-board {
     --andon-board-gap: 8px;
-    --andon-card-height: 113px;
+    --andon-card-height: 128px;
     --andon-cards-gap: 5px;
     --andon-group-width: 220px;
     --andon-panel-chrome: 88px;
@@ -669,7 +669,7 @@ body:has(.andon-page--single-view) #root {
   .andon-content { padding: 7px 8px 8px; }
   .andon-board {
     --andon-board-gap: 7px;
-    --andon-card-height: 92px;
+    --andon-card-height: 94px;
     --andon-cards-gap: 4px;
     --andon-group-width: 190px;
     --andon-panel-chrome: 82px;
@@ -788,7 +788,7 @@ body:has(.andon-page--manager) #root {
   .andon-page--tv .andon-content { padding: 16px 20px 20px; }
   .andon-page--tv .andon-board {
     --andon-board-gap: 16px;
-    --andon-card-height: 176px;
+    --andon-card-height: 180px;
     --andon-cards-gap: 10px;
     --andon-group-width: 410px;
     --andon-panel-chrome: 132px;
@@ -831,3 +831,83 @@ body:has(.andon-page--manager) #root {
   .andon-card[data-transition="update"],
   .andon-card[data-active="true"] .andon-card__oee::after { animation: none; }
 }
+
+/*
+ * Leitura à distância (AN-01/02/03). Fica no fim da folha para governar, em
+ * todas as faixas de resolução, só o que carrega o estado: nome, estado e
+ * cronômetro. As fontes escalam com a largura do próprio cartão (`cqi`; o
+ * `.andon-card` é container), então 1920 e 2560 crescem juntos sem um
+ * tamanho por breakpoint.
+ * - Cabeçalho em duas linhas: nome + cronômetro; o motivo ganha linha própria
+ *   e quebra em vez de ser cortado — abrevia-se o código, nunca a causa.
+ * - Parada é o único estado que vira superfície cheia: vermelho quando não
+ *   planejada, âmbar quando planejada (classificação vinda do backend). O
+ *   escalonamento por tempo não é inventado aqui: não há limiar definido no MES.
+ */
+.andon-page--single-view .andon-card__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1px 8px;
+  padding: 4px 8px 5px;
+}
+
+.andon-page--single-view .andon-card__state { display: contents; }
+
+.andon-page--single-view .andon-card__identity > strong {
+  font-size: clamp(12px, 6.2cqi, 26px);
+  line-height: 1.2;
+}
+
+.andon-page--single-view .andon-card__state > strong {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: clamp(12px, 6.8cqi, 30px);
+  line-height: 1.15;
+}
+
+.andon-page--single-view .andon-card__state > span {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: start;
+  max-width: 100%;
+  overflow: visible;
+  padding: 1px 6px;
+  font-size: clamp(10px, 4.6cqi, 20px);
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.andon-page--single-view .andon-card__state > span i {
+  width: .55em;
+  height: .55em;
+  flex-basis: .55em;
+}
+
+.andon-card--parada { --state-fill: var(--fill-stopped); --state-ink: var(--fill-ink); }
+.andon-card--parada[data-stop-classification="planejada"] { --state-fill: var(--fill-waiting); --state-ink: var(--fill-ink-dark); }
+
+.andon-page--single-view .andon-card--parada {
+  border-color: var(--state-fill);
+  border-width: 2px 2px 2px 6px;
+  background: var(--state-soft);
+}
+
+.andon-page--single-view .andon-card--parada .andon-card__header {
+  border-bottom-color: transparent;
+  color: var(--state-ink);
+  background: var(--state-fill);
+}
+
+.andon-page--single-view .andon-card--parada .andon-card__identity > strong,
+.andon-page--single-view .andon-card--parada .andon-card__state > strong,
+.andon-page--single-view .andon-card--parada .andon-card__state > span { color: var(--state-ink); }
+
+.andon-page--single-view .andon-card--parada .andon-card__state > span {
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.andon-page--single-view .andon-card--parada .andon-card__state > span i { background: var(--state-ink); }
