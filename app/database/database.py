@@ -44,7 +44,10 @@ from mes.domain import (
     EXECUTING_APPOINTMENT_STATUSES,
     ManufacturingRules,
     PHYSICAL_STATE_VALUES,
+    SHIFT_END_INTERRUPTION_TYPE,
+    SHIFT_END_REASON,
     SIGMANEST_LASER_MACHINE,
+    ShiftWindowKind,
     OperatorState,
     can_transition,
     operator_state_from_status,
@@ -57,6 +60,12 @@ PASSWORD_SCHEME = "pbkdf2_sha256"  # nosec B105 -- identificador de algoritmo de
 PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
+NO_DEMAND_REASON = "Recurso sem demanda"
+NO_DEMAND_INTERRUPTION_TYPE = "recurso_sem_demanda"
+AUTOMATIC_BREAK_INTERRUPTION = "intervalo_programado"
+# Estados copiados de uma OP/nesting: só valem enquanto a execução existir.
+EXECUTION_STATE_ORIGINS = frozenset({"apontamento_operador", "corte_nesting"})
+ACTIVE_OPERATIONAL_STATUSES = ("Em processo", "Parada", "Setup", "Retrabalho")
 
 
 
@@ -1338,12 +1347,22 @@ class Database(
             finished = cursor.fetchone()
             if not finished:
                 return None
-            self._encerrar_estado_recurso_tx(
+            closed = self._encerrar_estado_recurso_tx(
                 cursor,
                 finished.get("maquina"),
                 fim,
                 somente_origem="corte_nesting",
             )
+            if closed and closed.get("data_fim") is not None:
+                self._entrar_sem_demanda_tx(
+                    cursor,
+                    finished.get("maquina"),
+                    fim,
+                    tipo_setor=closed.get("tipo_setor"),
+                    operador=operador,
+                    origem="corte_nesting_fim",
+                    referencia_origem=f"nesting:{finished.get('id')}",
+                )
             return dict(finished)
 
     def avancar_nesting_corte(
@@ -3054,8 +3073,11 @@ class Database(
         A pausa automática é somente um recorte temporal. No fim, Produção
         volta para a mesma OP, uma Parada volta com seu motivo/status e Recurso
         sem demanda volta para a fila sem OP. Nenhuma OP é criada ou escolhida
-        por inferência. Se o recurso não possuía snapshot (recurso cadastrado
-        durante a pausa), o estado seguro é Recurso sem demanda.
+        por inferência. Com OP ativa, o estado é derivado das OPs como estão no
+        retorno (apontamentos feitos na pausa não encerram o intervalo). Se o
+        recurso não possuía snapshot (recurso cadastrado durante a pausa) ou se
+        a OP/nesting do snapshot terminou durante a pausa, o estado seguro é
+        Recurso sem demanda.
         """
 
         instante = _period_value(data_hora)
@@ -3100,15 +3122,43 @@ class Database(
                     """,
                     (resource, current["id"], current["data_inicio"]),
                 )
-                previous = _as_dict(cursor.fetchone()) or {
-                    "categoria": "fila",
-                    "tipo_setor": current.get("tipo_setor"),
-                    "operador": operador,
-                    "motivo": "Recurso sem demanda",
-                    "origem": "sincronizacao_recurso_sem_demanda",
-                    "automatico": True,
-                    "tipo_interrupcao": "recurso_sem_demanda",
-                }
+                previous = _as_dict(cursor.fetchone())
+                executions = self._execucoes_ativas_tx(cursor, resource, instante)
+                operational = next(
+                    (maquina for origem, maquina in executions
+                     if origem == "apontamento_operador"),
+                    None,
+                )
+                if operational:
+                    # Apontamentos feitos na pausa não mudaram o estado físico;
+                    # o retorno reflete as OPs como estão agora.
+                    state = self._reconciliar_estado_recurso_apontamentos_tx(
+                        cursor,
+                        operational,
+                        instante,
+                        operador=(previous or {}).get("operador") or operador,
+                        origem="intervalo_programado_fim",
+                        referencia_origem=f"intervalo:{current.get('id')}",
+                        preservar_intervalo=False,
+                    )
+                    if state:
+                        resumed.append(dict(state))
+                    continue
+                if previous and (
+                    previous.get("origem") in EXECUTION_STATE_ORIGINS
+                    and not executions
+                ):
+                    # A OP/nesting terminou durante a pausa: não é reaberta.
+                    previous = None
+                if not previous:
+                    previous = {
+                        "categoria": "fila",
+                        "tipo_setor": current.get("tipo_setor"),
+                        "operador": operador,
+                        "motivo": NO_DEMAND_REASON,
+                        "automatico": True,
+                        "tipo_interrupcao": NO_DEMAND_INTERRUPTION_TYPE,
+                    }
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
                     resource,
@@ -3995,15 +4045,136 @@ class Database(
         )
         return dict(cursor.fetchone())
 
+    def _execucoes_ativas_tx(self, cursor, recurso, instante):
+        """OPs e nestings do Corte ativos no recurso: ``[(origem, maquina)]``.
+
+        A comparação é pela identidade canônica: o apontamento guarda o código
+        informado no posto (ex.: ``1303``) e o estado físico guarda a
+        identidade resolvida (ex.: ``DOBRA3``). ``maquina`` volta como está
+        gravada no apontamento.
+        """
+
+        cursor.execute(
+            """
+            SELECT 'apontamento_operador' AS origem, maquina
+            FROM apontamentos_operacionais
+            WHERE status = ANY(%s)
+              AND data_inicio IS NOT NULL AND data_inicio <= %s
+              AND (data_fim IS NULL OR data_fim > %s)
+            UNION
+            SELECT 'corte_nesting' AS origem, maquina FROM apontamentos_corte
+            WHERE status = 'Em processo'
+              AND data_inicio IS NOT NULL AND data_inicio <= %s
+              AND (data_fim IS NULL OR data_fim > %s)
+            """,
+            (
+                list(ACTIVE_OPERATIONAL_STATUSES), instante, instante,
+                instante, instante,
+            ),
+        )
+        identity = str(resolve_resource_identity(recurso) or "").upper()
+        return [
+            (row["origem"], row["maquina"])
+            for row in cursor.fetchall()
+            if str(resolve_resource_identity(row["maquina"]) or "").upper() == identity
+        ]
+
+    def _recurso_em_execucao_tx(self, cursor, recurso, instante):
+        """Há OP ou nesting do Corte ainda ativo no recurso neste instante?"""
+
+        return bool(self._execucoes_ativas_tx(cursor, recurso, instante))
+
+    @staticmethod
+    def _em_intervalo_automatico(state):
+        return bool(
+            state
+            and state.get("tipo_interrupcao") == AUTOMATIC_BREAK_INTERRUPTION
+            and state.get("automatico")
+        )
+
+    def _fora_do_turno(self, recurso, instante):
+        """O instante está fora da janela operacional (turno + hora extra planejada)?
+
+        Mesma referência do fim de turno automático: calendário do recurso
+        quando cadastrado, senão os horários globais de ``parametros_turno``.
+        """
+
+        from mes.services.calendar import CalendarService
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        calendar = CalendarService(self, load_manufacturing_rules(self))
+        return calendar.shift_window_kind(recurso, instante) == ShiftWindowKind.OUT_OF_SHIFT
+
+    def _entrar_sem_demanda_tx(
+        self, cursor, recurso, instante, *, tipo_setor=None, operador=None,
+        origem, referencia_origem=None,
+    ):
+        """Recurso sem OP/nesting ativo passa a Recurso sem demanda.
+
+        Regra da Manufatura: ao terminar a última execução, o recurso não fica
+        sem estado. Estados programados abertos são preservados — o fim do
+        intervalo automático e o retorno do turno decidem o próximo estado.
+        Execução encerrada em hora extra não planejada (após a jornada) leva
+        a Fora de turno, que o retorno do turno seguinte converte em sem demanda.
+        """
+
+        resource = resolve_resource_identity(recurso)
+        if not resource:
+            return None
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
+            (resource,),
+        )
+        current = self._estado_recurso_aberto_tx(cursor, resource, instante=instante)
+        if current and (
+            current.get("categoria") == "fora_turno"
+            or self._em_intervalo_automatico(current)
+        ):
+            return dict(current)
+        if self._recurso_em_execucao_tx(cursor, resource, instante):
+            return dict(current) if current else None
+        if self._fora_do_turno(resource, instante):
+            return self._transicionar_estado_recurso_tx(
+                cursor,
+                resource,
+                "fora_turno",
+                tipo_setor=tipo_setor or (current or {}).get("tipo_setor"),
+                operador=operador,
+                motivo=SHIFT_END_REASON,
+                data_hora=instante,
+                origem=origem,
+                referencia_origem=referencia_origem,
+                planejado=True,
+                automatico=True,
+                tipo_interrupcao=SHIFT_END_INTERRUPTION_TYPE,
+            )
+        return self._transicionar_estado_recurso_tx(
+            cursor,
+            resource,
+            "fila",
+            tipo_setor=tipo_setor or (current or {}).get("tipo_setor"),
+            operador=operador,
+            motivo=NO_DEMAND_REASON,
+            data_hora=instante,
+            origem=origem,
+            referencia_origem=referencia_origem,
+            automatico=True,
+            tipo_interrupcao=NO_DEMAND_INTERRUPTION_TYPE,
+        )
+
     def _reconciliar_estado_recurso_apontamentos_tx(
         self, cursor, recurso, instante, *, operador=None, origem="apontamento_operador",
-        referencia_origem=None, evento_apontamento_id=None,
+        referencia_origem=None, evento_apontamento_id=None, preservar_intervalo=True,
     ):
         """Deriva um único estado físico a partir das OPs ativas do recurso.
 
         Simultaneidade com o mesmo estado é válida. Estados distintos no mesmo
         instante viram ``desconhecido``; escolher um vencedor corromperia a
         verdade física e os indicadores.
+
+        Durante o intervalo automático o apontamento é gravado, mas o estado
+        físico continua no intervalo até o horário cadastrado; o fim do
+        intervalo deriva o estado a partir das OPs (``preservar_intervalo=False``).
         """
 
         resource = str(recurso or "").strip()
@@ -4014,17 +4185,33 @@ class Database(
             SELECT *
             FROM apontamentos_operacionais
             WHERE UPPER(COALESCE(maquina, '')) = UPPER(%s)
-              AND status IN ('Em processo', 'Parada', 'Setup', 'Retrabalho')
+              AND status = ANY(%s)
               AND data_inicio IS NOT NULL
               AND data_inicio <= %s
               AND (data_fim IS NULL OR data_fim > %s)
             ORDER BY id
             """,
-            (resource, instante, instante),
+            (resource, list(ACTIVE_OPERATIONAL_STATUSES), instante, instante),
         )
         active = [dict(row) for row in cursor.fetchall()]
         if not active:
-            return self._encerrar_estado_recurso_tx(cursor, resource, instante)
+            return self._entrar_sem_demanda_tx(
+                cursor,
+                resource,
+                instante,
+                operador=operador,
+                origem=origem,
+                referencia_origem=referencia_origem,
+            )
+        if preservar_intervalo:
+            identity = resolve_resource_identity(resource)
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
+                (identity,),
+            )
+            current = self._estado_recurso_aberto_tx(cursor, identity, instante=instante)
+            if self._em_intervalo_automatico(current):
+                return dict(current)
 
         categories = {
             self._categoria_estado_apontamento(row.get("status"))
