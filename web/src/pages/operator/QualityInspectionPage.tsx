@@ -5,6 +5,7 @@ import { OperatorDialog } from "../../components/OperatorDialog";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { QualityDimension, QualityInspection } from "../../types/api";
 import { formatMeasurement } from "../../utils/format";
+import { Notice } from "../../components/Notice";
 
 export type MeasureStatus = "" | "CONFORME" | "NAO_CONFORME";
 interface MeasureState { medida: string; status: MeasureStatus }
@@ -295,7 +296,7 @@ export function QualityInspectionPage({
                 ))}
               </div>
 
-              {message ? <p className="operator-notice" role="status">{message}</p> : null}
+              {message ? <Notice>{message}</Notice> : null}
 
               <button
                 type="button"

@@ -175,17 +175,18 @@ describe("Pausas automáticas — organização e filtros", () => {
   });
 
   it("desativa e reativa pela ação da linha sem mudar o contrato", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const mock = stubFetch();
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Desativar pausa" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa salva"));
     const desativa = mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1);
     expect(JSON.parse(String((desativa?.[1] as RequestInit).body)).ativo).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Ativar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ativar pausa" }));
     await waitFor(() => {
       const ativa = mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1);
       expect(JSON.parse(String((ativa?.[1] as RequestInit).body)).ativo).toBe(true);
@@ -193,26 +194,27 @@ describe("Pausas automáticas — organização e filtros", () => {
   });
 
   it("remove a pausa pelo endpoint existente", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const mock = stubFetch();
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Remover" })[0]);
-
+    fireEvent.click(await screen.findByRole("button", { name: "Remover pausa" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa removida."));
     expect(mock.mock.calls.some(([path, init]) => String(path).includes("/management/pauses/")
       && (init as RequestInit)?.method === "DELETE")).toBe(true);
   });
 
   it("cancela Desativar e Remover quando o usuário não confirma", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     const mock = stubFetch();
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Remover" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     expect(mock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "POST")).toBe(false);
     expect(mock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "DELETE")).toBe(false);

@@ -5,6 +5,7 @@ import type { ManagementSectionId } from "../config/navigation";
 import { sectionById } from "../config/navigation";
 import type { FilterField } from "../filters/FilterContext";
 import { FilterBar } from "./FilterBar";
+import { Notice } from "./Notice";
 
 export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, filterFields, staleError }: PropsWithChildren<{
   sectionId: ManagementSectionId;
@@ -49,9 +50,9 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
         </header>
         {filters ? <FilterBar period={period} fields={filterFields} /> : null}
         {staleError ? (
-          <p className="operator-notice operator-notice--stale" role="status">
+          <Notice tone="stale">
             Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.
-          </p>
+          </Notice>
         ) : null}
         {children}
       </section>

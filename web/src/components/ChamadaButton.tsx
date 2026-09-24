@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { OperatorDialog } from "./OperatorDialog";
+import { Notice } from "./Notice";
 
 interface ChamadaContato {
   id: number;
@@ -290,7 +291,7 @@ export function ChamadaButton({
                 </label>
               )}
 
-              {passo === "erro" ? <p className="operator-notice operator-notice--danger" role="alert">{erro}</p> : null}
+              {passo === "erro" ? <Notice tone="error">{erro}</Notice> : null}
 
               <div className="operator-dialog__actions">
                 <button type="button" onClick={fechar} disabled={passo === "enviando"}>Cancelar</button>

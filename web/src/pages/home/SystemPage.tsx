@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, ApiError } from "../../api/client";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
+import { Notice } from "../../components/Notice";
 
 interface RebuildResult {
   ok: boolean;
@@ -60,14 +61,14 @@ export function ManagementSystemPage() {
           </button>
         </div>
         {status === "done" ? (
-          <p className="operator-notice" role="status">
+          <Notice>
             Build concluído em {duration}s. Atualize a página para ver as alterações.
-          </p>
+          </Notice>
         ) : null}
         {status === "error" ? (
-          <p className="operator-notice operator-notice--error" role="alert">
+          <Notice tone="error">
             O build falhou. Veja o log abaixo.
-          </p>
+          </Notice>
         ) : null}
         {output ? <pre className="system-build-log">{output}</pre> : null}
       </SectionCard>

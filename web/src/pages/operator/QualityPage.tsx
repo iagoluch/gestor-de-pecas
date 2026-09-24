@@ -7,6 +7,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import type { QualityHistoryItem, QualityQueue, QualityQueueItem, QualitySummary } from "../../types/api";
 import { formatDateTime, formatMeasurement } from "../../utils/format";
 import { QualityInspectionPage } from "./QualityInspectionPage";
+import { Notice } from "../../components/Notice";
 
 const SUMMARY_CARDS: { key: keyof QualitySummary; label: string; tone: string }[] = [
   { key: "aguardando", label: "Aguardando inspeção", tone: "info" },
@@ -146,8 +147,8 @@ export function QualityPage({ sector }: { sector: string }) {
         <button type="button" className="insp-history-button" onClick={() => setHistoryOpen(true)}>Histórico</button>
       </div>
 
-      {notice ? <p className="operator-notice" role="status">{notice}</p> : null}
-      {searchNotice ? <p className="operator-notice" role="status">{searchNotice}</p> : null}
+      {notice ? <Notice>{notice}</Notice> : null}
+      {searchNotice ? <Notice>{searchNotice}</Notice> : null}
 
       {queue.loading && !queue.data ? <LoadingState label="Carregando fila de inspeção…" /> : queue.error ? <ErrorState error={queue.error} onRetry={queue.reload} /> : items.length === 0 && !searchNotice ? (
         <EmptyState title="Nenhuma OP aguardando inspeção" detail="A OP entra aqui quando o roteiro chega na operação de inspeção." />

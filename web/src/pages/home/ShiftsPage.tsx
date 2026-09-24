@@ -8,6 +8,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { Notice } from "../../components/Notice";
 
 interface ShiftParameter {
   id: number;
@@ -121,7 +122,7 @@ export function ManagementShiftsPage() {
         não vira "Sem demanda" quando o expediente abrir.
       </p>
 
-      {mensagem ? <p className="operator-notice" role="status">{mensagem}</p> : null}
+      {mensagem ? <Notice>{mensagem}</Notice> : null}
 
       <SectionCard
         title="Turnos configurados"

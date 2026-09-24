@@ -7,6 +7,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
+import { Notice } from "../../components/Notice";
 
 /** Uma chapa física do programa: programa + chapa + repetição, vinda do SigmaNEST. */
 interface CuttingSheet {
@@ -275,7 +276,7 @@ export function CuttingPage({ resource }: { resource: string }) {
         {syncMessage ? <strong className={syncMessage.startsWith("Não foi possível") ? "cutting-sync__erro" : undefined}>{syncMessage}</strong> : null}
       </p>
       <div className="cutting-toolbar">
-        <p className="operator-notice" role="status">{message}</p>
+        <Notice>{message}</Notice>
         <div>
           {/* Retomar não depende de haver OP ativa: uma parada registrada sem
               nesting em processo também precisa de saída pela tela. */}
@@ -287,11 +288,11 @@ export function CuttingPage({ resource }: { resource: string }) {
           {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>{planoTemRepeticao(activePlan) ? "Finalizar nesting" : "Finalizar plano"}</button> : null}
         </div>
       </div>
-      {stopped ? <p className="operator-notice operator-notice--error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</p> : null}
-      {activityInProgress ? <p className="operator-notice">{queue.data?.resource_state?.motivo || "Atividade diária"} em andamento neste recurso. Finalize para iniciar um corte.</p> : null}
+      {stopped ? <Notice tone="error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</Notice> : null}
+      {activityInProgress ? <Notice>{queue.data?.resource_state?.motivo || "Atividade diária"} em andamento neste recurso. Finalize para iniciar um corte.</Notice> : null}
       {queue.loading && !queue.data ? <LoadingState label="Carregando fila do Corte…" /> : queue.error && !queue.data ? <ErrorState error={queue.error} onRetry={queue.reload} /> : queue.data?.items.length ? (
         <>
-          {queue.error ? <p className="operator-notice operator-notice--stale" role="alert">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</p> : null}
+          {queue.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
           <div className="cutting-queue">
             {queue.data.items.map((item, index) => (
               <CuttingTaskCard

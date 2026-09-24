@@ -11,6 +11,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
+import { Notice } from "../../components/Notice";
 
 interface OperatorBadge {
   id: number;
@@ -162,7 +163,7 @@ export function ManagementBadgesPage() {
         <MetricCard label="Sem responsável" value={(query.data?.authorizer_count ?? 0) > 0 ? "Não" : "Sim"} detail="Sem responsável designado, a OP bloqueada não é liberada." accent={(query.data?.authorizer_count ?? 0) > 0 ? "teal" : "danger"} />
       </div>
 
-      {mensagem ? <p className="operator-notice" role="status">{mensagem}</p> : null}
+      {mensagem ? <Notice>{mensagem}</Notice> : null}
 
       <RecordToolbar
         ariaLabel="Filtros dos crachás"

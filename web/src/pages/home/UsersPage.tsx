@@ -11,6 +11,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
+import { Notice } from "../../components/Notice";
 
 interface UserAccount {
   id: number;
@@ -127,8 +128,8 @@ export function ManagementUsersPage() {
         <MetricCard label="Sem conta admin" value={admins > 0 ? "Não" : "Sim"} detail="Sem conta admin, ninguém gerencia usuários nem contatos de chamada" accent={admins > 0 ? "teal" : "danger"} />
       </div>
 
-      {mensagem ? <p className="operator-notice" role="status">{mensagem}</p> : null}
-      {erro ? <p className="operator-notice operator-notice--danger" role="alert">{erro}</p> : null}
+      {mensagem ? <Notice>{mensagem}</Notice> : null}
+      {erro ? <Notice tone="error">{erro}</Notice> : null}
 
       <RecordToolbar
         ariaLabel="Filtros dos usuários"

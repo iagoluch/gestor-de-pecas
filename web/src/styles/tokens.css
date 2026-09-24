@@ -54,7 +54,9 @@
   --danger-ink: #9f1d2a;
   --danger-border: #f2b8bf;
   --warning-ink: #8a5700;
-  --success-ink: #11823b;
+  /* #0f7a37 sobre --accent-soft = 4,9:1 (o antigo #11823b ficava em 4,4:1). */
+  --success-ink: #0f7a37;
+  --setup-ink: #0e7490;
   /* Estados operacionais do apontamento: a mesma identidade dos botoes do
      operador, para que o Andon leia igual ao posto. */
   --state-setup: #0cc0df;
@@ -64,6 +66,27 @@
   --purple: #7047e8;
   --teal: #20a7a1;
   --orange: #ff7100;
+
+  /* Nomes semânticos dos estados MES. Telas novas usam estes nomes; os
+     tokens de cor acima continuam valendo por compatibilidade. */
+  --state-producing: var(--accent);
+  --state-stopped: var(--danger);
+  --state-waiting: var(--warning);
+  --state-neutral: var(--muted);
+  --success: var(--accent);
+  --error: var(--danger);
+
+  /* Preenchimentos sólidos de estado (botão de ação, faixa de estado, tile
+     de TV). Iguais nos dois temas e no Andon: cada par fundo/tinta passa
+     4,5:1 com texto de qualquer tamanho. */
+  --fill-producing: #15803d;   /* branco 5,0:1 */
+  --fill-stopped: #c81e2c;     /* branco 5,7:1 */
+  --fill-setup: #0e7490;       /* branco 5,4:1 */
+  --fill-waiting: #f59e0b;     /* tinta escura 8,1:1 */
+  --fill-rework: #7a2f00;      /* branco 9,4:1 */
+  --fill-neutral: #5a6a85;     /* branco 5,5:1 */
+  --fill-ink: #ffffff;
+  --fill-ink-dark: #0b1a33;
 
   /* A barra lateral mantém a mesma identidade azul-marinho nos dois temas —
      é a cor de marca, não um token de superfície que deva clarear. */
@@ -87,8 +110,10 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Tipo — razão curta (~1.15) própria de interface de operação */
-  --text-2xs: 10px;
+  /* Tipo — razão curta (~1.15) própria de interface de operação.
+     11px é o piso de leitura: nada de gestão/operador abaixo disso
+     (o antigo degrau de 10px reprovava contraste e leitura — AX-01). */
+  --text-2xs: 11px;
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;
@@ -102,6 +127,7 @@
   /* Raio */
   --radius-sm: 4px;
   --radius-control: 6px;
+  --radius-md: 8px;
   --radius-card: 10px;
   --radius-panel: 12px;
   --radius-pill: 999px;
@@ -114,6 +140,22 @@
   --shadow-card: var(--shadow-1);
   --shadow-hover: var(--shadow-2);
   --scrim: rgba(0, 18, 39, .48);
+
+  /* Camadas (z-index) — ordem única do app; valores soltos são drift.
+     Barra fixa < botão flutuante < menu/scrim móvel < barra lateral
+     < diálogo/drawer < popover (calendário) que abre dentro do diálogo. */
+  --z-raised: 2;
+  --z-sticky: 20;
+  --z-fab: 24;
+  --z-mobile-menu: 26;
+  --z-scrim: 27;
+  --z-sidebar: 30;
+  --z-modal: 100;
+  --z-popover: 1000;
+
+  /* Breakpoints (media query não lê var(); esta é a régua documentada):
+     480 · 580 · 650 · 900 · 1180 · 1400 · 1680 · 2500 (TV 4K/1440p).
+     Altura: 800 · 960. Degraus fora desta lista são dívida a remover. */
 
   /* Movimento */
   --ease: cubic-bezier(.22, 1, .36, 1);
@@ -157,6 +199,7 @@
     --danger-border: #5c2530;
     --warning-ink: #f2b866;
     --success-ink: #7fe0a0;
+    --setup-ink: #3fd4ef;
     --state-setup: #3fd4ef;
     --state-setup-soft: #0f3540;
     --state-rework: #ffb37a;
@@ -195,6 +238,7 @@
   --danger-border: #5c2530;
   --warning-ink: #f2b866;
   --success-ink: #7fe0a0;
+  --setup-ink: #3fd4ef;
   --state-setup: #3fd4ef;
   --state-setup-soft: #0f3540;
   --state-rework: #ffb37a;

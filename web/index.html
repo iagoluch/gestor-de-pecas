@@ -6,18 +6,7 @@
     <meta name="theme-color" content="#001E3F" />
     <meta name="description" content="Gestor de Peças — gestão industrial e execução real." />
     <title>Gestor de Peças</title>
-    <script>
-      // Aplica o tema salvo antes da primeira pintura, pra não piscar claro
-      // e depois trocar pra escuro (ou o contrário) quando o React montar.
-      try {
-        var storedTheme = localStorage.getItem("gestor.theme");
-        if (storedTheme === "light" || storedTheme === "dark") {
-          document.documentElement.dataset.theme = storedTheme;
-        }
-      } catch (error) {
-        // Storage bloqueado (aba privada etc.): segue o tema do sistema.
-      }
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

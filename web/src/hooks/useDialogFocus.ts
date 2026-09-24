@@ -14,13 +14,23 @@ const FOCUSABLE_SELECTOR =
 export function useDialogFocus(containerRef: RefObject<HTMLElement | null>, active: boolean, onClose: () => void) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Quem abriu o diálogo é lido durante a renderização, antes do commit: no
+  // efeito já é tarde, porque um `autoFocus` de dentro do diálogo roubou o
+  // foco e o retorno iria para o próprio campo desmontado (AX-02).
+  const openerRef = useRef<HTMLElement | null>(null);
+  if (!active) openerRef.current = null;
+  else if (openerRef.current === null) openerRef.current = document.activeElement as HTMLElement | null;
 
   useEffect(() => {
     if (!active) return undefined;
     const container = containerRef.current;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const focusables = container?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-    (focusables?.[0] ?? container)?.focus();
+    const previouslyFocused = openerRef.current;
+    // Um campo com autoFocus dentro do diálogo continua com o foco; só sem ele
+    // o foco vai para o primeiro controle.
+    if (!container?.contains(document.activeElement)) {
+      const focusables = container?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      (focusables?.[0] ?? container)?.focus();
+    }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {

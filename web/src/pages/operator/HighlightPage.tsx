@@ -7,6 +7,7 @@ import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
+import { Notice } from "../../components/Notice";
 
 interface HighlightOperation {
   id: number;
@@ -273,7 +274,7 @@ export function HighlightPage() {
         <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || selectedPaused || (selectedPlan ? !selectedRunning : false)} onClick={() => setDialog("stop")}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={busy || (!activityInProgress && (!selectedPlan || !selectedRunning))} onClick={() => setDialog(activityInProgress ? "activityFinish" : "finish")}><img src={assets.operator.actions.finish} alt="" /><span>{activityInProgress ? "Finalizar atividade" : "Finalizar"}</span></button>
       </div>
-      <p className="operator-notice" role="status">{message}</p>
+      <Notice>{message}</Notice>
       {filteredQueueItems.length ? (
         <div className="highlight-queue" aria-label="Tarefas liberadas pelo Corte">
           {filteredQueueItems.map((item) => (
@@ -304,18 +305,18 @@ export function HighlightPage() {
         </div>
       ) : !task.data ? <EmptyState title={filter ? "Nenhuma tarefa corresponde ao filtro" : "Nenhuma tarefa liberada pelo Corte"} detail={filter ? "Limpe o filtro para restaurar a lista completa." : "Assim que um plano do Laser Ensis for concluído, ele aparece aqui."} /> : null}
       {stoppedWithoutTask ? (
-        <p className="operator-notice operator-notice--error">
+        <Notice tone="error">
           Posto parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
-        </p>
+        </Notice>
       ) : null}
       {activityInProgress ? (
-        <p className="operator-notice">
+        <Notice>
           {resourceState?.motivo || "Atividade diária"} em andamento neste posto. Finalize para voltar a apontar.
-        </p>
+        </Notice>
       ) : null}
       {task.loading && loadedTask && !task.data ? <LoadingState label="Carregando tarefa…" /> : task.error && !task.data ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (
         <div className="highlight-detail">
-          {task.error ? <p className="operator-notice operator-notice--stale" role="alert">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</p> : null}
+          {task.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
           <header><div><small>Tarefa selecionada</small><h2>{task.data.task.codigo_tarefa}</h2></div><span className="operator-state">{plans.length} plano(s) liberado(s)</span></header>
           <dl className="highlight-metrics"><div><dt>Material</dt><dd>{task.data.task.material ?? "Não informado"}</dd></div><div><dt>Espessura</dt><dd>{task.data.task.espessura ?? "Não informada"}</dd></div><div><dt>Tempo em destaque</dt><dd>{formatDuration(task.data.timing.execution_seconds)}</dd></div></dl>
 

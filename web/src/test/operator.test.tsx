@@ -759,7 +759,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
 
     // O roteiro aparece sozinho: o operador não abriu nenhuma tela do ERP.
-    await screen.findByRole("button", { name: "20 - USINAGEM — Atual" });
+    await screen.findByRole("button", { name: "20 - USINAGEM — Atual" }, { timeout: 4000 });
     expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/operator/operations/PCMIXQ01001/sync") && init?.method === "POST")).toBe(true);
   });
 

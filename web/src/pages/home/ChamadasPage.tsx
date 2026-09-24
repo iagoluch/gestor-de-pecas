@@ -11,6 +11,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
+import { Notice } from "../../components/Notice";
 
 interface ChamadaContato {
   id: number;
@@ -166,7 +167,7 @@ export function ManagementChamadasPage() {
         ) : null}
       </div>
 
-      {mensagem ? <p className="operator-notice" role="status">{mensagem}</p> : null}
+      {mensagem ? <Notice>{mensagem}</Notice> : null}
 
       {isAdmin ? (
         <>

@@ -10,6 +10,8 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { api } from "../../api/client";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
+import { Notice } from "../../components/Notice";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 interface AutomaticPause {
   id: number;
@@ -78,6 +80,7 @@ export function ManagementPausesPage() {
   const [editando, setEditando] = useState<AutomaticPause | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const filtros = usePersistentFilters("gestor.filtros.pausas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
@@ -178,7 +181,8 @@ export function ManagementPausesPage() {
         <MetricCard label="Café" value={`${items.filter((item) => item.ativo && /caf/i.test(item.nome)).length} setor(es)`} accent="teal" />
       </div>
 
-      {mensagem ? <p className="operator-notice" role="status">{mensagem}</p> : null}
+      {mensagem ? <Notice>{mensagem}</Notice> : null}
+      {confirmDialog}
 
       <RecordToolbar
         ariaLabel="Filtros das pausas automáticas"
@@ -233,8 +237,8 @@ export function ManagementPausesPage() {
                 render: (row) => (
                   <span className="pause-actions">
                     <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                    <button type="button" disabled={salvando} onClick={() => { if (window.confirm(row.ativo ? `Desativar a pausa "${row.nome}"? Ela deixa de valer para os próximos ciclos.` : `Ativar a pausa "${row.nome}"?`)) void salvar({ ...row, ativo: !row.ativo }); }}>{row.ativo ? "Desativar" : "Ativar"}</button>
-                    <button type="button" disabled={salvando} onClick={() => { if (window.confirm(`Remover a pausa "${row.nome}"? Esta ação não pode ser desfeita.`)) void remover(row); }}>Remover</button>
+                    <button type="button" disabled={salvando} onClick={async () => { if (await confirm(row.ativo ? { title: "Desativar pausa", message: `A pausa "${row.nome}" deixa de valer para os próximos ciclos.`, confirmLabel: "Desativar pausa", tone: "danger" } : { title: "Ativar pausa", message: `A pausa "${row.nome}" passa a valer nos próximos ciclos.`, confirmLabel: "Ativar pausa" })) void salvar({ ...row, ativo: !row.ativo }); }}>{row.ativo ? "Desativar" : "Ativar"}</button>
+                    <button type="button" disabled={salvando} onClick={async () => { if (await confirm({ title: "Remover pausa", message: `A pausa "${row.nome}" será removida. Esta ação não pode ser desfeita.`, confirmLabel: "Remover pausa", tone: "danger" })) void remover(row); }}>Remover</button>
                   </span>
                 ),
               },

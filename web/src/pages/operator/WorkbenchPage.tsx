@@ -16,6 +16,7 @@ import type {
   StopReason,
 } from "../../types/api";
 import { formatDateTime } from "../../utils/format";
+import { Notice } from "../../components/Notice";
 import {
   type DraftDimension,
   formatDraftStandard,
@@ -682,14 +683,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {remoteSearch === "searching" ? <LoadingState label="Buscando OP no TOTVS..." /> : null}
       {operations.error ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
       {stoppedWithoutOp ? (
-        <p className="operator-notice operator-notice--error">
+        <Notice tone="error">
           Recurso parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
-        </p>
+        </Notice>
       ) : null}
       {activityInProgress ? (
-        <p className="operator-notice">
+        <Notice>
           {resourceState?.motivo || "Atividade s/OP"} em andamento neste posto. Finalize para voltar a apontar.
-        </p>
+        </Notice>
       ) : null}
       {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
@@ -718,10 +719,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           />
         </aside>
       </div>
-      <p className="operator-notice" role="status">{message}</p>
+      <Notice>{message}</Notice>
       {cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error && !cards.data ? <ErrorState error={cards.error} onRetry={cards.reload} /> : (
         <>
-          {cards.error ? <p className="operator-notice operator-notice--stale" role="alert">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</p> : null}
+          {cards.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
           <div className="operator-card-columns">
             <CardSection title="Produção" items={cards.data?.production ?? []} emptyTitle="Nenhuma OP em produção" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} />
             <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />
@@ -902,7 +903,7 @@ function SetupQualityDialog({
       {/* A ação anterior (autorizar, salvar cotas, enviar checklist) responde
           aqui dentro — o popup fica por cima do aviso da tela de fundo, e sem
           isso o operador não via o retorno de "Autorizar e liberar". */}
-      {!loading && message ? <p className="operator-notice" role="status">{message}</p> : null}
+      {!loading && message ? <Notice>{message}</Notice> : null}
       {!loading && state?.bloqueio_ativo ? (
         <>
           <p className="operator-help">{state.message}</p>

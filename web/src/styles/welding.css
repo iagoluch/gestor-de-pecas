@@ -27,14 +27,14 @@
 
 .welding-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--text-xl);
   letter-spacing: 0.2px;
 }
 
 .welding-header p {
   margin: 3px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .welding-summary {
@@ -54,7 +54,7 @@
 
 .welding-summary dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -62,7 +62,7 @@
 
 .welding-summary dd {
   margin: 2px 0 0;
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 700;
 }
 
@@ -72,7 +72,7 @@
   border: 1px solid var(--warning);
   border-radius: var(--radius-control);
   background: var(--warning-soft);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -97,11 +97,11 @@
   align-items: center;
   padding: 7px 13px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   background: var(--surface);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 700;
   cursor: pointer;
 }
@@ -110,9 +110,9 @@
 
 .welding-tab span {
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-alt);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -142,8 +142,8 @@
 }
 
 .welding-macros > header { margin-bottom: 10px; }
-.welding-macros h2 { margin: 0; font-size: 14px; }
-.welding-macros > header p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+.welding-macros h2 { margin: 0; font-size: var(--text-md); }
+.welding-macros > header p { margin: 2px 0 0; color: var(--muted); font-size: var(--text-xs); }
 
 .welding-macros__body {
   display: grid;
@@ -174,13 +174,13 @@
 
 /* Tabela pivô */
 .welding-macros__table-scroll { overflow-x: auto; }
-.welding-macro-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.welding-macro-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .welding-macro-table th[scope="col"] {
   padding: 7px 10px;
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   background: var(--surface-alt);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-align: right;
   text-transform: uppercase;
@@ -200,7 +200,7 @@
 }
 .welding-macro-table th[scope="row"] { text-align: left; }
 .welding-macro-table th[scope="row"] strong { display: block; font-weight: 700; }
-.welding-macro-table th[scope="row"] small { color: var(--muted); font-size: 10px; }
+.welding-macro-table th[scope="row"] small { color: var(--muted); font-size: var(--text-2xs); }
 .welding-macro-table td[data-tone="late"] { color: var(--danger); font-weight: 700; }
 .welding-macro-table td[data-tone="due"] { color: #0d7a3c; font-weight: 700; }
 .welding-macro-table td[data-tone="done"] { color: var(--primary); font-weight: 700; }
@@ -232,7 +232,7 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .welding-pie figcaption span {
   display: grid;
@@ -240,7 +240,7 @@
   gap: 7px;
   align-items: center;
 }
-.welding-pie figcaption i { width: 10px; height: 10px; border-radius: 2px; }
+.welding-pie figcaption i { width: 10px; height: 10px; border-radius: var(--radius-sm); }
 .welding-pie figcaption span[data-tone="late"] i { background: var(--danger); }
 .welding-pie figcaption span[data-tone="due"] i { background: var(--accent); }
 .welding-pie figcaption span[data-tone="done"] i { background: var(--primary-fill); }
@@ -260,7 +260,7 @@
   background: var(--surface-alt);
   min-height: 260px;
 }
-.welding-barchart h3 { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); }
+.welding-barchart h3 { margin: 0; font-size: var(--text-sm); font-weight: 700; color: var(--muted); }
 .welding-barchart__plot {
   position: relative;
   flex: 1 1 auto;
@@ -287,7 +287,7 @@
   top: -6px;
   width: 26px;
   text-align: right;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   color: var(--muted);
 }
 .welding-barchart__group {
@@ -307,7 +307,7 @@
   height: 100%;
   display: flex;
   flex-direction: column-reverse;
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--radius-sm) 3px 0 0;
   overflow: hidden;
   background: var(--surface);
 }
@@ -316,7 +316,7 @@
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   font-style: normal;
 }
@@ -336,7 +336,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   line-height: 1.2;
   text-align: center;
   text-overflow: ellipsis;
@@ -384,10 +384,10 @@
 .welding-station[open] > .welding-station__summary::before { transform: rotate(45deg); }
 .welding-station__summary:hover { background: var(--surface); }
 
-.welding-station__name { font-size: 13px; font-weight: 700; }
+.welding-station__name { font-size: var(--text-base); font-weight: 700; }
 .welding-station__count {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -396,8 +396,8 @@
 .welding-station__tally i {
   min-width: 24px;
   padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
   font-style: normal;
   font-weight: 800;
   text-align: center;
@@ -415,7 +415,7 @@
 .welding-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .welding-table thead th {
@@ -423,7 +423,7 @@
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   background: var(--surface);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-align: left;
   text-transform: uppercase;
@@ -448,7 +448,7 @@
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 .welding-product { max-width: 320px; }
@@ -459,15 +459,15 @@
 .welding-dates { display: grid; gap: 2px; }
 .welding-dates__main small { margin: 0; }
 .welding-dates__main strong { font-variant-numeric: tabular-nums; }
-.welding-dates__absent { color: var(--muted); font-size: 11px; }
-.welding-dates__real { color: var(--muted); font-size: 10px; }
+.welding-dates__absent { color: var(--muted); font-size: var(--text-xs); }
+.welding-dates__real { color: var(--muted); font-size: var(--text-2xs); }
 
 .welding-badge {
   display: inline-block;
   padding: 3px 9px;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.4px;
   white-space: nowrap;
@@ -502,8 +502,8 @@
   background: var(--surface);
 }
 
-.welding-card h3 { margin: 0; font-size: 13px; }
-.welding-card > p { margin: 2px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.welding-card h3 { margin: 0; font-size: var(--text-base); }
+.welding-card > p { margin: 2px 0 10px; color: var(--muted); font-size: var(--text-xs); line-height: 1.35; }
 .welding-card__scroll { overflow-x: auto; }
 .welding-card .welding-table thead th { background: var(--surface-alt); }
 
@@ -521,7 +521,7 @@
 }
 .welding-metrics dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -535,7 +535,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .welding-ranking li {
   display: grid;
@@ -551,7 +551,7 @@
   display: flex;
   overflow: hidden;
   height: 10px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--surface-alt);
 }
 .welding-ranking__bar i[data-tone="late"] { background: var(--danger); }
@@ -561,7 +561,7 @@
 .welding-footer {
   margin-top: 10px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -605,19 +605,19 @@ body:has(.welding-page--tv) #root {
 .welding-page--tv .welding-macros__table-scroll { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
 .welding-page--tv .welding-barchart { flex: 1 1 auto; min-height: 0; }
 .welding-page--tv .welding-header h1 { font-size: 24px; }
-.welding-page--tv .welding-macro-table { font-size: 14px; }
+.welding-page--tv .welding-macro-table { font-size: var(--text-md); }
 .welding-page--tv .welding-pie svg { width: 150px; height: 150px; }
-.welding-page--tv .welding-pie figcaption { font-size: 13px; }
-.welding-page--tv .welding-barchart__label { font-size: 11px; }
-.welding-page--tv .welding-barchart__bar i { font-size: 13px; }
+.welding-page--tv .welding-pie figcaption { font-size: var(--text-base); }
+.welding-page--tv .welding-barchart__label { font-size: var(--text-xs); }
+.welding-page--tv .welding-barchart__bar i { font-size: var(--text-base); }
 
 @media (min-width: 2500px) and (min-height: 1300px) {
   .welding-page--tv .welding-macros__body { grid-template-columns: minmax(360px, auto) minmax(320px, 1fr); }
-  .welding-page--tv .welding-macro-table { font-size: 20px; }
+  .welding-page--tv .welding-macro-table { font-size: var(--text-xl); }
   .welding-page--tv .welding-pie svg { width: 220px; height: 220px; }
   .welding-page--tv .welding-pie figcaption { font-size: 18px; }
   .welding-page--tv .welding-macros h2 { font-size: 22px; }
-  .welding-page--tv .welding-barchart__label { font-size: 16px; }
+  .welding-page--tv .welding-barchart__label { font-size: var(--text-lg); }
   .welding-page--tv .welding-barchart__bar i { font-size: 18px; }
   .welding-page--tv .welding-header h1 { font-size: 34px; }
   .welding-page--tv .welding-summary dd { font-size: 30px; }
