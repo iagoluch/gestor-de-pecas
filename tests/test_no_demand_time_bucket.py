@@ -155,13 +155,13 @@ class NoDemandRollupTests(unittest.TestCase):
         self.assertAlmostEqual(horas["out_of_shift_seconds"], 8 * 3600)
         self.assertEqual(horas["queue_seconds"], 0.0)
 
-    def test_sem_demanda_mantem_disponibilidade_e_entra_na_performance(self):
+    def test_sem_demanda_nao_reduz_disponibilidade_nem_performance(self):
 
         kpis = self.overview["kpis"]
 
         self.assertEqual(kpis["availability"]["value"], 100.0)
         self.assertEqual(kpis["ftt"]["value"], 100.0)
-        base_performance = 3600 + 8.5 * 3600
+        base_performance = 3600
         self.assertAlmostEqual(kpis["performance"]["value"], 90 * 38 / base_performance * 100)
         self.assertAlmostEqual(kpis["oee"]["value"], 90 * 38 / base_performance * 100)
         self.assertEqual(self.overview["production"]["good"], 38)

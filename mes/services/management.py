@@ -48,6 +48,7 @@ class ManagementService:
         physical_inputs = []
         good = scrap = rework_qty = 0
         standard_run_seconds = 0.0
+        good_without_standard = 0
         resources = set()
         ops = set()
         sectors = defaultdict(lambda: {"good": 0, "scrap": 0, "rework": 0, "seconds": defaultdict(float), "ops": set()})
@@ -58,6 +59,7 @@ class ManagementService:
             "scrap": 0,
             "rework": 0,
             "standard_run_seconds": 0.0,
+            "good_without_standard": 0,
             "seconds": defaultdict(float),
             "planned_downtime_seconds": 0.0,
         })
@@ -112,7 +114,12 @@ class ManagementService:
                 ops.add(op)
             bucket = sectors[sector]
             standard_unit_seconds = row.get("tempo_medio_segundos")
-            if standard_unit_seconds is not None:
+            if standard_unit_seconds is None:
+                row_good = max(0, int(row.get("quantidade_boa") or 0))
+                good_without_standard += row_good
+                if resource:
+                    resource_bucket(resource, sector)["good_without_standard"] += row_good
+            else:
                 row_standard_run_seconds = max(0.0, float(standard_unit_seconds)) * max(
                     0,
                     int(row.get("quantidade_boa") or 0),
@@ -194,6 +201,9 @@ class ManagementService:
             if not qty or not op:
                 continue
             good += qty
+            # O Corte não tem tempo padrão por peça em S_boas: o previsto do
+            # nesting é outra grandeza, ainda não homologada para a Performance.
+            good_without_standard += qty
             ops.add(op)
             bucket = sectors["Corte"]
             bucket["good"] += qty
@@ -201,6 +211,7 @@ class ManagementService:
             resource_input = resource_bucket(row.get("maquina"), "Corte")
             if resource_input is not None:
                 resource_input["good"] += qty
+                resource_input["good_without_standard"] += qty
         if cutting_production:
             quantity_evidence = True
 
@@ -303,6 +314,7 @@ class ManagementService:
             scrap_quantity=scrap,
             rework_quantity=rework_qty,
             standard_run_seconds=standard_run_seconds,
+            good_without_standard_quantity=good_without_standard,
         )
         availability = oee_calculation.availability
         performance = oee_calculation.performance
@@ -358,6 +370,7 @@ class ManagementService:
             "retrabalho_quantidade": rework_qty,
         }
         resource_kpis = []
+        no_demand_exception_resources = []
         for resource_input in sorted(
             resource_inputs.values(),
             key=lambda item: str(item.get("resource") or "").casefold(),
@@ -371,12 +384,16 @@ class ManagementService:
                 scrap_quantity=resource_input["scrap"],
                 rework_quantity=resource_input["rework"],
                 standard_run_seconds=resource_input["standard_run_seconds"],
+                good_without_standard_quantity=resource_input["good_without_standard"],
             )
+            if resource_calculation.is_no_demand_exception:
+                no_demand_exception_resources.append(resource_input["resource"])
             resource_kpis.append({
                 "resource": resource_input["resource"],
                 "sector": resource_input["sector"],
                 "metrics": resource_calculation.metrics_dict(),
                 "kpi_time_bases": dict(resource_calculation.time_bases),
+                "kpi_calculation": resource_calculation.trace_dict(),
                 "calculation_policy": "canonical_oee",
             })
         simulation = None
@@ -522,6 +539,16 @@ class ManagementService:
             },
             "kpi_contract": dict(OEE_CONTRACT),
             "kpi_time_bases": time_bases,
+            "kpi_calculation": {
+                **oee_calculation.trace_dict(),
+                # Recursos cujo período foi integralmente sem demanda recebem
+                # 0% por convenção. No consolidado o tempo sem demanda não
+                # entra nas bases, logo esse zero fica segregado: a política
+                # de consolidação ainda aguarda homologação.
+                "no_demand_exception_resources": no_demand_exception_resources,
+                "consolidation": "SOMA_DE_BASES_SEM_DEMANDA_SEGREGADO",
+                "consolidation_status": "PENDENTE_HOMOLOGACAO",
+            },
             # Só consumidos pela aba Análises (OEE) — não entram no Andon nem
             # em outras telas, que continuam lendo apenas "kpis".
             "kpis_estendidos": extended_metrics,
