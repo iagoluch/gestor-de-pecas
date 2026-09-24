@@ -5,6 +5,9 @@
 > Execução: agente único (pedido do usuário: "analise sozinho"); o critique do Impeccable prevê 2 avaliações isoladas — aqui foram feitas em sequência, pelo mesmo avaliador (**método degradado: single-agent**).
 > Ambiente: harness TEST em memória (`tests/web_preview_api.py` na 8013; cópia com conta admin + chamadas/turnos em memória na 8014; `tests/andon_visual_preview.py` na 8011). Nenhum dado real tocado.
 > Evidências: `docs/evidencias/auditoria_ui_2026-09-24/` (gitignored) — `matrix/` (177 arquivos), `flows/` (~130), `critique-A/`, `critique-B/`, `scripts/` (todos os scripts Playwright reproduzíveis).
+> **Cobertura: não é 100%.** Só o Chromium foi executado. Firefox e WebKit ficaram **NÃO TESTADOS por decisão de escopo** (nenhuma instalação foi tentada). Leitor de tela real e toque físico com luva também ficaram NÃO TESTADOS (§6). Nenhum trecho deste relatório afirma cobertura total.
+> Referência de código: os arquivos e linhas citados são os da working tree de 24/09/2026 durante a auditoria. `PausesPage.tsx` e `WorkbenchPage.tsx` já tinham alterações locais nesse momento; essas alterações foram commitadas depois, em `b73767f`.
+> Encerramento: os servidores temporários (8013, 8014, 8015) foram parados, e as configurações temporárias foram retiradas de `.claude/launch.json`. **Versão final oficial: revisão de 24/09/2026 (§9).**
 
 ---
 
@@ -35,7 +38,7 @@
 
 | Dimensão | Nota | Base |
 |---|---|---|
-| Acessibilidade | 2 | Botão primário do operador 1,87:1; FAB 2,76:1; foco perdido ao fechar diálogo; sem skip link; alvos < 44px no toque. Positivo: 0 controles sem nome, 0 inputs sem label, 1 h1 + main + nav em todas as rotas de gestão |
+| Acessibilidade | 2 | Botão primário do operador 1,87:1 e FAB 2,76:1 (falham WCAG 1.4.3); foco perdido ao fechar diálogo (2.4.3); foco invisível em um grupo de botões (2.4.7); sem skip link (recomendação; 2.4.1 atendido por landmarks); reflow a 320px com overflow no operador (1.4.10); alvos de toque abaixo do recomendado para HMI com luva (44–48px). Há 2 candidatos a falha de 2.5.8 (24×24), NÃO CONFIRMADOS (OP-13). Positivo: 0 controles sem nome, 0 inputs sem label, 1 h1 + main + nav em todas as rotas de gestão |
 | Performance | 3 | LCP 0,2–0,56 s, CLS 0, INP 112 ms (workbench), 3 long tasks no workbench (servidor local — não representa rede real) |
 | Responsivo | 2 | Gestão: 0 overflow horizontal em 37 rotas × 10 tamanhos. Andon ilegível ≤1366 e com scroll; portal do operador com 10px de overflow a 320px; modais de 707px em 768 |
 | Theming/tokens | 2 | Cor bem tokenizada (100 de 124 hex em `tokens.css`), dark OK; tipografia/raio/breakpoints/z-index sem escala |
@@ -45,7 +48,9 @@
 
 ## 2. Matriz de cobertura (rota × perfil × resolução/browser)
 
-Legenda: ✅ testado com evidência · ⚠️ testado com achado relevante · ❌ NÃO TESTADO (motivo na §6)
+Legenda: ✅ testado com evidência · ⚠️ testado com achado relevante · ❌ NÃO TESTADO (motivo na §6) · — não executado nesse tamanho (amostra reduzida, só no Dev Observatory)
+
+Todas as células ✅/⚠️ foram executadas **apenas no Chromium**. Zoom e reflow foram emulados pela largura do viewport (1280 CSS px ÷ zoom): 853 = 150%, 640 = 200%, 320 = 400%. **O zoom de 125% não foi medido isoladamente.** A largura equivalente (1280 ÷ 1,25 = 1024) está coberta pela coluna 1024; o zoom real do navegador não foi aplicado.
 
 | Área / rota | Perfil | 1024 | 1280 | 1366 | 1440 | 1600 | 1920 | 2560 | Zoom 150/200/400% (853/640/320) | Interação |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -67,7 +72,7 @@ Legenda: ✅ testado com evidência · ⚠️ testado com achado relevante · �
 | Operador Destaque | operador (toque) | ✅ | ✅ | ⚠️ alvos | ✅ | ✅ | ✅ | ✅ | ✅ | plano PROG-310, toque |
 | Operador Solda | operador (toque) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | roteiro concluído, PDF |
 | Dev Observatory (`/dev-observatory`) | dev (login próprio, credencial da fixture em instância TEST 8015) | ✅ | — | ✅ | — | — | ✅ | — | ⚠️ 320 | login vazio/errado/ok, teclado, falha de métricas |
-| **Browsers** | — | Chromium ✅ · Firefox ❌ · WebKit ❌ (ver §6) | | | | | | | | |
+| **Browsers** | — | Chromium ✅ · Firefox ❌ NÃO TESTADO (fora do escopo por decisão) · WebKit ❌ NÃO TESTADO (fora do escopo por decisão) | | | | | | | | |
 
 > O `QualityPage.tsx` (operador) **não é importado por nenhuma rota** — a Qualidade do operador na prática é o diálogo de primeira peça (`QualityInspectionPage`) dentro do workbench, que foi testado. A Qualidade da gestão é `analises/qualidade` (coberta na matriz).
 
@@ -77,19 +82,41 @@ Legenda: ✅ testado com evidência · ⚠️ testado com achado relevante · �
 
 Formato: **ID · Prioridade · Status** — título
 Rota · Persona · Fluxo/estado · Ambiente → Problema → Evidência → Arquivo/causa → Impacto → Recomendação.
-Ambiente padrão: Chromium, zoom 100%, salvo indicação.
+Ambiente padrão: Chromium, zoom 100%, salvo indicação. O índice completo, com todos os campos de cada achado, está no fim desta seção (§3.1).
+
+**Critérios de severidade**
+
+| Nível | Critério |
+|---|---|
+| **P0 — Bloqueante** | Impede executar uma tarefa ou função essencial (acessar o sistema, apontar produção, saber se um posto está parado) **ou** causa perda irreversível de dados pela UI, sem contorno razoável. |
+| **P1 — Grave** | A função é executável, mas com alto risco de erro operacional ou de perda de configuração, degradação forte de uma função essencial (há contorno, porém custoso) ou falha WCAG AA numa ação principal. |
+| **P2 — Moderado** | Atrito, inconsistência ou falha de usabilidade/acessibilidade numa tela ou ação secundária; contorno simples. |
+| **P3 — Menor** | Polimento ou consistência fina, sem impacto relevante na tarefa. |
+
+**Status**
+
+| Status | Significado |
+|---|---|
+| **CONFIRMADO** | Reproduzido no ambiente TEST (Chromium), com evidência gravada. |
+| **NÃO CONFIRMADO** | Hipótese: há sinal observado, mas a confirmação depende de algo que não pôde ser verificado aqui (backend real, medida não coletada, regra de negócio). |
+| **NÃO TESTADO** | Não executado (§6). |
+| **FORA DO ESCOPO** | Parte funcional ou de backend, registrada e não analisada. |
 
 ### P0
 
-**AN-01 · P0 · CONFIRMADO** — Andon ilegível à distância
+**Nenhum achado atende ao critério P0.** O único candidato era o AN-01, que foi reavaliado e reclassificado como P1 (justificativa abaixo).
+
+### P1
+
+**AN-01 · P1 · CONFIRMADO** (reclassificado de P0 na revisão final) — Andon ilegível à distância
 - `/andon` · TV/supervisor · estado normal e com parada · 1920×1080, 2560×1440, 1366, 1024.
 - Problema: é um painel para ler a metros de distância, mas a **mediana do texto é 10px a 1920** (mínimo 7px), 13px a 2560 e **7px a 1366** (mínimo 6px). Os rótulos OEE/Disp./Perf./FTT têm 8px e os valores 11px.
 - Evidência: `flows/andon_1920.png`, `flows/andon_1920_parada.png`, `flows/andon.json`, `matrix/gestor_andon_*.png`.
 - Causa: `andon.css` (linhas ~232–662) usa `font-size` literais de 7–13px e aplica `scale()`/densidade para caber todos os setores numa tela; a grade não aproveita a altura (metade inferior de Corte/Solda/Pintura vazia a 1920).
-- Impacto: o objetivo do Andon (entender o estado em 1–2 s, de longe) não é atingido; ninguém lê 8px a 3 m.
-- Recomendação: para TV, tipografia mínima de ~24px no nome do recurso e ~32–48px no estado; layout por setor em rodízio (como já acontece na TV da Solda) em vez de todos os setores comprimidos; usar a altura disponível.
-
-### P1
+- Impacto: o requisito de leitura à distância (entender o estado em 1–2 s, a metros da TV) não é atingido; texto de 7–10px não é legível a vários metros.
+- **Por que P1 e não P0:** a função principal do Andon funciona. Todos os recursos aparecem com o estado, e uma parada injetada ao vivo surgiu no quadro em tempo real (`flows/andon_1920_parada.png`). A leitura a curta distância é possível, e o estado continua disponível por outros caminhos (Tela inicial › Setores e o portal do operador). O que falha é a **adequação à leitura à distância**, e isso é uma degradação forte de uma função essencial, com contorno. A função não fica inviável.
+- **Condição para voltar a P0:** se o teste presencial na TV real (resolução e distância de instalação, NÃO TESTADO, §6) mostrar que nem o estado por cor é distinguível do ponto de observação, o Andon deixa de cumprir sua função e o AN-01 volta a P0.
+- Recomendação: para TV, tipografia mínima de ~24px no nome do recurso e ~32–48px no estado (valores de referência de HMI para leitura à distância, a validar na instalação real); layout por setor em rodízio (como já acontece na TV da Solda) em vez de todos os setores comprimidos; usar a altura disponível.
 
 **AN-02 · P1 · CONFIRMADO** — Estados críticos do Andon cortados
 - `/andon` · TV · parada/aguardando · 1920.
@@ -97,6 +124,7 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: `flows/andon_1920_parada.png`, `flows/andon.json` (`clipped`).
 - Causa: pílula de largura fixa + `text-overflow: ellipsis` num cabeçalho de card estreito.
 - Impacto: o supervisor vê "vermelho" mas não o motivo; precisa ir até o posto.
+- Por que P1: o estado (cor) aparece, mas o motivo, que é a informação para agir, fica ilegível; o contorno (ir até o posto) é custoso.
 - Recomendação: o motivo da parada deve ter uma linha própria, sem truncar; abreviar códigos, nunca a causa.
 
 **AN-03 · P1 · CONFIRMADO** — Alarme sem saliência no Andon
@@ -105,18 +133,21 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: `flows/andon_1920.png` × `flows/andon_1920_parada.png`.
 - Causa: o card tem uma hierarquia única; o estado é só um acento (o detector também sinaliza `border-accent-on-rounded` em `andon.css`).
 - Impacto: fere a consciência situacional (HMI: neutro/atenção/crítico devem ser distinguíveis na visão periférica).
+- Por que P1: a detecção de parada, que é a função essencial do Andon, fica degradada na visão periférica; a parada continua visível para quem olha o card de perto.
 - Recomendação: card inteiro em superfície de estado para parada/aguardando; cronômetro de parada grande; escalonamento (âmbar → vermelho) por tempo.
 
 **OP-01 · P1 · CONFIRMADO** — Contraste dos botões primários do operador
 - Portal do operador (todos os setores) · operador · estado inicial/OP carregada · 1366, claro e escuro.
 - Problema:
-  - "Iniciar atividade" tem **1,87:1** (branco sobre `rgb(66,216,90)`).
-  - "Parada" tem 3,66:1.
-  - "Retrabalho" (marrom) fica quase ilegível no escuro.
+  - "Iniciar atividade" tem **1,87:1** (branco sobre `rgb(66,216,90)`, texto de 13,66px).
+  - "Parada" tem 3,66:1 (13,66px).
+  - "Retrabalho" (marrom) fica quase ilegível no escuro. **Isso é uma observação visual; o contraste não foi medido.**
   - Os desabilitados usam pastel com texto branco ("Finalizar" amarelo-claro) e mal se distinguem de habilitados.
-- Evidência: `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` (`contrast_workbench_*`), `matrix/solda_operador_1366.png`, `flows/solda_a_carregada.png`.
+- Evidência: `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` (`contrast_workbench_*`), `flows/op_b_op_carregada.png`, `matrix/solda_operador_1366.png`, `flows/solda_a_carregada.png`.
 - Causa: as cores de ação do workbench em `global.css` não usam pares de texto/fundo do token de estado.
-- Impacto: é a ação mais frequente do chão de fábrica, lida sob luz forte e com luva; falha WCAG 1.4.3.
+- Impacto: é a ação mais frequente do chão de fábrica, lida sob luz forte e com luva.
+  - "Iniciar atividade" e "Parada" **falham WCAG 1.4.3 (AA)**. O texto tem 13,66px, abaixo do limite de texto grande (24px, ou 18,66px em negrito), então vale o mínimo de 4,5:1. Os 1,87:1 falham até o mínimo de 3:1 exigido para texto grande.
+  - Os botões **desabilitados estão isentos do 1.4.3** (componentes inativos). Para eles o problema é de usabilidade/HMI (distinguir habilitado de desabilitado), não de conformidade WCAG.
 - Recomendação: texto escuro sobre verde (ou verde mais escuro); desabilitado = cinza neutro com ícone de cadeado ou motivo, e não a cor original desbotada.
 
 **OP-02 · P1 · CONFIRMADO** — Estado do posto sem feedback após Parada, Retrabalho e Retomar
@@ -128,6 +159,7 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: `flows/op6*`, `flows/op3_retrabalho.json`, `flows/op3_r_*`, `flows/op3_p_after.png`.
 - Causa: `WorkbenchPage.tsx` só publica status em erro ou em algumas ações; o estado do apontamento não vira um "banner de estado" no topo.
 - Impacto: o operador (ou quem assume o turno) não sabe em 1–2 s se o posto está parado. É consciência situacional.
+- Por que P1: o apontamento funciona, mas há alto risco de erro operacional (produzir com o posto registrado como parado, ou o inverso).
 - Recomendação: faixa de estado persistente no topo (PRODUZINDO / PARADO desde hh:mm — motivo / SETUP / RETRABALHO), com a cor de estado; toast de confirmação a cada ação.
 
 **OP-03 · P1 · CONFIRMADO** — "Iniciar" habilitado quando o recurso já tem apontamento ativo
@@ -136,6 +168,7 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: `flows/op2*.png`, `flows/op2.json`.
 - Causa: a habilitação não considera o apontamento ativo do recurso; a barra de status não tem variante de erro.
 - Impacto: tentativa e erro com saliência baixa; o operador pode achar que iniciou.
+- Por que P1: risco alto de erro operacional na ação principal (o operador acredita ter iniciado e não iniciou).
 - Recomendação: desabilitar com o motivo visível ("Recurso já em produção: OP-…"), ou oferecer "Finalizar/Pausar a atual"; mensagens de erro na variante de alerta.
 
 **OP-04 · P1 · CONFIRMADO** — Duplo envio em "Confirmar finalização"
@@ -144,6 +177,7 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: `flows/op5.json`.
 - Causa: o botão do diálogo não é desabilitado de forma síncrona antes do `await` (o login faz isso certo, com "Entrando…" desabilitado).
 - Impacto: hoje o backend protege, mas a UI mostra um erro após o sucesso, o que confunde; outras ações sem idempotência ficariam expostas. A parte funcional fica **FORA DO ESCOPO**, e o problema de UI está CONFIRMADO.
+- Por que P1: a ação principal de fechamento mostra erro depois de um sucesso; sem a proteção do backend, geraria registro duplicado.
 - Recomendação: o padrão do login (estado "Enviando…" + disabled imediato) em todos os botões de confirmação.
 
 **GE-01 · P1 · CONFIRMADO** — Ações destrutivas sem confirmação, e inconsistentes
@@ -155,9 +189,10 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
   - "Reiniciar build" (POST imediato que reconstrói o `web/dist` real).
 
   Só Pausas usa `window.confirm` nativo ("Remover a pausa "Almoço"? Esta ação não pode ser desfeita.").
-- Evidência: `flows/flows3*`, `flows/t_*`, `flows/flows2_admin_forms.json` (`pausas_remover`).
+- Evidência: `flows/t_cadastro_pos_desativar.png`, `flows/t_sistema.png`, `flows/t_sistema_after.png`, `flows/admf_pausas_remover.png`, `flows/flows2_admin_forms.json` (`pausas_remover`).
 - Causa: `UsersPage.tsx:188-201`, `PausesPage.tsx` (`confirm(`), `backend/api/routers/system.py:117-160` (`rebuild_frontend` sem etapa de confirmação no front).
 - Impacto: perda de configuração com um clique; três padrões diferentes (nenhum, nativo, diálogo do app).
+- Por que P1: perda de configuração com um clique, sem desfazer (critério P1: alto risco de perda de configuração). Não é P0 porque os itens podem ser recadastrados.
 - Recomendação: um único `ConfirmDialog` do app para toda ação destrutiva, com o nome do objeto e a consequência; "Reiniciar build" com confirmação explícita.
 - ⚠️ **Efeito colateral desta auditoria:** esse clique reconstruiu o `web/dist` (gitignored) a partir da working tree atual por volta das 13:56. O build terminou OK (`index.html` + 27 assets). Nada versionado mudou.
 
@@ -167,6 +202,7 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: registrado nos fluxos admin (`flows2_admin_*`); reproduzido e restaurado reiniciando o harness.
 - Causa: não há guarda no front (`UsersPage.tsx:196-198`) nem no back (`management.py:389-423`); o login não distingue "inativo" de "senha errada".
 - Impacto: pode deixar o sistema sem administrador pela UI. A parte funcional/segurança fica FORA DO ESCOPO, e o risco de bloqueio é alto.
+- Por que P1 e não P0: o bloqueio exige um erro do próprio admin e pode ser revertido por outro admin ou pelo banco; ainda assim, o risco é alto e a mensagem leva a um diagnóstico errado.
 - Recomendação: impedir a auto-desativação (e a do último admin) e mostrar "Usuário inativo — procure o responsável".
 
 **AX-01 · P1 · CONFIRMADO** — Falhas de contraste recorrentes (WCAG 1.4.3)
@@ -178,8 +214,10 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
   - "Desenvolvido por"/"Powered by": 4,21:1 com 9–10px.
   - Pílulas "Em processo"/"Aguardando": 4,39–4,44:1.
 - Evidência: `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` (`contrast_*`).
+- Critério: todos os textos medidos têm 9–14px, isto é, são texto normal para o WCAG 1.4.3 (AA), cujo mínimo é **4,5:1**. O FAB (2,76:1) e o badge no escuro (2,75:1) falham também o mínimo de 3:1 exigido para texto grande.
 - Causa: laranja e vermelho de marca usados como fundo de texto branco; `--text-2xs` de 10px com cor secundária.
-- Impacto: legibilidade em monitor de fábrica; não conformidade AA.
+- Impacto: legibilidade em monitor de fábrica; não conformidade AA em elementos presentes em todas as telas (FAB, badge, rodapé da marca).
+- Por que P1: a falha AA aparece em todas as rotas e atinge o FAB "Chamar", que é uma ação principal.
 - Recomendação: pares de token texto/fundo validados (≥4,5:1) e proibir texto secundário abaixo de 12px.
 
 ### P2
@@ -246,19 +284,35 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Evidência: `flows/op1*`, `flows/op1.json`.
 - Recomendação: "OP XXXX não encontrada. Confira o código." e esconder a referência técnica (deixar só num "detalhes").
 
-**OP-13 · P2 · CONFIRMADO** — Alvos de toque abaixo de 44px (WCAG 2.5.8 / luva)
-- Corte, Destaque · toque emulado (`has_touch`) · 1366.
-- Problema:
+**OP-13 · P2 · CONFIRMADO (usabilidade/HMI) / NÃO CONFIRMADO (WCAG 2.5.8)** — Alvos de toque abaixo do recomendado para toque com luva
+- Portal do operador (Corte e Destaque) e gestão · operador (toque) e gestor · tela carregada · 1366, toque emulado (`has_touch`).
+- Medidas coletadas:
   - Corte: "Atualizar tarefas", "Histórico", "Registrar parada" e "Iniciar atividade" com 38px de altura.
-  - Destaque: botões "i" com 22×22 e "Ver mais" com 32px.
+  - Destaque: botões "i" com 22×22 e "Ver mais" com 66×32.
   - Gestão: `table-link` com 16px de altura (9px em Setores e Inconsistências); toggle da sidebar com 22×44.
-- Evidência: `flows/op7.json` (TARGETS_JS), `flows/op7_*`.
-- Recomendação: mínimo de 44×44 no portal do operador (48 para uso com luva).
+- Evidência: `flows/op7.json` (`corte_small_targets`, `destaque_small_targets`), `flows/op7_corte_0.png`, `flows/op7_destaque_0.png`.
+- **Referência normativa:**
+  - WCAG 2.2 **2.5.8 Target Size (Minimum), nível AA**, exige **24×24 CSS px**, com exceções: espaçamento (um círculo de 24px centrado no alvo não cruza outro alvo), equivalente, inline (link dentro de texto), controle do agente do usuário e essencial. **O WCAG AA não exige 44×44.** Os 44×44 aparecem no 2.5.5 (nível AAA).
+  - Os 44×44 (ou 48×48) usados neste achado são uma **recomendação de usabilidade/HMI industrial** para tela de toque operada com luva, não um requisito WCAG AA.
+- Leitura contra o WCAG 2.5.8 (AA):
+  - Os botões de 38px e 32px **passam** (≥24px).
+  - O `table-link` está dentro de célula de texto e provavelmente se enquadra na exceção "inline". Não conta como falha.
+  - Os botões "i" (22×22) e o toggle da sidebar (22px de largura) estão abaixo de 24px. São **candidatos a falha, NÃO CONFIRMADOS**, porque o espaçamento até os alvos vizinhos não foi medido e a exceção de espaçamento pode se aplicar.
+- Leitura contra a recomendação HMI (44–48px com luva): **todos os alvos listados ficam abaixo. CONFIRMADO.**
+- Impacto: com luva, alvos de 22–38px aumentam toques errados ou perdidos na ação mais frequente (Iniciar/Parada no Corte).
+- Recomendação:
+  - No portal do operador, alvos de **44×44 no mínimo e 48×48 para uso com luva** (usabilidade/HMI).
+  - Em todo o app, garantir **≥24×24** ou o espaçamento da exceção (conformidade 2.5.8 AA).
+  - Medir o espaçamento dos botões "i" e do toggle para fechar o status WCAG.
+- Severidade: P2, mantida. Nenhuma falha WCAG AA foi confirmada; o problema confirmado é de ergonomia de toque.
 
 **OP-14 · P2 · CONFIRMADO** — Reflow a 320px no portal do operador
 - Portal do operador · 320×256 (equivale a zoom de 400% sobre 1280).
 - Problema: overflow horizontal de 10px. A gestão não tem esse problema.
 - Evidência: `matrix/*_operador_320.png`, `matrix/dobra.json`.
+- Critério: WCAG 1.4.10 Reflow (AA), que exige conteúdo sem rolagem em duas dimensões a 320 CSS px.
+- Impacto: operador com zoom alto ou tela pequena precisa rolar na horizontal.
+- Recomendação: remover larguras fixas do portal (`min-width: 0`, `flex-wrap`) e validar de novo a 320px.
 
 **OP-15 · P2 · NÃO CONFIRMADO como defeito** — Solda: "Parada" habilitado com o roteiro concluído
 - Operador Solda · OP-SOLDA-501 concluída · 1366.
@@ -296,7 +350,9 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 
 **GE-05 · P2 · CONFIRMADO** — Estado sujo descartado sem aviso
 - "Editar pausa" → alterar → Escape.
-- Evidência: `flows3` (`dirty_escape`).
+- Gestão › Pausas · admin.
+- Evidência: `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` (`dirty_escape`), `flows/admf_pausas_editar.png`.
+- Impacto: edição perdida sem aviso.
 - Recomendação: "Descartar alterações?" quando o formulário estiver sujo.
 
 **GE-06 · P2 · CONFIRMADO na UI / NÃO CONFIRMADO no servidor** — Turno invertido
@@ -342,19 +398,28 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Recomendação: capturar `document.activeElement` antes de abrir (no handler), não no efeito.
 
 **AX-03 · P2 · CONFIRMADO** — Foco invisível nos botões "Ver análise relacionada a…"
+- Gestão · teclado · Tab pelas análises.
+- Evidência: `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` (`tab_walk`: "Ver análise relacionada a | SEM-INDICADOR").
+- Critério: WCAG 2.4.7 Focus Visible (AA).
 - Causa: `global.css:255-256` remove o outline.
+- Impacto: quem navega por teclado perde a posição nesses botões.
 - Recomendação: usar `:focus-visible` com o anel padrão.
 
 **AX-04 · P2 · CONFIRMADO** — Não há skip link
+- Gestão · teclado · primeira tabulação.
 - Problema: o Tab passa por todos os itens da sidebar antes de chegar ao conteúdo.
-- Evidência: `flows2` (`skiplink: false`).
+- Evidência: `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` (`skiplink: false`), `flows/kbd_1_primeiro_tab.png`, `flows/kbd_2_tab15.png`.
+- Critério: o WCAG 2.4.1 Bypass Blocks (A) **está formalmente atendido** pelos landmarks (`main`, `nav`, `h1` presentes em todas as páginas). O skip link é recomendação de eficiência para teclado, não falha WCAG.
+- Recomendação: link "Pular para o conteúdo" como primeiro elemento focável.
 
 **AX-05 · P2 · CONFIRMADO** — Menu mobile (800px)
 - Problema:
   - O foco não entra na gaveta.
   - O Escape não fecha.
   - O FAB "Chamar" fica acima do scrim (z-index 40 contra 27/30).
-- Evidência: `flows/kbd_5_*`, `flows/kbd_6_*`.
+- Evidência: `flows/kbd_4_800.png`, `flows/kbd_5_menu_mobile.png`, `flows/kbd_6_menu_esc.png`.
+- Impacto: por teclado, a navegação a 800px fica confusa; o FAB compete com o menu.
+- Recomendação: focus trap e Escape na gaveta; FAB abaixo do scrim.
 
 **AX-06 · P2 · CONFIRMADO** — FAB "Chamar" fixo sobre o conteúdo
 - Problema: a 1366 cobre "10h 35m" na visão geral; a 1366 e 1024 cobre o canto do card da fila no workbench; também aparece atrás de diálogos altos.
@@ -393,15 +458,18 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - Recomendação: estado de erro dentro do painel afetado ("Métricas indisponíveis — último valor hh:mm"), sem toast solto.
 
 **DO-03 · P2 · CONFIRMADO** — Reflow a 320px no observatório
-- Problema: 116px de overflow horizontal.
+- `/dev-observatory` · desenvolvedor · 320px.
+- Problema: 116px de overflow horizontal (WCAG 1.4.10).
 - Evidência: `flows/devobs_320.png`.
+- Impacto: pequeno; ferramenta interna, usada em desktop.
+- Recomendação: grade com `minmax(0,1fr)` e quebra dos cabeçalhos dos cards.
 
 ### P3
 
 **DO-04 · P3 · CONFIRMADO** — Login e controles do observatório
 - Problema:
   - Com os campos vazios, a validação é a nativa do navegador, em inglês.
-  - Com senha errada, a mensagem "Usuário ou senha inválidos." aparece em vermelho pequeno, fora de `role=alert` (leitor de tela não anuncia). O foco vai para o body e a senha errada fica no campo.
+  - Com senha errada, a mensagem "Usuário ou senha inválidos." aparece em vermelho pequeno, fora de `role=alert`. Provavelmente não é anunciado (inferido pela árvore de acessibilidade; leitor de tela real NÃO TESTADO; WCAG 4.1.3). O foco vai para o body e a senha errada fica no campo.
   - 2 selects do cabeçalho (Ambiente observado, Atualização) não têm label associado.
   - Os estados vêm como códigos crus ("producao", "parada"), sem acento.
 - Ponto positivo: login limpo e `autocomplete` correto (`username`, `current-password`).
@@ -472,6 +540,69 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 - **TV da Solda:** o rodízio funciona (o conteúdo muda a cada ~10–20 s).
 - **Exportar:** o sucesso gera um .xlsx válido com nome datado.
 
+### 3.1 Índice de achados (todos os campos)
+
+Caminhos de evidência relativos a `docs/evidencias/auditoria_ui_2026-09-24/flows/`, salvo quando começam por `matrix/` ou `critique-*/`. `flows2_…json` = `flows2_keyboard_filters_resilience_emulations_contrast.json`. Ambiente de todos: Chromium, harness TEST.
+
+| ID | Sev | Status | Rota | Perfil | Estado/fluxo | Evidência | Impacto | Recomendação |
+|---|---|---|---|---|---|---|---|---|
+| AN-01 | P1 | CONFIRMADO | /andon | TV/supervisor | normal e com parada; 1024–2560 | `andon_1920.png`, `andon_1920_parada.png`, `andon.json` | leitura à distância não atingida (texto 7–13px) | tipografia de distância, rodízio por setor |
+| AN-02 | P1 | CONFIRMADO | /andon | TV | parada/aguardando; 1920 | `andon_1920_parada.png`, `andon.json` (`clipped`) | motivo da parada truncado | linha própria para o motivo |
+| AN-03 | P1 | CONFIRMADO | /andon | TV | parada injetada ao vivo; 1920 | `andon_1920.png` × `andon_1920_parada.png` | parada sem destaque periférico | card em superfície de estado, cronômetro |
+| OP-01 | P1 | CONFIRMADO | portal do operador | operador | OP carregada; claro/escuro | `flows2_…json` (`contrast_workbench_*`), `op_b_op_carregada.png` | 1,87:1 e 3,66:1 na ação principal (falha 1.4.3) | texto escuro sobre verde; desabilitado neutro |
+| OP-02 | P1 | CONFIRMADO | workbench Dobra | operador | Parada, Retrabalho, Retomar | `op6*`, `op3_retrabalho.json`, `op3_p_after.png` | estado do posto invisível | faixa de estado persistente + toast |
+| OP-03 | P1 | CONFIRMADO | workbench Dobra | operador | Iniciar com apontamento ativo | `op2*.png`, `op2.json` | 409 só na barra cinza | desabilitar com motivo |
+| OP-04 | P1 | CONFIRMADO | workbench Dobra | operador | Finalizar, duplo clique | `op5.json` | 2 POST, erro após sucesso | padrão "Enviando…" do login |
+| GE-01 | P1 | CONFIRMADO | /inicio/cadastro, crachas, chamadas, sistema | admin | ação destrutiva | `t_cadastro_pos_desativar.png`, `t_sistema*.png`, `admf_pausas_remover.png` | perda de configuração com um clique | `ConfirmDialog` único |
+| GE-02 | P1 | CONFIRMADO | /inicio/cadastro | admin | desativar a si mesmo | `flows2_admin_*` | admin trancado, mensagem enganosa | guarda + "Usuário inativo" |
+| AX-01 | P1 | CONFIRMADO | todas | todos | claro/escuro | `flows2_…json` (`contrast_*`) | falha 1.4.3 em FAB, badge, rodapé | pares de token ≥4,5:1 |
+| OP-05 | P2 | CONFIRMADO | workbench Dobra | operador | após finalizar | `op4*`, `op5_fe_final.png` | dúvida se finalizou | tela/toast de sucesso |
+| OP-06 | P2 | CONFIRMADO | workbench | operador | ciclo inteiro | `op1*`–`op4*` (`buttons`) | verbos instáveis, microcopy técnico | um verbo por intenção |
+| OP-07 | P2 | CONFIRMADO | workbench | operador | Setup → Setup | `op3_setup.json` | diálogo redundante | Setup ativo + "Encerrar setup" |
+| OP-08 | P2 | CONFIRMADO | workbench | operador | qualquer estado | `op_b_op_carregada.png` | dica fora de contexto | dicas condicionadas ao estado |
+| OP-09 | P2 | CONFIRMADO | workbench | operador | primeira peça; 1366×768 | `op4*.png`, `op4.json` | ação encostada na borda, texto contraditório | rodapé fixo, foco no passo |
+| OP-10 | P2 | CONFIRMADO (UI) / FORA DO ESCOPO (validação) | workbench | operador | cotas vazias | `op4*` | cotas salvas vazias | placeholders "ex.:", label ± |
+| OP-11 | P2 | CONFIRMADO | diálogo Finalizar | operador | vazio, 999 peças | `op4_j_fin_vazio.png`, `op4_k_fin_999.png`, `op5_fa_cracha_invalido.png` | bloqueio sem explicação | motivo visível, aviso de saldo |
+| OP-12 | P2 | NÃO CONFIRMADO (backend real) | workbench | operador | OP inexistente | `op1.json` | sinais contraditórios, UUID exposto | "OP não encontrada" |
+| OP-13 | P2 | CONFIRMADO (HMI) / NÃO CONFIRMADO (2.5.8) | Corte, Destaque, gestão | operador (toque), gestor | tela carregada; toque emulado | `op7.json`, `op7_corte_0.png`, `op7_destaque_0.png` | alvos de 22–38px com luva | 44–48px no operador (HMI); ≥24px no app (2.5.8) |
+| OP-14 | P2 | CONFIRMADO | portal do operador | operador | 320px | `matrix/*_operador_320.png` | overflow de 10px (1.4.10) | sem largura fixa |
+| OP-15 | P2 | NÃO CONFIRMADO como defeito | operador Solda | operador | roteiro concluído | `solda_a_carregada.png`, `solda.json` | Parada ambígua | rótulo "Parada do posto" |
+| AN-04 | P2 | CONFIRMADO | /andon, /welding-management | TV | 1280, 1366 | `matrix/gestor_andon_1366.png`, `matrix/gestor_welding-management_1366.png` | conteúdo abaixo da dobra some | caber sem scroll |
+| AN-05 | P2 | CONFIRMADO | /andon | TV | 15 s offline | `andon_offline_15s.png`, `andon2.json` | TV vazia | último snapshot + faixa |
+| GE-03 | P2 | CONFIRMADO | /relatorios/* | gestor | Exportar com 500 | `export.json`, `export_500.png` | arquivo corrompido sem aviso | fetch + blob, erro inline |
+| GE-04 | P2 | CONFIRMADO | formulários admin, login | admin | vazio, senha errada | `flows2_admin_forms.json`, `flows2_admin_login_flows.json` | Salvar sem motivo, validação em inglês | validação inline pt-BR |
+| GE-05 | P2 | CONFIRMADO | Pausas | admin | editar → Escape | `flows2_…json` (`dirty_escape`), `admf_pausas_editar.png` | edição perdida | "Descartar alterações?" |
+| GE-06 | P2 | CONFIRMADO (UI) / NÃO CONFIRMADO (servidor) | Turnos | admin | 22:00–21:00 | `t_turno_invertido.png` | turno inválido aceito | validar ou tratar meia-noite |
+| GE-07 | P2 | CONFIRMADO | Cadastro, Crachás, Turnos | gestor | 403 | `matrix/gestor_inicio_{cadastro,crachas,turnos}_1366.png` | erro genérico ou tela vazia | esconder ou "Acesso restrito" |
+| GE-08 | P2 | CONFIRMADO | Pausas, Crachás, Chamadas | admin | lista | `adm_inicio_{pausas,crachas,chamadas}.png` | destrutivo ao lado do seguro | menu "⋯" |
+| GE-09 | P2 | CONFIRMADO | /producao/ordens | gestor | 1366 | `emu_forced_producao_ordens.png`, `flows2_…json` (`ordens_table`) | 14 colunas, status cortado | colunas fixas, ordenação |
+| GE-10 | P2 | CONFIRMADO | /producao/ordens | gestor | KPI × tabela | `emu_forced_producao_ordens.png` | 41,7% × 50% sem base | rotular a base |
+| GE-11 | P2 | CONFIRMADO | Chamadas | admin | Novo contato | `admf_inicio_chamadas_2_dialog_vazio.png` | 17 campos, placeholder cortado | reorganizar diálogo |
+| AX-02 | P2 | CONFIRMADO | diálogos do operador e Qualidade | operador, gestor | fechar diálogo | árvore de foco nos fluxos `op*` e `flows2_…json` | foco cai no body (2.4.3) | guardar foco no handler |
+| AX-03 | P2 | CONFIRMADO | análises | gestor | Tab | `flows2_…json` (`tab_walk`) | foco invisível (2.4.7) | `:focus-visible` |
+| AX-04 | P2 | CONFIRMADO | gestão | gestor | primeiro Tab | `flows2_…json` (`skiplink: false`), `kbd_1_primeiro_tab.png`, `kbd_2_tab15.png` | eficiência de teclado (2.4.1 atendido por landmarks) | skip link |
+| AX-05 | P2 | CONFIRMADO | gestão | gestor | 800px, menu mobile | `kbd_4_800.png`, `kbd_5_menu_mobile.png`, `kbd_6_menu_esc.png` | foco fora da gaveta, FAB sobre scrim | trap + Escape |
+| AX-06 | P2 | CONFIRMADO | visão geral, workbench | gestor, operador | 1024, 1366 | `matrix/*_1366.png`, `op_b_op_carregada.png` | FAB cobre conteúdo | reservar área |
+| TE-01 | P2 | CONFIRMADO | todas | todos | carga da página | `flows2_…json` (`filters_errors`: CSP) | erro de console, piscar de tema | script externo ou hash |
+| TE-02 | P2 | CONFIRMADO | todas | — | código | `critique-B/detect*.json`, §5 | 40 tamanhos, 20 raios, 20 breakpoints | escalas fechadas |
+| IA-01 | P2 | CONFIRMADO | navegação | gestor, admin | menu e títulos | `critique-A/m_inicio__{visao-geral,cadastro,sistema}_1366.png` | três nomes por lugar, "DEV/IagoDev" | seção Administração |
+| DO-01 | P2 | CONFIRMADO | /dev-observatory | desenvolvedor | painel; 1024–1920 | `devobs_2_home.png`, `devobs.json` | 361 de 548 textos <12px | tokens do `web/` |
+| DO-02 | P2 | CONFIRMADO | /dev-observatory | desenvolvedor | métricas 500 | `devobs_2_home.png` | painéis vazios sem motivo | erro dentro do painel |
+| DO-03 | P2 | CONFIRMADO | /dev-observatory | desenvolvedor | 320px | `devobs_320.png` | overflow de 116px (1.4.10) | grade flexível |
+| DO-04 | P3 | CONFIRMADO (UI) / inferido (anúncio) | /dev-observatory | desenvolvedor | login vazio/errado | `devobs_0_login.png`, `devobs_1_erro.png` | erro provavelmente não anunciado | `role=alert`, labels |
+| OP-16 | P3 | CONFIRMADO | operador Solda | operador | PDF | `solda.json` | aria-label diverge do visível | alinhar rótulo e estado |
+| OP-17 | P3 | CONFIRMADO | portal do operador | operador | cabeçalho | `matrix/solda_operador_1366.png`, `op_b_op_carregada.png` | "onde estou" apagado, sem h1 | estação em destaque, h1 |
+| OP-18 | P3 | CONFIRMADO | diálogo de parada | operador | busca sem resultado | `op6_a_busca_vazia.png`, `op6.json` | faixa vazia, sem `aria-selected` | estado vazio limpo |
+| OP-19 | P3 | CONFIRMADO | operador Destaque | operador | plano PROG-310 | `op7.json` (`destaque_buttons`) | rótulo duplicado | remover duplicata |
+| GE-12 | P3 | CONFIRMADO | filtros, abas | gestor | presets, setas | `flows2_…json` (`preset_7d pressed: []`, `tabs`) | preset ativo invisível | `aria-pressed`, setas |
+| GE-13 | P3 | CONFIRMADO | produção | gestor | zero, filtros | `critique-A/m_producao__ordens_1366.png` | zero inconsistente, 11 filtros | padronizar vazio |
+| IA-02 | P3 | CONFIRMADO | IA Industrial | gestor | desabilitada | `t_ia.png` | entrada sem saída | esconder quando desabilitada |
+| AX-07 | P3 | CONFIRMADO | gestão | gestor | forced-colors | `emu_forced_*.png` | item ativo e barras somem | cores de sistema |
+| TE-03 | P3 | CONFIRMADO | — | — | código | busca estática de imports | `QualityPage.tsx` órfão | remover ou ligar à rota |
+| AN-06 | P3 | CONFIRMADO | /andon | TV | reduced motion | `andon.json`, `emu_reduced_*` | depende de F11/quiosque | controle de tela cheia |
+
+**Contagem final:** 0 P0 · 10 P1 · 33 P2 · 11 P3 = **54 achados**.
+
 ---
 
 ## 4. Melhores e piores telas
@@ -513,26 +644,29 @@ Ambiente padrão: Chromium, zoom 100%, salvo indicação.
 
 | Item | Bloqueio | Tentativas | O que falta |
 |---|---|---|---|
-| Firefox e WebKit | **Não existe nenhum motor Firefox/WebKit na máquina.** Em `ms-playwright/` só há `chromium-1234`, e não há Firefox em `Program Files` nem Safari no Windows. O Edge instalado também é Chromium. | Verifiquei `ms-playwright/`, `Program Files/Mozilla Firefox`, o Edge e o Selenium 4.46 (instalado, mas o Selenium Manager baixaria o Firefox e o geckodriver). Toda alternativa exige **download**, que pela política de segurança desta sessão depende de autorização explícita. Perguntei e não houve autorização | Você autorizar `C:/Python314/python.exe -m playwright install firefox webkit` (~200 MB). Depois disso, rodar de novo `scripts/matrix.py` e `scripts/flows*.py` trocando `pw.chromium` por `pw.firefox`/`pw.webkit` |
+| Firefox e WebKit | **NÃO TESTADO por decisão de escopo do usuário (24/09/2026).** Nenhum download, instalação ou execução foi feito. Não impede o fechamento oficial desta auditoria. | Nenhuma (fora do escopo). Na máquina só existe o motor `chromium-1234`; o Edge instalado também é Chromium | Só como referência futura, se o escopo mudar: `C:/Python314/python.exe -m playwright install firefox webkit` e rodar de novo `scripts/matrix.py` e `scripts/flows*.py` com `pw.firefox`/`pw.webkit` |
 | Dev Observatory com dados do REAL | A instância 8001 exige credencial real (não digitada) | **UI coberta** numa instância TEST (8015) com a credencial fictícia da fixture `tests/test_dev_observatory.py` e o painel REAL desligado; ver DO-01 a DO-04 | Ver o painel com o DSN do REAL configurado (somente leitura) para checar densidade com dados reais |
-| Leitor de tela real (NVDA/Narrator) | O NVDA não está instalado. O Narrator existe (`System32/Narrator.exe`), mas a saída dele é áudio e só pode ser conduzida por controle de desktop (computer-use), com aprovação sua e em tela visível | Substituído pela árvore de acessibilidade do Chromium (nome/papel/valor, landmarks, headings, `aria-live`, `role=alert`) em todas as rotas. Com isso, confirmei os problemas de anúncio: o erro de login e o erro do observatório ficam fora de `role=alert`, e as opções de parada não têm `aria-selected` | Uma sessão com o Narrator mais o "Resumo de fala" (Narrador + Alt + X), com você autorizando o controle do desktop, ou o NVDA instalado |
+| Leitor de tela real (NVDA/Narrator) | O NVDA não está instalado. O Narrator existe (`System32/Narrator.exe`), mas a saída dele é áudio e só pode ser conduzida por controle de desktop (computer-use), com aprovação sua e em tela visível | Substituído pela árvore de acessibilidade do Chromium (nome/papel/valor, landmarks, headings, `aria-live`, `role=alert`) em todas as rotas. Com isso, identifiquei pela árvore de acessibilidade, sem verificação com leitor real, os prováveis problemas de anúncio: o erro de login e o erro do observatório ficam fora de `role=alert`, e as opções de parada não têm `aria-selected` | Uma sessão com o Narrator mais o "Resumo de fala" (Narrador + Alt + X), com você autorizando o controle do desktop, ou o NVDA instalado |
+| Andon na TV real, à distância de instalação | Não há TV nem posição de observação no ambiente | Medição de fonte e captura em 1024–2560 (AN-01) | Teste presencial; se nem a cor do estado for distinguível, o AN-01 volta a P0 |
+| Zoom real de 125% do navegador | Não aplicado; a emulação foi feita por largura de viewport | Largura equivalente (1024) coberta na matriz | Repetir com zoom real do navegador |
 | Toque físico e luva | Bloqueio físico: não há tela de toque nem luva no ambiente | Emulação `has_touch` com medição de alvos em todos os portais de operador (OP-13) | Teste presencial num tablet ou terminal de chão de fábrica, com luva |
 | Validações do backend real (cotas vazias, turno invertido, OP inexistente = 404) | O harness é fake | Registradas como NÃO CONFIRMADO | Repetir na instância TEST real |
 
-**Com esses itens em aberto, a cobertura não é 100%.** Em 24/09/2026 o usuário decidiu aceitar a auditoria assim: não autorizou o download dos browsers nem o controle do desktop para o Narrator.
+**Com esses itens em aberto, a cobertura não é 100%.** Firefox e WebKit estão fora do escopo por decisão do usuário (24/09/2026). O leitor de tela real e o toque físico com luva continuam NÃO TESTADOS. Nenhum desses itens impede o fechamento da auditoria; os achados que dependem deles estão marcados como NÃO CONFIRMADO ou "inferido".
 
 ---
 
 ## 7. Plano (ordem sugerida)
 
-1. **Andon para TV** (AN-01 a AN-05): tipografia de distância, rodízio por setor, card de estado inteiro, snapshot quando offline. → `/impeccable adapt andon`, depois `/impeccable typeset andon`.
-2. **Segurança de ação** (GE-01, GE-02, GE-05, OP-04): `ConfirmDialog` + `AsyncButton` únicos, e guarda contra auto-desativação. → `/impeccable harden`.
-3. **Operador** (OP-01, OP-02, OP-03, OP-05, OP-06): contraste e desabilitado, faixa de estado do posto, feedback de cada ação, verbos estáveis. → `/impeccable clarify operador`, depois `/impeccable colorize operador`.
-4. **Acessibilidade transversal** (AX-01 a AX-06, OP-13): pares de contraste, retorno de foco, skip link, gaveta mobile, FAB, alvos de 44px. → `/impeccable audit` de novo depois das correções.
+1. **Andon para TV** (AN-01 a AN-06): tipografia de distância, rodízio por setor, card de estado inteiro, snapshot quando offline. → `/impeccable adapt andon`, depois `/impeccable typeset andon`.
+2. **Segurança de ação e formulários** (GE-01, GE-02, GE-04, GE-05, GE-06, GE-08, OP-04): `ConfirmDialog` + `AsyncButton` únicos, guarda contra auto-desativação, validação inline em pt-BR, destrutivos separados das ações seguras. → `/impeccable harden`.
+3. **Operador** (OP-01 a OP-12, OP-15 a OP-19): contraste e desabilitado, faixa de estado do posto, feedback de cada ação, verbos estáveis, diálogos de primeira peça/finalização/parada. → `/impeccable clarify operador`, depois `/impeccable colorize operador`.
+4. **Acessibilidade transversal** (AX-01 a AX-07, OP-13, OP-14): pares de contraste (4,5:1), retorno de foco, foco visível, skip link, gaveta mobile, FAB, forced-colors, reflow a 320px; alvos **≥24px em todo o app (WCAG 2.5.8)** e **44–48px no operador (HMI/luva)**. → `/impeccable audit` de novo depois das correções.
 5. **Navegação e nomes** (IA-01, IA-02, GE-07): seção Administração, sem DEV/IagoDev, um nome por lugar. → `/impeccable clarify`.
-6. **Dados** (GE-09, GE-10, GE-13, GE-03): bases dos percentuais, tabela, zero, exportação com erro. → `/impeccable harden relatorios`.
+6. **Dados e telas da gestão** (GE-03, GE-09 a GE-13): bases dos percentuais, tabela, zero, exportação com erro, diálogo de contato, presets e abas. → `/impeccable harden relatorios`.
 7. **Drift** (TE-01, TE-02, TE-03): escalas de tipo, raio, breakpoints e z-index; CSP sem inline; remover o órfão. → `/impeccable extract`, depois `/impeccable document`.
-8. Fechamento → `/impeccable polish`.
+8. **Dev Observatory** (DO-01 a DO-04): trazer o observatório para os tokens do `web/` (fim da quarta linguagem visual), erro dentro do painel, `role=alert` no login, labels nos selects, reflow. Baixa prioridade (ferramenta interna).
+9. Fechamento → `/impeccable polish`.
 
 ---
 
@@ -552,3 +686,39 @@ As escalas tipográficas (40 tamanhos), de raio (20) e de breakpoint (20) mostra
 **Resposta final — Este frontend parece um único MES profissional e coerente ou uma coleção de telas construídas em momentos diferentes?**
 
 Uma **coleção de telas construídas em momentos diferentes**, com quatro linguagens visuais: Gestão, Operador, Andon/TV e Dev Observatory. Elas compartilham uma boa base de tokens de cor e ainda não formam um MES único. A Gestão é o núcleo mais maduro e serve de referência para o resto.
+
+---
+
+## 9. Revisão final (versão oficial de 24/09/2026)
+
+Ajustes desta revisão, sem reabrir achados nem executar testes novos:
+- **OP-13:** a referência normativa passou a ser o WCAG 2.5.8 AA (24×24 CSS px, com exceções). Os 44×44/48×48 ficaram como recomendação de usabilidade/HMI para toque com luva. Os 2 alvos de 22px são candidatos a falha 2.5.8 NÃO CONFIRMADOS, porque o espaçamento não foi medido.
+- **AN-01:** reclassificado de P0 para **P1**. A função do Andon (mostrar o estado de cada recurso e a parada ao vivo) funciona; o que falha é a leitura à distância. A condição para voltar a P0 está registrada no achado.
+- **Firefox/WebKit:** NÃO TESTADOS por decisão de escopo; nada foi baixado, instalado nem executado.
+- Critérios P0–P3 e de status explícitos (§3); justificativa "Por que P1" em cada P1; índice completo (§3.1).
+- Referências normativas revisadas: 1.4.3 (4,5:1 para texto normal; desabilitados isentos), 1.4.10, 2.4.1 (atendido por landmarks; skip link é recomendação), 2.4.3, 2.4.7, 2.5.8, 4.1.3. Anúncios a leitor de tela passaram a "inferido pela árvore de acessibilidade".
+- Evidências corrigidas onde apontavam para arquivos inexistentes (`flows3*` → arquivos reais em `flows/`).
+- Plano (§7) cobre os 54 IDs e as 6 causas sistêmicas da §5; o Dev Observatory entrou como item 8.
+
+| # | Critério de aceite | Situação |
+|---|---|---|
+| 1 | OP-13 corrigido | ✅ |
+| 2 | AN-01 reavaliado e justificado | ✅ P1, com a condição para voltar a P0 |
+| 3 | Firefox/WebKit fora do escopo, sem instalação | ✅ |
+| 4 | Todos os achados com ID, severidade, rota, perfil, estado/fluxo, evidência, impacto e recomendação | ✅ §3.1 (54 linhas) |
+| 5 | Nenhum P0/P1 sem justificativa objetiva | ✅ 0 P0; 10 P1 com "Por que P1" ou critério explícito |
+| 6 | Nenhuma referência WCAG/UX/HMI incorreta | ✅ revisadas (lista acima) |
+| 7 | NÃO TESTADOS explícitos | ✅ §6 e lista abaixo |
+| 8 | Matriz compatível com o executado | ✅ só Chromium; células "—" onde não houve execução; 125% não medido |
+| 9 | Scores coerentes | ✅ Nielsen 20/40 (50%) e técnico 11/20 (55%) → Health 53; a reclassificação do AN-01 não altera notas |
+| 10 | Plano cobrindo todas as causas sistêmicas | ✅ causas 1–2 → item 2; 3 → item 3; 4 → item 1; 5 → item 7; 6 → item 5 |
+| 11 | Conclusão sustentada pelas evidências | ✅ §8 cita as quatro linguagens visuais medidas (§5, DO-01) |
+| 12 | Nenhum código/CSS/config do produto alterado | ✅ único efeito colateral: `web/dist` (gitignored) reconstruído pelo clique em "Reiniciar build" (GE-01) |
+| 13 | Servidores temporários encerrados | ✅ 8013, 8014, 8015 |
+| 14 | Configs temporárias removidas | ✅ `.claude/launch.json` só com as configurações originais |
+| 15 | `git status` final verificado | ✅ informado na entrega |
+| 16 | RELATORIO.md como versão final oficial | ✅ este arquivo |
+
+**Contagem final:** 0 P0 · 10 P1 · 33 P2 · 11 P3 = 54 achados.
+
+**Continuam NÃO TESTADOS:** Firefox e WebKit (fora do escopo por decisão); leitor de tela real (NVDA/Narrator); toque físico com luva; zoom real de 125% do navegador; Andon na TV real, na distância de instalação (condição de revisão do AN-01); Dev Observatory com dados do REAL; validações do backend real (cotas vazias, turno invertido, OP inexistente = 404).
