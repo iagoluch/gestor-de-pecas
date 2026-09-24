@@ -4,7 +4,7 @@ psycopg[binary]
 # Pool síncrono thread-safe usado pela facade Database.
 psycopg_pool
 # Parser XML endurecido contra DTD, entidades e XXE.
-defusedxml>=0.7,<1
+defusedxml>=0.7.1,<1
 # Carrega o arquivo local .env sem sobrescrever variáveis do sistema.
 python-dotenv
 # Adaptador HTTP oficial. O domínio e os serviços continuam neutros.
