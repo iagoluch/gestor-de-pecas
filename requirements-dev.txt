@@ -13,7 +13,7 @@ bandit==1.9.4
 pip-audit==2.10.1
 
 # --- Testes E2E (job "e2e" em e2e.yml, sob demanda) ---
-playwright==1.62.0
+playwright==1.63.0
 pytest-playwright==0.9.0
 
 # --- Fuzzing de contrato de API (uso manual, ainda não incorporado ao CI) ---
