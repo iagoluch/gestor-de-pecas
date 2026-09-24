@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
-import { LoadingState } from "./components/DataState";
+import { EmptyState, LoadingState } from "./components/DataState";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -57,6 +57,24 @@ function RequireAuth({ management = false, andon = false, operator = false, chil
   return children;
 }
 
+/**
+ * Telas só de admin (as mesmas `adminOnly` do menu, que já as esconde):
+ * pela URL direta o gestor recebia 403 como erro genérico ou tela vazia.
+ * Aqui a página nem monta — sem chamada à API e com o motivo explícito (GE-07).
+ * A autorização continua no backend; isto só evita a mensagem enganosa.
+ */
+function RequireAdmin({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  if (user?.role === "admin") return children;
+  return (
+    <div className="page-wrap">
+      <section className="page-panel">
+        <EmptyState title="Acesso restrito ao administrador" detail="Esta tela é exclusiva da conta de administração. Peça a um administrador se precisar de alguma alteração aqui." />
+      </section>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
@@ -81,11 +99,11 @@ export default function App() {
         <Route path="inicio/solda" element={<Navigate to="/welding-management" replace />} />
         <Route path="inicio/metas" element={<ManagementGoalsPage />} />
         <Route path="inicio/pausas" element={<ManagementPausesPage />} />
-        <Route path="inicio/crachas" element={<ManagementBadgesPage />} />
+        <Route path="inicio/crachas" element={<RequireAdmin><ManagementBadgesPage /></RequireAdmin>} />
         <Route path="inicio/chamadas" element={<ManagementChamadasPage />} />
-        <Route path="inicio/turnos" element={<ManagementShiftsPage />} />
-        <Route path="inicio/sistema" element={<ManagementSystemPage />} />
-        <Route path="inicio/cadastro" element={<ManagementUsersPage />} />
+        <Route path="inicio/turnos" element={<RequireAdmin><ManagementShiftsPage /></RequireAdmin>} />
+        <Route path="inicio/sistema" element={<RequireAdmin><ManagementSystemPage /></RequireAdmin>} />
+        <Route path="inicio/cadastro" element={<RequireAdmin><ManagementUsersPage /></RequireAdmin>} />
         <Route path="inicio/ia" element={<AIPage />} />
 
         <Route path="consulta-operacional/visao-geral" element={<OperationsOverviewPage />} />

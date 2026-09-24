@@ -2,18 +2,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { subscribeRealtime } from "../api/realtime";
 
+/**
+ * Último snapshot bom por rota, só para quem pede `keepLastSnapshot` (painéis
+ * de TV). O rodízio da TV remonta a página a cada troca; sem isso, uma queda
+ * de rede apagava o quadro inteiro na remontagem seguinte (AN-05).
+ * ponytail: uma entrada por rota, sem expiração — só as rotas fixas de TV usam.
+ */
+const lastSnapshots = new Map<string, { data: unknown; at: number }>();
+
+/** Fim de sessão: o próximo usuário da mesma aba não herda o quadro do anterior. */
+export function clearLastSnapshots() {
+  lastSnapshots.clear();
+}
+
 export function useApiQuery<T>(
   path: string | null,
-  options: { ignoreLiveTick?: boolean } = {},
+  options: { ignoreLiveTick?: boolean; keepLastSnapshot?: boolean } = {},
 ) {
-  const [data, setData] = useState<T | null>(null);
+  const cached = options.keepLastSnapshot && path ? lastSnapshots.get(path) : undefined;
+  const [data, setData] = useState<T | null>((cached?.data as T | undefined) ?? null);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(cached?.at ?? null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [generation, setGeneration] = useState(0);
   const inFlight = useRef(false);
   const refreshQueued = useRef(false);
   const requestId = useRef(0);
-  const hasData = useRef(false);
+  const hasData = useRef(Boolean(cached));
+  const keepLast = useRef(options.keepLastSnapshot);
+  keepLast.current = options.keepLastSnapshot;
   const activePath = useRef<string | null>(path);
 
   const reload = useCallback(() => {
@@ -64,7 +81,10 @@ export function useApiQuery<T>(
       .get<T>(path, controller.signal)
       .then((value) => {
         hasData.current = true;
+        const at = Date.now();
+        if (keepLast.current) lastSnapshots.set(path, { data: value, at });
         setData(value);
+        setUpdatedAt(at);
       })
       .catch((reason) => {
         if (reason?.name !== "AbortError") {
@@ -88,5 +108,5 @@ export function useApiQuery<T>(
     return () => controller.abort();
   }, [path, generation]);
 
-  return { data, error, loading, reload, replaceData };
+  return { data, error, loading, reload, replaceData, updatedAt };
 }

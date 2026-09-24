@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { SnapshotStatus } from "../components/SnapshotStatus";
 import { useForceLightTheme } from "../hooks/useForceLightTheme";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
@@ -650,7 +651,7 @@ type ManagerTabId = (typeof MANAGER_TABS)[number]["id"];
 export function WeldingManagementPage() {
   useForceLightTheme();
   const { user } = useAuth();
-  const query = useApiQuery<WeldingManagementSnapshot>("/api/v1/welding", { ignoreLiveTick: true });
+  const query = useApiQuery<WeldingManagementSnapshot>("/api/v1/welding", { ignoreLiveTick: true, keepLastSnapshot: true });
   const realtime = useRealtimeStatus();
   const [tab, setTab] = useState<ManagerTabId>("geral");
   // Padrão WAI-ARIA de abas: setas/Home/End movem a seleção e o foco.
@@ -717,11 +718,7 @@ export function WeldingManagementPage() {
         </div>
         <Summary data={data} />
       </header>
-      {query.error ? (
-        <div className="welding-stale" role="alert">
-          Atualização temporariamente indisponível. A última leitura válida permanece visível.
-        </div>
-      ) : null}
+      <SnapshotStatus error={query.error} updatedAt={query.updatedAt} staleClassName="welding-stale" />
       {isTelevision ? macros : (
         <>
           <div className="welding-tabs" role="tablist" aria-label="Visões do acompanhamento da Solda" onKeyDown={onTabKeyDown}>

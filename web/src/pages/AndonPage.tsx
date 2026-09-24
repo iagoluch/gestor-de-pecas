@@ -5,6 +5,7 @@ import { AndonResourceDrawer } from "../components/AndonResourceDrawer";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { SnapshotStatus } from "../components/SnapshotStatus";
 import { useForceLightTheme } from "../hooks/useForceLightTheme";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
@@ -254,7 +255,7 @@ function SectorPanel({ sector, elapsed, transitions, onOpen }: {
 export function AndonPage() {
   useForceLightTheme();
   const { user } = useAuth();
-  const query = useApiQuery<AndonSnapshot>("/api/v1/andon", { ignoreLiveTick: true });
+  const query = useApiQuery<AndonSnapshot>("/api/v1/andon", { ignoreLiveTick: true, keepLastSnapshot: true });
   const realtime = useRealtimeStatus();
   const elapsed = useSnapshotClock(query.data?.clock);
   const transitions = useResourceTransitions(query.data ?? null);
@@ -299,7 +300,7 @@ export function AndonPage() {
       {showPanelsNav ? <AndonSidebarNav /> : null}
       <h1 className="visually-hidden">Andon Geral</h1>
       <div className="andon-content">
-        {query.error ? <div className="andon-stale" role="alert">Atualização temporariamente indisponível. O último snapshot válido permanece visível.</div> : null}
+        <SnapshotStatus error={query.error} updatedAt={query.updatedAt} staleClassName="andon-stale" />
         <section className="andon-board-section" aria-labelledby="andon-resources-title">
           <h2 className="visually-hidden" id="andon-resources-title">Recursos ativos por setor</h2>
           {sectors.length ? (

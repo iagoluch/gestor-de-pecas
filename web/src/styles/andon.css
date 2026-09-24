@@ -229,7 +229,7 @@ body:has(.andon-page--single-view) #root {
 .andon-resource-group__header span {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -682,7 +682,7 @@ body:has(.andon-page--single-view) #root {
   .andon-sector-panel__groups { gap: 5px; padding: 5px; }
   .andon-resource-group__header { min-height: 25px; padding: 3px 5px; }
   .andon-resource-group__header h3 { font-size: 9px; }
-  .andon-resource-group__header span { font-size: 6px; }
+  .andon-resource-group__header span { font-size: 9px; }
   .andon-resource-group__cards { --andon-card-width: 190px; gap: 4px; padding: 4px; }
   .andon-sector-panel[data-density="medium"] .andon-resource-group__cards { --andon-card-width: 174px; }
   .andon-sector-panel[data-density="high"] .andon-resource-group__cards { --andon-card-width: 158px; }

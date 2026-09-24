@@ -47,14 +47,33 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (response.status === 204) return undefined as T;
   const contentType = response.headers.get("content-type") ?? "";
   const body = contentType.includes("application/json") ? await response.json() : null;
-  if (!response.ok) {
-    const payload: ApiErrorPayload = body ?? {
-      code: "request_failed",
-      message: "Não foi possível concluir a solicitação.",
-    };
-    throw new ApiError(response.status, payload);
-  }
+  if (!response.ok) throw failure(response.status, body);
   return body as T;
+}
+
+function failure(status: number, body: ApiErrorPayload | null) {
+  return new ApiError(status, body ?? {
+    code: "request_failed",
+    message: "Não foi possível concluir a solicitação.",
+  });
+}
+
+/**
+ * Baixa um arquivo gerado pela API. Com `<a download>` direto, um erro do
+ * servidor virava um .xlsx contendo o JSON do erro, sem aviso nenhum (GE-03);
+ * aqui a falha chega como ApiError e só um 2xx vira arquivo.
+ */
+async function download(path: string, fallbackName: string) {
+  const response = await fetch(path, { credentials: "include" });
+  if (!response.ok) {
+    const json = (response.headers.get("content-type") ?? "").includes("application/json");
+    throw failure(response.status, json ? await response.json() : null);
+  }
+  const name = /filename="?([^";]+)"?/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = Object.assign(document.createElement("a"), { href: url, download: name });
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export const api = {
@@ -65,4 +84,5 @@ export const api = {
       body: payload === undefined ? undefined : JSON.stringify(payload),
     }),
   delete: (path: string) => request<void>(path, { method: "DELETE" }),
+  download,
 };

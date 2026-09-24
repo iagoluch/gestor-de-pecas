@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { api, ApiError } from "../api/client";
+import { clearLastSnapshots } from "../hooks/useApiQuery";
 import type { SessionUser } from "../types/api";
 
 interface AuthValue {
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     await api.post<void>("/api/v1/auth/logout");
+    clearLastSnapshots();
     setUser(null);
   }, []);
 

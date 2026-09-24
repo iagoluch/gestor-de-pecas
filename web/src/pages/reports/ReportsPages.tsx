@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { api, apiErrorMessage } from "../../api/client";
+import { AsyncButton } from "../../components/AsyncButton";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
@@ -48,7 +51,21 @@ function productionValue(production: JsonRecord, field: string) {
 }
 
 function DownloadAction({ type, query }: { type: ReportType; query: string }) {
-  return <a className="button button--primary" href={`/api/v1/reports/${type}/export.xlsx?${query}`} title="Baixar em Excel (.xlsx)" download>Exportar</a>;
+  const [error, setError] = useState<string | null>(null);
+  async function exportXlsx() {
+    setError(null);
+    try {
+      await api.download(`/api/v1/reports/${type}/export.xlsx?${query}`, `relatorio_${type}.xlsx`);
+    } catch (reason) {
+      setError(`Não foi possível gerar o Excel. ${apiErrorMessage(reason)}`);
+    }
+  }
+  return (
+    <div className="download-action">
+      <AsyncButton className="button button--primary" pendingLabel="Gerando…" title="Baixar em Excel (.xlsx)" onClick={exportXlsx}>Exportar</AsyncButton>
+      {error ? <span role="alert" className="download-action__error">{error}</span> : null}
+    </div>
+  );
 }
 
 function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecord }) {

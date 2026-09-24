@@ -11,7 +11,7 @@ vi.mock("../auth/AuthContext", () => {
 const CONTATOS = [{ id: 7, nome: "Carla Souza", funcao: "Manutenção", ativo: true, padrao_gestao: false, setores: [] }];
 
 function stubFetch() {
-  const mock = vi.fn(async (input: RequestInfo | URL) => {
+  const mock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = String(input);
     const body = url.includes("/contatos") ? { items: CONTATOS } : { items: [] };
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });

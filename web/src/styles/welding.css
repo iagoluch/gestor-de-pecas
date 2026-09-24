@@ -611,6 +611,14 @@ body:has(.welding-page--tv) #root {
 .welding-page--tv .welding-barchart__label { font-size: var(--text-xs); }
 .welding-page--tv .welding-barchart__bar i { font-size: var(--text-base); }
 
+/* AN-04: TV baixa (1280×720, 1366×768) — a tabela cabe sem rolagem interna. */
+@media (max-height: 800px) {
+  .welding-page--tv .welding-macro-table { font-size: var(--text-base); }
+  .welding-page--tv .welding-macro-table td,
+  .welding-page--tv .welding-macro-table th { padding-block: 3px; }
+  .welding-page--tv .welding-pie svg { width: 120px; height: 120px; }
+}
+
 @media (min-width: 2500px) and (min-height: 1300px) {
   .welding-page--tv .welding-macros__body { grid-template-columns: minmax(360px, auto) minmax(320px, 1fr); }
   .welding-page--tv .welding-macro-table { font-size: var(--text-xl); }

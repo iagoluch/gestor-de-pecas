@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -8,6 +8,7 @@ import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { assets } from "../config/assets";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 import { isSectionActive, managementSections } from "../config/navigation";
 
 const SIDEBAR_COLLAPSED_KEY = "gestor.sidebar.collapsed";
@@ -28,6 +29,10 @@ export function AppShell({ children }: PropsWithChildren) {
   // só que fixo (não some sozinho ao navegar) e lembrado entre acessos
   // (decisão do usuário, 15/09/2026).
   const [collapsed, setCollapsed] = useState(readStoredCollapsed);
+  const drawerRef = useRef<HTMLElement>(null);
+  // No celular a barra vira gaveta modal: foco preso nela, Esc fecha e o foco
+  // volta ao botão de menu (AX-05). No desktop `open` nunca liga.
+  useDialogFocus(drawerRef, open, () => setOpen(false));
   const sections = managementSections.filter((section) => !section.adminOnly || user?.role === "admin");
 
   useEffect(() => {
@@ -41,6 +46,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
   return (
     <div className={`app-shell ${collapsed ? "app-shell--collapsed" : ""}`}>
+      <a className="skip-link" href="#conteudo">Pular para o conteúdo</a>
       <button className="mobile-menu" type="button" onClick={() => setOpen(true)} aria-label="Abrir navegação">
         <span />
         <span />
@@ -56,7 +62,7 @@ export function AppShell({ children }: PropsWithChildren) {
       >
         <span aria-hidden="true">{collapsed ? "›" : "‹"}</span>
       </button>
-      <aside className={`sidebar ${open ? "sidebar--open" : ""}`}>
+      <aside ref={drawerRef} className={`sidebar ${open ? "sidebar--open" : ""}`} aria-modal={open || undefined} role={open ? "dialog" : undefined} aria-label={open ? "Navegação" : undefined}>
         <div className="sidebar__brand">
           <img src={assets.logo} alt="Gestor de Peças" />
           <button type="button" className="sidebar__close" onClick={() => setOpen(false)} aria-label="Fechar navegação">×</button>
@@ -102,7 +108,7 @@ export function AppShell({ children }: PropsWithChildren) {
           <small className="sidebar__credit">Desenvolvido por:<br />Iago Luchtenberg da Silva</small>
         </div>
       </aside>
-      <main className="app-content">{children ?? <Outlet />}</main>
+      <main id="conteudo" tabIndex={-1} className="app-content">{children ?? <Outlet />}</main>
       <ChamadaButton variant="gestao" />
     </div>
   );

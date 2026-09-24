@@ -507,8 +507,26 @@ describe("Andon Geral Web", () => {
     fail = true;
     act(() => MockEventSource.instances[0].emit("refresh", { topic: "data" }));
     await screen.findByRole("alert");
-    expect(screen.getByText(/último snapshot válido permanece visível/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sem conexão com o servidor — dados de \d\d:\d\d\. Reconectando automaticamente/i)).toBeInTheDocument();
     expect(container.querySelector('[data-state="setup"]')).toBeInTheDocument();
+  });
+
+  it("o rodízio da TV remonta a página offline sem apagar o quadro — AN-05", async () => {
+    let fail = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/auth/session")) return authResponse();
+      if (fail) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(snapshot([resource("SERRA-01", "Serra", "setup")])), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const first = renderAndon(fetchMock);
+    await waitFor(() => expect(first.container.querySelector('[data-state="setup"]')).toBeInTheDocument());
+    expect(screen.getByText(/^Atualizado às \d\d:\d\d$/)).toBeInTheDocument();
+    first.unmount();
+    fail = true;
+    const second = renderAndon(fetchMock);
+    await screen.findByText(/Sem conexão com o servidor — dados de/i);
+    expect(second.container.querySelector('[data-state="setup"]')).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Tentar novamente/i })).toBeNull();
   });
 
   it("trata fábrica sem recursos com empty state explícito", async () => {

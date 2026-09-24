@@ -5,6 +5,7 @@ import App from "../App";
 import { AuthProvider } from "../auth/AuthContext";
 import { TV_ROTATION_SECONDS } from "../hooks/useTvRotation";
 import type { WeldingMacroRow, WeldingManagementSnapshot, WeldingOrderRow } from "../types/welding";
+import { clearLastSnapshots } from "../hooks/useApiQuery";
 
 /**
  * Wave 6D — tela gerencial da Solda e o ciclo automático da TV.
@@ -428,6 +429,8 @@ describe("Acompanhamento gerencial da Solda", () => {
     expect(grupos).toHaveLength(3);
     expect(grupos.every((grupo) => !(grupo as HTMLDetailsElement).open)).toBe(true);
     // Duas estações ainda cabem abertas: o fechamento é do volume, não da regra.
+    // Outro backend no mesmo teste: sem o snapshot guardado do cenário anterior.
+    clearLastSnapshots();
     const poucas = renderApp(apiMock(snapshot(rows.slice(0, 2))));
     await within(poucas.container).findByText("OP-01");
     expect(
