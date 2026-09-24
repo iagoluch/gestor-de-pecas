@@ -171,7 +171,9 @@ class ShiftBoundaryService:
             if str(alias or "").strip()
         }
 
-    def _active_break(self, profile, now):
+    def active_break(self, profile, now):
+        """``(início, nome)`` da pausa configurada vigente para o setor, ou None."""
+
         sector = str(profile.get("tipo_setor") or "").strip().casefold()
         for start_time, end_time, name, configured_sector in self.configured_breaks():
             if configured_sector and str(configured_sector).strip().casefold() != sector:
@@ -207,7 +209,7 @@ class ShiftBoundaryService:
             resource = profile.get("codigo")
             sector = profile.get("tipo_setor")
             window = calendar.shift_window_kind(resource, now)
-            active_break = self._active_break(profile, now)
+            active_break = self.active_break(profile, now)
             if window is ShiftWindowKind.OUT_OF_SHIFT:
                 category = "fora_turno"
                 reason = SHIFT_END_REASON

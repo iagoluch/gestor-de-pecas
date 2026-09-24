@@ -66,6 +66,10 @@ AUTOMATIC_BREAK_INTERRUPTION = "intervalo_programado"
 # Estados copiados de uma OP/nesting: só valem enquanto a execução existir.
 EXECUTION_STATE_ORIGINS = frozenset({"apontamento_operador", "corte_nesting"})
 ACTIVE_OPERATIONAL_STATUSES = ("Em processo", "Parada", "Setup", "Retrabalho")
+# Apontamentos que iniciam trabalho físico: durante a pausa automática, sobem o recurso.
+WORKING_OPERATOR_STATES = frozenset(
+    {OperatorState.PRODUCTION, OperatorState.SETUP, OperatorState.REWORK}
+)
 
 
 
@@ -2589,6 +2593,7 @@ class Database(
                 origem="apontamento_operador",
                 referencia_origem=source_ref,
                 evento_apontamento_id=evento_id,
+                inicia_trabalho=destino in WORKING_OPERATOR_STATES,
             )
             quantity_common = {
                 "numero_operacao": row.get("numero_operacao"),
@@ -3074,10 +3079,10 @@ class Database(
         volta para a mesma OP, uma Parada volta com seu motivo/status e Recurso
         sem demanda volta para a fila sem OP. Nenhuma OP é criada ou escolhida
         por inferência. Com OP ativa, o estado é derivado das OPs como estão no
-        retorno (apontamentos feitos na pausa não encerram o intervalo). Se o
-        recurso não possuía snapshot (recurso cadastrado durante a pausa) ou se
-        a OP/nesting do snapshot terminou durante a pausa, o estado seguro é
-        Recurso sem demanda.
+        retorno. Se o recurso não possuía snapshot (recurso cadastrado durante
+        a pausa) ou se a OP/nesting do snapshot terminou durante a pausa, o
+        estado seguro é Recurso sem demanda. Recurso que saiu da pausa por
+        trabalho apontado nela e ainda o executa não é tocado: continua como está.
         """
 
         instante = _period_value(data_hora)
@@ -3110,19 +3115,9 @@ class Database(
                 if alvo and str(current.get("tipo_setor") or "").strip().casefold() != alvo:
                     continue
                 resource = current["recurso"]
-                cursor.execute(
-                    """
-                    SELECT *
-                    FROM eventos_estado_recurso
-                    WHERE UPPER(recurso) = UPPER(%s)
-                      AND id <> %s
-                      AND data_fim = %s
-                    ORDER BY data_inicio DESC, id DESC
-                    LIMIT 1
-                    """,
-                    (resource, current["id"], current["data_inicio"]),
+                previous = self._estado_encerrado_em_tx(
+                    cursor, resource, current["data_inicio"], excluir_id=current["id"]
                 )
-                previous = _as_dict(cursor.fetchone())
                 executions = self._execucoes_ativas_tx(cursor, resource, instante)
                 operational = next(
                     (maquina for origem, maquina in executions
@@ -4105,6 +4100,72 @@ class Database(
         calendar = CalendarService(self, load_manufacturing_rules(self))
         return calendar.shift_window_kind(recurso, instante) == ShiftWindowKind.OUT_OF_SHIFT
 
+    def _intervalo_vigente(self, tipo_setor, instante):
+        """``(início, nome)`` da pausa automática configurada para o setor, ou None."""
+
+        from mes.services.shift_boundary import ShiftBoundaryService
+
+        return ShiftBoundaryService(self).active_break({"tipo_setor": tipo_setor}, instante)
+
+    @staticmethod
+    def _estado_encerrado_em_tx(cursor, recurso, instante, *, excluir_id=None):
+        """Estado do recurso encerrado exatamente em ``instante`` (o snapshot)."""
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM eventos_estado_recurso
+            WHERE UPPER(recurso) = UPPER(%s)
+              AND id <> %s
+              AND data_fim = %s
+            ORDER BY data_inicio DESC, id DESC
+            LIMIT 1
+            """,
+            (recurso, excluir_id or 0, instante),
+        )
+        return _as_dict(cursor.fetchone())
+
+    def _abrir_intervalo_tx(self, cursor, recurso, instante, intervalo, *, tipo_setor, operador):
+        start, name = intervalo
+        return self._transicionar_estado_recurso_tx(
+            cursor,
+            recurso,
+            "parada",
+            tipo_setor=tipo_setor,
+            operador=operador,
+            motivo=f"Intervalo automático — {name}",
+            data_hora=instante,
+            origem="intervalo_programado_inicio",
+            referencia_origem=start.isoformat(),
+            planejado=True,
+            automatico=True,
+            tipo_interrupcao=AUTOMATIC_BREAK_INTERRUPTION,
+        )
+
+    def _manter_intervalo_tx(self, cursor, recurso, instante, *, tipo_setor, operador):
+        """Pausa automática a manter ou reabrir no instante, ou None.
+
+        Dentro da janela da pausa, apontamento que não inicia trabalho
+        (parada, fim de OP com outra ainda aberta) mantém a pausa; se o
+        recurso havia saído dela por trabalho apontado na pausa, volta a ela.
+        """
+
+        identity = resolve_resource_identity(recurso)
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
+            (identity,),
+        )
+        current = self._estado_recurso_aberto_tx(cursor, identity, instante=instante)
+        if self._em_intervalo_automatico(current):
+            return dict(current)
+        sector = tipo_setor or (current or {}).get("tipo_setor")
+        window = self._intervalo_vigente(sector, instante)
+        if not window:
+            return None
+        return self._abrir_intervalo_tx(
+            cursor, identity, instante, window, tipo_setor=sector, operador=operador
+        )
+
     def _entrar_sem_demanda_tx(
         self, cursor, recurso, instante, *, tipo_setor=None, operador=None,
         origem, referencia_origem=None,
@@ -4114,8 +4175,10 @@ class Database(
         Regra da Manufatura: ao terminar a última execução, o recurso não fica
         sem estado. Estados programados abertos são preservados — o fim do
         intervalo automático e o retorno do turno decidem o próximo estado.
-        Execução encerrada em hora extra não planejada (após a jornada) leva
-        a Fora de turno, que o retorno do turno seguinte converte em sem demanda.
+        Execução apontada durante a pausa e encerrada ainda dentro dela volta
+        para a pausa até o horário cadastrado. Execução encerrada fora da
+        janela operacional (após a última hora extra) leva a Fora de turno,
+        que o retorno do turno seguinte converte em sem demanda.
         """
 
         resource = resolve_resource_identity(recurso)
@@ -4133,12 +4196,18 @@ class Database(
             return dict(current)
         if self._recurso_em_execucao_tx(cursor, resource, instante):
             return dict(current) if current else None
+        sector = tipo_setor or (current or {}).get("tipo_setor")
+        window = self._intervalo_vigente(sector, instante)
+        if window:
+            return self._abrir_intervalo_tx(
+                cursor, resource, instante, window, tipo_setor=sector, operador=operador
+            )
         if self._fora_do_turno(resource, instante):
             return self._transicionar_estado_recurso_tx(
                 cursor,
                 resource,
                 "fora_turno",
-                tipo_setor=tipo_setor or (current or {}).get("tipo_setor"),
+                tipo_setor=sector,
                 operador=operador,
                 motivo=SHIFT_END_REASON,
                 data_hora=instante,
@@ -4152,7 +4221,7 @@ class Database(
             cursor,
             resource,
             "fila",
-            tipo_setor=tipo_setor or (current or {}).get("tipo_setor"),
+            tipo_setor=sector,
             operador=operador,
             motivo=NO_DEMAND_REASON,
             data_hora=instante,
@@ -4165,6 +4234,7 @@ class Database(
     def _reconciliar_estado_recurso_apontamentos_tx(
         self, cursor, recurso, instante, *, operador=None, origem="apontamento_operador",
         referencia_origem=None, evento_apontamento_id=None, preservar_intervalo=True,
+        inicia_trabalho=False,
     ):
         """Deriva um único estado físico a partir das OPs ativas do recurso.
 
@@ -4172,9 +4242,12 @@ class Database(
         instante viram ``desconhecido``; escolher um vencedor corromperia a
         verdade física e os indicadores.
 
-        Durante o intervalo automático o apontamento é gravado, mas o estado
-        físico continua no intervalo até o horário cadastrado; o fim do
-        intervalo deriva o estado a partir das OPs (``preservar_intervalo=False``).
+        Durante o intervalo automático, apontamento que inicia ou retoma
+        trabalho (``inicia_trabalho``: produção, setup, retrabalho) tira o
+        recurso da pausa. Os demais mantêm a pausa programada até o horário
+        cadastrado — ou a reabrem, se o trabalho apontado na pausa acabou nela.
+        O fim do intervalo deriva o estado a partir das OPs
+        (``preservar_intervalo=False``).
         """
 
         resource = str(recurso or "").strip()
@@ -4203,16 +4276,6 @@ class Database(
                 origem=origem,
                 referencia_origem=referencia_origem,
             )
-        if preservar_intervalo:
-            identity = resolve_resource_identity(resource)
-            cursor.execute(
-                "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-                (identity,),
-            )
-            current = self._estado_recurso_aberto_tx(cursor, identity, instante=instante)
-            if self._em_intervalo_automatico(current):
-                return dict(current)
-
         categories = {
             self._categoria_estado_apontamento(row.get("status"))
             for row in active
@@ -4250,6 +4313,13 @@ class Database(
             planned = False if category == "parada" else None
 
         single = active[0] if len(active) == 1 else None
+        if preservar_intervalo and not inicia_trabalho:
+            paused = self._manter_intervalo_tx(
+                cursor, resource, instante, tipo_setor=sector, operador=operador,
+            )
+            if paused:
+                return paused
+
         return self._transicionar_estado_recurso_tx(
             cursor,
             resource,

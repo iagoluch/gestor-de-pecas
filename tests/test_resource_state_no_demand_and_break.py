@@ -6,8 +6,12 @@ Regras da Manufatura (Gabriel Fogaça, 24/09/2026):
 - fim do intervalo automático volta para o último estado, qualquer que seja
   (OP em produção, parada com motivo, sem demanda) — C09/C10;
 - OP encerrada durante o intervalo não é reaberta no retorno (I03);
-- apontamento feito durante o intervalo não encerra o intervalo antes da hora;
-- execução encerrada após a jornada (fora da hora extra) leva a Fora de turno.
+- OP apontada durante o intervalo sobe para produção; encerrada ainda na
+  pausa, o recurso volta para a pausa; aberta até o fim, continua como está;
+- parada apontada durante o intervalo não encerra o intervalo antes da hora;
+- execução encerrada após a jornada (fora da hora extra) leva a Fora de turno;
+- ciclo H1/expediente/H2: fora de turno nos limites da jornada, sem demanda
+  entre a última OP e o próximo limite.
 """
 
 from datetime import datetime, timedelta
@@ -25,6 +29,9 @@ from app.database.database import Database
 from mes.domain import ManufacturingRules
 
 RESOURCE = "1303"
+# Almoço semeado pela migration 23 (12:10-12:52), em minutos a partir de t0 = 09:00.
+LUNCH_START = 190
+LUNCH_END = 232
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
@@ -53,6 +60,14 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
         item = self.db.enfileirar_apontamento_operacional(
             code, "Peça", task_id, "Dobra", RESOURCE, "IAGO", 2
         )
+        # O enfileiramento usa o relógio real; alinha ao t0 fixo do teste para
+        # não parecer um evento posterior aos limites de turno simulados.
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE eventos_apontamento_operador SET data_hora = %s"
+                " WHERE apontamento_id = %s AND estado = 'fila'",
+                (self._at(minute), item["id"]),
+            )
         self.db.transicionar_apontamento_operador(
             item["id"], "producao", "IAGO", data_hora=self._at(minute)
         )
@@ -73,6 +88,16 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
             referencia_origem=self._at(start).isoformat(),
         )
         return self.db.finalizar_intervalo_automatico(self._at(end), "Almoço")
+
+    def _lunch_start(self, resource=RESOURCE, sector="Dobra"):
+        # Mesmos parâmetros de iniciar_intervalo_automatico, na janela configurada.
+        self.db.transicionar_estado_recurso(
+            resource, "parada", tipo_setor=sector, data_hora=self._at(LUNCH_START),
+            operador="SISTEMA", motivo="Intervalo automático — Almoço",
+            planejado=True, automatico=True, tipo_interrupcao="intervalo_programado",
+            origem="intervalo_programado_inicio",
+            referencia_origem=self._at(LUNCH_START).isoformat(),
+        )
 
     def _timeline(self, resource=RESOURCE):
         with self.db.connection() as connection, connection.cursor() as cursor:
@@ -178,7 +203,7 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
         self.assertIsNone(timeline[-1]["op"])
         self._assert_continuous(timeline)
 
-    def test_apontamento_durante_o_intervalo_nao_encerra_o_intervalo(self):
+    def test_parada_apontada_no_intervalo_nao_encerra_o_intervalo(self):
         item = self._started_op()
         self.db.transicionar_estado_recurso(
             RESOURCE, "parada", data_hora=self._at(60), operador="SISTEMA",
@@ -202,6 +227,76 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
         self.assertEqual(timeline[-1]["apontamento_id"], item["id"])
         self.assertEqual(timeline[-1]["data_inicio"], self._at(120))
         self._assert_continuous(timeline)
+
+    def test_op_apontada_no_intervalo_sobe_e_encerrada_nele_volta_ao_intervalo(self):
+        before = self._started_op("OP-ANTES", minute=150)
+        self._finish(before, 180)
+        self._lunch_start()
+        during = self._started_op("OP-PAUSA", minute=200)
+        self.assertEqual(self._timeline()[-1]["categoria"], "producao")
+
+        self._finish(during, 220)
+        back = self._timeline()[-1]
+        self.assertEqual(back["tipo_interrupcao"], "intervalo_programado")
+        self.assertTrue(back["planejado"])
+        self.assertEqual(back["data_inicio"], self._at(220))
+
+        self.db.finalizar_intervalo_automatico(self._at(LUNCH_END), "Almoço")
+        timeline = self._timeline()
+        self.assertEqual(
+            [row["categoria"] for row in timeline],
+            ["producao", "fila", "parada", "producao", "parada", "fila"],
+        )
+        self._assert_no_demand(timeline[-1])
+        self._assert_continuous(timeline)
+
+    def test_op_apontada_no_intervalo_e_aberta_ate_o_fim_continua_como_esta(self):
+        self._lunch_start()
+        item = self._started_op("OP-PAUSA", minute=200)
+
+        self.db.finalizar_intervalo_automatico(self._at(LUNCH_END), "Almoço")
+        current = self._timeline()[-1]
+        self.assertEqual(current["categoria"], "producao")
+        self.assertEqual(current["apontamento_id"], item["id"])
+        self.assertEqual(current["data_inicio"], self._at(200))
+        self.assertIsNone(current["data_fim"])
+
+    def test_op_da_pausa_encerrada_com_op_anterior_aberta_volta_ao_intervalo(self):
+        before = self._started_op("OP-ANTES", minute=0)
+        self._lunch_start()
+        during = self._started_op("OP-PAUSA", minute=200)
+        self._finish(during, 220)
+        self.assertEqual(self._timeline()[-1]["tipo_interrupcao"], "intervalo_programado")
+
+        self.db.finalizar_intervalo_automatico(self._at(LUNCH_END), "Almoço")
+        current = self._timeline()[-1]
+        self.assertEqual(current["categoria"], "producao")
+        self.assertEqual(current["apontamento_id"], before["id"])
+
+    def test_ciclo_h1_expediente_h2(self):
+        # Fim do expediente (17:30) com OP aberta -> fora de turno.
+        item = self._started_op(minute=420)
+        self.db.interromper_apontamento_fim_turno(item["id"], data_hora=self._at(510))
+        self.assertEqual(self._timeline()[-1]["categoria"], "fora_turno")
+
+        # H2: operador aponta a OP de novo; sem OP, sem demanda até o fim da H2.
+        self.db.transicionar_apontamento_operador(
+            item["id"], "producao", "IAGO", data_hora=self._at(540)
+        )
+        self.assertEqual(self._timeline()[-1]["categoria"], "producao")
+        self._finish(item, 600)
+        self._assert_no_demand(self._timeline()[-1])
+        self.db.interromper_recursos_ociosos_fim_turno(self._at(750))
+        self.assertEqual(self._timeline()[-1]["categoria"], "fora_turno")
+
+        # H1 do dia seguinte (06:30-07:00): OP finalizada -> sem demanda, que
+        # atravessa o início do expediente (08:00) sem virar outro estado.
+        early = self._started_op("OP-H1", minute=1290)
+        self._finish(early, 1320)
+        self._assert_no_demand(self._timeline()[-1])
+        self.db.finalizar_fora_turno_automatico(self._at(1380))
+        self._assert_no_demand(self._timeline()[-1])
+        self._assert_continuous(self._timeline())
 
     def test_op_encerrada_apos_a_jornada_entra_em_fora_de_turno(self):
         # 22:00-23:00: depois do expediente e da hora extra H2 (até 21:30).
@@ -227,7 +322,7 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
 
         self._assert_no_demand(self._timeline()[-1])
 
-    def test_fim_do_nesting_do_corte_entra_em_sem_demanda(self):
+    def _cut_plan(self):
         with self.db.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -250,6 +345,9 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
                 """,
                 (self.t0.date(), self.t0),
             )
+
+    def test_fim_do_nesting_do_corte_entra_em_sem_demanda(self):
+        self._cut_plan()
         started = self.db.iniciar_apontamento_corte(
             "HASH-CORTE-SD", "Laser Ensis 3015", "CORTADOR", "2026-01-01",
             data_inicio=self._at(0),
@@ -258,6 +356,26 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
 
         timeline = self._timeline(started["maquina"])
         self.assertEqual([row["categoria"] for row in timeline], ["producao", "fila"])
+        self._assert_no_demand(timeline[-1])
+        self._assert_continuous(timeline)
+
+    def test_nesting_iniciado_e_encerrado_no_intervalo_volta_ao_intervalo(self):
+        self._cut_plan()
+        machine = "Laser Ensis 3015"
+        self._lunch_start(machine, sector="Corte")
+        during = self.db.iniciar_apontamento_corte(
+            "HASH-CORTE-SD", "Laser Ensis 3015", "CORTADOR", "2026-01-01",
+            data_inicio=self._at(200),
+        )
+        self.assertEqual(self._timeline(machine)[-1]["categoria"], "producao")
+
+        self.db.finalizar_apontamento_corte(during["id"], "CORTADOR", data_fim=self._at(220))
+        self.assertEqual(
+            self._timeline(machine)[-1]["tipo_interrupcao"], "intervalo_programado"
+        )
+
+        self.db.finalizar_intervalo_automatico(self._at(LUNCH_END), "Almoço")
+        timeline = self._timeline(machine)
         self._assert_no_demand(timeline[-1])
         self._assert_continuous(timeline)
 
