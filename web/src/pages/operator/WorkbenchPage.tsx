@@ -134,7 +134,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const [routeSelection, setRouteSelection] = useState<{ op: string; operationKey: string } | null>(null);
   // Resultado da última ação: erro sai como alerta, não na mesma barra neutra
   // do sucesso — o operador distinguia "deu certo" de "foi recusado" só lendo.
-  const [feedback, setFeedback] = useState<{ text: string; tone: NoticeTone }>({ text: "Produção e fila atualizadas.", tone: "info" });
+  const [feedback, setFeedback] = useState<{ text: string; tone: NoticeTone }>({ text: "", tone: "info" });
   const setMessage = (text: string, tone: NoticeTone = "success") => setFeedback({ text, tone });
   const [submitting, setSubmitting] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -652,7 +652,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         operation_number: withoutOp ? null : appointmentForStop?.numero_operacao ?? appointmentForStop?.operation ?? selected?.numero_operacao ?? selected?.codigo,
         ...extra,
       });
-      setMessage(response.message);
+      // Sucesso não vira faixa: a faixa de estado do posto já mostra o resultado.
+      setMessage("");
       setDialog(null);
       cards.reload();
       historyQuery.reload();
@@ -722,11 +723,6 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           Recurso parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
         </Notice>
       ) : null}
-      {activityInProgress ? (
-        <Notice>
-          {resourceState?.motivo || "Atividade s/OP"} em andamento neste posto. Finalize para voltar a apontar.
-        </Notice>
-      ) : null}
       {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
           preparação da máquina, que é quando a primeira peça é fabricada. */}
@@ -759,7 +755,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           />
         </aside>
       </div>
-      <Notice tone={feedback.tone}>{feedback.text}</Notice>
+      {feedback.text ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
       {cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error && !cards.data ? <ErrorState error={cards.error} onRetry={cards.reload} /> : (
         <>
           {cards.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}

@@ -164,6 +164,73 @@ OPERATOR_SECTORS = (
 
 WELDING_STATIONS = WELDING_FAMILY_SECTORS[0][1]
 
+#: Regra "recursos apontáveis vs. só sincronizados": identidades (nome do posto
+#: e código de catálogo, em casefold) dos recursos que algum operador aponta.
+#: Todo o resto do cadastro sincronizado do PC Factory/Protheus é só catálogo.
+APONTAVEL_RESOURCE_IDENTITIES = frozenset(
+    identity
+    for sector in OPERATOR_SECTORS
+    for station in sector.resources
+    for identity in (
+        station.casefold(),
+        STATION_RESOURCE_CODES.get((sector.name.casefold(), station.casefold()), "").casefold(),
+    )
+    if identity
+) | frozenset(
+    # Setor com posto único e sem estação listada (Destaque): o próprio nome
+    # do setor é a identidade física gravada na timeline.
+    sector.name.casefold() for sector in OPERATOR_SECTORS if not sector.resources
+)
+
+
+#: Chave de dev: ``True`` devolve à timeline automática (sem demanda, fora de
+#: turno, intervalo) e às somas de tempo os recursos só sincronizados — os que
+#: não têm tela de apontamento. Padrão desligado: só postos apontáveis contam.
+INCLUIR_RECURSOS_SO_SINCRONIZADOS = False
+
+
+def is_apontavel_resource(*identities):
+    """Diz se algum dos nomes/códigos informados é um posto apontável.
+
+    Casa também pelo nome amigável, para que códigos de catálogo de um posto
+    compartilhado (ROBO P/ROBO S → "Robô 1") contem como o próprio posto.
+    """
+
+    return any(
+        value.casefold() in APONTAVEL_RESOURCE_IDENTITIES
+        for identity in identities
+        if (raw := str(identity or "").strip())
+        for value in (raw, resource_display_name(raw))
+    )
+
+
+def participa_da_timeline(*identities):
+    """Recurso entra na timeline automática e nas somas de tempo?"""
+
+    return INCLUIR_RECURSOS_SO_SINCRONIZADOS or is_apontavel_resource(*identities)
+
+
+def postos_apontaveis_sem_catalogo(codigos_catalogo):
+    """Postos apontáveis que o catálogo sincronizado não cobre (estações de solda).
+
+    Sem código no PC Factory eles ficariam fora do inventário do scheduler e
+    nunca ganhariam "sem demanda"/fora de turno automáticos.
+    """
+
+    cobertos = {
+        value.casefold()
+        for code in codigos_catalogo
+        if (raw := str(code or "").strip())
+        for value in (raw, resource_display_name(raw))
+    }
+    return [
+        (sector.name, station)
+        for sector in OPERATOR_SECTORS
+        for station in sector.resources
+        if station.casefold() not in cobertos
+        and not STATION_RESOURCE_CODES.get((sector.name.casefold(), station.casefold()))
+    ]
+
 
 def _weld_operator_profiles():
     """Gera os perfis por login da frente de Solda.

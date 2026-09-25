@@ -703,11 +703,11 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
     def test_andon_usa_catalogo_e_estado_fisico_reais_sem_alterar_dados(self):
         now = datetime.now().replace(microsecond=0)
         self.db.publicar_recursos_pcfactory([
-            {"codigo": "R-ANDON-P", "nome": "Recurso Andon Produção", "tipo_setor": "Dobra"},
-            {"codigo": "R-ANDON-S", "nome": "Recurso Andon Sem Estado", "tipo_setor": "Dobra"},
+            {"codigo": "DOBRA1", "nome": "Recurso Andon Produção", "tipo_setor": "Dobra"},
+            {"codigo": "DOBRA2", "nome": "Recurso Andon Sem Estado", "tipo_setor": "Dobra"},
         ], fonte="teste_andon")
         state = self.db.transicionar_estado_recurso(
-            "R-ANDON-P",
+            "DOBRA1",
             "parada",
             tipo_setor="Dobra",
             motivo="Falta de material",
@@ -723,12 +723,12 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         }
 
         self.assertEqual(snapshot["resource_count"], 1)
-        self.assertEqual(resources["R-ANDON-P"]["state"]["category"], "parada")
-        self.assertEqual(resources["R-ANDON-P"]["state"]["reason"], "Falta de material")
-        self.assertNotIn("R-ANDON-S", resources)
-        self.assertEqual(resources["R-ANDON-P"]["state"]["duration_seconds"], 720)
+        self.assertEqual(resources["DOBRA1"]["state"]["category"], "parada")
+        self.assertEqual(resources["DOBRA1"]["state"]["reason"], "Falta de material")
+        self.assertNotIn("DOBRA2", resources)
+        self.assertEqual(resources["DOBRA1"]["state"]["duration_seconds"], 720)
         self.assertEqual(
-            self.db.buscar_estado_recurso_atual("R-ANDON-P")["id"],
+            self.db.buscar_estado_recurso_atual("DOBRA1")["id"],
             state["id"],
         )
 

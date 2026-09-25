@@ -18,6 +18,8 @@ from app.core.normalization import limpa_codigo
 from app.core.operator_sectors import sector_display_label
 from app.core.quality import inspection_step_auto_skipped, sector_has_quality
 from mes.domain import (
+    NO_DEMAND_INTERRUPTION_TYPE,
+    NO_DEMAND_REASON,
     EventCategory,
     ManufacturingRules,
     OperatorAction,
@@ -552,7 +554,8 @@ class OperatorFlowService:
             recurso,
             EventCategory.QUEUE.value,
             tipo_setor=setor,
-            motivo="Retomada após parada sem OP",
+            motivo=NO_DEMAND_REASON,
+            tipo_interrupcao=NO_DEMAND_INTERRUPTION_TYPE,
             automatico=False,
             data_hora=self._now(),
         )
@@ -648,7 +651,8 @@ class OperatorFlowService:
             recurso,
             EventCategory.QUEUE.value,
             tipo_setor=setor,
-            motivo="Fim da atividade sem OP",
+            motivo=NO_DEMAND_REASON,
+            tipo_interrupcao=NO_DEMAND_INTERRUPTION_TYPE,
             automatico=False,
             data_hora=self._now(),
         )

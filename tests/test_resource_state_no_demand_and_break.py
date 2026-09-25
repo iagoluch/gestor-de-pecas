@@ -686,6 +686,12 @@ class TimelineSoDePostosApontaveisTests(unittest.TestCase):
         self._auto("Estação 2")  # primeiro estado às 09:00, antes do almoço
         self.assertEqual(pausadas(), {"Estação 2"})
 
+    def test_destaque_segue_na_timeline_sem_estar_no_catalogo(self):
+        self.assertEqual(self._auto("Destaque")["categoria"], "fila")
+        fim = self.t0 + timedelta(hours=1)
+        recursos = {row["recurso"] for row in self.db.listar_estados_recurso_periodo(self.t0, fim)}
+        self.assertEqual(recursos, {"Destaque"})
+
     def test_chave_de_dev_devolve_os_recursos_so_sincronizados(self):
         with patch("app.core.operator_sectors.INCLUIR_RECURSOS_SO_SINCRONIZADOS", True):
             self.assertIsNotNone(self._auto("ALMOXS"))

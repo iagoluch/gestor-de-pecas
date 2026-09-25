@@ -44,6 +44,8 @@ from mes.integrations.totvs.outbound_enqueue import (
 )
 from mes.domain import (
     EXECUTING_APPOINTMENT_STATUSES,
+    NO_DEMAND_INTERRUPTION_TYPE,
+    NO_DEMAND_REASON,
     ManufacturingRules,
     PHYSICAL_STATE_VALUES,
     SHIFT_END_INTERRUPTION_TYPE,
@@ -62,8 +64,6 @@ PASSWORD_SCHEME = "pbkdf2_sha256"  # nosec B105 -- identificador de algoritmo de
 PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
-NO_DEMAND_REASON = "Recurso sem demanda"
-NO_DEMAND_INTERRUPTION_TYPE = "recurso_sem_demanda"
 SCHEDULED_OP_REASON = "OP programada aguardando início"
 SCHEDULED_OP_INTERRUPTION_TYPE = "op_programada"
 AUTOMATIC_BREAK_INTERRUPTION = "intervalo_programado"
@@ -1331,7 +1331,7 @@ class Database(
                 "producao",
                 tipo_setor="Corte",
                 operador=operador,
-                motivo=f"Nesting {started.get('sequencia_nesting') or ''}".strip(),
+                motivo=f"Plano {started.get('programa') or ''}".strip(),
                 data_hora=inicio,
                 origem="corte_nesting",
                 referencia_origem=f"nesting:{started.get('id')}",
@@ -1460,7 +1460,7 @@ class Database(
                     "producao",
                     tipo_setor="Corte",
                     operador=operador,
-                    motivo=f"Nesting {started.get('sequencia_nesting') or ''}".strip(),
+                    motivo=f"Plano {started.get('programa') or ''}".strip(),
                     data_hora=transicao,
                     origem="corte_nesting",
                     referencia_origem=f"nesting:{started.get('id')}",
@@ -3402,7 +3402,7 @@ class Database(
         data_hora,
         *,
         operador="SISTEMA",
-        motivo="Retorno do turno — recurso sem demanda",
+        motivo=NO_DEMAND_REASON,
         tipo_interrupcao="retorno_turno_sem_demanda",
         recursos=None,
         excluir_recursos=None,

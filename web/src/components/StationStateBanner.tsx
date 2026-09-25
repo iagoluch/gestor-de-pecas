@@ -29,8 +29,13 @@ function since(value?: string | null) {
  * se a máquina está produzindo, parada ou em setup, sem depender da última
  * mensagem de ação.
  */
-export function StationStateBanner({ state }: { state?: StationState | null }) {
-  const known = STATES[String(state?.categoria ?? "")] ?? { label: "Sem apontamento", tone: "neutral" };
+export function StationStateBanner({ state, semOp = false }: { state?: StationState | null; semOp?: boolean }) {
+  const category = String(state?.categoria ?? "");
+  // Corte e Destaque trabalham com tarefas e planos, não com OP: fila ali é
+  // só "Sem apontamento".
+  const known = semOp && category === "fila"
+    ? { label: "Sem apontamento", tone: "waiting" }
+    : STATES[category] ?? { label: "Sem apontamento", tone: "neutral" };
   const op = String(state?.op ?? "").trim();
   const details = [op ? `OP ${op}` : "", state?.motivo ?? "", since(state?.data_inicio)].filter(Boolean).join(" · ");
   return (

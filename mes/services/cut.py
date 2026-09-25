@@ -7,7 +7,11 @@ import logging
 import re
 from typing import Optional
 
-from mes.domain.manufacturing_rules import ManufacturingRules
+from mes.domain.manufacturing_rules import (
+    NO_DEMAND_INTERRUPTION_TYPE,
+    NO_DEMAND_REASON,
+    ManufacturingRules,
+)
 
 DEFAULT_CUT_QUEUE_START_DATE = "2026-08-03"
 
@@ -219,13 +223,15 @@ class CutService:
             if active
             else None
         )
-        nesting = (active.get("nesting_atual") or active.get("sequencia_nesting") or "") if active else ""
+        # Nesting é a repetição da mesma chapa; o operador acompanha o plano.
+        plano = (active.get("programa_atual") or active.get("programa") or "") if active else ""
         changed = transition(
             machine,
             "producao" if active else "fila",
             tipo_setor="Corte",
             operador=self.operador,
-            motivo=f"Nesting {nesting}".strip() if active else "Retomada sem nesting ativo",
+            motivo=f"Plano {plano}".strip() if active else NO_DEMAND_REASON,
+            tipo_interrupcao=None if active else NO_DEMAND_INTERRUPTION_TYPE,
             origem="corte_nesting" if active else "corte_retomada_sem_nesting",
             referencia_origem=f"nesting:{active_id}" if active_id is not None else None,
             planejado=None,

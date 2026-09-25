@@ -75,7 +75,7 @@ class _ShiftReturnRepo(_CanonicalRepo):
                 "data_inicio": datetime(2026, 9, 17, 9, 0),
                 "data_fim": datetime(2026, 9, 17, 17, 30),
                 "automatico": True,
-                "motivo": "Retorno do turno — recurso sem demanda",
+                "motivo": "Recurso sem demanda",
                 "tipo_interrupcao": SHIFT_START_NO_DEMAND_TYPE,
             },
         ]

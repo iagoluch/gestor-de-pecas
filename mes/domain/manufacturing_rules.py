@@ -36,7 +36,12 @@ OPEN_APPOINTMENT_STATUSES = EXECUTING_APPOINTMENT_STATUSES | {
 SHIFT_END_BOUNDARIES = (time(17, 30), time(21, 30))
 SHIFT_END_REASON = "Fim de turno — interrupção programada automática"
 SHIFT_END_INTERRUPTION_TYPE = "fim_turno"
-SHIFT_START_NO_DEMAND_REASON = "Retorno do turno — recurso sem demanda"
+# Recurso sem nada apontado é sempre exibido como "Recurso sem demanda",
+# qualquer que seja a origem. O retorno do turno mantém só o tipo próprio
+# (marcador interno usado pelo Andon), não um texto diferente.
+NO_DEMAND_REASON = "Recurso sem demanda"
+NO_DEMAND_INTERRUPTION_TYPE = "recurso_sem_demanda"
+SHIFT_START_NO_DEMAND_REASON = NO_DEMAND_REASON
 SHIFT_START_NO_DEMAND_TYPE = "retorno_turno_sem_demanda"
 AUTOMATIC_BREAKS = (
     (time(12, 10), time(12, 52), "Almoço"),

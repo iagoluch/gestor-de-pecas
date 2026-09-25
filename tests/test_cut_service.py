@@ -140,7 +140,10 @@ class CutServiceTests(unittest.TestCase):
 
         resumed = self.service.retomar("Laser Ensis 3015")
         self.assertTrue(resumed.ok)
-        self.assertEqual(self.db.buscar_estado_recurso_atual("Laser Ensis 3015")["categoria"], "producao")
+        estado = self.db.buscar_estado_recurso_atual("Laser Ensis 3015")
+        self.assertEqual(estado["categoria"], "producao")
+        # Nesting é repetição de chapa; o motivo mostra o plano em corte.
+        self.assertRegex(estado["motivo"], r"^Plano \S")
         self.assertEqual(self.db.cut_appointments[0]["status"], "Em processo")
         self.assertEqual(
             [event["tipo"] for event in self.db.events[-3:]],
@@ -155,10 +158,9 @@ class CutServiceTests(unittest.TestCase):
         resumed = self.service.retomar("Laser Ensis 3015")
         self.assertTrue(resumed.ok)
         self.assertEqual(resumed.data["status"], "Sem nesting ativo")
-        self.assertEqual(
-            self.db.buscar_estado_recurso_atual("Laser Ensis 3015")["categoria"],
-            "fila",
-        )
+        estado = self.db.buscar_estado_recurso_atual("Laser Ensis 3015")
+        self.assertEqual(estado["categoria"], "fila")
+        self.assertEqual(estado["motivo"], "Recurso sem demanda")
 
         invalid = self.service.parar("Plasma TerraBlade 4", motivo_codigo="1005")
         self.assertFalse(invalid.ok)

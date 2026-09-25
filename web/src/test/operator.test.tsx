@@ -2,7 +2,15 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
+import { StationStateBanner } from "../components/StationStateBanner";
 import { AuthProvider } from "../auth/AuthContext";
+
+// Sucesso de ação não vira faixa (25/09/2026): a faixa de estado do posto já
+// mostra o resultado. Os testes esperam o POST em vez da mensagem.
+async function expectActionPosted(fragment: string, successText: string) {
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([path, init]) => String(path).includes(fragment) && init?.method === "POST")).toBe(true));
+  expect(screen.queryByText(successText)).not.toBeInTheDocument();
+}
 
 class SseStub {
   static instance: SseStub | null = null;
@@ -234,7 +242,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "30 - DOBRA ESPECIAL — Próxima" })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
-    await screen.findByText("Início registrado com sucesso.");
+    await expectActionPosted("/operator/actions", "Início registrado com sucesso.");
     const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Início", op: "OP-OVERRIDE", operation_id: 3 });
   });
@@ -262,7 +270,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
     fireEvent.click(await screen.findByRole("button", { name: "Retomar produção" }));
-    await screen.findByText(`${expectedAction} registrado com sucesso.`);
+    await expectActionPosted("/operator/actions", `${expectedAction} registrado com sucesso.`);
 
     const actionCall = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
     expect(JSON.parse(String(actionCall?.[1]?.body))).toMatchObject({ action: expectedAction, resource: "1303", op: "OP-091", operation_id: 91 });
@@ -322,7 +330,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "0029" } });
     await waitFor(() => expect(screen.getByRole("option", { name: "0029 - Quebra de ferramenta" })).toHaveAttribute("aria-selected", "true"));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar parada" }));
-    await screen.findByText("Parada registrada com sucesso.");
+    await expectActionPosted("/operator/actions", "Parada registrada com sucesso.");
     const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Parada", resource: "1303", op: null, operation_id: null });
   });
@@ -355,7 +363,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/Parado.*0029 - Quebra de ferramenta/);
     // Sem OP carregada não existe apontamento: a retomada é do próprio recurso.
     fireEvent.click(screen.getByRole("button", { name: "Retomar produção" }));
-    await screen.findByText("Recurso retomado com sucesso.");
+    await expectActionPosted("/operator/actions", "Recurso retomado com sucesso.");
     const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retomar", resource: "1303", op: null, operation_id: null });
   });
@@ -478,7 +486,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
     fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
-    await screen.findByText("Início registrado com sucesso.");
+    await expectActionPosted("/operator/actions", "Início registrado com sucesso.");
     // O botão Setup só habilita depois que `cards.reload()` traz o card em
     // "Em processo"; clicar antes disso (com o botão ainda disabled) não
     // dispara nada.
@@ -519,7 +527,7 @@ describe("fluxo Web do operador", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
 
-    await screen.findByText("Início registrado com sucesso.");
+    await expectActionPosted("/operator/actions", "Início registrado com sucesso.");
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
     const inicio = calls.find((call) => call.method === "POST" && call.path.includes("/operator/actions"));
     expect(inicio?.body).toMatchObject({ action: "Início", op: "OP-GATE" });
@@ -570,7 +578,7 @@ describe("fluxo Web do operador", () => {
     const retornar = screen.queryByRole("button", { name: "Retomar produção" });
     if (retornar) {
       fireEvent.click(retornar);
-      await screen.findByText("Retorno registrado com sucesso.");
+      await expectActionPosted("/operator/actions", "Retorno registrado com sucesso.");
     }
     await waitFor(() => expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled());
     await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled());
@@ -869,7 +877,7 @@ describe("fluxo Web do operador", () => {
     expect(retomar.querySelector("svg")).toHaveAttribute("data-icon", "start");
     expect(screen.getByRole("button", { name: "Parada" })).toBeDisabled();
     fireEvent.click(retomar);
-    await screen.findByText("Recurso retomado com sucesso.");
+    await expectActionPosted("/highlight/actions", "Recurso retomado com sucesso.");
     const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retomar", task_code: null });
   });
@@ -1130,5 +1138,14 @@ describe("fluxo Web do operador", () => {
     expect(within(linhas[1]).getByText("CHAPA 3000 x 1500 · 2")).toBeInTheDocument();
     expect(within(linhas[0]).getByText("00:00:02")).toBeInTheDocument();
     expect(screen.getAllByText("00617399002, 00617399003")).toHaveLength(2);
+  });
+});
+
+describe("StationStateBanner", () => {
+  it("Corte e Destaque não trabalham com OP: fila vira Sem apontamento", () => {
+    const { rerender } = render(<StationStateBanner state={{ categoria: "fila", motivo: "Recurso sem demanda" }} semOp />);
+    expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/^Sem apontamentoRecurso sem demanda$/);
+    rerender(<StationStateBanner state={{ categoria: "fila", motivo: "Recurso sem demanda" }} />);
+    expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/^Aguardando OP/);
   });
 });

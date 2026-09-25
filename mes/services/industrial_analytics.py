@@ -143,7 +143,13 @@ class IndustrialAnalyticsService:
         return payload
 
     def downtimes(self, filters: AnalyticsFilter) -> dict:
-        rows = self._segments(filters, EventCategory.DOWNTIME)
+        # Intervalo automático (almoço/café) é pausa do calendário, não perda:
+        # fica fora de rankings, exceções e análises de paradas. A composição
+        # física do tempo continua vindo da timeline completa.
+        rows = [
+            row for row in self._segments(filters, EventCategory.DOWNTIME)
+            if not row.get("automatica")
+        ]
         return self._segment_summary(filters, rows, label="paradas")
 
     def setups(self, filters: AnalyticsFilter) -> dict:

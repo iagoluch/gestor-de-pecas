@@ -542,6 +542,24 @@ class CapacityTests(unittest.TestCase):
         )
 
 
+class AutomaticBreakIsNotLossTests(unittest.TestCase):
+    """Intervalo automático não é perda: fora de paradas/rankings (25/09/2026)."""
+
+    def test_paradas_ignoram_intervalo_automatico(self):
+        manual = _estado(1, "parada", datetime(2026, 8, 19, 9, 0), datetime(2026, 8, 19, 9, 30),
+                         codigo="0011")
+        almoco = {**_estado(2, "parada", datetime(2026, 8, 19, 12, 10),
+                            datetime(2026, 8, 19, 12, 52)),
+                  "automatico": True, "motivo": "Intervalo automático — Almoço"}
+        service = IndustrialAnalyticsService(
+            _ReliabilityRepo([manual, almoco]),
+            now_func=lambda: datetime(2026, 8, 19, 23, 0),
+        )
+        result = service.downtimes(ReliabilityTests.filters)
+        self.assertEqual(result["total_seconds"], 30 * 60)
+        self.assertEqual([item["estado_recurso_id"] for item in result["items"]], [1])
+
+
 class ReliabilityTests(unittest.TestCase):
     """MTBF/MTTR sobre a taxonomia de manutenção já existente no catálogo."""
 

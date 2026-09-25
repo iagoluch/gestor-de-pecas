@@ -213,7 +213,8 @@ describe("hierarquia da tela de Corte", () => {
     expect(JSON.parse(String(chamada?.[1]?.body))).toMatchObject({
       resource: "Laser Ensis 3015", action: "Início", plan_hash: "h-001-1",
     });
-    await screen.findByText("Nesting iniciado.");
+    // Sucesso não vira faixa: a faixa de estado do posto já mostra o resultado.
+    expect(screen.queryByText("Nesting iniciado.")).not.toBeInTheDocument();
   });
 
   it("trata uma chapa sem repetição como plano, inclusive no progresso e na finalização", async () => {

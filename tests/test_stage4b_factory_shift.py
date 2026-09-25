@@ -932,7 +932,7 @@ class OperationalViewIdentityTests(unittest.TestCase):
         repository.states = [{
             **repository.states[0],
             "categoria": "fila",
-            "motivo": "Retorno do turno — recurso sem demanda",
+            "motivo": "Recurso sem demanda",
             "data_inicio": datetime(2026, 9, 4, 8, 0),
             "planejado": None,
             "tipo_interrupcao": "retorno_turno_sem_demanda",
@@ -978,7 +978,7 @@ class OperationalViewIdentityTests(unittest.TestCase):
                 repository.states = [{
                     **repository.states[0],
                     "categoria": "fila",
-                    "motivo": "Retorno do turno — recurso sem demanda",
+                    "motivo": "Recurso sem demanda",
                     "data_inicio": datetime(2026, 9, 4, 8, 0),
                     "planejado": None,
                     "tipo_interrupcao": "retorno_turno_sem_demanda",
@@ -1026,7 +1026,7 @@ class OperationalViewIdentityTests(unittest.TestCase):
             "recurso": "Laser Ensis 3015",
             "tipo_setor": "Corte",
             "categoria": "fila",
-            "motivo": "Retorno do turno — recurso sem demanda",
+            "motivo": "Recurso sem demanda",
             "data_inicio": datetime(2026, 9, 4, 8, 0),
             "planejado": None,
             "tipo_interrupcao": "retorno_turno_sem_demanda",

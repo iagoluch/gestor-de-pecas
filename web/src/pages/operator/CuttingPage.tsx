@@ -188,10 +188,12 @@ interface CuttingSyncState {
 interface QueueResponse { resource: string; resource_state?: StationState | null; items: CuttingRow[]; sync?: CuttingSyncState }
 interface HistoryResponse { resource: string; status: string; items: CuttingRow[] }
 
+const CUTTING_HINT = "Fila automática — novas tarefas aparecem sozinhas.";
+
 export function CuttingPage({ resource }: { resource: string }) {
   const [search, setSearch] = useState("");
   const appliedSearch = useDebouncedValue(search.trim(), 250);
-  const [message, setMessage] = useState("Fila automática — novas tarefas aparecem sozinhas.");
+  const [message, setMessage] = useState(CUTTING_HINT);
   const [stopOpen, setStopOpen] = useState(false);
   // Atividade diária do posto: só o Sim/Não fica na tela, o tipo é do backend.
   const [activityPrompt, setActivityPrompt] = useState<"Início" | "Finalizado" | null>(null);
@@ -249,8 +251,9 @@ export function CuttingPage({ resource }: { resource: string }) {
   async function action(payload: Record<string, unknown>) {
     setBusy(true);
     try {
-      const response = await api.post<{ message: string }>("/api/v1/cutting/actions", { resource, ...payload });
-      setMessage(response.message);
+      await api.post<{ message: string }>("/api/v1/cutting/actions", { resource, ...payload });
+      // Sucesso não vira faixa: a faixa de estado do posto já mostra o resultado.
+      setMessage(CUTTING_HINT);
       setStopOpen(false);
       setActivityPrompt(null);
       queue.reload();
@@ -263,7 +266,7 @@ export function CuttingPage({ resource }: { resource: string }) {
 
   return (
     <section className="cutting-page">
-      <StationStateBanner state={queue.data?.resource_state} />
+      <StationStateBanner state={queue.data?.resource_state} semOp />
       {/* A pesquisa é apenas um filtro do que já está na fila. Descobrir uma
           tarefa nova não depende dela: a fila chega sozinha. */}
       <form className="cutting-search" onSubmit={(event) => event.preventDefault()}>
@@ -292,7 +295,6 @@ export function CuttingPage({ resource }: { resource: string }) {
         </div>
       </div>
       {stopped ? <Notice tone="error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</Notice> : null}
-      {activityInProgress ? <Notice>{queue.data?.resource_state?.motivo || "Atividade diária"} em andamento neste recurso. Finalize para iniciar um corte.</Notice> : null}
       {queue.loading && !queue.data ? <LoadingState label="Carregando fila do Corte…" /> : queue.error && !queue.data ? <ErrorState error={queue.error} onRetry={queue.reload} /> : queue.data?.items.length ? (
         <>
           {queue.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}

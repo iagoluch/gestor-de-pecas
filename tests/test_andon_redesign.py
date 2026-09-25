@@ -322,6 +322,71 @@ class AccountResourceNoDemandTests(unittest.TestCase):
             [],
         )
 
+    def test_somente_recursos_em_uso_mostra_so_postos_apontaveis(self):
+        repository = AndonRepositoryFake()
+        now = datetime(2026, 9, 25, 9, 0)
+        repository.listar_estados_recurso_atuais = lambda **_kwargs: [
+            {"id": 1, "recurso": "LASER1", "tipo_setor": "Corte", "categoria": "fila", "data_inicio": now, "automatico": True},
+            {"id": 2, "recurso": "PINT.L", "tipo_setor": "Pintura", "categoria": "fila", "data_inicio": now, "automatico": True},
+            {"id": 3, "recurso": "D14STQ", "tipo_setor": "Solda", "categoria": "fila", "data_inicio": now, "automatico": True},
+            {"id": 4, "recurso": "ACABAMENTO VELLOX", "tipo_setor": None, "categoria": "fila", "data_inicio": now, "automatico": True},
+            {"id": 5, "recurso": "XPTO9", "tipo_setor": None, "categoria": "producao", "data_inicio": now, "automatico": False},
+        ]
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: []
+        repository.listar_usuarios = lambda: [{"nivel": "estacao1aco", "ativo": True}]
+        facade = FrontendBackendFacade(repository, now_func=lambda: now)
+        filters = AnalyticsFilter(now, now)
+
+        def recursos(**kwargs):
+            return sorted(item["recurso"] for item in facade.consulta_operacional(
+                filters, incluir_recursos_sem_demanda_de_contas=True, **kwargs,
+            )["resources"])
+
+        self.assertEqual(
+            recursos(),
+            ["ACABAMENTO VELLOX", "D14STQ", "Estação 1", "LASER1", "PINT.L", "XPTO9"],
+        )
+        # Catálogo só sincronizado some; execução em andamento nunca some.
+        self.assertEqual(
+            recursos(somente_recursos_em_uso=True),
+            ["Estação 1", "LASER1", "PINT.L", "XPTO9"],
+        )
+
+    def test_posto_secagem_da_conta_de_pintura_e_o_recurso_estufa(self):
+        repository = AndonRepositoryFake()
+        now = datetime(2026, 9, 25, 9, 0)
+        repository.listar_estados_recurso_atuais = lambda **_kwargs: [
+            {"id": 1, "recurso": "ESTUFA", "tipo_setor": "Pintura", "categoria": "fila", "data_inicio": now, "automatico": True},
+        ]
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: []
+        repository.listar_usuarios = lambda: [{"nivel": "operador_pintura", "ativo": True}]
+        facade = FrontendBackendFacade(repository, now_func=lambda: now)
+
+        resources = facade.consulta_operacional(
+            AnalyticsFilter(now, now), incluir_recursos_sem_demanda_de_contas=True,
+        )["resources"]
+
+        by_code = {item["recurso"]: item for item in resources}
+        self.assertNotIn("Secagem", by_code)
+        self.assertTrue(by_code["ESTUFA"]["conta_operador_ativa"])
+
+    def test_robo_p_e_robo_s_viram_um_card_so_do_robo_1(self):
+        repository = AndonRepositoryFake()
+        now = datetime(2026, 9, 25, 9, 0)
+        repository.listar_estados_recurso_atuais = lambda **_kwargs: [
+            {"id": 1, "recurso": "ROBO P", "tipo_setor": "Solda Robô", "categoria": "fila", "data_inicio": now, "automatico": True},
+            {"id": 2, "recurso": "ROBO S", "tipo_setor": "Solda Robô", "categoria": "producao", "data_inicio": now, "automatico": False},
+        ]
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: []
+        facade = FrontendBackendFacade(repository, now_func=lambda: now)
+
+        resources = facade.consulta_operacional(AnalyticsFilter(now, now))["resources"]
+
+        self.assertEqual(
+            [(item["recurso"], item["recurso_nome"], item["categoria"]) for item in resources],
+            [("ROBO S", "Robô 1", "producao")],
+        )
+
     def test_codigo_real_e_posto_ativo_nao_geram_alias_em_card_separado(self):
         repository = AndonRepositoryFake()
         now = datetime(2026, 9, 24, 10, 45)

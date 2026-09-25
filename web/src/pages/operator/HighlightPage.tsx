@@ -137,10 +137,12 @@ function rotuloPlano(plano: HighlightPlan, planos: HighlightPlan[]) {
     : `Plano ${programa}`;
 }
 
+const HIGHLIGHT_HINT = "Selecione uma tarefa e um plano liberado pelo Corte.";
+
 export function HighlightPage() {
   const [filterText, setFilterText] = useState("");
   const [loadedTask, setLoadedTask] = useState("");
-  const [message, setMessage] = useState("Selecione uma tarefa e um plano liberado pelo Corte.");
+  const [message, setMessage] = useState(HIGHLIGHT_HINT);
   const [dialog, setDialog] = useState<"stop" | "finish" | "history" | "ops" | "activityStart" | "activityFinish" | null>(null);
   const [opsPlano, setOpsPlano] = useState<HighlightPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -153,10 +155,6 @@ export function HighlightPage() {
   // tarefas cujo Corte já liberou pelo menos uma chapa.
   const queue = useApiQuery<HighlightQueueResponse>("/api/v1/highlight/queue");
   const [planoSelecionado, setPlanoSelecionado] = useState<HighlightPlan | null>(null);
-
-  useEffect(() => {
-    if (task.data) setMessage(`Tarefa ${task.data.task.codigo_tarefa} carregada.`);
-  }, [task.data?.task.codigo_tarefa]);
 
   async function action(
     actionName: "Início" | "Parada" | "Retomar" | "Fim",
@@ -176,7 +174,8 @@ export function HighlightPage() {
         task_code: atividadeSemOp || actionName === "Retomar" ? null : loadedTask || null,
         ...extra,
       });
-      setMessage(response.message);
+      // Sucesso não vira faixa: a faixa de estado do posto já mostra o resultado.
+      setMessage(HIGHLIGHT_HINT);
       if (response.current) task.replaceData(response.current);
       setDialog(null);
       if (actionName === "Fim") setPlanoSelecionado(null);
@@ -255,7 +254,7 @@ export function HighlightPage() {
   const startsActivity = !stoppedWithoutTask && !activityInProgress && !selectedPlan;
   return (
     <section className="highlight-page">
-      <StationStateBanner state={resourceState} />
+      <StationStateBanner state={resourceState} semOp />
       <div className="highlight-search">
         <label>Filtrar tarefas liberadas<input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Tarefa, plano ou material" autoFocus /></label>
         {filterText ? <button type="button" className="button" onClick={() => setFilterText("")}>Limpar filtro</button> : null}
@@ -310,11 +309,6 @@ export function HighlightPage() {
       {stoppedWithoutTask ? (
         <Notice tone="error">
           Posto parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
-        </Notice>
-      ) : null}
-      {activityInProgress ? (
-        <Notice>
-          {resourceState?.motivo || "Atividade diária"} em andamento neste posto. Finalize para voltar a apontar.
         </Notice>
       ) : null}
       {task.loading && loadedTask && !task.data ? <LoadingState label="Carregando tarefa…" /> : task.error && !task.data ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (

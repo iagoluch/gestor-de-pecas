@@ -197,6 +197,18 @@ def _unique_display_names_to_code():
 
 _RESOURCE_DISPLAY_TO_CODE = _unique_display_names_to_code()
 
+_SHARED_POST_NAMES = frozenset(
+    name for name in RESOURCE_OPERATIONAL_NAMES.values()
+    if list(RESOURCE_OPERATIONAL_NAMES.values()).count(name) > 1
+)
+
+
+def shared_post_name(code):
+    """Nome do posto físico quando ele atende mais de um código de roteiro."""
+
+    name = RESOURCE_OPERATIONAL_NAMES.get(normalize_resource_code(code))
+    return name if name in _SHARED_POST_NAMES else None
+
 
 def resolve_resource_identity(value):
     """Resolve um valor de identidade de recurso ao código canônico quando o
@@ -226,6 +238,11 @@ def resolve_resource_identity(value):
     if not text:
         return text
     normalized = normalize_resource_code(text)
+    # Posto que atende vários códigos de roteiro (ROBO P/ROBO S → "Robô 1") tem
+    # uma timeline só, sob o nome do posto; o roteiro segue com o código dele.
+    post = shared_post_name(normalized)
+    if post:
+        return post
     if normalized in OFFICIAL_RESOURCE_ALIASES or normalized in RESOURCE_DISPLAY_NAMES:
         return canonical_resource_code(normalized)
     code = _RESOURCE_DISPLAY_TO_CODE.get(text.casefold())

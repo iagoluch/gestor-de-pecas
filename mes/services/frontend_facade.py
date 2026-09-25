@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.core.operator_sectors import operator_sector_for_level
-from app.core.resource_mapping import resource_display_name
+from app.core.operator_sectors import is_apontavel_resource, operator_sector_for_level
+from app.core.resource_mapping import resource_display_name, shared_post_name, station_resource_code
 from app.database.schema import SCHEMA_VERSION
 from mes.analytics.resource_state import classify_state_row
 from mes.contracts import (
@@ -25,6 +25,7 @@ from mes.domain import (
     OPEN_APPOINTMENT_STATUSES,
     PLANNED_STOP_GROUP_CODES,
     RESOURCE_WITHOUT_OP_STOP_REASON,
+    NO_DEMAND_REASON,
     SHIFT_START_NO_DEMAND_TYPE,
     STOP_CLASSIFICATION_COLORS,
     STOP_CLASSIFICATION_UI_TOKENS,
@@ -49,6 +50,60 @@ FACADE_REPORT_TYPES = (
     "indicadores",
     "dados_analiticos",
 )
+
+
+def _post_identities(resource, sector=None):
+    """Nome do posto, código de catálogo e rótulos de ambos, em casefold.
+
+    O posto "Secagem" da conta de Pintura é o recurso ESTUFA do roteiro; sem o
+    código da estação os dois viravam cards separados.
+    """
+
+    codes = {str(resource or "").strip(), station_resource_code(sector, resource) if sector else ""}
+    return {
+        identity
+        for code in codes if code
+        for identity in (code.casefold(), resource_display_name(code).casefold())
+    }
+
+
+def _card_relevance(item):
+    start = item.get("inicio")
+    return (
+        item.get("categoria") == "producao",
+        bool(item.get("ops_ativas")),
+        not item.get("automatico"),
+        start if isinstance(start, datetime) else datetime.min,
+    )
+
+
+def _merge_shared_post_cards(items):
+    """Um posto físico, um card.
+
+    ROBO P e ROBO S são códigos de roteiro do mesmo Robô 1 e cada um carrega
+    estado próprio. Fica o card mais relevante (produzindo, com OP, lançado
+    por pessoa, mais recente), somando as OPs ativas dos dois.
+    """
+
+    groups = {}
+    for item in items:
+        post = shared_post_name(item.get("recurso"))
+        if post:
+            groups.setdefault(post, []).append(item)
+    dropped = set()
+    for cards in groups.values():
+        if len(cards) < 2:
+            continue
+        keep = max(cards, key=_card_relevance)
+        ops = [op for card in cards for op in card.get("ops_ativas") or []]
+        keep.update({
+            "ops_ativas": ops,
+            "quantidade_ops_ativas": len(ops),
+            "tem_apontamento_canonico": any(card.get("tem_apontamento_canonico") for card in cards),
+            "conta_operador_ativa": any(card.get("conta_operador_ativa") for card in cards),
+        })
+        dropped.update(id(card) for card in cards if card is not keep)
+    return [item for item in items if id(item) not in dropped]
 
 
 class FrontendBackendFacade:
@@ -279,6 +334,7 @@ class FrontendBackendFacade:
         *,
         somente_vinculo_operacional=False,
         incluir_recursos_sem_demanda_de_contas=False,
+        somente_recursos_em_uso=False,
         catalogo_recursos=None,
     ):
         now = min(self._now(), filters.fim)
@@ -322,8 +378,8 @@ class FrontendBackendFacade:
                     account_resources.setdefault(resource.casefold(), (resource, profile.name))
         account_resource_identities = {
             identity
-            for resource, _sector in account_resources.values()
-            for identity in (resource.casefold(), resource_display_name(resource).casefold())
+            for resource, sector in account_resources.values()
+            for identity in _post_identities(resource, sector)
         }
 
         active_by_resource = {}
@@ -612,7 +668,7 @@ class FrontendBackendFacade:
                 for identity in (resource.casefold(), resource_display_name(resource).casefold())
             }
             for resource, sector in account_resources.values():
-                identities = {resource.casefold(), resource_display_name(resource).casefold()}
+                identities = _post_identities(resource, sector)
                 if identities & present:
                     continue
                 present.update(identities)
@@ -623,7 +679,7 @@ class FrontendBackendFacade:
                     "categoria": "fila",
                     "sem_demanda": True,
                     "codigo_status": None,
-                    "motivo": "Recurso sem demanda no momento.",
+                    "motivo": NO_DEMAND_REASON,
                     "causa_raiz": None,
                     "inicio": None,
                     "duracao_segundos": None,
@@ -659,6 +715,19 @@ class FrontendBackendFacade:
         for item in items:
             code = str(item.get("recurso") or "").strip()
             item["recurso_nome"] = resource_display_name(code, catalog_names.get(code.casefold()))
+        items = _merge_shared_post_cards(items)
+        if somente_recursos_em_uso:
+            # Regra "apontáveis vs. só sincronizados": o catálogo do PC
+            # Factory/Protheus traz centenas de recursos que nenhum operador
+            # aponta. A consulta mostra só os postos apontáveis; execução em
+            # andamento nunca some, mesmo fora da regra.
+            items = [
+                item for item in items
+                if item.get("conta_operador_ativa")
+                or item.get("quantidade_ops_ativas")
+                or item.get("categoria") == "producao"
+                or is_apontavel_resource(item.get("recurso"), item.get("recurso_nome"))
+            ]
         result["resources"] = items
         result["count"] = len(items)
         if somente_vinculo_operacional:

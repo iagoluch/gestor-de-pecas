@@ -269,7 +269,9 @@ class OperatorFlowTests(unittest.TestCase):
         retomada = service.retomar_recurso_sem_op(setor="Dobra", recurso="1303")
         self.assertTrue(retomada.ok, retomada.message)
         self.assertEqual(retomada.code, "retomada_recurso_sem_op")
-        self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "fila")
+        estado = db.buscar_estado_recurso_atual("1303")
+        self.assertEqual(estado["categoria"], "fila")
+        self.assertEqual(estado["motivo"], "Recurso sem demanda")
 
     def test_retomada_sem_op_recusa_recurso_que_nao_esta_parado(self):
         _db, service, _operation = self._service()
@@ -288,7 +290,9 @@ class OperatorFlowTests(unittest.TestCase):
         fim = service.finalizar_atividade_sem_op(setor="Dobra", recurso="1303")
         self.assertTrue(fim.ok, fim.message)
         self.assertEqual(fim.code, "fim_atividade_sem_op")
-        self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "fila")
+        estado = db.buscar_estado_recurso_atual("1303")
+        self.assertEqual(estado["categoria"], "fila")
+        self.assertEqual(estado["motivo"], "Recurso sem demanda")
 
     def test_atividade_sem_op_grava_tipo_diaria_apenas_no_corte_e_no_destaque(self):
         for setor, esperado in (("Corte", "diaria"), ("Destaque", "diaria"), ("Dobra", None)):

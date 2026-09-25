@@ -64,6 +64,7 @@ def operations_overview(
     payload = facade.consulta_operacional(
         filters,
         incluir_recursos_sem_demanda_de_contas=True,
+        somente_recursos_em_uso=True,
     )
     resources = list(payload.get("resources", []))
     return {
@@ -85,6 +86,7 @@ def resources(
     payload = facade.consulta_operacional(
         filters,
         incluir_recursos_sem_demanda_de_contas=True,
+        somente_recursos_em_uso=True,
     )
     resources = list(payload.get("resources", []))
     return {
@@ -139,6 +141,7 @@ async def stream(
                     facade.consulta_operacional,
                     filters,
                     incluir_recursos_sem_demanda_de_contas=True,
+                    somente_recursos_em_uso=True,
                 )
                 data = json.dumps(jsonable_encoder(snapshot), ensure_ascii=False, separators=(",", ":"))
                 falhando = False
