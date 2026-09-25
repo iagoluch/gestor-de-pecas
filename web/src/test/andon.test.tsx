@@ -184,7 +184,7 @@ describe("Andon Geral Web", () => {
     });
     const { container } = renderAndon(fetchMock);
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     expect(container.querySelector(".sidebar")).not.toBeInTheDocument();
     expect(container.querySelector(".operator-shell")).not.toBeInTheDocument();
     expect(container.querySelector(".andon-page--tv")).toBeInTheDocument();
@@ -199,7 +199,7 @@ describe("Andon Geral Web", () => {
     });
     const { container } = renderAndon(fetchMock);
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     expect(container.querySelector(".andon-header")).not.toBeInTheDocument();
     expect(container.querySelector(".andon-summary")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tela cheia" })).not.toBeInTheDocument();
@@ -221,7 +221,7 @@ describe("Andon Geral Web", () => {
     });
     const { container } = renderAndon(fetchMock, "/inicio/andon");
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     const navRow = container.querySelector(".andon-nav-row");
     expect(navRow).toBeInTheDocument();
     expect(within(navRow as HTMLElement).getByRole("link", { name: "Andon" })).toHaveClass("page-tab--active");
@@ -247,7 +247,7 @@ describe("Andon Geral Web", () => {
     });
     const { container } = renderAndon(fetchMock, "/inicio/andon");
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     expect(container.querySelector(".app-shell")).not.toBeInTheDocument();
     expect(container.querySelector(".andon-page--single-view")).toBeInTheDocument();
   });
@@ -401,7 +401,7 @@ describe("Andon Geral Web", () => {
     });
     const { container } = renderAndon(fetchMock);
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     expect(container.querySelector(".andon-page")).toHaveAttribute("data-simulation", "true");
   });
 

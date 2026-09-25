@@ -153,7 +153,7 @@ export function OperationsResourcesPage() {
 export function OperationsOrdersPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<PagedOrders>(`/api/v1/operations/orders?${filters.dailyQuery}&page=1&page_size=200`);
-  const title = "Consulta Operacional — OPs em Andamento";
+  const title = "Consulta Operacional — OPs em andamento";
   const subtitle = "Execuções do dia corrente, mantendo quantidade boa, refugo e retrabalho separados.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
   if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;

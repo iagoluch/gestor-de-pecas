@@ -8,6 +8,7 @@ import { sectionById } from "../config/navigation";
 import type { FilterField } from "../filters/FilterContext";
 import { FilterBar } from "./FilterBar";
 import { Notice } from "./Notice";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, filterFields, staleError }: PropsWithChildren<{
   sectionId: ManagementSectionId;
@@ -37,6 +38,12 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
   const aiEnabled = useAiEnabled(sectionId === "home" && pathname !== "/inicio/ia");
   const tabs = section.tabs.filter((tab) =>
     (!tab.adminOnly || auth?.user?.role === "admin") && !(tab.screen === "home-ai" && aiEnabled === false));
+  // IA-01: numa rota de aba, o h1 e o título do documento saem do menu
+  // ("Seção — Aba"), para o mesmo destino nunca ter dois nomes. `title` só
+  // vale para telas fora das abas.
+  const activeTab = section.tabs.find((tab) => pathname === tab.path || pathname.startsWith(`${tab.path}/`));
+  const heading = activeTab ? `${section.label} — ${activeTab.label}` : title;
+  useDocumentTitle(heading);
   return (
     <div className="page-wrap">
       <nav className="page-tabs" aria-label={section.label}>
@@ -49,7 +56,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
       <section className="page-panel">
         <header className={filters ? "page-heading" : "page-heading page-heading--standalone"}>
           <div>
-            <h1>{title}</h1>
+            <h1>{heading}</h1>
             <p>{subtitle}</p>
           </div>
           {actions}

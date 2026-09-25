@@ -87,7 +87,7 @@ export function ManagementPausesPage() {
   const filtros = usePersistentFilters("gestor.filtros.pausas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
-  const title = "Painéis Operacionais — Pausas automáticas";
+  const title = "Painéis Operacionais — Pausas";
   const subtitle = "Horários em que o sistema interrompe o apontamento por setor.";
 
   const setores = useMemo(() => {

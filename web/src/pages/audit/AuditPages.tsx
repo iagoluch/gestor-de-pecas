@@ -111,7 +111,7 @@ export function AuditIssuesPage() {
 export function AuditReliabilityPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<ReliabilityResponse>(`/api/v1/audit/reliability?${filters.query}`);
-  const title = "Auditoria — Confiabilidade dos Dados";
+  const title = "Auditoria — Confiabilidade dos dados";
   const subtitle = "Qualidade das fontes e cobertura observada, sem percentual inventado.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;

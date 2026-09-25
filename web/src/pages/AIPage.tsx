@@ -412,7 +412,7 @@ export function AIPage() {
   const regularError = error && error.code !== "rate_limit" && !requestTooLarge ? error : null;
 
   if (loading) {
-    return <PageFrame sectionId="home" title="IA Industrial" subtitle="Consulta segura aos dados canônicos do MES." filters={false}><LoadingState label="Verificando a IA…" /></PageFrame>;
+    return <PageFrame sectionId="home" title="Tela inicial — IA" subtitle="Consulta segura aos dados canônicos do MES." filters={false}><LoadingState label="Verificando a IA…" /></PageFrame>;
   }
 
   if (!status?.enabled || !status.configured) {
@@ -421,7 +421,7 @@ export function AIPage() {
       ? "A disponibilidade desta função deve ser ativada pelo responsável pelo sistema."
       : "A configuração segura da IA ainda não foi concluída pelo responsável. O restante do Gestor continua disponível.";
     return (
-      <PageFrame sectionId="home" title="IA Industrial" subtitle="Consulta segura aos dados canônicos do MES." filters={false}>
+      <PageFrame sectionId="home" title="Tela inicial — IA" subtitle="Consulta segura aos dados canônicos do MES." filters={false}>
         <div className="ai-unavailable"><EmptyState title={title} detail={detail} /></div>
       </PageFrame>
     );
@@ -430,7 +430,7 @@ export function AIPage() {
   return (
     <PageFrame
       sectionId="home"
-      title="IA Industrial"
+      title="Tela inicial — IA"
       subtitle="Pergunte sobre fábrica, setor, recurso, OP, KPI, perdas e relatórios. A IA não executa ações produtivas."
       filters={false}
       actions={<span>Somente leitura • Dados oficiais</span>}

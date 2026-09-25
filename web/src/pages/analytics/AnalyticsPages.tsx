@@ -592,7 +592,7 @@ function FirstPieceHistorySection() {
 export function AnalyticsStandardPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<StandardResponse>(`/api/v1/analytics/standard-vs-actual?${filters.query}`);
-  const title = "Análises — Tempo Padrão × Real";
+  const title = "Análises — Tempo padrão";
   const subtitle = "Tempo padrão e execução real por OP/operação com fonte temporal identificada.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
@@ -693,7 +693,7 @@ export function AnalyticsChronoPage() {
 export function AnalyticsCapacityPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<CapacityResponse>(`/api/v1/analytics/capacity?${filters.query}`);
-  const title = "Análises — Capacidade & Gargalos";
+  const title = "Análises — Capacidade";
   const subtitle = "Quanto do tempo disponível pelo calendário produtivo virou trabalho, e onde está o gargalo.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;

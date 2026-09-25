@@ -15,11 +15,11 @@ type ReportType = "gerencial" | "producao" | "perdas" | "indicadores" | "dados_a
 type JsonRecord = Record<string, unknown>;
 
 const labels: Record<ReportType, { title: string; subtitle: string }> = {
-  gerencial: { title: "Relatórios — Relatório Gerencial", subtitle: "Resumo executivo a partir das mesmas fontes das telas gerenciais." },
+  gerencial: { title: "Relatórios — Gerencial", subtitle: "Resumo executivo a partir das mesmas fontes das telas gerenciais." },
   producao: { title: "Relatórios — Produção", subtitle: "Produção boa, refugo e retrabalho preservados em campos independentes." },
   perdas: { title: "Relatórios — Perdas", subtitle: "Paradas e qualidade sem conversão silenciosa de ausência em zero." },
   indicadores: { title: "Relatórios — Indicadores", subtitle: "Indicadores com disponibilidade e justificativa explícitas." },
-  dados_analiticos: { title: "Relatórios — Dados Analíticos", subtitle: "Conjunto analítico para conferência e exportação, sem editar a origem." },
+  dados_analiticos: { title: "Relatórios — Dados analíticos", subtitle: "Conjunto analítico para conferência e exportação, sem editar a origem." },
 };
 
 function record(value: unknown): JsonRecord {

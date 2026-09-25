@@ -99,7 +99,7 @@ export function TraceabilityOrderPage() {
 export function TraceabilityTimelinePage() {
   const { search, setSearch, op } = useOrderSelection();
   const query = useApiQuery<TraceabilityResponse>(op ? `/api/v1/traceability/orders/${encodeURIComponent(op)}` : null);
-  const title = "Rastreabilidade — Linha do Tempo";
+  const title = "Rastreabilidade — Linha do tempo";
   const subtitle = "Máquina → OP → operação → evento → operador → registro original, em ordem cronológica.";
   if (query.loading) return <TraceLoading title={title} subtitle={subtitle} search={search} setSearch={setSearch} />;
   return (

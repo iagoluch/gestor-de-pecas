@@ -112,7 +112,7 @@ export function ProductionOrdersPage() {
 export function ProductionCompletedPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<ProductionResponse>(`/api/v1/orders/production?${filters.query}`);
-  const title = "Produção — Produção Realizada";
+  const title = "Produção — Produção realizada";
   const subtitle = "Somente peças boas compõem a produção; perdas permanecem em grandezas separadas.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;

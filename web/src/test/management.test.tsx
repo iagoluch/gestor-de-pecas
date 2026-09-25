@@ -7,11 +7,14 @@ import { FilterBar } from "../components/FilterBar";
 import { SearchInput } from "../components/SearchInput";
 import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
-import { managementRoutes } from "../config/navigation";
+import { PageFrame } from "../components/PageFrame";
+import { managementRoutes, sectionById } from "../config/navigation";
 import { FilterProvider, useManagementFilters } from "../filters/FilterContext";
 import { AnalyticsCapacityPage, AnalyticsOeePage, AnalyticsReliabilityPage } from "../pages/analytics/AnalyticsPages";
 import { OperationsOverviewPage, OperationsResourcesPage } from "../pages/operations/OperationsPages";
 import { ProductionOrdersPage } from "../pages/production/ProductionPages";
+import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
+import { HomeSectorsPage } from "../pages/home/HomePages";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -367,6 +370,83 @@ const TEXTOS_TECNICOS = [
   /Excel \(\.xlsx\)/i,
   /Nenhum valor faltante é convertido em zero/i,
 ];
+
+describe("IA-01 — um destino, um nome", () => {
+  it.each(managementRoutes.map((route) => [route.path, route] as const))("%s: h1 e título do documento vêm do menu", (path, route) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ enabled: true }), { status: 200, headers: { "content-type": "application/json" } })));
+    const expected = `${sectionById(route.sectionId).label} — ${route.label}`;
+    const { unmount } = render(
+      <MemoryRouter initialEntries={[path]}><FilterProvider>
+        <PageFrame sectionId={route.sectionId} title="Título local divergente" subtitle="" filters={false}>conteúdo</PageFrame>
+      </FilterProvider></MemoryRouter>,
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(expected);
+    expect(document.title).toBe(`${expected} · Gestor de Peças`);
+    unmount();
+    expect(document.title).toBe("Gestor de Peças");
+  });
+});
+
+describe("GE-13 — KPI sem meta canônica", () => {
+  function overviewWith(limitations: Array<{ code: string; message: string }>, exceptions: unknown[] = []) {
+    const insights = { ...managementInsightsFixture(), limitations, exceptions, exception_count: exceptions.length };
+    return {
+      periodo: {},
+      production: { good: 0, scrap: 0, rework: 0, ops: 0, resources: 0, availability: "sem_registros", reason: null, source: "x" },
+      production_plan: { value: null, availability: "nao_configurado", reason: null },
+      kpis: {
+        oee: { value: 0, availability: "disponivel", unit: "%" },
+        availability: { value: 80, availability: "disponivel", unit: "%" },
+        performance: { value: 36.6, availability: "disponivel", unit: "%" },
+        ftt: { value: null, availability: "dados_insuficientes", unit: "%", reason: "Sem inspeções no período" },
+      },
+      sectors: [],
+      time_composition: { items: [], total_seconds: 0, availability: "sem_registros" },
+      audit: { open_issues: [] },
+      data_quality: {},
+      insights,
+    };
+  }
+
+  function renderOverview(body: unknown) {
+    vi.stubGlobal("fetch", jsonOnce(body));
+    render(<MemoryRouter><FilterProvider><ManagementOverviewPage /></FilterProvider></MemoryRouter>);
+  }
+
+  it("sem fonte de metas, zero e percentual dizem 'Sem meta definida'; sem dado mostra o motivo", async () => {
+    renderOverview(overviewWith([{ code: "kpi_targets_not_configured", message: "Nenhuma fonte de metas" }]));
+    const performance = await screen.findByRole("button", { name: /Performance: 36,6%/ });
+    expect(performance).toHaveTextContent("Sem meta definida");
+    expect(screen.getByRole("button", { name: /OEE: 0%/ })).toHaveTextContent("Sem meta definida");
+    const ftt = screen.getByRole("button", { name: /FTT \/ Qualidade: Dados insuficientes/ });
+    expect(ftt).toHaveTextContent("Sem inspeções no período");
+    expect(ftt).not.toHaveTextContent("Sem meta definida");
+  });
+
+  it("com meta configurada, o card não nega a meta e o desvio aparece como exceção do backend", async () => {
+    renderOverview(overviewWith([], [{
+      ...managementInsightsFixture().exceptions[0],
+      id: "target-performance",
+      type: "configured_kpi_target",
+      title: "Performance abaixo da meta configurada",
+      summary: "Valor atual 36.60% e meta 60.00%.",
+    }]));
+    await screen.findByRole("button", { name: /Performance: 36,6%/ });
+    expect(screen.queryByText("Sem meta definida")).not.toBeInTheDocument();
+    expect(screen.getByText("Performance abaixo da meta configurada")).toBeInTheDocument();
+  });
+
+  it("Setores sem registro: um único vazio, na tabela, e nenhum destaque zerado sem setor", async () => {
+    vi.stubGlobal("fetch", jsonOnce({
+      items: [],
+      highlights: [{ key: "best_good", label: "Maior produção boa", value: 0, unit: "pcs", sector: null }],
+    }));
+    const { container } = render(<MemoryRouter><FilterProvider><HomeSectorsPage /></FilterProvider></MemoryRouter>);
+    expect(await screen.findAllByText("Sem registros para o filtro selecionado")).toHaveLength(1);
+    expect(container.querySelector(".metric-card")).toBeNull();
+    expect(screen.queryByText("Maior produção boa")).not.toBeInTheDocument();
+  });
+});
 
 describe("KPIs gerenciais da Wave 2", () => {
   it("na Visão Geral, exibe os recursos de um setor por vez", async () => {

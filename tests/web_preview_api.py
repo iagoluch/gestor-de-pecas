@@ -122,6 +122,12 @@ database.listar_estados_recurso_atuais = lambda **_kwargs: visual_states
 database.listar_estados_recurso_periodo = lambda *_args, **_kwargs: visual_states
 database.listar_destaques_ativos_andon = lambda: visual_highlights
 database.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: visual_facts
+# O sininho do menu e a tela de Chamadas leem isto; a prévia não tem chamadas.
+database.contar_chamadas_nao_vistas = lambda _usuario_id: 0
+database.marcar_chamadas_vistas = lambda _usuario_id: None
+database.listar_chamadas = lambda **_kwargs: []
+database.listar_chamada_contatos = lambda **_kwargs: []
+database.buscar_contato_padrao_gestao = lambda: None
 
 task_id = database.inserir_tarefa("T-VISUAL-101", material="AÇO 304", espessura=3)
 database.inserir_op_na_tarefa(task_id, "OP-VISUAL-101", "SUPORTE-101", "Dobra", 12)

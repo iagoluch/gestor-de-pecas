@@ -159,20 +159,19 @@ Três commits: parte 1 (a739155 — TV, exportação, 403, teclado), parte 2 (ee
 | OP-18 | Filtro de motivo sem resultado deixava uma faixa vazia | **CORRIGIDO** — a mensagem "Nenhum motivo corresponde…" (`role=status`) substitui o listbox; `aria-selected` já existia | `operator.test.tsx` |
 | OP-19 | "Ver OPs" repetido com o mesmo nome para dois nestings do mesmo programa | **CORRIGIDO** — `aria-label` "Ver OPs: Nesting N do plano X" (reusa `rotuloPlano`) | `operator.test.tsx` |
 | GE-12 | Preset de período sem estado ativo; abas com `role=tablist` sem setas | **CORRIGIDO** — `aria-pressed` compara o período aplicado com o do atalho; abas viram `<nav>` de links com `aria-current` (NavLink) | 8010: "Hoje:true" → clique em "7 dias" → "7 dias:true"; 0 `[role=tablist]` |
-| GE-13 | Setores: vazio duplicado + destaques zerados sem setor | **PARCIAL** — vazio só na tabela (`emptyTitle`), destaques somem sem setores | tsc + management; o estado vazio não foi reproduzido no 8010 (a fixture sempre devolve setores) |
-| GE-13 (Performance 36,6% sem meta) | — | **BLOQUEADO** pela refatoração da OEE (fora do escopo desta auditoria) | |
+| GE-13 | Setores: vazio duplicado + destaques zerados sem setor | **CORRIGIDO E PROVADO** (Fechamento) — vazio só na tabela (`emptyTitle`), destaques somem sem setores | `management.test.tsx` "Setores sem registro": 1 vazio, 0 `.metric-card` |
+| GE-13 (Performance 36,6% sem meta) | — | **CORRIGIDO E PROVADO** (Fechamento) — ver seção Fechamento | `management.test.tsx` GE-13 |
 | GE-13 (11 filtros) | — | **SEM MUDANÇA** — os campos avançados já ficam atrás de "Mais filtros" | |
 | IA-02 | Aba "IA" visível com a função desligada | **CORRIGIDO** — o `PageFrame` consulta `/ai/status` na Tela inicial e esconde a aba só quando o backend diz `enabled=false` (falha/carregando mantém a aba; na própria rota da IA não consulta de novo) | `ai.test.tsx` (novo teste, liga/desliga); 8010: abas "Visão Geral, Setores, Alertas" |
 | AX-07 | Alto contraste: item ativo, barras e presets sem distinção | **CORRIGIDO** — bloco `@media (forced-colors: active)` com Highlight/HighlightText/CanvasText e `forced-color-adjust: none` só onde o fundo carrega informação. A "pílula cortada" da evidência é a rolagem horizontal da tabela, que acontece também fora do alto contraste — não é defeito de forced-colors | CSS; emulação completa fica para a Onda 5 |
-| AN-06 | TV sem atalho de tela cheia | **NÃO APLICADO — decisão do usuário** ("não coloque botão em tv", 25/09/2026). Implementado e retirado: o botão fixo cobria a contagem do setor no Andon e "Estações com OP" na Solda (a TV alterna `/andon` ↔ `/welding-management`). Tela cheia/quiosque é configuração do navegador da TV | medição de sobreposição no 8011 a 1366×768 |
+| AN-06 | TV sem atalho de tela cheia | **ACEITO POR DECISÃO DE PRODUTO** (Fechamento; antes: não aplicado) ("não coloque botão em tv", 25/09/2026). Implementado e retirado: o botão fixo cobria a contagem do setor no Andon e "Estações com OP" na Solda (a TV alterna `/andon` ↔ `/welding-management`). Tela cheia/quiosque é configuração do navegador da TV | medição de sobreposição no 8011 a 1366×768 |
 | DO-04 | Login do observatório com validação nativa em inglês, sem foco no erro | **CORRIGIDO** — `novalidate`, "Preencha Usuário."/"Preencha Senha." com foco e `aria-invalid`; 401 limpa e foca a senha; `#erro role=alert`; rótulos `<label for>` em Ambiente/Atualização | Playwright com o código atual: vazio → ("Preencha Usuário.", foco em username, `aria-invalid`); 401 → ("Usuário ou senha inválidos.", foco em password, valor vazio) — `docs/evidencias/…/onda4/do04_login_*.png` |
 | DO (órfão da Onda 3) | `app.js` aplicava `c-<classe>` sem estilo | **CORRIGIDO** — removido `CATEGORIA_CLASSE`; a pílula mostra o rótulo pt-BR (`CATEGORIA_ROTULO`: Produção, Parada, Setup…) | `tests.test_dev_observatory` |
 | TE-03 | `QualityPage` parecia código morto | **DOCUMENTADO** — órfã de propósito desde a Wave 6B, coberta por `quality.test.tsx` (JSDoc) | |
 
 ### Pendências / observações
 
-- `.andon-page--embedded` (global.css) está sem uso, mas o bloco contém regras `.andon-card__oee` → **não removido** (fronteira da OEE).
-- `.andon-fullscreen` (global.css) é CSS órfão de uma versão antiga, sem uso em `.tsx` → registrado, não removido.
+- `.andon-page--embedded` e `.andon-fullscreen` (global.css): **removidos no Fechamento** (ver seção Fechamento).
 - O `describe` "tela IagoDev" de `shifts.test.tsx` está correto: o título da tela é literalmente "IagoDev — Turnos". Sem mudança.
 - A 8001 (servidor do Dev Observatory aberto fora da sessão) roda o código antigo; o DO-04 foi validado num servidor temporário com o código atual.
 - As pílulas "Produção" do observatório não foram vistas renderizadas: o banco falso do teste não implementa `fetchall` nos eventos (limitação do ambiente de teste).
@@ -248,16 +247,11 @@ Das 26 células que pioraram, nenhuma é regressão de layout:
 
 | ID | Antes | Depois |
 |---|---|---|
-| IA-01 | Títulos misturavam "Management View", "Crachás" e "Usuários" sem seção | **PARCIAL** — todas as telas seguem "Seção — Aba" ("Tela inicial — Visão Geral/Setores/Alertas", "IagoDev — Crachás e responsáveis", "IagoDev — Cadastro de usuários"). Fica pendente, por decisão do usuário, renomear a seção "IagoDev" (nome e estrutura definidos pelo usuário em 17/09/2026). Breadcrumb não foi adicionado: o h1 e a aba ativa já localizam a tela |
+| IA-01 | Títulos misturavam "Management View", "Crachás" e "Usuários" sem seção | **CORRIGIDO E PROVADO** no Fechamento (antes: PARCIAL) — todas as telas seguem "Seção — Aba" ("Tela inicial — Visão Geral/Setores/Alertas", "IagoDev — Crachás e responsáveis", "IagoDev — Cadastro de usuários"). Fica pendente, por decisão do usuário, renomear a seção "IagoDev" (nome e estrutura definidos pelo usuário em 17/09/2026). Breadcrumb não foi adicionado: o h1 e a aba ativa já localizam a tela |
 
 ### Pendências registradas
 
-- **GE-13 (Performance 36,6% sem meta):** BLOQUEADO pela refatoração da OEE.
-- **AN-06 (tela cheia na TV):** não aplicado, por decisão do usuário (sem botão em TV).
-- **Seção "IagoDev" (IA-01):** decisão do usuário.
-- **`.andon-page--embedded` e `.andon-fullscreen`:** CSS órfão. Não removido, porque o primeiro contém regras da OEE.
-- **Fixture visual sem `contar_chamadas_nao_vistas`:** gera 500 no badge de chamadas em toda página do ambiente de teste.
-- **Firefox/WebKit:** não testados.
+Todas fechadas na seção **Fechamento**, exceto Firefox/WebKit (fora do escopo).
 
 ### Validação
 
@@ -265,3 +259,63 @@ Das 26 células que pioraram, nenhuma é regressão de layout:
 - Matriz, fluxos, contraste e vitals: `docs/evidencias/auditoria_ui_2026-09-24/onda5/` (gitignorado, com screenshots e JSON).
 - 8010: Ordens reinspecionada após o build (clique no cabeçalho, cor do ícone ativo).
 - OEE: nenhum arquivo nem regra `.oee-*` ou `.andon-card__oee` tocados em nenhuma onda.
+
+## Fechamento — pontos soltos
+
+Escopo: só as pendências da Onda 5, sem nova auditoria ampla e sem redesign. Backend não foi tocado; a única mudança Python é a fixture `tests/web_preview_api.py`. Somente TEST.
+
+| Item | Status final | Causa → correção | Evidência |
+|---|---|---|---|
+| **GE-13** Performance sem meta | **CORRIGIDO E PROVADO** | O backend já emite `kpi_targets_not_configured` em `insights.limitations` quando não há fonte de metas, mas o card mostrava o percentual solto. Agora os 4 KPIs da Visão Geral dizem "Sem meta definida". O motivo de dado insuficiente tem prioridade. Com meta configurada, o desvio aparece como exceção do backend. Nenhuma meta foi inventada, e o cálculo da OEE não mudou | `management.test.tsx` › GE-13 (3 testes, incluindo o estado vazio de Setores) |
+| **GE-13** Setores (vazio) | **CORRIGIDO E PROVADO** | A fixture sempre devolve setores; o estado vazio foi provado por teste | teste "Setores sem registro": 1 mensagem de vazio, nenhum destaque zerado |
+| **IA-01** nomes | **CORRIGIDO E PROVADO** | Causa: cada página passava um `title` literal, que divergia do menu. Agora o `PageFrame` monta o h1 como "Seção — Aba" a partir de `navigation.ts`, a mesma fonte do menu e das abas. O hook novo `useDocumentTitle` aplica esse nome ao `document.title` ("… · Gestor de Peças"). Andon: "Painéis Operacionais — Andon". Solda (fora das abas): "Acompanhamento da Solda". A seção "IagoDev" segue como nome oficial, sem prefixo "DEV —". A aba ativa continua com `aria-current` (NavLink). Postos do operador (`OperatorShell`): o `document.title` ficava "Gestor de Peças", diferente do h1 em 20 células da matriz. Agora usa o mesmo nome do h1 ("Posto do operador · Dobra", "Máquina Dobra - 1303") | `management.test.tsx` › IA-01: `it.each` em **todas** as `managementRoutes`, que passa um título local divergente e confere h1 + `document.title` + reset no unmount; 8011: título da aba do navegador conferido no Andon e na Solda; 8010: título = h1 conferido no posto Dobra, antes e depois de escolher a máquina |
+| **AN-06** tela cheia na TV | **ACEITO POR DECISÃO DE PRODUTO** | Sem controle em TV ("não coloque botão em tv"). O navegador da TV faz tela cheia/quiosque | 8011, perfil TV, viewport emulado (equivale ao F11/quiosque, sem barra do navegador): **1920×1080 e 2560×1440**, Andon (20 cards) e Solda → rolagem horizontal 0, rolagem vertical 0, 0 cards sobrepostos, 0 cards fora da tela, 0 controles fora dos cards |
+| **CSS órfão** | **CORRIGIDO E PROVADO** | Removidas 33 linhas de `.andon-page--embedded …` e `.andon-fullscreen …` do `global.css`, incluindo as de dentro de media queries. Nenhum `.tsx` atribui essas classes. As 4 regras `.andon-page--embedded .andon-card__oee` nunca casavam porque o pai não existe. O anel real da OEE fica em `andon.css:376-415` e está intacto. O teste do Andon, que conta `.andon-card__oee`, continua verde | build sem os seletores; 8011 sem `cssRule` para eles; `andon.test.tsx` verde |
+| **Detector Impeccable** | **CORRIGIDO E PROVADO** | 12 alertas triados. **1 corrigido:** `border-top: 5px` do `.andon-card` em `global.css` era declaração morta, porque o shorthand `border` do `andon.css` (carregado depois) sobrescrevia. **11 intencionais**, suprimidos um a um com `impeccable-disable-next-line <regra> -- motivo`: faixas de estado HMI em que a cor muda com o estado e o texto do estado está no card (Andon, Corte, Destaque, Inspeção), faixa engrossada da TV, faixa por KPI (identidade da série, igual à legenda) e o triângulo de canto do dia selecionado. Nenhuma supressão genérica: `.impeccable/config.json` não foi alterado | `impeccable detect web/src` → **0**; `--no-inline-ignores` → **11** (as 11 suprimidas, nenhuma nova) |
+| **Fixture 500** | **CORRIGIDO E PROVADO** | O `ApiFakeDatabase` da prévia não tinha os métodos de chamadas. O sininho (`/api/v1/chamadas/nao-vistas`) dava 500 em toda página. A tela Chamadas (`/chamadas/admin/historico`, contatos) também dava 500: eram 11 respostas 500 no log da regressão. Stubs vazios só na fixture, sem mexer no backend | ver regressão abaixo |
+
+### Regressão final (Fechamento)
+
+Tudo em TEST, nos servidores de prévia 8010 (Gestão/postos), 8011 (Andon/Solda em perfil TV) e 8012, servindo o `web/dist` recém-construído. Evidências em `docs/evidencias/auditoria_ui_2026-09-24/final/` (gitignored): `matrix/*.json` + capturas, e `flows/flows2_keyboard_filters_resilience_emulations_contrast.json` + capturas.
+
+**Matriz de telas × tamanhos.** Gestão (todas as rotas), postos Dobra/Corte/Destaque/Solda e Andon/TV, em **1024, 1366, 1920, 2560 e 320 px (reflow)**. Foram 215 pares comparados com a Onda 5 e nenhum ficou sem par.
+
+| Métrica (total da matriz) | Onda 5 | Fechamento | Leitura |
+|---|---|---|---|
+| Erros de console/rede | 433 | **16** | Os 500 da fixture sumiram. Os 16 restantes são o `401` esperado de `/auth/me` antes do login (1 por perfil) e ruído de SSE da prévia |
+| Rolagem horizontal | 80 | 80 | inalterado (tabelas largas em 320 px rolam dentro do próprio contêiner) |
+| Texto < 12 px | 5143 | 5148 | +5: o detalhe "Sem meta definida" (GE-13) no slot `--text-xs` que já existia em `.metric-card__detail`, a mesma escala do detalhe anterior. Não é regressão |
+| Cortado / minúsculo | 45 / 60 | 45 / 60 | inalterado |
+| Sem nome acessível / sem rótulo / img sem alt | 0 | 0 | — |
+| Fora da tela | 1699 | 1686 | −13 |
+
+**Fluxos.**
+- **Teclado/foco:** o skip link é a 1ª parada do Tab e todas as paradas têm contorno de 2 px. No menu móvel, o foco vai para o "×" e o Esc fecha o menu e devolve o foco.
+- **Filtros:** o botão "7 dias" usa `aria-pressed`. A ordenação de tabela funciona.
+- **Offline:** aparece o alerta "Não foi possível acessar o servidor".
+- **Erro 500:** aparece o estado de erro com "Detalhes técnicos".
+- **API lenta (3 s):** não há crash. Menu e abas aparecem na hora; o conteúdo entra quando a API responde. Na 1ª carga a área fica vazia, sem indicador de carregamento (`res_3_lento_visao.png`). É o mesmo comportamento que a auditoria marcou como ✅, sem ID aberto; está registrado aqui como observação.
+
+**Temas e emulações:**
+- **Escuro:** o fundo fica em `rgb(10,19,34)`.
+- **Contraste:** 0 falhas em 12 telas, nos temas claro e escuro.
+- **`prefers-reduced-motion`:** 0 animações ativas.
+- **`forced-colors`:** capturas feitas, com os controles visíveis.
+
+**AN-06 (TV):** Andon e Solda sem rolagem, sobreposição nem controles, em 1920×1080 e 2560×1440 (ver tabela acima).
+
+**Chamadas (observação, não regressão):** na prévia, `/chamadas/nao-vistas` e `/admin/historico` são recarregados a cada ~1 s. A causa é o `live_tick` do SSE (`subscribeRealtime` em `useApiQuery`), que recarrega toda consulta ativa. É comportamento pré-existente de atualização ao vivo, e nenhum desses arquivos mudou.
+
+**Validação:**
+- `npx tsc -b` → 0.
+- `npm run build` → OK.
+- vitest direcionado (`management`, `andon`, `welding-management`, `operator`) → **4 arquivos, 132/132**.
+- `impeccable detect web/src` → **0**.
+- `git diff --check` → limpo.
+- Firefox/WebKit: fora do escopo.
+
+
+### Pendências reais
+
+- **Firefox/WebKit:** fora do escopo, por decisão do usuário.
+- Nenhuma outra pendência aberta da auditoria de frontend.

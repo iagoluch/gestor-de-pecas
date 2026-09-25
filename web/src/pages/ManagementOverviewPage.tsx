@@ -60,6 +60,9 @@ export function ManagementOverviewPage() {
   const simulation = data.simulation;
   const insights = data.insights;
   const hasQuantityRecords = data.production.availability !== "sem_registros";
+  // GE-13: sem fonte de metas o backend avisa em `limitations`; o card diz isso
+  // em vez de deixar o percentual solto. Com metas, o desvio vira exceção.
+  const targetNote = insights.limitations.some((item) => item.code === "kpi_targets_not_configured") ? "Sem meta definida" : undefined;
   const quantityText = (value: number) => hasQuantityRecords ? value.toLocaleString("pt-BR") : humanizeSystemState("sem_registros");
   return (
     <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
@@ -70,10 +73,10 @@ export function ManagementOverviewPage() {
             detail={data.production.reason ?? "Peças boas; refugo e retrabalho permanecem separados."}
             availability={data.production.availability}
           />
-          <MetricCard label="OEE" value={metricText(kpis.oee)} detail={kpis.oee.reason ?? undefined} accent="purple" availability={kpis.oee.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.oee)} />
-          <MetricCard label="Disponibilidade" value={metricText(kpis.availability)} detail={kpis.availability.reason ?? undefined} accent="success" availability={kpis.availability.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.availability)} />
-          <MetricCard label="Performance" value={metricText(kpis.performance)} detail={kpis.performance.reason ?? undefined} accent="warning" availability={kpis.performance.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.performance)} />
-          <MetricCard label="FTT / Qualidade" value={metricText(kpis.ftt)} detail={kpis.ftt.reason ?? undefined} accent="teal" availability={kpis.ftt.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.ftt)} />
+          <MetricCard label="OEE" value={metricText(kpis.oee)} detail={kpis.oee.reason ?? targetNote} accent="purple" availability={kpis.oee.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.oee)} />
+          <MetricCard label="Disponibilidade" value={metricText(kpis.availability)} detail={kpis.availability.reason ?? targetNote} accent="success" availability={kpis.availability.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.availability)} />
+          <MetricCard label="Performance" value={metricText(kpis.performance)} detail={kpis.performance.reason ?? targetNote} accent="warning" availability={kpis.performance.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.performance)} />
+          <MetricCard label="FTT / Qualidade" value={metricText(kpis.ftt)} detail={kpis.ftt.reason ?? targetNote} accent="teal" availability={kpis.ftt.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.ftt)} />
         </div>
         {simulation ? (
           <div className="metric-grid metric-grid--six simulation-metrics">

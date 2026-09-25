@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
@@ -650,6 +651,7 @@ type ManagerTabId = (typeof MANAGER_TABS)[number]["id"];
 
 export function WeldingManagementPage() {
   useForceLightTheme();
+  useDocumentTitle("Acompanhamento da Solda");
   const { user } = useAuth();
   const query = useApiQuery<WeldingManagementSnapshot>("/api/v1/welding", { ignoreLiveTick: true, keepLastSnapshot: true });
   const realtime = useRealtimeStatus();

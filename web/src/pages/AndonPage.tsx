@@ -9,6 +9,7 @@ import { SnapshotStatus } from "../components/SnapshotStatus";
 import { useForceLightTheme } from "../hooks/useForceLightTheme";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { useTvRotation } from "../hooks/useTvRotation";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { assets } from "../config/assets";
 import type { MetricValue } from "../types/api";
 import type { AndonResource, AndonSnapshot } from "../types/andon";
@@ -252,6 +253,8 @@ function SectorPanel({ sector, elapsed, transitions, onOpen }: {
   );
 }
 
+const ANDON_TITLE = "Painéis Operacionais — Andon";
+
 export function AndonPage() {
   useForceLightTheme();
   const { user } = useAuth();
@@ -270,6 +273,8 @@ export function AndonPage() {
   // (ou qualquer outra seção) a não ser pelo "voltar" do navegador (decisão
   // do usuário, 15/09/2026). A TV dedicada (role "andon") nunca vê isso.
   const showPanelsNav = Boolean(user?.management_access);
+  // IA-01: mesmo nome da aba do menu ("Painéis Operacionais — Andon").
+  useDocumentTitle(ANDON_TITLE);
 
   useEffect(() => {
     if (realtime === "connected") return undefined;
@@ -278,7 +283,7 @@ export function AndonPage() {
   }, [query.reload, realtime]);
 
   if (query.loading && !query.data) {
-    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<LoadingState label="Carregando Andon Geral…" /></main>;
+    return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<LoadingState label="Carregando Andon…" /></main>;
   }
   if (query.error && !query.data) {
     return <main className={pageClass}>{showPanelsNav ? <AndonSidebarNav /> : null}<ErrorState error={query.error} onRetry={query.reload} /></main>;
@@ -298,7 +303,7 @@ export function AndonPage() {
   return (
     <main className={pageClass} data-simulation={data.simulation_only ? "true" : undefined}>
       {showPanelsNav ? <AndonSidebarNav /> : null}
-      <h1 className="visually-hidden">Andon Geral</h1>
+      <h1 className="visually-hidden">{ANDON_TITLE}</h1>
       <div className="andon-content">
         <SnapshotStatus error={query.error} updatedAt={query.updatedAt} staleClassName="andon-stale" />
         <section className="andon-board-section" aria-labelledby="andon-resources-title">

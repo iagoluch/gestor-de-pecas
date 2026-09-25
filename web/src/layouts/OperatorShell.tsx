@@ -4,6 +4,7 @@ import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { assets } from "../config/assets";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export interface OperatorNavItem {
   key: string;
@@ -32,6 +33,7 @@ export function OperatorShell({
   const resourceLabel = sector.toLocaleLowerCase().startsWith("solda") ? "Estação" : "Máquina";
   const selectedResource = resource === sector ? resource : <><span>{sector} - </span><span>{resource}</span></>;
   const pageTitle = !resource ? `Posto do operador · ${sector}` : resource === sector ? `${resourceLabel} ${resource}` : `${resourceLabel} ${sector} - ${resource}`;
+  useDocumentTitle(pageTitle);
   return (
     <div className="operator-shell">
       <header className={`operator-topbar ${resource ? "operator-topbar--with-machine" : ""}`}>

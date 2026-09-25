@@ -512,7 +512,7 @@ describe("Ciclo automático da TV", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { container } = renderApp(apiMock(snapshot(), "andon"), "/andon");
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     expect(container.querySelector(".andon-page--tv")).toBeInTheDocument();
 
     await act(async () => {
@@ -524,7 +524,7 @@ describe("Ciclo automático da TV", () => {
     await act(async () => {
       vi.advanceTimersByTime(TV_ROTATION_SECONDS * 1000);
     });
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     expect(container.querySelector(".welding-page")).not.toBeInTheDocument();
 
     // Terceira volta: o ciclo não para depois de uma alternância.
@@ -538,11 +538,11 @@ describe("Ciclo automático da TV", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     renderApp(apiMock(snapshot(), "andon"), "/andon");
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     await act(async () => {
       vi.advanceTimersByTime((TV_ROTATION_SECONDS - 1) * 1000);
     });
-    expect(screen.getByRole("heading", { name: /andon geral/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Painéis Operacionais — Andon/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /acompanhamento da solda/i })).not.toBeInTheDocument();
   });
 
@@ -550,11 +550,11 @@ describe("Ciclo automático da TV", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     renderApp(apiMock(snapshot()), "/andon");
 
-    await screen.findByRole("heading", { name: /andon geral/i });
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
     await act(async () => {
       vi.advanceTimersByTime(TV_ROTATION_SECONDS * 3 * 1000);
     });
-    expect(screen.getByRole("heading", { name: /andon geral/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Painéis Operacionais — Andon/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /acompanhamento da solda/i })).not.toBeInTheDocument();
   });
 });
