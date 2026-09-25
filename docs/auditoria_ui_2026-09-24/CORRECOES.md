@@ -112,8 +112,21 @@ Três commits: parte 1 (a739155 — TV, exportação, 403, teclado), parte 2 (ee
 | DO-01 | 361 de 548 textos < 12px, caixa alta | **CORRIGIDO** — escala `--text-*`/`--radius-*` espelhada de `web/src/styles/tokens.css`; sem caixa alta; borda lateral colorida (side-tab) removida | harness: 0 de 110 textos < 12px |
 | DO-02 | Falha de um bloco apagava painéis sem motivo | **CORRIGIDO** — falha dentro do painel ("Indisponível agora: … Mostrando a última leitura, das hh:mm:ss."), valores anteriores esmaecidos; toast só para ações do usuário | harness com métricas 500: só PostgreSQL/Processo/Rotas lentas mostram a falha |
 | DO-03 | Overflow de 116px a 320px | **CORRIGIDO** — grades `minmax(min(N, 100%), 1fr)` | `scrollWidth` 320 a 320px |
-| OP-05..15, AX-01 (Chamar) | ver ee95754 | **CORRIGIDO** (parte 2) | |
-| AX-03..06 | ver a739155 | **CORRIGIDO** (parte 1) | |
+| OP-05 / OP-06 | Mensagem de sucesso genérica, igual para toda ação | **CORRIGIDO** (ee95754) — mensagem por intenção no backend (`operator_flow._mensagem_sucesso`) e rótulo por intenção no botão | `WorkbenchPage.tsx` |
+| OP-07 | Setup em curso reapontava o Setup | **CORRIGIDO** (ee95754) — só reabre o checklist, com `aria-pressed` | |
+| OP-08 | Setup liberado sem produção iniciada, sem explicação | **CORRIGIDO** (ee95754) — dica "Inicie a produção e depois aponte o Setup" quando o Setup não está disponível | |
+| OP-09 | Inspeção bloqueava sem dizer o motivo | **CORRIGIDO** (ee95754) — motivo do bloqueio, medida inválida explicada e foco no passo | `QualityInspectionPage.tsx` |
+| OP-10 | Campos de medida sem rótulo visível | **CORRIGIDO** (ee95754) — "Padrão (mm)" e "Tolerância (± mm)", teclado decimal, salvar desabilitado com motivo | |
+| OP-11 | Botão travado sem motivo; passar do saldo bloqueava | **CORRIGIDO** (ee95754) — motivo no botão; passar do saldo só avisa (regra existente preservada) | |
+| OP-12 | OP inexistente mostrava referência técnica crua | **CORRIGIDO** (ee95754) — mensagem clara e referência dentro de "Detalhes técnicos" (`DataState`) | fluxo `http500` da Onda 5 |
+| OP-13 | Alvos de toque pequenos | **CORRIGIDO** (ee95754) — 44px nos botões do posto, 24px nos alvos isolados | matriz: `tiny` 579→120 |
+| OP-14 | Topbar do posto rolava de lado a 320px | **CORRIGIDO** (ee95754) | matriz: `hOverflow` dos postos 110→80 |
+| OP-15 | "Parada" ambígua sem OP ativa | **CORRIGIDO** (ee95754) — "Parada do posto" quando não há OP | |
+| AX-01 (Chamar) | FAB "Chamar" com contraste 2,76:1 | **CORRIGIDO** (ee95754) | fluxo `contrast`: 0 falhas |
+| AX-03 | "Ver análise" sem anel de foco | **CORRIGIDO** (a739155) | |
+| AX-04 | Sem skip link | **CORRIGIDO** (a739155) — "Pular para o conteúdo" é a 1ª parada do Tab | fluxo `keyboard`: `skiplink has=true` |
+| AX-05 | Menu móvel perdia o foco ao fechar; FAB por cima do scrim | **CORRIGIDO** (a739155) — foco vai para o "×" ao abrir e volta ao botão ao fechar | fluxo `keyboard` |
+| AX-06 | FAB "Chamar" cobria conteúdo | **CORRIGIDO** (a739155) — faixa reservada no fim da página | |
 
 ### Bugs achados na inspeção visual (corrigidos)
 
@@ -170,3 +183,85 @@ Três commits: parte 1 (a739155 — TV, exportação, 403, teclado), parte 2 (ee
 - `python -m unittest tests.test_dev_observatory` → 20/20.
 - 8010 (gestor e operador) e 8011 (Andon/Solda TV) inspecionados após o build.
 - OEE: nenhum arquivo nem regra `.oee-*`/`.andon-card__oee` tocados.
+
+## Onda 5 — Regressão
+
+Mesma bateria da auditoria (matriz de layout, fluxos, emulações, contraste, rede, Web Vitals e detector), rodada contra o código atual numa instância limpa (`tests/web_preview_api.py` na 8013, `web/dist` recém-buildado). Chromium apenas: Firefox/WebKit não foram testados, por decisão do usuário.
+
+### Matriz (430 pares: 39 rotas de gestão + Dobra/Corte/Destaque/Solda × 1024, 1280, 1366, 1440, 1600, 1920, 2560, 853×480, 640×360, 320×256)
+
+Os tamanhos 853×480, 640×360 e 320×256 equivalem ao zoom de 150/200/400% e ao reflow de 320px.
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| rolagem horizontal da página | 110 | 80 |
+| texto < 12px | 11057 | 10403 |
+| texto cortado | 194 | 82 |
+| alvo < 24px | 579 | 120 |
+| fora da tela | 3105 | 3013 |
+| erros de console | 1270 | 860 |
+| sem nome acessível / sem label / img sem alt | 0 / 0 / 0 | 0 / 0 / 0 |
+
+Das 26 células que pioraram, nenhuma é regressão de layout:
+- **`clipped` 0→1 nos postos:** é o `h1.visually-hidden` do OP-17, oculto de propósito. O comparador desconta.
+- **Ordens, `small` 27→38 e `offscreen`:** vêm dos ícones ↕ de ordenação do GE-09 e das colunas dentro da rolagem da tabela, que é intencional com OP/Status fixos. O ícone tinha 9px e `opacity .7`; → **corrigido** para `--text-xs` e `--muted`, com a cor do texto quando a coluna está ativa.
+- **Solda e Andon em 640×360 e 320×256, `offscreen`:** a tabela macro da Solda agora tem conteúdo, dentro da própria rolagem. Nenhuma das duas é tamanho de TV.
+- **`errors` +1 em 7 células:** é o 500 do fixture em `/calls/unseen-count` (`contar_chamadas_nao_vistas` não existe no `ApiFakeDatabase`), que chega em momentos diferentes a cada rodada. É limitação do ambiente de teste, não do produto.
+
+### Achados novos da regressão (corrigidos)
+
+| Achado | Causa | Correção |
+|---|---|---|
+| Clicar no cabeçalho da coluna fora do texto não ordenava | `.data-table__sort` era `inline-flex`, com 27px dentro de um `th` de 112px | O botão ocupa a célula inteira (`display: flex; width: 100%`). No 8010, clicar no centro da célula → `aria-sort=ascending` |
+| Dark: texto `--primary` sobre `--primary-soft` com 4,39:1 (item ativo, "Aguardando", paginação) | Token `--primary-soft` do tema escuro claro demais | `#15325a` → `#12294a` (≈5:1). A cor da marca não mudou |
+
+### Fluxos, emulações e rede (Chromium, Playwright)
+
+| Fluxo | Antes | Depois |
+|---|---|---|
+| 1ª parada do Tab | "Recolher menu" | "Pular para o conteúdo" (AX-04) |
+| Menu móvel aberto | foco ficava no botão de abrir | foco no "×" (AX-05) |
+| Preset de período | nenhum `aria-pressed` | "7 dias" pressionado (GE-12) |
+| Abas de seção | `tablist` sem setas | `<nav>` com links, 0 `tablist` (GE-12) |
+| Erro 500 | "Referência: abc123" solto | "Detalhes técnicos" recolhido (OP-12) |
+| Offline / API lenta (3s) | — | sem mudança em relação à auditoria; nenhum crash |
+| Dark / forced-colors / reduced-motion | — | sem crash; regras AX-07 aplicadas (forced-colors emulado pelo Chromium) |
+| Contraste (12 telas: light, dark, operador) | 3 a 5 falhas por tela | **0 falhas** em todas |
+| Violações de CSP `script-src 'self'` no console (todos os fluxos) | 5 | 0 (CSP intacta) |
+
+### Web Vitals (fixture local)
+
+| Rota | LCP antes → depois (ms) | Outros |
+|---|---|---|
+| Visão Geral | 400 → 380 | CLS 0 |
+| Ordens | 468 → 432 | CLS 0 |
+| OEE | 404 → 392 | CLS 0 |
+| Gerencial | 340 → 316 | CLS 0 |
+| Operador (workbench) | 208 → 228 | INP 112 → 48; tarefas longas 3 → 1 |
+| Andon 1920 | 560 → 116 | tarefas longas 1 → 0 |
+
+### Detector Impeccable
+
+12 achados, os mesmos da linha de base e nenhum novo: side-tab/border-accent dos acentos de estado do Andon, pré-existentes.
+
+### IA-01 (arquitetura de informação)
+
+| ID | Antes | Depois |
+|---|---|---|
+| IA-01 | Títulos misturavam "Management View", "Crachás" e "Usuários" sem seção | **PARCIAL** — todas as telas seguem "Seção — Aba" ("Tela inicial — Visão Geral/Setores/Alertas", "IagoDev — Crachás e responsáveis", "IagoDev — Cadastro de usuários"). Fica pendente, por decisão do usuário, renomear a seção "IagoDev" (nome e estrutura definidos pelo usuário em 17/09/2026). Breadcrumb não foi adicionado: o h1 e a aba ativa já localizam a tela |
+
+### Pendências registradas
+
+- **GE-13 (Performance 36,6% sem meta):** BLOQUEADO pela refatoração da OEE.
+- **AN-06 (tela cheia na TV):** não aplicado, por decisão do usuário (sem botão em TV).
+- **Seção "IagoDev" (IA-01):** decisão do usuário.
+- **`.andon-page--embedded` e `.andon-fullscreen`:** CSS órfão. Não removido, porque o primeiro contém regras da OEE.
+- **Fixture visual sem `contar_chamadas_nao_vistas`:** gera 500 no badge de chamadas em toda página do ambiente de teste.
+- **Firefox/WebKit:** não testados.
+
+### Validação
+
+- `tsc --noEmit` limpo; vitest management, operator, users e badges **61/61**; `npm run build` ok.
+- Matriz, fluxos, contraste e vitals: `docs/evidencias/auditoria_ui_2026-09-24/onda5/` (gitignorado, com screenshots e JSON).
+- 8010: Ordens reinspecionada após o build (clique no cabeçalho, cor do ícone ativo).
+- OEE: nenhum arquivo nem regra `.oee-*` ou `.andon-card__oee` tocados em nenhuma onda.

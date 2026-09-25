@@ -363,10 +363,11 @@ tbody tr:last-child > td { border-bottom: 0; }
 .data-table .data-table__sticky { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: inset -1px 0 0 var(--divider); }
 .data-table thead .data-table__sticky { z-index: 2; background: var(--surface-alt); }
 .data-table tbody tr:hover .data-table__sticky { background: var(--primary-soft); }
-.data-table__sort { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0; border: 0; color: inherit; background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.data-table__sort { display: flex; width: 100%; align-items: center; gap: 6px; min-height: 24px; padding: 0; border: 0; color: inherit; background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .data-table__sort:hover { color: var(--text); }
-.data-table__sort-icon { font-size: 9px; opacity: .7; }
-th[aria-sort="ascending"] .data-table__sort, th[aria-sort="descending"] .data-table__sort { color: var(--text); }
+.data-table__sort-icon { font-size: var(--text-xs); color: var(--muted); }
+th[aria-sort="ascending"] .data-table__sort, th[aria-sort="descending"] .data-table__sort,
+th[aria-sort="ascending"] .data-table__sort-icon, th[aria-sort="descending"] .data-table__sort-icon { color: var(--text); }
 .table-link, .inline-link { color: var(--primary); font-weight: 700; text-decoration: none; }
 /* OP-13 / WCAG 2.5.8: link de tabela é alvo isolado (não está numa frase) — mínimo 24px. */
 .table-link { display: inline-flex; align-items: center; min-height: 24px; }

@@ -51,9 +51,9 @@ export function ManagementOverviewPage() {
     return () => navigateTo("/analises/paradas", scopedFilters);
   };
 
-  if (query.loading) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><LoadingState label="Carregando visão gerencial…" /></PageFrame>;
-  if (query.error && !query.data) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
-  if (!query.data) return <PageFrame sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><EmptyState state="sem_registros" /></PageFrame>;
+  if (query.loading) return <PageFrame sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><LoadingState label="Carregando visão gerencial…" /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (!query.data) return <PageFrame sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><EmptyState state="sem_registros" /></PageFrame>;
 
   const data = query.data;
   const kpis = data.kpis;
@@ -62,7 +62,7 @@ export function ManagementOverviewPage() {
   const hasQuantityRecords = data.production.availability !== "sem_registros";
   const quantityText = (value: number) => hasQuantityRecords ? value.toLocaleString("pt-BR") : humanizeSystemState("sem_registros");
   return (
-    <PageFrame staleError={query.error} sectionId="home" title="Management View — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
+    <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
         <div className="metric-grid metric-grid--five">
           <MetricCard
             label="Produção boa"

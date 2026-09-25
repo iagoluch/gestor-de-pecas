@@ -312,7 +312,7 @@ describe("contrato gerencial Web", () => {
     fireEvent.change(screen.getByLabelText("Usuário"), { target: { value: "Gestor Teste" } });
     fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "segredo-local" } });
     fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Management View — Visão Geral" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Tela inicial — Visão Geral" })).toBeInTheDocument());
     await screen.findByRole("heading", { name: "Planejado × realizado — acumulado" });
     expect(screen.getByText("Gestor Teste")).toBeInTheDocument();
     expect(document.querySelector(".profile-card > i")).not.toBeInTheDocument();

@@ -62,7 +62,7 @@ function LoadingPage({ title, subtitle }: { title: string; subtitle: string }) {
 export function HomeSectorsPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<SectorResponse>(`/api/v1/management/sectors?${filters.query}`);
-  const title = "Management View — Setores";
+  const title = "Tela inicial — Setores";
   const subtitle = "Comparação operacional por setor.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
@@ -106,7 +106,7 @@ export function HomeAlertsPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<AlertsResponse>(`/api/v1/management/alerts?${filters.query}`);
   const internos = useApiQuery<InternalAlertsResponse>("/api/v1/management/internal-alerts");
-  const title = "Management View — Alertas";
+  const title = "Tela inicial — Alertas";
   const subtitle = "Desvios e inconsistências que exigem atenção, sem inventar confiança estatística.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;

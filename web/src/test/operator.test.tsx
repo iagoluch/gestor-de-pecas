@@ -66,7 +66,7 @@ describe("fluxo Web do operador", () => {
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByRole("heading", { name: "Selecione o recurso" });
     expect(document.querySelector(".operator-topbar__machine")).not.toBeInTheDocument();
-    expect(screen.queryByText("Management View — Visão Geral")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tela inicial — Visão Geral")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1303" }));
     await screen.findByText("1303");
     expect(await screen.findByRole("heading", { name: "Histórico" })).toBeInTheDocument();

@@ -61,7 +61,7 @@ export function ManagementUsersPage() {
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const niveis = query.data?.levels ?? [];
-  const title = "DEV — Cadastro de usuários";
+  const title = "IagoDev — Cadastro de usuários";
   const subtitle = "Login de quem acessa o sistema — a mesma tela que os funcionários usam para entrar.";
 
   const filtrados = useMemo(() => {
