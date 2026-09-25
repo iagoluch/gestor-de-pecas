@@ -70,14 +70,24 @@ export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
     context.reset();
   }
 
-  function applyPreset(days: number | "month") {
+  function presetRange(days: number | "month") {
     const end = referenceNow(reference);
     const start = new Date(end);
     if (days === "month") start.setDate(1);
     else start.setDate(start.getDate() - days);
+    return { startDate: localDate(start), endDate: localDate(end) };
+  }
+
+  function applyPreset(days: number | "month") {
     // O preset é um atalho de período: aplica de imediato, já com o que estiver
     // digitado nos demais campos, para não deixar dois estados divergentes.
-    context.setFilters({ ...draft, startDate: localDate(start), endDate: localDate(end) });
+    context.setFilters({ ...draft, ...presetRange(days) });
+  }
+
+  // Ativo = o período aplicado é exatamente o do atalho (GE-12).
+  function presetActive(days: number | "month") {
+    const range = presetRange(days);
+    return context.filters.startDate === range.startDate && context.filters.endDate === range.endDate;
   }
 
   return (
@@ -87,7 +97,7 @@ export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
           <>
             <div className="filter-bar__presets" role="group" aria-label="Períodos rápidos">
               {PRESETS.map((preset) => (
-                <button key={preset.label} type="button" onClick={() => applyPreset(preset.days)}>{preset.label}</button>
+                <button key={preset.label} type="button" aria-pressed={presetActive(preset.days)} onClick={() => applyPreset(preset.days)}>{preset.label}</button>
               ))}
             </div>
             <DatePicker label="Início" value={draft.startDate} onChange={(value) => update({ startDate: value })} />

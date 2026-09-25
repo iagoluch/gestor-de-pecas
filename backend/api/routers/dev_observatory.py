@@ -636,16 +636,17 @@ _LOGIN_PAGE = """<!doctype html>
   button { width:100%; padding: 9px; margin-top: 8px; border:0; border-radius:6px;
             background:#2563eb; color:#fff; font-weight:600; font-size: 14px; cursor:pointer; }
   button:disabled { opacity:.6; cursor:default; }
-  #erro { color:#f87171; font-size:12px; min-height: 16px; margin-top: 8px; }
+  input[aria-invalid=true] { border-color:#f87171; }
+  #erro { color:#fca5a5; font-size:13px; min-height: 20px; margin-top: 8px; }
 </style>
 <main>
   <h1>Dev Observatory</h1>
   <p>Login próprio, independente do Gestor de Peças.</p>
-  <form id="f" method="post" action="javascript:void(0)">
+  <form id="f" method="post" action="javascript:void(0)" novalidate>
     <label>Usuário<input name="username" autocomplete="username" required></label>
     <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
     <button type="submit">Entrar</button>
-    <div id="erro"></div>
+    <div id="erro" role="alert"></div>
   </form>
 </main>
 <script src="/dev-observatory/login.js"></script>
@@ -662,6 +663,15 @@ _LOGIN_SCRIPT = """document.getElementById("f").addEventListener("submit", async
   const botao = form.querySelector("button");
   const erro = document.getElementById("erro");
   erro.textContent = "";
+  // Validação própria em pt-BR (a nativa do navegador sai em inglês): foca o campo vazio.
+  const vazio = ["username", "password"].map((nome) => form.elements[nome]).find((campo) => !campo.value.trim());
+  for (const campo of form.querySelectorAll("input")) campo.removeAttribute("aria-invalid");
+  if (vazio) {
+    vazio.setAttribute("aria-invalid", "true");
+    erro.textContent = `Preencha ${vazio.name === "username" ? "Usuário" : "Senha"}.`;
+    vazio.focus();
+    return;
+  }
   botao.disabled = true;
   const dados = new FormData(form);
   try {
@@ -672,6 +682,10 @@ _LOGIN_SCRIPT = """document.getElementById("f").addEventListener("submit", async
     });
     if (resposta.ok) { window.location.reload(); return; }
     erro.textContent = resposta.status === 401 ? "Usuário ou senha inválidos." : "Não foi possível entrar agora.";
+    if (resposta.status === 401) {
+      form.elements.password.value = "";
+      form.elements.password.focus();
+    }
   } catch (falha) {
     erro.textContent = "Não foi possível falar com o servidor.";
   } finally {

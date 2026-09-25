@@ -1116,10 +1116,10 @@ function DrawingCard({ op, loading, data, onOpen }: { op: string; loading: boole
         className={`operator-drawing-button${disponivel ? " is-available" : ""}`}
         disabled={!disponivel}
         title={disponivel ? `Abrir PDF${data?.filename ? ` — ${data.filename}` : ""}` : (data?.message ?? "Nenhum PDF disponível para esta peça.")}
-        aria-label={disponivel ? "Abrir desenho PDF" : "PDF indisponível"}
         onClick={onOpen}
       >
-        <span aria-hidden="true">PDF</span><span aria-hidden="true">↗</span>
+        {/* O texto visível é o nome acessível (OP-16): o estado aparece escrito, não só na cor. */}
+        {disponivel ? <><span>PDF</span><span aria-hidden="true">↗</span></> : <span>Sem PDF</span>}
       </button>
       {!op || (loading && !data) ? <span className="operator-drawing-hint">{!op ? "Informe a OP para ver o PDF." : "Procurando o PDF…"}</span> : null}
     </div>

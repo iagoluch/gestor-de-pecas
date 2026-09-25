@@ -32,6 +32,11 @@ function SummaryCards({ resumo }: { resumo: QualitySummary }) {
   );
 }
 
+/**
+ * Fila de inspeção dimensional (operação INSPECAO). Sem rota de propósito desde a Wave 6B:
+ * o posto perdeu a aba Qualidade e o operador entra pelo popup do Iniciar. A tela fica
+ * guardada, coberta por `quality.test.tsx`, até o novo ponto de entrada ser definido.
+ */
 export function QualityPage({ sector }: { sector: string }) {
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState("");

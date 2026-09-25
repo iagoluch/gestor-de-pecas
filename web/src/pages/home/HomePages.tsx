@@ -69,7 +69,8 @@ export function HomeSectorsPage() {
   const rows = query.data?.items ?? [];
   return (
     <PageFrame staleError={query.error} sectionId="home" title={title} subtitle={subtitle}>
-      <div className="metric-grid metric-grid--four">
+      {/* Sem setores no filtro, os destaques seriam zeros sem setor: o vazio fica só na tabela (GE-13). */}
+      {rows.length ? <div className="metric-grid metric-grid--four">
         {(query.data?.highlights ?? []).map((highlight, index) => (
           <MetricCard
             key={highlight.key}
@@ -79,12 +80,12 @@ export function HomeSectorsPage() {
             accent={(["success", "warning", "primary", "teal"] as const)[index % 4]}
           />
         ))}
-      </div>
-      {!rows.length ? <EmptyState title="Sem registros para o filtro selecionado" /> : null}
+      </div> : null}
       <SectionCard title="Setores — execução real" className="content-section">
         <DataTable
           rows={rows}
           rowKey={(row) => row.setor}
+          emptyTitle="Sem registros para o filtro selecionado"
           columns={[
             { key: "sector", label: "Setor", render: (row) => <Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(row.setor)}`}>{row.setor}</Link> },
             { key: "good", label: "Produção boa", render: (row) => formatNumber(row.producao_boa) },

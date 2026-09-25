@@ -46,6 +46,25 @@ function renderAI(fetchMock: ReturnType<typeof vi.fn>) {
 }
 
 describe("IA Industrial gerencial", () => {
+  it("esconde a aba IA da Tela inicial só quando o backend diz que a função está desligada", async () => {
+    for (const enabled of [false, true]) {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        const path = String(input);
+        if (path.includes("/auth/session")) return json(manager);
+        if (path.endsWith("/ai/status")) return json({ enabled, configured: enabled, available: enabled, model: null });
+        return json({ code: "not_found", message: "Não encontrado" }, 404);
+      }));
+      const view = render(
+        <MemoryRouter initialEntries={["/inicio/alertas"]}>
+          <AuthProvider><App /></AuthProvider>
+        </MemoryRouter>,
+      );
+      await screen.findByRole("link", { name: "Alertas" });
+      await waitFor(() => expect(Boolean(screen.queryByRole("link", { name: "IA" }))).toBe(enabled));
+      view.unmount();
+    }
+  });
+
   it("exibe estado não configurado sem chave ou segredo no navegador", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

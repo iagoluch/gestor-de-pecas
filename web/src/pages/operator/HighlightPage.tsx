@@ -364,7 +364,7 @@ export function HighlightPage() {
                       <button
                         type="button"
                         className="highlight-plan__info"
-                        aria-label={`Ver OPs do plano ${plano.programa ?? ""}`}
+                        aria-label={`Ver OPs: ${rotuloPlano(plano, plans)}`}
                         onClick={() => { setOpsPlano(plano); setDialog("ops"); }}
                       >
                         <span aria-hidden="true">i</span>

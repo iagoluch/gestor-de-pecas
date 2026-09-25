@@ -31,9 +31,11 @@ export function OperatorShell({
   const hasTabs = items.length > 1;
   const resourceLabel = sector.toLocaleLowerCase().startsWith("solda") ? "Estação" : "Máquina";
   const selectedResource = resource === sector ? resource : <><span>{sector} - </span><span>{resource}</span></>;
+  const pageTitle = !resource ? `Posto do operador · ${sector}` : resource === sector ? `${resourceLabel} ${resource}` : `${resourceLabel} ${sector} - ${resource}`;
   return (
     <div className="operator-shell">
       <header className={`operator-topbar ${resource ? "operator-topbar--with-machine" : ""}`}>
+        <h1 className="visually-hidden">{pageTitle}</h1>
         <div className="operator-topbar__brand">
           <img src={assets.operator.logo} alt="Gestor de Peças" />
           <small className="operator-topbar__credit">Powered by Iago Luchtenberg</small>

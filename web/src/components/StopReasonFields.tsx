@@ -43,11 +43,12 @@ export function StopReasonFields({
       <div className="stop-reason-field">
         <strong>Motivo da parada</strong>
         {selected ? <div className={variant(selected, "stop-reason-selected")} data-stop-classification={selected.classificacao}>{selected.codigo} - {selected.nome}</div> : <div className="stop-reason-selected stop-reason-selected--empty">Selecione</div>}
-        <div className="stop-reason-options" role="listbox" aria-label="Motivo da parada">
-          {filtered.map((reason) => <button type="button" role="option" aria-selected={reason.codigo === code} className={variant(reason, "stop-reason-option")} data-stop-classification={reason.classificacao} key={reason.codigo} onClick={() => onCodeChange(reason.codigo)}>{reason.codigo} - {reason.nome}</button>)}
-        </div>
+        {filtered.length ? (
+          <div className="stop-reason-options" role="listbox" aria-label="Motivo da parada">
+            {filtered.map((reason) => <button type="button" role="option" aria-selected={reason.codigo === code} className={variant(reason, "stop-reason-option")} data-stop-classification={reason.classificacao} key={reason.codigo} onClick={() => onCodeChange(reason.codigo)}>{reason.codigo} - {reason.nome}</button>)}
+          </div>
+        ) : <p className="operator-help" role="status">Nenhum motivo corresponde ao filtro informado.</p>}
       </div>
-      {!filtered.length ? <p className="operator-help">Nenhum motivo corresponde ao filtro informado.</p> : null}
       <label>
         Comentário{selected?.requer_comentario ? " (obrigatório)" : ""}
         <textarea value={comment} onChange={(event) => onCommentChange(event.target.value)} />

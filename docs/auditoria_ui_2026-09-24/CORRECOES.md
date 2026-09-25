@@ -134,3 +134,39 @@ Três commits: parte 1 (a739155 — TV, exportação, 403, teclado), parte 2 (ee
 - `python -m unittest tests.test_dev_observatory` → 20/20.
 - 8010 (gestor, 1366×900): Ordens, Pausas (menu, validação, diálogo empilhado); Dev Observatory via harness same-origin (CSP intacta; arquivos de harness removidos do `dist`).
 - OEE: nenhum arquivo nem regra `.oee-*`/`.andon-card__oee` tocados.
+
+## Onda 4 — P3 / polish
+
+### ID → status
+
+| ID | Antes | Depois | Evidência |
+|---|---|---|---|
+| OP-16 | Botão do desenho: estado só na cor, `aria-label` ≠ texto visível | **CORRIGIDO** — o texto visível é o nome acessível ("PDF ↗" / "Sem PDF"); indisponível ganha borda tracejada | 8010 operador Dobra 1303: "Sem PDF", `border-style: dashed` |
+| OP-17 | Cabeçalho do posto em caixa alta 8px, sem h1; campo da OP centralizado | **CORRIGIDO** — h1 oculto "Máquina Dobra - 1303", rótulo da máquina em `--text-sm`, crédito em `--sidebar-text-muted`, campo da OP alinhado à esquerda | 8010: `h1` = "Máquina Dobra - 1303" |
+| OP-18 | Filtro de motivo sem resultado deixava uma faixa vazia | **CORRIGIDO** — a mensagem "Nenhum motivo corresponde…" (`role=status`) substitui o listbox; `aria-selected` já existia | `operator.test.tsx` |
+| OP-19 | "Ver OPs" repetido com o mesmo nome para dois nestings do mesmo programa | **CORRIGIDO** — `aria-label` "Ver OPs: Nesting N do plano X" (reusa `rotuloPlano`) | `operator.test.tsx` |
+| GE-12 | Preset de período sem estado ativo; abas com `role=tablist` sem setas | **CORRIGIDO** — `aria-pressed` compara o período aplicado com o do atalho; abas viram `<nav>` de links com `aria-current` (NavLink) | 8010: "Hoje:true" → clique em "7 dias" → "7 dias:true"; 0 `[role=tablist]` |
+| GE-13 | Setores: vazio duplicado + destaques zerados sem setor | **PARCIAL** — vazio só na tabela (`emptyTitle`), destaques somem sem setores | tsc + management; o estado vazio não foi reproduzido no 8010 (a fixture sempre devolve setores) |
+| GE-13 (Performance 36,6% sem meta) | — | **BLOQUEADO** pela refatoração da OEE (fora do escopo desta auditoria) | |
+| GE-13 (11 filtros) | — | **SEM MUDANÇA** — os campos avançados já ficam atrás de "Mais filtros" | |
+| IA-02 | Aba "IA" visível com a função desligada | **CORRIGIDO** — o `PageFrame` consulta `/ai/status` na Tela inicial e esconde a aba só quando o backend diz `enabled=false` (falha/carregando mantém a aba; na própria rota da IA não consulta de novo) | `ai.test.tsx` (novo teste, liga/desliga); 8010: abas "Visão Geral, Setores, Alertas" |
+| AX-07 | Alto contraste: item ativo, barras e presets sem distinção | **CORRIGIDO** — bloco `@media (forced-colors: active)` com Highlight/HighlightText/CanvasText e `forced-color-adjust: none` só onde o fundo carrega informação. A "pílula cortada" da evidência é a rolagem horizontal da tabela, que acontece também fora do alto contraste — não é defeito de forced-colors | CSS; emulação completa fica para a Onda 5 |
+| AN-06 | TV sem atalho de tela cheia | **NÃO APLICADO — decisão do usuário** ("não coloque botão em tv", 25/09/2026). Implementado e retirado: o botão fixo cobria a contagem do setor no Andon e "Estações com OP" na Solda (a TV alterna `/andon` ↔ `/welding-management`). Tela cheia/quiosque é configuração do navegador da TV | medição de sobreposição no 8011 a 1366×768 |
+| DO-04 | Login do observatório com validação nativa em inglês, sem foco no erro | **CORRIGIDO** — `novalidate`, "Preencha Usuário."/"Preencha Senha." com foco e `aria-invalid`; 401 limpa e foca a senha; `#erro role=alert`; rótulos `<label for>` em Ambiente/Atualização | Playwright com o código atual: vazio → ("Preencha Usuário.", foco em username, `aria-invalid`); 401 → ("Usuário ou senha inválidos.", foco em password, valor vazio) — `docs/evidencias/…/onda4/do04_login_*.png` |
+| DO (órfão da Onda 3) | `app.js` aplicava `c-<classe>` sem estilo | **CORRIGIDO** — removido `CATEGORIA_CLASSE`; a pílula mostra o rótulo pt-BR (`CATEGORIA_ROTULO`: Produção, Parada, Setup…) | `tests.test_dev_observatory` |
+| TE-03 | `QualityPage` parecia código morto | **DOCUMENTADO** — órfã de propósito desde a Wave 6B, coberta por `quality.test.tsx` (JSDoc) | |
+
+### Pendências / observações
+
+- `.andon-page--embedded` (global.css) está sem uso, mas o bloco contém regras `.andon-card__oee` → **não removido** (fronteira da OEE).
+- `.andon-fullscreen` (global.css) é CSS órfão de uma versão antiga, sem uso em `.tsx` → registrado, não removido.
+- O `describe` "tela IagoDev" de `shifts.test.tsx` está correto: o título da tela é literalmente "IagoDev — Turnos". Sem mudança.
+- A 8001 (servidor do Dev Observatory aberto fora da sessão) roda o código antigo; o DO-04 foi validado num servidor temporário com o código atual.
+- As pílulas "Produção" do observatório não foram vistas renderizadas: o banco falso do teste não implementa `fetchall` nos eventos (limitação do ambiente de teste).
+
+### Validação
+
+- `vitest`: management, andon, operator, shifts, ai, primitives → **86/86**; andon + welding-management após retirar o AN-06 → **41/41**; `tsc --noEmit` limpo; `npm run build` ok.
+- `python -m unittest tests.test_dev_observatory` → 20/20.
+- 8010 (gestor e operador) e 8011 (Andon/Solda TV) inspecionados após o build.
+- OEE: nenhum arquivo nem regra `.oee-*`/`.andon-card__oee` tocados.

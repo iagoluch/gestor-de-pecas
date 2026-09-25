@@ -230,11 +230,15 @@ function desenharMetricas(dados) {
 // ---------------------------------------------------------------------------
 // Viewports dos postos
 // ---------------------------------------------------------------------------
-const CATEGORIA_CLASSE = {
-  producao: "producao",
-  parada: "parada",
-  setup: "setup",
-  retrabalho: "retrabalho",
+const CATEGORIA_ROTULO = {
+  producao: "Produção",
+  parada: "Parada",
+  setup: "Setup",
+  retrabalho: "Retrabalho",
+  fila: "Fila",
+  fora_turno: "Fora do turno",
+  atividade_sem_op: "Atividade sem OP",
+  desconhecido: "Desconhecido",
 };
 
 function desenharPostos(dados) {
@@ -248,18 +252,17 @@ function desenharPostos(dados) {
   alvo.innerHTML = itens
     .map((item) => {
       const categoria = String(item.categoria || "desconhecido");
-      const classe = CATEGORIA_CLASSE[categoria] || "outro";
       const ops = item.ops_ativas || [];
       const op = ops[0] || {};
       const codigoOp = item.op_estado || op.op;
       return `
-        <article class="posto c-${classe}">
+        <article class="posto">
           <div class="cabeca">
             <div>
               <h3>${escapar(item.recurso)}</h3>
               <div class="meta">${escapar(item.setor)} · desde ${hora(item.inicio)} (${duracao(item.duracao_segundos)})</div>
             </div>
-            <span class="pill p-${escapar(categoria)}">${escapar(categoria)}</span>
+            <span class="pill p-${escapar(categoria)}">${escapar(CATEGORIA_ROTULO[categoria] || categoria)}</span>
           </div>
           <dl>
             <dt>OP</dt><dd>${escapar(codigoOp)}${op.operacao ? ` · op ${escapar(op.operacao)}` : ""}</dd>
