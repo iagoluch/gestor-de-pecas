@@ -14,11 +14,6 @@ import clock from "../../../assets/icons/Relógio.svg";
 import trash from "../../../assets/icons/Lixeira.svg";
 import operatorLogo from "../../../assets/operator_mockup/logo_operator.png";
 import operatorProfile from "../../../assets/operator_mockup/profile_operator_transparent.png";
-import actionStart from "../../../assets/operator_mockup/action_start.png";
-import actionStop from "../../../assets/operator_mockup/action_stop.png";
-import actionFinish from "../../../assets/operator_mockup/action_finish.png";
-import actionSetup from "../../../assets/operator_mockup/action_setup.png";
-import actionRework from "../../../assets/operator_mockup/action_rework.png";
 import navDestaque from "../../../assets/operator_mockup/nav_destaque_transparent.png";
 import navDobra from "../../../assets/operator_mockup/nav_dobra_transparent.png";
 import navUsinagem from "../../../assets/operator_mockup/nav_usinagem_transparent.png";
@@ -33,7 +28,7 @@ import navSolda from "../../../assets/operator_mockup/nav_solda_transparent.png"
 import navQualidade from "../../../assets/web/navigation/audit.png";
 import dobra1303 from "../../../assets/icons/Dobra_1303.svg";
 import dobra2204 from "../../../assets/icons/Dobra_2204.svg";
-import dobraGasparini from "../../../assets/icons/Gasparini.svg";
+import dobraGasparini from "../../../assets/icons/Dobra_Gasparini.png";
 import serraSfg from "../../../assets/icons/Serra_SFG-330.png";
 import serraS4220 from "../../../assets/icons/Serra_S4220.png";
 import serraSfha from "../../../assets/icons/Serra_SFHA-10.png";
@@ -47,6 +42,19 @@ import usinagemRomiGl350m from "../../../assets/icons/Usinagem_RomiGL350M.png";
 import usinagemFresadoraFtv31 from "../../../assets/icons/Usinagem_FresadoraFTV31.png";
 import cortePlasma from "../../../assets/icons/Corte_TerraBlade4.png";
 import corteLaser from "../../../assets/icons/Corte_Ensis3015.jpg";
+// Fotos de referência do tipo de equipamento (não da unidade da fábrica),
+// recortadas com fundo transparente.
+import usinagemTorno from "../../../assets/icons/Usinagem_TornoMecanico.png";
+import pinturaJato from "../../../assets/icons/Pintura_Jato.png";
+import pinturaSecagem from "../../../assets/icons/Pintura_Secagem.png";
+// Postos sem foto do equipamento: ilustração vetorial própria, mesmo estilo.
+import recursoPreparacao from "../../../assets/icons/Recurso_Preparacao.svg";
+import recursoPintura from "../../../assets/icons/Recurso_Pintura.svg";
+import recursoInspecao from "../../../assets/icons/Recurso_Inspecao.svg";
+import recursoDispositivo from "../../../assets/icons/Recurso_Dispositivo.svg";
+import recursoServicos from "../../../assets/icons/Recurso_Servicos.svg";
+import recursoPreMontagem from "../../../assets/icons/Recurso_PreMontagem.svg";
+import recursoSolda from "../../../assets/icons/Recurso_Solda.svg";
 import logoDobra from "../../../assets/icons/Logo_Dobra.svg";
 import logoUsinagem from "../../../assets/icons/Logo_Usinagem.svg";
 import logoSerra from "../../../assets/icons/Logo_Serra.svg";
@@ -61,7 +69,6 @@ export const assets = {
   operator: {
     logo: operatorLogo,
     profile: operatorProfile,
-    actions: { start: actionStart, stop: actionStop, finish: actionFinish, setup: actionSetup, rework: actionRework },
     navigation: { Destaque: navDestaque, Dobra: navDobra, Usinagem: navUsinagem, Serra: navSerra, Corte: navCorte, Pintura: navPintura, Solda: navSolda, Qualidade: navQualidade,
       // Wave 6F — os cinco setores que substituíram a antiga "Solda"
       // reaproveitam o mesmo ícone da frente até a arte própria existir.
@@ -80,6 +87,18 @@ export const assets = {
       "Fresadora FTV31": usinagemFresadoraFtv31,
       "Plasma TerraBlade 4": cortePlasma,
       "Laser Ensis 3015": corteLaser,
+      "Torno Mecânico": usinagemTorno,
+      Jato: pinturaJato,
+      "Preparação": recursoPreparacao,
+      Pintura: recursoPintura,
+      Secagem: pinturaSecagem,
+      "Inspeção Final": recursoInspecao,
+      DISPEX: recursoDispositivo,
+      DISPG: recursoDispositivo,
+      DISPOS: recursoDispositivo,
+      SERVGE: recursoServicos,
+      PREMTG: recursoPreMontagem,
+      SOLDA4: recursoSolda,
     },
     sectors: { Dobra: logoDobra, Usinagem: logoUsinagem, Serra: logoSerra, Corte: logoCorte },
   },

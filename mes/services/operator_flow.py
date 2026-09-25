@@ -44,6 +44,30 @@ from mes.services.first_piece import FirstPieceService
 from mes.services.internal_alerts import InternalAlertService
 from mes.services.resource_state import ResourceStateService
 
+# OP-05/OP-06 (auditoria de UI 24/09/2026): a resposta fala a intenção do
+# operador, não o código da ação ("Retornar registrado com sucesso.").
+_MENSAGEM_POR_ACAO = {
+    "Início": "Produção iniciada.",
+    "Retomar": "Produção retomada.",
+    "Retornar": "Setup encerrado. Produção retomada.",
+}
+_MENSAGEM_POR_ESTADO = {
+    OperatorState.STOPPED: "Parada registrada.",
+    OperatorState.SETUP: "Setup iniciado.",
+    OperatorState.REWORK: "Retrabalho iniciado.",
+}
+
+
+def _mensagem_sucesso(action, target, codigo, boas, refugos):
+    if target == OperatorState.FINISHED:
+        return f"OP {codigo} finalizada: {boas} peça(s) boa(s), {refugos} refugo(s)."
+    return (
+        _MENSAGEM_POR_ESTADO.get(target)
+        or _MENSAGEM_POR_ACAO.get(str(getattr(action, "value", action)))
+        or f"{action} registrado."
+    )
+
+
 @dataclass(frozen=True)
 class OperatorFlowResult:
     ok: bool
@@ -1397,7 +1421,9 @@ class OperatorFlowService:
                 "finalizacao_parcial",
                 row,
             )
-        return OperatorFlowResult(True, f"{action} registrado com sucesso.", data=row)
+        return OperatorFlowResult(
+            True, _mensagem_sucesso(action, target, codigo, boas, refugos), data=row
+        )
 
     def _autorizar_refugo(
         self, *, op, setor, recurso, operacao, quantidade, cracha, crachas_informados

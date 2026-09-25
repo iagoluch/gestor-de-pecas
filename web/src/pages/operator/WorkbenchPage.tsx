@@ -1,10 +1,10 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, apiErrorMessage } from "../../api/client";
 import { ChamadaButton } from "../../components/ChamadaButton";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
-import { assets } from "../../config/assets";
+import { OperatorActionIcon } from "../../components/OperatorActionIcon";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type {
   FirstPieceGate,
@@ -22,6 +22,8 @@ import { StationStateBanner } from "../../components/StationStateBanner";
 import {
   type DraftDimension,
   formatDraftStandard,
+  isInvalidMeasure,
+  MeasureError,
   TemplateEditor,
   previewStatus,
   rangeLabel,
@@ -193,7 +195,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           operations.reload();
           return;
         }
-        setMessage(result.sync?.message ?? "OP não encontrada no TOTVS.");
+        setMessage(result.sync?.message ?? `OP ${op} não encontrada. Confira o código.`, "error");
       })
       .catch((reason) => {
         setRemoteSearch("idle");
@@ -201,6 +203,19 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         setMessage(apiErrorMessage(reason), "error");
       });
   }, [loadedOp, operations, searchedOp]);
+
+  // OP-12: OP que não existe (nem local, nem para buscar no TOTVS) ou roteiro
+  // que falhou ao carregar — a barra de status diz isso, e não "atualizadas".
+  useEffect(() => {
+    if (!loadedOp) return;
+    const error = operations.error;
+    if (error) {
+      setMessage(error.status === 404 ? `OP ${loadedOp} não encontrada. Confira o código.` : `Não foi possível carregar a OP ${loadedOp}.`, "error");
+      return;
+    }
+    const data = operations.data;
+    if (data && !data.items?.length && !data.sync?.pending) setMessage(`OP ${loadedOp} não encontrada. Confira o código.`, "error");
+  }, [loadedOp, operations.data, operations.error]);
 
   useEffect(() => {
     const rows = operations.data?.items ?? [];
@@ -285,11 +300,15 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       : selectedCard?.rework_return
         ? "Retrabalho"
         : "Início";
+  // OP-06: o rótulo fala a intenção do operador; `startAction` continua sendo
+  // o código que o backend espera ("Retomar" da parada, "Retornar" do Setup).
   const startLabel = selectedCard?.rework_return
     ? "Iniciar retrabalho"
     : startsActivity
       ? "Iniciar atividade"
-      : startAction === "Início" ? "Iniciar" : startAction;
+      : startAction === "Início" ? "Iniciar"
+        : startAction === "Retomar" || startAction === "Retornar" ? "Retomar produção"
+          : startAction;
   const activeCard = (cards.data?.production ?? []).find((item) =>
     ["Em processo", "Parada", "Setup", "Retrabalho"].includes(String(item.status ?? "")),
   );
@@ -502,6 +521,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
    * esse mesmo clique que abre o checklist para o operador conferi-la.
    */
   async function setupAppointment() {
+    // OP-07: com o Setup já em curso o clique só reabre o checklist — reenviar
+    // "Setup" seria recusado pelo backend como ação já registrada.
+    if (currentStatus === "Setup") {
+      if (gateRequired) openGate();
+      return;
+    }
     setDialog({ kind: "confirm", action: "Setup" });
   }
 
@@ -691,7 +716,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       ) : null}
       {operations.loading && loadedOp ? <LoadingState label="Carregando roteiro…" /> : null}
       {remoteSearch === "searching" ? <LoadingState label="Buscando OP no TOTVS..." /> : null}
-      {operations.error ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
+      {operations.error && operations.error.status !== 404 ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
       {stoppedWithoutOp ? (
         <Notice tone="error">
           Recurso parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
@@ -706,11 +731,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
           preparação da máquina, que é quando a primeira peça é fabricada. */}
       <div className="operator-actions" aria-label="Ações operacionais">
-        <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><img src={assets.operator.actions.start} alt="" /><span>{startLabel}</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
-        <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><img src={assets.operator.actions.finish} alt="" /><span>Finalizar</span></button>
-        {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} onClick={() => void setupAppointment()}><img src={assets.operator.actions.setup} alt="" /><span>Setup</span></button> : null}
-        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><img src={assets.operator.actions.rework} alt="" /><span>Retrabalho</span></button>
+        <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
+        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
+        <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
+        {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
+        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>Retrabalho</span></button>
       </div>
       {canPoint && occupiedBy ? (
         <Notice>
@@ -721,7 +746,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <p className="operator-help operator-gate-notice">
           {firstPiece?.bloqueio_ativo
             ? firstPiece.message
-            : "Aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."}
+            : `${canSetup ? "Aponte o Setup" : "Inicie a produção e depois aponte o Setup"} para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada.`}
         </p>
       ) : null}
         </div>
@@ -899,6 +924,20 @@ function SetupQualityDialog({
   };
   const preenchidas = cotas.length > 0 && cotas.every((cota) => Boolean(statusDaCota(cota)));
   const reprovada = cotas.some((cota) => statusDaCota(cota) === "NAO_CONFORME");
+  const algumaManual = cotas.some((cota) => !cota.conformidade_automatica);
+  const faltaCracha = reprovada && destination === "REFUGO" && !badge.trim();
+  // OP-09: o botão travado diz o que falta (Setup pendente já tem aviso próprio).
+  const motivoBloqueio = setupPendente ? "" : !preenchidas ? "Informe a medida de todas as cotas para liberar o lote." : faltaCracha ? "Informe o crachá do responsável para registrar o refugo." : "";
+
+  // OP-09: quando o popup troca de passo (bloqueio, cadastro, medição), o foco
+  // vai para o título do passo novo — senão fica no botão que desmontou (body).
+  const passo = loading ? "" : state?.bloqueio_ativo ? "bloqueio" : state?.checklist?.configuravel ? "cotas" : cotas.length ? "medicao" : state ? "sem" : "";
+  const stepRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = stepRef.current;
+    if (!passo || !box || box.contains(document.activeElement)) return;
+    box.querySelector<HTMLElement>("[data-step-title]")?.focus();
+  }, [passo]);
 
   function submit() {
     onSubmit({
@@ -922,8 +961,10 @@ function SetupQualityDialog({
           aqui dentro — o popup fica por cima do aviso da tela de fundo, e sem
           isso o operador não via o retorno de "Autorizar e liberar". */}
       {!loading && message ? <Notice tone={messageTone}>{message}</Notice> : null}
+      <div ref={stepRef} className="operator-dialog__step">
       {!loading && state?.bloqueio_ativo ? (
         <>
+          <h3 className="operator-step-title" data-step-title tabIndex={-1}>Primeira peça bloqueada</h3>
           <p className="operator-help">{state.message}</p>
           <p className="operator-help">O responsável precisa estar no posto e informar o próprio crachá. Não existe login para ele: a autorização fica registrada com OP, recurso, operador, horário e decisão.</p>
           <label>Crachá do responsável<input value={badge} onChange={(event) => setBadge(event.target.value)} autoFocus /></label>
@@ -957,7 +998,12 @@ function SetupQualityDialog({
       ) : null}
       {!loading && !state?.bloqueio_ativo && !state?.checklist?.configuravel && cotas.length ? (
         <>
-          <p className="operator-help">O lote só é liberado depois que a primeira peça for aprovada. Informe a medida de cada cota: o sistema compara com a faixa do padrão cadastrado e decide a conformidade.</p>
+          <h3 className="operator-step-title" data-step-title tabIndex={-1}>Medição da primeira peça</h3>
+          <p className="operator-help">
+            O lote só é liberado depois que a primeira peça for aprovada. Informe a medida de cada cota: {algumaManual
+              ? "nas cotas com faixa aceita o sistema decide a conformidade; nas demais, escolha a situação."
+              : "o sistema compara com a faixa do padrão cadastrado e decide a conformidade."}
+          </p>
           {setupPendente ? (
             <p className="operator-gate-setup" role="status">
               Aponte o Setup desta operação pelo botão <strong>Setup</strong> do posto: é ele que registra a preparação da máquina em que a primeira peça é fabricada.
@@ -979,6 +1025,7 @@ function SetupQualityDialog({
                     <input
                       inputMode="decimal"
                       aria-label={`Medida da cota ${cota.sequencia}`}
+                      aria-invalid={isInvalidMeasure(atual.medida) || undefined}
                       value={atual.medida}
                       onChange={(event) => setMeasures((current) => ({
                         ...current,
@@ -986,6 +1033,7 @@ function SetupQualityDialog({
                       }))}
                     />
                   </label>
+                  <MeasureError medida={atual.medida} />
                   {cota.conformidade_automatica ? null : (
                     <label>
                       Situação
@@ -1034,16 +1082,12 @@ function SetupQualityDialog({
           ) : null}
           <label>Observação<textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="O que foi verificado no posto" /></label>
           <div className="operator-dialog__actions">
+            {motivoBloqueio ? <small className="disabled-reason">{motivoBloqueio}</small> : null}
             <button type="button" onClick={onCancel}>Cancelar</button>
             <button
               type="button"
               className="button button--primary"
-              disabled={
-                busy
-                || !preenchidas
-                || setupPendente
-                || (reprovada && destination === "REFUGO" && !badge.trim())
-              }
+              disabled={busy || !preenchidas || setupPendente || faltaCracha}
               onClick={submit}
             >
               Liberar lote
@@ -1053,10 +1097,11 @@ function SetupQualityDialog({
       ) : null}
       {!loading && !state?.bloqueio_ativo && !state?.checklist ? (
         <>
-          <p className="operator-help">Esta operação não possui o Setup/Qualidade estruturado.</p>
+          <p className="operator-help" data-step-title tabIndex={-1}>Esta operação não possui o Setup/Qualidade estruturado.</p>
           <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Fechar</button></div>
         </>
       ) : null}
+      </div>
     </OperatorDialog>
   );
 }
@@ -1140,6 +1185,13 @@ function FinishDialog({ context, sector, operators, onCancel, onConfirm }: { con
   // mesma regra do retrabalho da primeira peça. Quem valida é o backend.
   const [scrapBadge, setScrapBadge] = useState("");
   const scrapRequiresApproval = Number(scrap || 0) > 0;
+  const total = Number(good || 0) + Number(scrap || 0);
+  // OP-11: aviso (não bloqueia) — o backend segue dono do limite de quantidade.
+  const aboveBalance = context.planned > 0 && total > context.balance;
+  const missing = !badges.length
+    ? "Informe o crachá do operador e toque em + para confirmar."
+    : total <= 0 ? "Informe a quantidade de peças boas ou de refugo."
+      : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
   function addBadge() {
     const normalized = badge.trim();
     if (!normalized) return;
@@ -1164,6 +1216,7 @@ function FinishDialog({ context, sector, operators, onCancel, onConfirm }: { con
     </div>
     <div className="operator-quantity-grid"><label>Peças boas<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
     <p className="operator-help">O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado.</p>
+    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s). Confira antes de confirmar.</p> : null}
     {scrapRequiresApproval ? <>
       <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>
       <ChamadaButton
@@ -1183,7 +1236,7 @@ function FinishDialog({ context, sector, operators, onCancel, onConfirm }: { con
         return <div key={item}><span><strong>{operator?.nome ?? item}</strong><small>Crachá {item}</small></span><button type="button" aria-label={`Remover ${operator?.nome ?? item}`} onClick={() => setBadges((current) => current.filter((value) => value !== item))}>×</button></div>;
       }) : <p>Nenhum operador adicionado.</p>}
     </div>
-    <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={!badges.length || Number(good || 0) + Number(scrap || 0) <= 0 || (scrapRequiresApproval && !scrapBadge.trim())} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar finalização</AsyncButton></div>
+    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar finalização</AsyncButton></div>
   </OperatorDialog>;
 }
 

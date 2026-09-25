@@ -3,7 +3,7 @@ import { api, apiErrorMessage } from "../../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
-import { assets } from "../../config/assets";
+import { OperatorActionIcon } from "../../components/OperatorActionIcon";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { StopReason } from "../../types/api";
 import { formatDateTime, formatDuration } from "../../utils/format";
@@ -271,11 +271,11 @@ export function HighlightPage() {
             void action("Início", { plan_hash: selectedPlan?.plano_hash });
           }}
         >
-          <img src={assets.operator.actions.start} alt="" />
-          <span>{stoppedWithoutTask || selectedPaused ? "Retomar" : startsActivity ? "Iniciar atividade" : "Iniciar"}</span>
+          <OperatorActionIcon name="start" />
+          <span>{stoppedWithoutTask || selectedPaused ? "Retomar produção" : startsActivity ? "Iniciar atividade" : "Iniciar"}</span>
         </button>
-        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || selectedPaused || (selectedPlan ? !selectedRunning : false)} onClick={() => setDialog("stop")}><img src={assets.operator.actions.stop} alt="" /><span>Parada</span></button>
-        <button type="button" className="operator-action operator-action--finish" disabled={busy || (!activityInProgress && (!selectedPlan || !selectedRunning))} onClick={() => setDialog(activityInProgress ? "activityFinish" : "finish")}><img src={assets.operator.actions.finish} alt="" /><span>{activityInProgress ? "Finalizar atividade" : "Finalizar"}</span></button>
+        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || selectedPaused || (selectedPlan ? !selectedRunning : false)} onClick={() => setDialog("stop")}><OperatorActionIcon name="stop" /><span>Parada</span></button>
+        <button type="button" className="operator-action operator-action--finish" disabled={busy || (!activityInProgress && (!selectedPlan || !selectedRunning))} onClick={() => setDialog(activityInProgress ? "activityFinish" : "finish")}><OperatorActionIcon name="finish" /><span>{activityInProgress ? "Finalizar atividade" : "Finalizar"}</span></button>
       </div>
       <Notice>{message}</Notice>
       {filteredQueueItems.length ? (

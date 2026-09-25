@@ -591,12 +591,15 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(inspecao["selectable"])
 
         real = next(row for row in route if row["numero_operacao"] == "20")
-        service.executar("Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=real)
+        inicio = service.executar("Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=real)
+        self.assertEqual(inicio.message, "Produção iniciada.")
         concluido = service.executar(
             "Finalizado", op="OP-OPERADOR", setor="Dobra", recurso="1303",
             operacao=real, pecas_boas=2, operadores_cracha=["1"],
         )
         self.assertTrue(concluido.ok, concluido.message)
+        # OP-05: a resposta confirma o que foi finalizado, com as quantidades.
+        self.assertEqual(concluido.message, "OP OP-OPERADOR finalizada: 2 peça(s) boa(s), 0 refugo(s).")
 
         rota_final = service.listar_operacoes("OP-OPERADOR", "Dobra", "1303")
         terminal = next(row for row in rota_final if row["numero_operacao"] == "99")

@@ -16,7 +16,8 @@ export function ErrorState({ error, onRetry }: { error: ApiError; onRetry?: () =
     <div className="state-box state-box--error" role="alert">
       <strong>Não foi possível carregar os dados</strong>
       <span>{error.message}</span>
-      {error.requestId ? <small>Referência: {error.requestId}</small> : null}
+      {/* OP-12: o código de rastreio é para o suporte, não para quem opera. */}
+      {error.requestId ? <details className="state-box__details"><summary>Detalhes técnicos</summary><small>Referência: {error.requestId}</small></details> : null}
       {onRetry ? <button type="button" onClick={onRetry}>Tentar novamente</button> : null}
     </div>
   );

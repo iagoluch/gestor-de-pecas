@@ -47,7 +47,7 @@ export function OperatorShell({
           ) : (
             <div className="operator-topbar__machine"><span>{resourceLabel}</span><strong>{selectedResource}</strong></div>
           )
-        ) : <div />}
+        ) : null}
         <div className="operator-topbar__actions">
           <ThemeToggle compact />
           <LogoutButton compact />

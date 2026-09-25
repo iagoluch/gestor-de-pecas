@@ -31,6 +31,12 @@ export function previewStatus(cota: QualityDimension, medida: string): MeasureSt
   return valor >= minimo && valor <= maximo ? "CONFORME" : "NAO_CONFORME";
 }
 
+/** OP-09: medida digitada que não é número ("abc") — avisa na linha, sem regra nova. */
+export function isInvalidMeasure(medida: string): boolean {
+  const texto = medida.trim().replace(",", ".");
+  return Boolean(texto) && !NUMERO.test(texto);
+}
+
 export function rangeLabel(cota: QualityDimension): string {
   if (cota.limite_inferior === null || cota.limite_superior === null) return "";
   const minimo = formatMeasurement(String(cota.limite_inferior));
@@ -230,9 +236,11 @@ export function QualityInspectionPage({
                               <input
                                 aria-label={`Medida da cota ${cota.sequencia}`}
                                 inputMode="decimal"
+                                aria-invalid={isInvalidMeasure(state.medida) || undefined}
                                 value={state.medida}
                                 onChange={(event) => setMeasures({ ...measures, [cota.sequencia]: { ...state, medida: event.target.value } })}
                               />
+                              <MeasureError medida={state.medida} />
                             </td>
                             <td>
                               {cota.conformidade_automatica ? (
@@ -374,6 +382,10 @@ export function QualityInspectionPage({
   );
 }
 
+export function MeasureError({ medida }: { medida: string }) {
+  return isInvalidMeasure(medida) ? <small className="field-error" role="alert">Use só números, ex.: 125,4</small> : null;
+}
+
 export function TemplateEditor({
   drafts,
   saving,
@@ -385,9 +397,10 @@ export function TemplateEditor({
   onChange: (value: DraftDimension[]) => void;
   onSave: () => void;
 }) {
+  const incompleto = drafts.some((item) => !item.nominal.trim() || !item.tolerancia.trim());
   return (
     <>
-      <h2>Cadastro das cotas do produto</h2>
+      <h2 data-step-title tabIndex={-1}>Cadastro das cotas do produto</h2>
       <p className="insp-template-note">
         Este produto ainda não possui cotas cadastradas. Informe os padrões que a peça deveria possuir; eles serão reutilizados nas próximas inspeções.
       </p>
@@ -396,13 +409,11 @@ export function TemplateEditor({
           <fieldset key={index}>
             <legend>Cota {index + 1}</legend>
             <label>Descrição (opcional)<input value={item.descricao} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, descricao: event.target.value } : row))} /></label>
-            <label>Padrão
-              <span className="insp-tolerance-input">
-                <input aria-label={`Padrão nominal da cota ${index + 1}`} placeholder="125,0" value={item.nominal} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, nominal: event.target.value } : row))} />
-                <span aria-hidden="true">±</span>
-                <input aria-label={`Tolerância da cota ${index + 1}`} placeholder="0,5" value={item.tolerancia} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, tolerancia: event.target.value } : row))} />
-              </span>
-            </label>
+            {/* OP-10: dois campos com label visível; o placeholder é exemplo, não valor. */}
+            <span className="insp-tolerance-input">
+              <label>Padrão (mm)<input aria-label={`Padrão nominal da cota ${index + 1}`} inputMode="decimal" placeholder="ex.: 125,0" value={item.nominal} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, nominal: event.target.value } : row))} /></label>
+              <label>Tolerância (± mm)<input aria-label={`Tolerância da cota ${index + 1}`} inputMode="decimal" placeholder="ex.: 0,5" value={item.tolerancia} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, tolerancia: event.target.value } : row))} /></label>
+            </span>
             <div className="insp-fixed-unit"><span>Unidade</span><strong>mm</strong></div>
             {drafts.length > 1 ? <button type="button" className="insp-remove" onClick={() => onChange(drafts.filter((_row, position) => position !== index))}>Remover</button> : null}
           </fieldset>
@@ -415,7 +426,8 @@ export function TemplateEditor({
       >
         + Adicionar cota
       </button>
-      <button type="button" className="insp-primary" disabled={saving} onClick={onSave}>Salvar cotas do produto</button>
+      <button type="button" className="insp-primary" disabled={saving || incompleto} onClick={onSave}>Salvar cotas do produto</button>
+      {incompleto ? <small className="disabled-reason">Preencha o padrão e a tolerância de todas as cotas para salvar.</small> : null}
     </>
   );
 }

@@ -105,10 +105,10 @@ describe("fluxo Web do operador", () => {
     fireEvent.change(input, { target: { value: "OP-CLEAR" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
-    expect(screen.getByText(/Aponte o Setup/)).toBeInTheDocument();
+    expect(screen.getByText(/aponte o Setup/i)).toBeInTheDocument();
     fireEvent.change(input, { target: { value: "" } });
     await waitFor(() => expect(screen.queryByRole("button", { name: "20 - DOBRA — Atual" })).not.toBeInTheDocument());
-    expect(screen.queryByText(/Aponte o Setup/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/aponte o Setup/i)).not.toBeInTheDocument();
   });
 
   it("habilita qualquer etapa apontável do Workbench, inclusive inspeção, e mantém o marco terminal fora do seletor", async () => {
@@ -153,7 +153,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Parada" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Parada do posto" })).not.toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "20 - DOBRA — Próxima" }));
     await screen.findByRole("heading", { name: "Confirmar operação" });
     const confirmation = screen.getByRole("dialog");
@@ -261,7 +261,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-091" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
-    fireEvent.click(await screen.findByRole("button", { name: expectedAction }));
+    fireEvent.click(await screen.findByRole("button", { name: "Retomar produção" }));
     await screen.findByText(`${expectedAction} registrado com sucesso.`);
 
     const actionCall = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
@@ -314,7 +314,7 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("1303");
-    fireEvent.click(screen.getByRole("button", { name: "Parada" }));
+    fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
     // A busca do motivo filtra a lista pelo texto digitado.
     fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "quebra" } });
     expect(screen.getByRole("option", { name: "0029 - Quebra de ferramenta" })).toBeInTheDocument();
@@ -354,7 +354,7 @@ describe("fluxo Web do operador", () => {
     // OP-02: a faixa persistente mostra o estado físico do posto vindo do backend.
     expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/Parado.*0029 - Quebra de ferramenta/);
     // Sem OP carregada não existe apontamento: a retomada é do próprio recurso.
-    fireEvent.click(screen.getByRole("button", { name: "Retomar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retomar produção" }));
     await screen.findByText("Recurso retomado com sucesso.");
     const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retomar", resource: "1303", op: null, operation_id: null });
@@ -534,7 +534,7 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
 
     // O aviso do posto já orienta antes mesmo de tentar.
-    expect(screen.getByText(/Aponte o Setup para conferir a primeira peça/)).toBeInTheDocument();
+    expect(screen.getByText(/Inicie a produção e depois aponte o Setup para conferir a primeira peça/)).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeDisabled();
 
@@ -567,7 +567,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Liberar lote" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    const retornar = screen.queryByRole("button", { name: "Retornar" });
+    const retornar = screen.queryByRole("button", { name: "Retomar produção" });
     if (retornar) {
       fireEvent.click(retornar);
       await screen.findByText("Retorno registrado com sucesso.");
@@ -597,6 +597,10 @@ describe("fluxo Web do operador", () => {
     expect(within(dialog).getByRole("button", { name: "Chamar responsável" })).toBeInTheDocument();
     // A chamada só avisa: sem o crachá, a autorização continua bloqueada.
     expect(within(dialog).getByRole("button", { name: "Liberar lote" })).toBeDisabled();
+    // OP-09: o bloqueio diz o que falta; medida não numérica avisa na linha.
+    expect(within(dialog).getByText("Informe o crachá do responsável para registrar o refugo.")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "abc" } });
+    expect(within(dialog).getByText("Use só números, ex.: 125,4")).toBeInTheDocument();
   });
 
   it("oferece o cadastro das cotas quando o produto ainda não tem checklist", async () => {
@@ -684,6 +688,11 @@ describe("fluxo Web do operador", () => {
     expect(finalizar).toBeEnabled();
     fireEvent.click(finalizar);
     await screen.findByRole("heading", { name: "Finalizar produção" });
+    // OP-11: o botão travado diz o que falta; passar do saldo só avisa.
+    expect(screen.getByRole("button", { name: "Confirmar finalização" })).toBeDisabled();
+    expect(screen.getByText("Informe o crachá do operador e toque em + para confirmar.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Peças boas"), { target: { value: "999" } });
+    expect(screen.getByText(/passa do saldo/)).toBeInTheDocument();
   });
 
   it("recusa escolher estação de Solda Aço quando o login não tem perfil fixo", async () => {
@@ -792,6 +801,32 @@ describe("fluxo Web do operador", () => {
     expect(screen.queryByText(/SOAP|Traceback|http/i)).not.toBeInTheDocument();
   });
 
+  it("OP-12: OP inexistente sem busca remota diz que não encontrou, sem erro técnico", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 10, name: "Operador Usinagem", role: "operador_usinagem", management_access: false, operator_access: true, operator_sector: "Usinagem" });
+      if (path.includes("/operator/context")) return json({ sector: "Usinagem", route: "Usinagem", resources: ["Romi D 1000"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/workbench")) return json({ sector: "Usinagem", resource: "Romi D 1000", production: [], queue: [] });
+      if (path.includes("/operator/operations/XX404")) return json({ code: "not_found", message: "Não encontrado", request_id: "abc-123" }, 404);
+      if (path.includes("/operator/operations/ZZ888")) return json({ items: [], sync: { source: "miss", pending: false, remote_available: false } });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    }));
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("Romi D 1000");
+    fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "ZZ888" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByText("OP ZZ888 não encontrada. Confira o código.");
+    expect(screen.queryByText("Produção e fila atualizadas.")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "XX404" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByText("OP XX404 não encontrada. Confira o código.");
+    expect(screen.queryByText(/Referência|Não foi possível carregar os dados/)).not.toBeInTheDocument();
+  });
+
   it("explica o setor sem posto cadastrado em vez de exibir painel vazio", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
@@ -830,8 +865,8 @@ describe("fluxo Web do operador", () => {
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText(/Posto parado — 0029 - Quebra de ferramenta/);
     // A ação verde vira Retomar e a tela não oferece uma segunda parada.
-    const retomar = screen.getByRole("button", { name: "Retomar" });
-    expect(retomar.querySelector("img")).toHaveAttribute("src", expect.stringContaining("action_start"));
+    const retomar = screen.getByRole("button", { name: "Retomar produção" });
+    expect(retomar.querySelector("svg")).toHaveAttribute("data-icon", "start");
     expect(screen.getByRole("button", { name: "Parada" })).toBeDisabled();
     fireEvent.click(retomar);
     await screen.findByText("Recurso retomado com sucesso.");

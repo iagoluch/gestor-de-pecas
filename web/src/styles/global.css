@@ -43,7 +43,7 @@ table, .metric-card__value, .insight-drawer__summary strong, .resource-card dd, 
   top: 28px;
   left: clamp(200px, 14vw, 260px);
   z-index: calc(var(--z-sidebar) + 1);
-  width: 22px;
+  width: 24px;
   height: 44px;
   transform: translateX(-50%);
   display: grid;
@@ -56,7 +56,7 @@ table, .metric-card__value, .insight-drawer__summary strong, .resource-card dd, 
   transition: left .2s ease, background-color .15s ease;
 }
 .sidebar-collapse-toggle:hover { background: var(--sidebar-hover); }
-.app-shell--collapsed .sidebar-collapse-toggle { left: 11px; }
+.app-shell--collapsed .sidebar-collapse-toggle { left: 12px; }
 .sidebar__brand { min-height: 60px; display: flex; align-items: center; justify-content: center; }
 .sidebar__brand img { width: 218px; height: 45px; object-fit: contain; }
 .sidebar__close { display: none; }
@@ -359,6 +359,8 @@ tbody tr:last-child > td { border-bottom: 0; }
 .data-table tbody tr { transition: background-color var(--duration-fast) ease; }
 .data-table tbody tr:hover { background: var(--primary-soft); }
 .table-link, .inline-link { color: var(--primary); font-weight: 700; text-decoration: none; }
+/* OP-13 / WCAG 2.5.8: link de tabela é alvo isolado (não está numa frase) — mínimo 24px. */
+.table-link { display: inline-flex; align-items: center; min-height: 24px; }
 .table-link:hover, .inline-link:hover { text-decoration: underline; }
 .inline-link { display: inline-block; margin-right: 8px; }
 .button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 0 16px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); box-shadow: var(--shadow-1); font-size: var(--text-base); font-weight: 700; text-decoration: none; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease; }
@@ -808,6 +810,8 @@ tbody tr:last-child > td { border-bottom: 0; }
 
 /* Posto do operador — barra superior enxuta; o espaço da tela é do apontamento. */
 .operator-shell { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+/* OP-13: no chão de fábrica (toque, às vezes com luva) todo botão do portal tem 44px. */
+.operator-shell .button { min-height: 44px; }
 .operator-topbar { position: sticky; top: 0; z-index: var(--z-sticky); display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 22px; height: 72px; padding: 0 22px; color: white; background: var(--sidebar); }
 .operator-topbar__brand { display: grid; gap: 2px; }
 .operator-topbar__brand img { height: 32px; width: auto; object-fit: contain; }
@@ -817,7 +821,7 @@ tbody tr:last-child > td { border-bottom: 0; }
 .operator-topbar__clock strong { display: block; font-size: 17px; line-height: 1.1; }
 .operator-topbar__clock small { display: block; font-size: var(--text-xs); opacity: .75; }
 .operator-topbar__machine { position: absolute; left: 50%; transform: translateX(-50%); min-width: 0; max-width: calc(100% - 420px); display: grid; gap: 1px; padding: 0; border: 0; color: white; background: transparent; text-align: center; overflow: hidden; }
-.operator-topbar__machine span { color: var(--sidebar-text-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.operator-topbar__machine > span { color: var(--sidebar-text-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .operator-topbar__machine strong { display: block; font-size: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.operator-topbar__machine { cursor: pointer; }
 button.operator-topbar__machine:hover strong, button.operator-topbar__machine:focus-visible strong { text-decoration: underline; text-underline-offset: 3px; }
@@ -868,7 +872,7 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-action:not(:disabled):hover { filter: brightness(1.05); box-shadow: var(--shadow-2), inset 0 -2px 0 rgba(0, 0, 0, .12); }
 .operator-action:not(:disabled):active { transform: translateY(1px); box-shadow: var(--shadow-1); }
 .operator-action span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.operator-action img { width: clamp(30px, 3.2vw, 51px); height: clamp(24px, 2.6vw, 41px); flex: 0 0 auto; object-fit: contain; }
+.operator-action__icon { width: clamp(22px, 2vw, 28px); height: clamp(22px, 2vw, 28px); flex: 0 0 auto; }
 /* OP-01: preenchimentos de estado medidos AA (tokens --fill-*). Desabilitado
    vira neutro — a cor original desbotada parecia uma ação disponível. */
 .operator-action--start { color: var(--fill-ink); background: var(--fill-producing); }
@@ -878,9 +882,11 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-action--rework { color: var(--fill-ink); background: var(--fill-rework); }
 .operator-action:disabled { cursor: not-allowed; color: var(--fill-ink); background: var(--fill-neutral); box-shadow: none; opacity: .55; }
 .operator-action:disabled img { filter: grayscale(1); }
+/* OP-07: Setup em curso — o botão fica "afundado" e reabre o checklist. */
+.operator-action[aria-pressed="true"] { box-shadow: inset 0 0 0 4px var(--fill-ink), inset 0 4px 10px rgb(0 0 0 / .35); }
 
 /* OP-02: faixa persistente do estado físico do posto. */
-.station-state { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 12px; padding: 10px 16px; border-radius: var(--radius-card); color: var(--fill-ink); background: var(--fill-neutral); font-size: var(--text-md); }
+.station-state { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 14px; text-align: center; margin: 0 0 12px; padding: 10px 16px; border-radius: var(--radius-card); color: var(--fill-ink); background: var(--fill-neutral); font-size: var(--text-md); }
 .station-state strong { font-size: var(--text-xl); letter-spacing: .02em; text-transform: uppercase; }
 .station-state--producing { background: var(--fill-producing); }
 .station-state--stopped { background: var(--fill-stopped); }
@@ -933,7 +939,7 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-card-columns h2 { margin: 0; font-size: 17px; }
 .operator-card-heading-actions { display: flex; align-items: center; gap: 8px; }
 .operator-card-columns header span { min-width: 28px; min-height: 28px; display: grid; place-items: center; border-radius: var(--radius-panel); color: var(--primary); background: var(--primary-soft); font-size: var(--text-sm); font-weight: 700; }
-.operator-card-heading-actions button { min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--primary); background: var(--surface); font-size: var(--text-xs); font-weight: 700; }
+.operator-card-heading-actions button { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--primary); background: var(--surface); font-size: var(--text-xs); font-weight: 700; }
 .operator-card-list { min-height: 214px; display: grid; grid-template-columns: 1fr; align-content: start; gap: 10px; padding: 12px; }
 .operator-card-list .state-box { grid-column: 1 / -1; min-height: 185px; }
 .operator-production-card { position: relative; min-width: 0; --card-accent: var(--primary); padding: 16px 16px 14px; border: 1px solid var(--border); border-radius: var(--radius-card); color: var(--text); background: var(--surface); box-shadow: inset 0 3px 0 var(--card-accent), var(--shadow-1); text-align: left; transition: box-shadow .18s var(--ease), border-color .18s ease, background-color .18s ease; }
@@ -986,7 +992,15 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-dialog__body label { display: grid; gap: 7px; font-size: var(--text-sm); font-weight: 700; }
 .operator-dialog input, .operator-dialog select, .operator-dialog textarea { width: 100%; min-height: 42px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); }
 .operator-dialog textarea { min-height: 92px; resize: vertical; }
-.operator-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; }
+/* OP-09: ações sempre visíveis — o rodapé gruda na base do diálogo que rola. */
+.operator-dialog__actions { position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 -20px; padding: 12px 20px; border-top: 1px solid var(--divider); background: var(--surface); }
+.operator-dialog__step { display: grid; gap: 15px; }
+.operator-step-title { margin: 0; font-size: var(--text-md); }
+.operator-step-title:focus, [data-step-title]:focus { outline: none; }
+.operator-step-title:focus-visible, [data-step-title]:focus-visible { box-shadow: var(--focus-ring); }
+/* Motivo visível de uma ação desabilitada (OP-09/10/11). */
+.disabled-reason { flex: 1 1 220px; color: var(--muted); font-size: var(--text-sm); }
+.field-error { color: var(--danger-ink); font-size: var(--text-sm); font-weight: 700; }
 .operator-dialog__actions > button { min-height: 42px; padding: 0 18px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-weight: 700; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease; }
 .operator-dialog__actions > button:not(:disabled):not(.button--primary):not(.operator-danger):hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .operator-dialog__actions > button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
@@ -1109,6 +1123,8 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .highlight-plan__select > small { color: var(--muted); font-size: var(--text-xs); }
 .highlight-plan__info { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-alt); color: var(--primary); font-size: var(--text-sm); font-weight: 800; font-style: italic; line-height: 1; cursor: pointer; }
 .highlight-plan__info:hover { border-color: var(--primary); }
+/* OP-13: o "i" continua pequeno no desenho, mas a área de toque tem 44×44. */
+.highlight-plan__info::after { content: ""; position: absolute; inset: -11px; }
 .highlight-plan--disponivel { --card-accent: var(--primary); }
 .highlight-plan--destacado { --card-accent: var(--accent); background: var(--accent-soft); }
 .highlight-plan--aguardando { opacity: .72; }
@@ -1294,8 +1310,7 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .insp-template-editor legend { padding: 0 6px; font-size: var(--text-sm); font-weight: 700; }
 .insp-template-editor label { display: grid; gap: 6px; font-size: var(--text-sm); font-weight: 700; }
 .insp-template-editor input { min-height: 40px; padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); }
-.insp-tolerance-input { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
-.insp-tolerance-input > span { font-size: 18px; font-weight: 700; }
+.insp-tolerance-input { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: end; gap: 8px; }
 
 .insp-panel--drawing { position: sticky; top: 16px; }
 .insp-drawing__meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -1372,7 +1387,7 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
   .operator-topbar__clock strong { font-size: var(--text-base); }
   .operator-topbar__clock small { font-size: var(--text-2xs); }
   .operator-topbar__machine { position: static; grid-column: 1 / -1; grid-row: 2; width: 100%; max-width: none; transform: none; }
-  .operator-topbar__machine span { display: none; }
+  .operator-topbar__machine > span { display: none; }
   .operator-topbar__machine strong { font-size: var(--text-md); }
   .operator-topbar__actions { grid-column: 3; }
   .operator-tabs { padding: 6px 12px; }
@@ -1408,9 +1423,10 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
   padding: 0 20px 0 16px;
   border: 0;
   border-radius: var(--radius-pill);
-  /* Tinta escura sobre o laranja da marca: branco dava 2,8:1 (AX-01). */
-  color: var(--fill-ink-dark);
-  background: var(--orange);
+  /* AX-01: branco sobre o laranja da marca escurecido (4,7:1) — tinta escura
+     no laranja vivo passava no contraste mas destoava da identidade. */
+  color: var(--fill-ink);
+  background: var(--fill-brand);
   box-shadow: 0 6px 18px rgba(255, 113, 0, .38), var(--shadow-hover);
   font-size: var(--text-md);
   font-weight: 700;
@@ -1584,4 +1600,11 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
   font-size: var(--text-2xs);
   font-weight: 700;
   line-height: 1;
+}
+
+/* OP-14 / WCAG 1.4.10: a 320px (zoom 400%) a topbar cabe sem rolagem lateral. */
+@media (max-width: 400px) {
+  .operator-topbar { gap: 6px; padding: 0 8px; }
+  .operator-topbar__credit, .operator-topbar__clock img { display: none; }
+  .operator-topbar__brand img { height: 20px; }
 }
