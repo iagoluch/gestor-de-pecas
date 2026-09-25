@@ -17,6 +17,8 @@ from app.core.resource_mapping import resolve_resource_identity
 from app.core.operator_sectors import (
     CAPACITY_TAB_STATION_OWNED_SECTORS,
     CAPACITY_TAB_WHITELIST_CODES,
+    participa_da_timeline,
+    postos_apontaveis_sem_catalogo,
 )
 from app.database.config import PostgresConfig, load_postgres_config
 from app.database.ai_repository import AIRepositoryMixin
@@ -62,6 +64,8 @@ LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
 NO_DEMAND_REASON = "Recurso sem demanda"
 NO_DEMAND_INTERRUPTION_TYPE = "recurso_sem_demanda"
+SCHEDULED_OP_REASON = "OP programada aguardando início"
+SCHEDULED_OP_INTERRUPTION_TYPE = "op_programada"
 AUTOMATIC_BREAK_INTERRUPTION = "intervalo_programado"
 # Estados copiados de uma OP/nesting: só valem enquanto a execução existir.
 EXECUTION_STATE_ORIGINS = frozenset({"apontamento_operador", "corte_nesting"})
@@ -1902,6 +1906,40 @@ class Database(
                 current["tipo_setor"] = sector
             if row.get("calendario_codigo") and not current.get("calendario_codigo"):
                 current["calendario_codigo"] = row.get("calendario_codigo")
+        grouped = {
+            key: item for key, item in grouped.items()
+            if participa_da_timeline(*item["aliases"])
+        }
+        catalog_codes = [alias for item in grouped.values() for alias in item["aliases"]]
+        stations = postos_apontaveis_sem_catalogo(catalog_codes)
+        if stations:
+            # Posto sem catálogo "existe" desde o primeiro estado dele (ou desde
+            # agora): sem isso o replay de pausas já passadas criaria timeline
+            # retroativa para uma estação que acabou de entrar no inventário.
+            with self.connection() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT UPPER(recurso) AS recurso, MIN(data_inicio) AS inicio
+                    FROM eventos_estado_recurso
+                    WHERE UPPER(recurso) = ANY(%s)
+                    GROUP BY UPPER(recurso)
+                    """,
+                    ([station.upper() for _sector, station in stations],),
+                )
+                first_state = {row["recurso"]: row["inicio"] for row in cursor.fetchall()}
+            now = self._now()
+            for sector, station in stations:
+                grouped.setdefault(
+                    station.casefold(),
+                    {
+                        "codigo": station,
+                        "nome": station,
+                        "tipo_setor": sector,
+                        "aliases": {station},
+                        "calendario_codigo": None,
+                        "sincronizado_em": first_state.get(station.upper()) or now,
+                    },
+                )
         return [
             {**item, "aliases": sorted(item["aliases"], key=str.casefold)}
             for _key, item in sorted(grouped.items())
@@ -2898,14 +2936,54 @@ class Database(
     # OFFICIAL_WORK_WINDOW). ``ShiftBoundaryService`` lê esta tabela a cada
     # ciclo pelo carregador em ``mes/services/shift_parameters.py``.
     # ------------------------------------------------------------------
-    def listar_parametros_turno(self, *, somente_ativos=False):
-        query = "SELECT * FROM parametros_turno WHERE TRUE"
+    def listar_parametros_turno(self, *, somente_ativos=False, vigente_em=None):
+        """Turnos atuais, ou os que valiam em ``vigente_em`` (histórico)."""
+
+        params = []
+        if vigente_em is None:
+            query = "SELECT * FROM parametros_turno WHERE TRUE"
+        else:
+            instante = _period_value(vigente_em)
+            query = (
+                "SELECT parametro_id AS id, nome, tipo, hora_inicio, hora_fim, ativo, ordem"
+                " FROM parametros_turno_historico"
+                " WHERE vigente_desde <= %s AND (vigente_ate IS NULL OR vigente_ate > %s)"
+            )
+            params = [instante, instante]
         if somente_ativos:
             query += " AND ativo IS TRUE"
         query += " ORDER BY ordem, hora_inicio, id"
         with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
+
+    def _versionar_parametro_turno_tx(self, cursor, parametro_id, row=None):
+        """Encerra a versão aberta do turno e, se ``row``, abre a nova agora."""
+
+        instante = self._now()
+        # Duas gravações no mesmo instante: a versão aberta nunca valeu.
+        cursor.execute(
+            "DELETE FROM parametros_turno_historico"
+            " WHERE parametro_id = %s AND vigente_ate IS NULL AND vigente_desde >= %s",
+            (int(parametro_id), instante),
+        )
+        cursor.execute(
+            "UPDATE parametros_turno_historico SET vigente_ate = %s"
+            " WHERE parametro_id = %s AND vigente_ate IS NULL",
+            (instante, int(parametro_id)),
+        )
+        if row:
+            cursor.execute(
+                """
+                INSERT INTO parametros_turno_historico (
+                    parametro_id, nome, tipo, hora_inicio, hora_fim, ativo, ordem, vigente_desde
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    row["id"], row["nome"], row["tipo"], row["hora_inicio"],
+                    row["hora_fim"], row["ativo"], row["ordem"], instante,
+                ),
+            )
 
     def salvar_parametro_turno(
         self,
@@ -2961,6 +3039,8 @@ class Database(
                     (rotulo, tipo_normalizado, hora_inicio, hora_fim, bool(ativo), int(ordem)),
                 )
             row = cursor.fetchone()
+            if row:
+                self._versionar_parametro_turno_tx(cursor, row["id"], row)
             return dict(row) if row else None
 
     def remover_parametro_turno(self, parametro_id):
@@ -2968,7 +3048,10 @@ class Database(
             cursor.execute(
                 "DELETE FROM parametros_turno WHERE id = %s", (int(parametro_id),)
             )
-            return cursor.rowcount > 0
+            removed = cursor.rowcount > 0
+            if removed:
+                self._versionar_parametro_turno_tx(cursor, parametro_id)
+            return removed
 
     def listar_recursos_ativos_no_instante(self, data_hora):
         """Recursos com execução operacional ou Corte aberta no instante."""
@@ -3008,7 +3091,8 @@ class Database(
 
         ``tipo_setor`` restringe a pausa ao setor configurado. Sem ele, a pausa
         vale para toda a fábrica — comportamento anterior, preservado para
-        configurações que não declaram setor.
+        configurações que não declaram setor. Máquina de Corte com nesting em
+        execução no instante não entra na pausa.
         """
 
         instante = _period_value(data_hora)
@@ -3028,6 +3112,22 @@ class Database(
                 (instante,),
             )
             ja_aplicados = {row["recurso"] for row in cursor.fetchall()}
+            # Decisão da Manufatura (25/09/2026): nesting em execução no início
+            # da pausa segue em produção. Encerrado ainda dentro da janela, o
+            # recurso entra na pausa pelo fluxo de fim de execução.
+            cursor.execute(
+                """
+                SELECT DISTINCT maquina FROM apontamentos_corte
+                WHERE status = 'Em processo'
+                  AND data_inicio IS NOT NULL AND data_inicio <= %s
+                  AND (data_fim IS NULL OR data_fim > %s)
+                """,
+                (instante, instante),
+            )
+            cortando = {
+                str(resolve_resource_identity(row["maquina"]) or "").upper()
+                for row in cursor.fetchall()
+            }
         candidates = {
             resolve_resource_identity(row.get("codigo")): {
                 "recurso": resolve_resource_identity(row.get("codigo")),
@@ -3051,7 +3151,7 @@ class Database(
             if alvo and str(row.get("tipo_setor") or "").strip().casefold() != alvo:
                 continue
             resource = resolve_resource_identity(row.get("recurso"))
-            if str(resource or "").upper() in ja_aplicados:
+            if str(resource or "").upper() in ja_aplicados | cortando:
                 continue
             state = self.transicionar_estado_recurso(
                 resource,
@@ -3145,14 +3245,19 @@ class Database(
                 ):
                     # A OP/nesting terminou durante a pausa: não é reaberta.
                     previous = None
-                if not previous:
+                if not previous or ManufacturingRules.state_is_no_demand(
+                    category=previous.get("categoria"),
+                    interruption_type=previous.get("tipo_interrupcao"),
+                    operation=previous.get("op"),
+                ):
+                    # Sem demanda não é restaurado às cegas: uma OP pode ter
+                    # sido programada no recurso durante a pausa.
                     previous = {
                         "categoria": "fila",
                         "tipo_setor": current.get("tipo_setor"),
                         "operador": operador,
-                        "motivo": NO_DEMAND_REASON,
                         "automatico": True,
-                        "tipo_interrupcao": NO_DEMAND_INTERRUPTION_TYPE,
+                        **self._fila_sem_execucao_tx(cursor, resource),
                     }
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
@@ -3305,8 +3410,9 @@ class Database(
         """Encerra o fora de turno e publica ausência de demanda às 08:00.
 
         A OP interrompida permanece em ``Parada`` e exige retomada manual. A
-        fila criada aqui não carrega OP nem estado produtivo: ela registra
-        apenas que o recurso voltou à janela oficial sem demanda em execução.
+        fila criada aqui não carrega estado produtivo: carrega a OP programada
+        no recurso (``_fila_sem_execucao_tx``), se houver; senão registra que o
+        recurso voltou à janela oficial sem demanda.
 
         Recurso com execução em curso fica de fora: o Corte é interrompido no
         fim do turno sem encerrar o nesting, então o estado físico pode dizer
@@ -3390,19 +3496,21 @@ class Database(
                 ),
             )
             for current in [dict(row) for row in cursor.fetchall()]:
+                queue = self._fila_sem_execucao_tx(cursor, current["recurso"])
+                if not queue.get("op"):
+                    queue.update(motivo=str(motivo or "").strip(), tipo_interrupcao=tipo_interrupcao)
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
                     current["recurso"],
                     "fila",
                     tipo_setor=current.get("tipo_setor"),
                     operador=str(operador or "SISTEMA").strip() or "SISTEMA",
-                    motivo=str(motivo or "").strip(),
                     data_hora=instante,
                     origem="retorno_turno_sem_demanda",
                     referencia_origem=f"evento_estado:{current.get('id')}",
                     planejado=None,
                     automatico=True,
-                    tipo_interrupcao=tipo_interrupcao,
+                    **queue,
                 )
                 if state and not state.get("retroativo_ignorado"):
                     changed.append(dict(state))
@@ -3981,6 +4089,8 @@ class Database(
         resource = resolve_resource_identity(recurso)
         if not resource:
             raise ValueError("Recurso é obrigatório para registrar estado.")
+        if automatico and not participa_da_timeline(resource):
+            return None
         category = str(categoria or "").strip().lower()
         if category not in PHYSICAL_STATE_VALUES:
             raise ValueError(f"Categoria de estado inválida: {categoria}")
@@ -4097,7 +4207,7 @@ class Database(
         from mes.services.calendar import CalendarService
         from mes.services.shift_parameters import load_manufacturing_rules
 
-        calendar = CalendarService(self, load_manufacturing_rules(self))
+        calendar = CalendarService(self, load_manufacturing_rules(self, vigente_em=instante))
         return calendar.shift_window_kind(recurso, instante) == ShiftWindowKind.OUT_OF_SHIFT
 
     def _intervalo_vigente(self, tipo_setor, instante):
@@ -4223,13 +4333,63 @@ class Database(
             "fila",
             tipo_setor=sector,
             operador=operador,
-            motivo=NO_DEMAND_REASON,
             data_hora=instante,
             origem=origem,
             referencia_origem=referencia_origem,
             automatico=True,
-            tipo_interrupcao=NO_DEMAND_INTERRUPTION_TYPE,
+            **self._fila_sem_execucao_tx(cursor, resource),
         )
+
+    def _fila_sem_execucao_tx(self, cursor, recurso):
+        """Fila do recurso sem execução: com OP programada ou sem demanda.
+
+        OP programada é uma operação do roteiro TOTVS vigente (OP ativa no
+        catálogo PCP) cujo recurso é este e que ainda não foi apontada —
+        apontamento ``Aguardando`` não conta, é só um início recusado. Com
+        ela, o recurso fica em fila com a OP (demanda); sem ela, em Recurso
+        sem demanda. Ordem: prazo de entrega, emissão, OP, sequência.
+        """
+
+        resource = str(recurso or "").upper()
+        cursor.execute(
+            "SELECT DISTINCT codigo_recurso FROM catalogo_operacoes_op"
+            " WHERE ativo = TRUE AND BTRIM(COALESCE(codigo_recurso, '')) <> ''"
+        )
+        codes = [
+            row["codigo_recurso"] for row in cursor.fetchall()
+            if str(resolve_resource_identity(row["codigo_recurso"]) or "").upper() == resource
+        ]
+        scheduled = None
+        if codes:
+            cursor.execute(
+                """
+                SELECT o.codigo_op, o.numero_operacao, o.produto_codigo
+                FROM catalogo_operacoes_op o
+                JOIN catalogo_pcp_ops p ON p.codigo_op = o.codigo_op AND p.ativo = TRUE
+                WHERE o.ativo = TRUE
+                  AND o.codigo_recurso = ANY(%s)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM apontamentos_operacionais a
+                      WHERE UPPER(a.op) = UPPER(o.codigo_op)
+                        AND a.numero_operacao = o.numero_operacao
+                        AND a.status <> 'Aguardando'
+                  )
+                ORDER BY p.prazo_entrega NULLS LAST, p.data_emissao NULLS LAST,
+                         o.codigo_op, o.ordem, o.id
+                LIMIT 1
+                """,
+                (codes,),
+            )
+            scheduled = cursor.fetchone()
+        if not scheduled:
+            return {"motivo": NO_DEMAND_REASON, "tipo_interrupcao": NO_DEMAND_INTERRUPTION_TYPE}
+        return {
+            "op": scheduled["codigo_op"],
+            "numero_operacao": scheduled["numero_operacao"],
+            "produto_codigo": scheduled["produto_codigo"],
+            "motivo": SCHEDULED_OP_REASON,
+            "tipo_interrupcao": SCHEDULED_OP_INTERRUPTION_TYPE,
+        }
 
     def _reconciliar_estado_recurso_apontamentos_tx(
         self, cursor, recurso, instante, *, operador=None, origem="apontamento_operador",
@@ -4462,7 +4622,10 @@ class Database(
         query += " ORDER BY COALESCE(e.tipo_setor, ''), e.recurso, e.data_inicio"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+            return [
+                dict(row) for row in cursor.fetchall()
+                if participa_da_timeline(row.get("recurso"))
+            ]
 
     def listar_estados_recurso_periodo(
         self, inicio, fim, *, setor=None, recurso=None, categoria=None,
@@ -4510,6 +4673,10 @@ class Database(
             result = []
             for raw in cursor.fetchall():
                 row = dict(raw)
+                # Recurso só sincronizado (sem tela de apontamento) não entra
+                # em soma de tempo nenhuma — ver INCLUIR_RECURSOS_SO_SINCRONIZADOS.
+                if not participa_da_timeline(row.get("recurso")):
+                    continue
                 state_start = _period_value(row.get("data_inicio"))
                 state_end = _period_value(row.get("data_fim")) or end
                 row["inicio_periodo"] = max(state_start, start)

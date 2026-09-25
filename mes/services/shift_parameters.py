@@ -17,8 +17,12 @@ from __future__ import annotations
 from mes.domain.manufacturing_rules import ManufacturingRules
 
 
-def load_manufacturing_rules(db) -> ManufacturingRules:
+def load_manufacturing_rules(db, *, vigente_em=None) -> ManufacturingRules:
     """Monta a ``ManufacturingRules`` vigente a partir de ``parametros_turno``.
+
+    Com ``vigente_em``, usa a versão dos turnos que valia naquele instante
+    (``parametros_turno_historico``): decidir um instante passado com o turno
+    de hoje reescreveria o passado depois de uma alteração de H1/H2.
 
     Regra de derivação (generaliza H1/Oficial/H2 para N turnos futuros):
 
@@ -35,7 +39,10 @@ def load_manufacturing_rules(db) -> ManufacturingRules:
     """
 
     loader = getattr(db, "listar_parametros_turno", None)
-    rows = list(loader(somente_ativos=True) or []) if callable(loader) else []
+    filters = {"somente_ativos": True}
+    if vigente_em is not None:
+        filters["vigente_em"] = vigente_em
+    rows = list(loader(**filters) or []) if callable(loader) else []
     expediente_rows = [row for row in rows if str(row.get("tipo") or "") == "expediente"]
     if len(expediente_rows) != 1:
         # Sem configuração (ou configuração ambígua/quebrada): mantém o

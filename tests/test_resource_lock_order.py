@@ -12,6 +12,7 @@ import os
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 import psycopg
@@ -35,6 +36,11 @@ class ResourceLockOrderTests(unittest.TestCase):
         self.admin_dsn = base.dsn
         self.dsn = make_conninfo(base.dsn, options=f"-c search_path={self.schema}")
         self.db = Database(self.dsn)
+        # Os recursos daqui são fictícios: testam travas e restauração, não a
+        # regra de postos apontáveis — liga a chave de dev que os inclui.
+        dev_switch = patch("app.core.operator_sectors.INCLUIR_RECURSOS_SO_SINCRONIZADOS", True)
+        dev_switch.start()
+        self.addCleanup(dev_switch.stop)
 
     def tearDown(self):
         self.db.close()
@@ -169,12 +175,15 @@ class ResourceLockOrderTests(unittest.TestCase):
         self.assertIsNone(by_resource["RESTAURA-SEM-DEMANDA"]["op"])
 
     def test_pausa_automatica_inclui_recurso_habilitado_nunca_usado(self):
-        self.db.publicar_recursos_pcfactory([{
-            "codigo": "NOVO-SEM-HISTORICO",
-            "nome": "Novo sem histórico",
-            "tipo_setor": "Dobra",
-            "habilitado": True,
-        }])
+        # Cadastro anterior à pausa: a publicação carimba ``sincronizado_em`` com
+        # o relógio do Database, e a pausa ignora recurso cadastrado depois dela.
+        with patch.object(self.db, "_now", lambda: datetime(2026, 9, 24, 8, 0)):
+            self.db.publicar_recursos_pcfactory([{
+                "codigo": "NOVO-SEM-HISTORICO",
+                "nome": "Novo sem histórico",
+                "tipo_setor": "Dobra",
+                "habilitado": True,
+            }])
 
         changed = self.db.iniciar_intervalo_automatico(
             datetime(2026, 9, 24, 14, 0), "Almoço", tipo_setor="Dobra"
