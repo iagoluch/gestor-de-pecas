@@ -81,3 +81,56 @@ codemod pulou toda linha com `oee`. `app/database/database.py` e `mes/services/s
 - `python -m unittest tests.test_user_management` → 9/9.
 - Regressão da gestão (`check.py onda2`): 148 combinações (37 rotas × claro/escuro × 1366/320) — 0 overflow horizontal, 0 texto cortado, 0 texto < 11px; os 12 erros de console são os mesmos 403 do gestor já registrados na Onda 1 (idêntico a `onda1/metrics.json`).
 - OEE: nenhuma linha com `oee` no diff de estilos; `.oee-*` e `.andon-card__oee` intactos.
+
+## Onda 3 — P2
+
+Três commits: parte 1 (a739155 — TV, exportação, 403, teclado), parte 2 (ee95754 — operador) e o restante (gestão + Dev Observatory, este commit).
+
+### Primitives novos (fonte única)
+
+- `RowActions` — ação primária visível + menu "⋯" (popover nativo: fecha ao clicar fora/Escape, foco no 1º item, destrutivas separadas no fim). Nomes acessíveis com contexto: "Editar: Almoço · Caldeiraria", "Mais ações: …".
+- `ValidatedForm` / `validarFormulario` / `Obrigatorio` — validação inline pt-BR ("Preencha Descrição."), foco no 1º campo inválido, `aria-invalid`, `*` de obrigatório `aria-hidden`.
+- `useDraft` — estado sujo: fechar/Escape com alteração abre "Descartar alterações?" (via `useConfirm`).
+- `useDialogFocus` com pilha: só o diálogo do topo trata Escape e o Tab trap.
+- `OperatorDialog` via portal no `body` + título por `useId`.
+
+### ID → status
+
+| ID | Antes | Depois | Evidência |
+|---|---|---|---|
+| AN-04 | Solda/Andon com rolagem a 1280/1366 | **CORRIGIDO** (parte 1) | 0px de rolagem a 1280 e 1366 |
+| AN-05 | TV em branco ao cair a rede no rodízio | **CORRIGIDO** (parte 1) — último quadro + "dados de hh:mm" | `keepLastSnapshot` |
+| GE-03 | Exportar navegava para JSON de erro | **CORRIGIDO** (parte 1) — `api.download` + erro inline pt-BR | |
+| GE-04 | Salvar sem motivo; validação nativa em inglês | **CORRIGIDO** — `ValidatedForm` em Pausas, Crachás, Chamadas, Turnos, Usuários e Login | teste "explica em pt-BR o campo obrigatório vazio" (foco + `aria-invalid` + nenhum POST); visto no 8010 |
+| GE-05 | Editar → Escape perdia a edição | **CORRIGIDO** — `useDraft` nos 5 cadastros | visto no 8010 com teclado real: Escape → "Descartar alterações?" por cima |
+| GE-06 | 22:00–21:00 aceito sem explicação | **CORRIGIDO na UI** — o servidor aceita fim < início (turno que vira o dia); a tabela mostra "21:00 (dia seguinte)". Nenhuma regra nova inventada no front | `shifts.test.tsx` |
+| GE-07 | 403 genérico para gestor | **CORRIGIDO** (parte 1) — `RequireAdmin` → "Acesso restrito" | |
+| GE-08 | Destrutivo ao lado do seguro em cada linha | **CORRIGIDO** — `RowActions` em Pausas, Crachás, Chamadas e Turnos (Remover turno agora pede confirmação) | menu "⋯" com foco em "Desativar", "Remover" separado |
+| GE-09 | 14 colunas, status cortado, sem ordenação | **CORRIGIDO** — `DataTable` com colunas fixas (OP, Status sticky), ordenação com `aria-sort` e status sem corte | 8010: "Em Processo" inteiro; `aria-sort` → ascending; 0 overflow |
+| GE-10 | 41,7% (KPI) × 50% (tabela) sem base | **CORRIGIDO** — cada percentual rotula a base | |
+| GE-11 | 17 campos, placeholder cortado | **CORRIGIDO** — dica do ID do Telegram vira texto de ajuda ligado por `aria-describedby`, placeholder curto, setores em largura total | `chamadas.test.tsx` |
+| DO-01 | 361 de 548 textos < 12px, caixa alta | **CORRIGIDO** — escala `--text-*`/`--radius-*` espelhada de `web/src/styles/tokens.css`; sem caixa alta; borda lateral colorida (side-tab) removida | harness: 0 de 110 textos < 12px |
+| DO-02 | Falha de um bloco apagava painéis sem motivo | **CORRIGIDO** — falha dentro do painel ("Indisponível agora: … Mostrando a última leitura, das hh:mm:ss."), valores anteriores esmaecidos; toast só para ações do usuário | harness com métricas 500: só PostgreSQL/Processo/Rotas lentas mostram a falha |
+| DO-03 | Overflow de 116px a 320px | **CORRIGIDO** — grades `minmax(min(N, 100%), 1fr)` | `scrollWidth` 320 a 320px |
+| OP-05..15, AX-01 (Chamar) | ver ee95754 | **CORRIGIDO** (parte 2) | |
+| AX-03..06 | ver a739155 | **CORRIGIDO** (parte 1) | |
+
+### Bugs achados na inspeção visual (corrigidos)
+
+- **Diálogo de confirmação atrás do de edição**: os backdrops dividem `z-index: 100` e o "Descartar alterações?" vinha antes no DOM → ficava por baixo do "Editar pausa". O jsdom não pinta, então os testes passavam. Correção na camada compartilhada: `OperatorDialog` renderiza em portal no `body` (o último aberto fica no topo). Um teste do operador que buscava o diálogo no `container` passou a buscá-lo no `document`.
+- **`*` de obrigatório numa linha própria** (labels em grid): `label:has(> .required-mark)` vira flex com o campo em 100%.
+- **Ids de título duplicados** entre diálogos: `useId` no `OperatorDialog`.
+
+### Pendências / observações
+
+- Crachás, Chamadas e Turnos não foram vistos no navegador (a fixture de gestor não é admin); cobertos por teste.
+- Foco inicial do "Descartar alterações?" vai para o "×"; aceitável, sem mudança.
+- `app.js` do Dev Observatory ainda aplica `c-<classe>` nos postos, que agora não tem estilo (inofensivo) → Onda 4 (órfãos).
+- Nenhuma nova falha no teste de refugo do operador nesta rodada (32/32).
+
+### Validação
+
+- `vitest`: pauses 14, badges 10, chamadas 1, shifts 4, users 2, operator 32, primitives 4, management 17 → **84/84**; `tsc --noEmit` limpo; `npm run build` ok.
+- `python -m unittest tests.test_dev_observatory` → 20/20.
+- 8010 (gestor, 1366×900): Ordens, Pausas (menu, validação, diálogo empilhado); Dev Observatory via harness same-origin (CSP intacta; arquivos de harness removidos do `dist`).
+- OEE: nenhum arquivo nem regra `.oee-*`/`.andon-card__oee` tocados.

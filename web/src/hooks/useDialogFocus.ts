@@ -3,6 +3,10 @@ import { useEffect, useRef, type RefObject } from "react";
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Diálogos empilhados (ex.: "Descartar alterações?" sobre um formulário): só
+// o do topo responde a Esc e prende o Tab.
+const openDialogs: symbol[] = [];
+
 /**
  * Comportamento de teclado de um diálogo modal: foco inicial dentro dele,
  * Tab/Shift+Tab presos no conteúdo, Esc fecha e, ao fechar, o foco volta ao
@@ -25,6 +29,8 @@ export function useDialogFocus(containerRef: RefObject<HTMLElement | null>, acti
     if (!active) return undefined;
     const container = containerRef.current;
     const previouslyFocused = openerRef.current;
+    const token = Symbol("dialog");
+    openDialogs.push(token);
     // Um campo com autoFocus dentro do diálogo continua com o foco; só sem ele
     // o foco vai para o primeiro controle.
     if (!container?.contains(document.activeElement)) {
@@ -33,6 +39,7 @@ export function useDialogFocus(containerRef: RefObject<HTMLElement | null>, acti
     }
 
     function onKeyDown(event: KeyboardEvent) {
+      if (openDialogs[openDialogs.length - 1] !== token) return;
       if (event.key === "Escape") {
         event.stopPropagation();
         onCloseRef.current();
@@ -55,6 +62,7 @@ export function useDialogFocus(containerRef: RefObject<HTMLElement | null>, acti
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
+      openDialogs.splice(openDialogs.indexOf(token), 1);
       previouslyFocused?.focus?.();
     };
   }, [active, containerRef]);

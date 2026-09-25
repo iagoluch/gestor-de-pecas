@@ -78,7 +78,7 @@ export function ProductionOrdersPage() {
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Ordens no filtro" value={formatNumber(data?.page.total ?? 0)} />
         <MetricCard label="Quantidade planejada" value={formatNumber(orderTotals.planned)} detail="Somatório das OPs do filtro" accent="primary" />
-        <MetricCard label="Peças boas produzidas" value={formatNumber(orderTotals.good)} detail={orderTotals.planned ? `${formatPercent(orderTotals.good / orderTotals.planned * 100)} do planejado` : undefined} accent="success" />
+        <MetricCard label="Peças boas produzidas" value={formatNumber(orderTotals.good)} detail={orderTotals.planned ? `${formatPercent(orderTotals.good / orderTotals.planned * 100)} do planejado (só boas)` : undefined} accent="success" />
         <MetricCard label="Saldo a produzir" value={formatNumber(orderTotals.balance)} detail={`${formatNumber(orderTotals.attended)} atendidas (boas + refugo); retrabalho não reduz saldo`} accent={orderTotals.balance > 0 ? "warning" : "success"} />
       </div>
       <SectionCard title="Ordens de Produção" className="content-section section-card--table">
@@ -86,19 +86,21 @@ export function ProductionOrdersPage() {
           rows={data?.items ?? []}
           rowKey={(row, index) => row.apontamento_id ?? `${row.op}-${index}`}
           columns={[
-            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
-            { key: "product", label: "Produto", render: (row) => <span title={row.descricao ?? undefined}>{row.produto ?? "Não disponível"}</span> },
-            { key: "operation", label: "Operação", render: (row) => row.operacao_atual ?? "Não disponível" },
-            { key: "sequence", label: "Sequência", render: (row) => row.sequencia ?? "Não disponível" },
-            { key: "resource", label: "Recurso", render: (row) => row.recurso_real ?? row.recurso_planejado ?? "Não disponível" },
-            { key: "priority", label: "Prioridade", render: (row) => row.prioridade ?? "Não disponível" },
-            { key: "planned", label: "Planejada", render: (row) => formatNumber(row.quantidade_planejada) },
-            { key: "good", label: "Boa", render: (row) => formatNumber(row.quantidade_boa) },
-            { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
-            { key: "attended", label: "Atendida", render: (row) => formatNumber(row.quantidade_atendida) },
-            { key: "balance", label: "Saldo", render: (row) => formatNumber(row.saldo_quantidade) },
-            { key: "progress", label: "Progresso", render: (row) => formatPercent(row.progresso_percentual) },
-            { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status} /> },
+            // GE-09: OP fixa e Status logo ao lado, para não sumirem na rolagem;
+            // a sequência acompanha a operação em vez de ocupar coluna própria.
+            { key: "op", label: "OP", sticky: true, sortValue: (row) => row.op, render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+            { key: "status", label: "Status", sortValue: (row) => row.status, render: (row) => <StatusBadge value={row.status} /> },
+            { key: "product", label: "Produto", sortValue: (row) => row.produto, render: (row) => <span title={row.descricao ?? undefined}>{row.produto ?? "Não disponível"}</span> },
+            { key: "operation", label: "Operação", sortValue: (row) => row.sequencia, render: (row) => row.operacao_atual ? (row.sequencia ? `${row.sequencia} · ${row.operacao_atual}` : row.operacao_atual) : "Não disponível" },
+            { key: "resource", label: "Recurso", sortValue: (row) => row.recurso_real ?? row.recurso_planejado, render: (row) => row.recurso_real ?? row.recurso_planejado ?? "Não disponível" },
+            { key: "priority", label: "Prioridade", sortValue: (row) => row.prioridade, render: (row) => row.prioridade ?? "Não disponível" },
+            { key: "planned", label: "Planejada", sortValue: (row) => row.quantidade_planejada, render: (row) => formatNumber(row.quantidade_planejada) },
+            { key: "good", label: "Boa", sortValue: (row) => row.quantidade_boa, render: (row) => formatNumber(row.quantidade_boa) },
+            { key: "scrap", label: "Refugo", sortValue: (row) => row.refugo, render: (row) => formatNumber(row.refugo) },
+            { key: "attended", label: "Atendida", sortValue: (row) => row.quantidade_atendida, render: (row) => formatNumber(row.quantidade_atendida) },
+            { key: "balance", label: "Saldo", sortValue: (row) => row.saldo_quantidade, render: (row) => formatNumber(row.saldo_quantidade) },
+            // GE-10: a base do percentual fica no rótulo (atendida = boas + refugo).
+            { key: "progress", label: "% atendida", sortValue: (row) => row.progresso_percentual, render: (row) => formatPercent(row.progresso_percentual) },
             { key: "next", label: "Próxima operação", render: (row) => row.proxima_operacao ?? "Não disponível" },
           ]}
         />

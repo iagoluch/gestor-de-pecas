@@ -51,6 +51,7 @@ function linhas() {
 beforeEach(() => window.sessionStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
+// O menu "⋯" usa popover nativo; o jsdom o esconde mas não implementa showPopover, daí `hidden: true` nos itens.
 describe("Pausas automáticas — organização e filtros", () => {
   it("lista todas as pausas cadastradas com tipo e situação legíveis", async () => {
     stubFetch();
@@ -147,14 +148,55 @@ describe("Pausas automáticas — organização e filtros", () => {
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Editar" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Editar:/ })[0]);
     expect(await screen.findByRole("dialog", { name: "Editar pausa" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Fim"), { target: { value: "12:55" } });
+    fireEvent.change(screen.getByLabelText(/^Fim/), { target: { value: "12:55" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa salva"));
     const post = mock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "POST");
     expect(JSON.parse(String((post?.[1] as RequestInit).body))).toMatchObject({ hora_fim: "12:55", ativo: true });
+  });
+
+  it("pergunta antes de descartar uma edição alterada (Esc) e fecha direto quando nada mudou", async () => {
+    stubFetch();
+    renderPauses();
+    await waitFor(() => expect(linhas()).toBe(4));
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Editar:/ })[0]);
+    await screen.findByRole("dialog", { name: "Editar pausa" });
+    fireEvent.change(screen.getByLabelText(/^Fim/), { target: { value: "12:55" } });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await screen.findByRole("dialog", { name: "Descartar alterações?" });
+    // Esc no aviso só fecha o aviso; a edição continua aberta e intacta.
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Descartar alterações?" })).not.toBeInTheDocument());
+    expect(screen.getByLabelText(/^Fim/)).toHaveValue("12:55");
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Descartar alterações" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar pausa" })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Editar:/ })[0]);
+    await screen.findByRole("dialog", { name: "Editar pausa" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar pausa" })).not.toBeInTheDocument());
+  });
+
+  it("explica em pt-BR o campo obrigatório vazio, foca nele e não envia", async () => {
+    const mock = stubFetch();
+    renderPauses();
+    await waitFor(() => expect(linhas()).toBe(4));
+
+    fireEvent.click(screen.getByRole("button", { name: "Nova pausa" }));
+    await screen.findByRole("dialog", { name: "Nova pausa" });
+    fireEvent.change(screen.getByLabelText(/^Descrição/), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Preencha Descrição.");
+    expect(screen.getByLabelText(/^Descrição/)).toHaveFocus();
+    expect(screen.getByLabelText(/^Descrição/)).toHaveAttribute("aria-invalid", "true");
+    expect(mock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "POST")).toBe(false);
   });
 
   it("cria uma pausa nova pelo diálogo", async () => {
@@ -164,7 +206,7 @@ describe("Pausas automáticas — organização e filtros", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Nova pausa" }));
     expect(await screen.findByRole("dialog", { name: "Nova pausa" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Descrição"), { target: { value: "Reunião de turno" } });
+    fireEvent.change(screen.getByLabelText(/^Descrição/), { target: { value: "Reunião de turno" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa salva"));
@@ -179,13 +221,13 @@ describe("Pausas automáticas — organização e filtros", () => {
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Desativar", hidden: true })[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Desativar pausa" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa salva"));
     const desativa = mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1);
     expect(JSON.parse(String((desativa?.[1] as RequestInit).body)).ativo).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ativar" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ativar", hidden: true }));
     fireEvent.click(await screen.findByRole("button", { name: "Ativar pausa" }));
     await waitFor(() => {
       const ativa = mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1);
@@ -198,7 +240,7 @@ describe("Pausas automáticas — organização e filtros", () => {
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Remover" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Remover", hidden: true })[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Remover pausa" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa removida."));
     expect(mock.mock.calls.some(([path, init]) => String(path).includes("/management/pauses/")
@@ -210,9 +252,9 @@ describe("Pausas automáticas — organização e filtros", () => {
     renderPauses();
     await waitFor(() => expect(linhas()).toBe(4));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Desativar", hidden: true })[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Remover" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Remover", hidden: true })[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 

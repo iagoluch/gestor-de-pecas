@@ -51,6 +51,7 @@ function linhas() {
 beforeEach(() => window.sessionStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
+// O menu "⋯" usa popover nativo; o jsdom o esconde mas não implementa showPopover, daí `hidden: true` nos itens.
 describe("Crachás — organização e filtros", () => {
   it("lista os crachás com situação, perfil e origem legíveis", async () => {
     stubFetch();
@@ -143,9 +144,9 @@ describe("Crachás — organização e filtros", () => {
     renderBadges();
     await waitFor(() => expect(linhas()).toBe(3));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Editar" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Editar:/ })[0]);
     expect(await screen.findByRole("dialog", { name: "Editar crachá" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Ana Souza Silva" } });
+    fireEvent.change(screen.getByLabelText(/^Nome/), { target: { value: "Ana Souza Silva" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Crachá salvo"));
@@ -163,13 +164,13 @@ describe("Crachás — organização e filtros", () => {
     renderBadges();
     await waitFor(() => expect(linhas()).toBe(3));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Desativar" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Desativar", hidden: true })[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Desativar crachá" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Crachá salvo"));
     let corpo = JSON.parse(String((mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1)?.[1] as RequestInit).body));
     expect(corpo.ativo).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ativar" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ativar", hidden: true }));
     await waitFor(() => {
       corpo = JSON.parse(String((mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1)?.[1] as RequestInit).body));
       expect(corpo.ativo).toBe(true);
@@ -181,7 +182,7 @@ describe("Crachás — organização e filtros", () => {
     renderBadges();
     await waitFor(() => expect(linhas()).toBe(3));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Tornar responsável" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Tornar responsável", hidden: true })[0]);
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Crachá salvo"));
     const corpo = JSON.parse(String((mock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST").at(-1)?.[1] as RequestInit).body));

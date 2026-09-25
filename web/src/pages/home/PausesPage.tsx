@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { DataTable } from "../../components/DataTable";
+import { RowActions } from "../../components/RowActions";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { OperatorDialog } from "../../components/OperatorDialog";
+import { Obrigatorio, ValidatedForm } from "../../components/ValidatedForm";
 import { PageFrame } from "../../components/PageFrame";
 import { RecordToolbar } from "../../components/RecordToolbar";
 import { SectionCard } from "../../components/SectionCard";
@@ -12,6 +14,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { useDraft } from "../../hooks/useDraft";
 
 interface AutomaticPause {
   id: number;
@@ -77,10 +80,10 @@ function minutos(inicio: string, fim: string) {
 
 export function ManagementPausesPage() {
   const query = useApiQuery<PausesResponse>("/api/v1/management/pauses");
-  const [editando, setEditando] = useState<AutomaticPause | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
+  const [editando, setEditando, abrirEdicao, fecharEdicao] = useDraft<AutomaticPause>(confirm);
   const filtros = usePersistentFilters("gestor.filtros.pausas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
@@ -172,7 +175,7 @@ export function ManagementPausesPage() {
       title={title}
       subtitle={subtitle}
       filters={false}
-      actions={<button type="button" className="button button--primary" onClick={() => setEditando({ id: 0, tipo_setor: SETORES[0], nome: "", hora_inicio: "12:10", hora_fim: "12:52", ativo: true, ordem: 1 })}>Nova pausa</button>}
+      actions={<button type="button" className="button button--primary" onClick={() => abrirEdicao({ id: 0, tipo_setor: SETORES[0], nome: "", hora_inicio: "12:10", hora_fim: "12:52", ativo: true, ordem: 1 })}>Nova pausa</button>}
     >
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Pausas ativas" value={String(query.data?.active ?? 0)} detail={`${query.data?.count ?? 0} configuradas`} accent="primary" />
@@ -235,11 +238,15 @@ export function ManagementPausesPage() {
                 key: "acoes",
                 label: "Ações",
                 render: (row) => (
-                  <span className="pause-actions">
-                    <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                    <button type="button" disabled={salvando} onClick={async () => { if (await confirm(row.ativo ? { title: "Desativar pausa", message: `A pausa "${row.nome}" deixa de valer para os próximos ciclos.`, confirmLabel: "Desativar pausa", tone: "danger" } : { title: "Ativar pausa", message: `A pausa "${row.nome}" passa a valer nos próximos ciclos.`, confirmLabel: "Ativar pausa" })) void salvar({ ...row, ativo: !row.ativo }); }}>{row.ativo ? "Desativar" : "Ativar"}</button>
-                    <button type="button" disabled={salvando} onClick={async () => { if (await confirm({ title: "Remover pausa", message: `A pausa "${row.nome}" será removida. Esta ação não pode ser desfeita.`, confirmLabel: "Remover pausa", tone: "danger" })) void remover(row); }}>Remover</button>
-                  </span>
+                  <RowActions
+                    label={`${row.nome} · ${row.tipo_setor}`}
+                    disabled={salvando}
+                    primary={{ label: "Editar", onClick: () => abrirEdicao(row) }}
+                    actions={[
+                      { label: row.ativo ? "Desativar" : "Ativar", onClick: async () => { if (await confirm(row.ativo ? { title: "Desativar pausa", message: `A pausa "${row.nome}" deixa de valer para os próximos ciclos.`, confirmLabel: "Desativar pausa", tone: "danger" } : { title: "Ativar pausa", message: `A pausa "${row.nome}" passa a valer nos próximos ciclos.`, confirmLabel: "Ativar pausa" })) void salvar({ ...row, ativo: !row.ativo }); } },
+                      { label: "Remover", danger: true, onClick: async () => { if (await confirm({ title: "Remover pausa", message: `A pausa "${row.nome}" será removida. Esta ação não pode ser desfeita.`, confirmLabel: "Remover pausa", tone: "danger" })) void remover(row); } },
+                    ]}
+                  />
                 ),
               },
             ]}
@@ -257,29 +264,23 @@ export function ManagementPausesPage() {
       {editando ? (
         <OperatorDialog
           title={editando.id ? "Editar pausa" : "Nova pausa"}
-          onCancel={() => (salvando ? undefined : setEditando(null))}
+          onCancel={() => (salvando ? undefined : void fecharEdicao())}
         >
-          <form
-            className="pause-form pause-form--dialog"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void salvar({ ...editando, id: editando.id || undefined });
-            }}
-          >
+          <ValidatedForm className="pause-form pause-form--dialog" onValidSubmit={() => void salvar({ ...editando, id: editando.id || undefined })}>
             <label>Setor
               <select value={editando.tipo_setor} onChange={(event) => setEditando({ ...editando, tipo_setor: event.target.value })}>
                 {SETORES.map((setor) => <option key={setor} value={setor}>{setor}</option>)}
               </select>
             </label>
-            <label>Descrição<input value={editando.nome} onChange={(event) => setEditando({ ...editando, nome: event.target.value })} placeholder="Almoço, Café, Ginástica…" required /></label>
-            <label>Início<input type="time" value={hora(editando.hora_inicio)} onChange={(event) => setEditando({ ...editando, hora_inicio: event.target.value })} required /></label>
-            <label>Fim<input type="time" value={hora(editando.hora_fim)} onChange={(event) => setEditando({ ...editando, hora_fim: event.target.value })} required /></label>
+            <label>Descrição<Obrigatorio /><input value={editando.nome} onChange={(event) => setEditando({ ...editando, nome: event.target.value })} placeholder="Almoço, Café, Ginástica…" required /></label>
+            <label>Início<Obrigatorio /><input type="time" value={hora(editando.hora_inicio)} onChange={(event) => setEditando({ ...editando, hora_inicio: event.target.value })} required /></label>
+            <label>Fim<Obrigatorio /><input type="time" value={hora(editando.hora_fim)} onChange={(event) => setEditando({ ...editando, hora_fim: event.target.value })} required /></label>
             <label className="pause-form__check"><input type="checkbox" checked={editando.ativo} onChange={(event) => setEditando({ ...editando, ativo: event.target.checked })} />Ativa</label>
             <div className="pause-form__actions">
-              <button type="button" onClick={() => setEditando(null)}>Cancelar</button>
-              <button type="submit" className="button button--primary" disabled={salvando || !editando.nome.trim()}>Salvar</button>
+              <button type="button" onClick={() => void fecharEdicao()}>Cancelar</button>
+              <button type="submit" className="button button--primary" disabled={salvando}>Salvar</button>
             </div>
-          </form>
+          </ValidatedForm>
         </OperatorDialog>
       ) : null}
     </PageFrame>

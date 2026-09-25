@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { DataTable } from "../../components/DataTable";
+import { RowActions } from "../../components/RowActions";
 import { ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { OperatorDialog } from "../../components/OperatorDialog";
+import { Obrigatorio, ValidatedForm } from "../../components/ValidatedForm";
 import { PageFrame } from "../../components/PageFrame";
 import { RecordToolbar } from "../../components/RecordToolbar";
 import { SectionCard } from "../../components/SectionCard";
@@ -13,6 +15,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { useDraft } from "../../hooks/useDraft";
 
 interface ChamadaContato {
   id: number;
@@ -59,10 +62,11 @@ export function ManagementChamadasPage() {
   const historicoQuery = useApiQuery<{ items: Chamada[] }>("/api/v1/chamadas/admin/historico");
   const setoresQuery = useApiQuery<{ items: string[] }>(isAdmin ? "/api/v1/chamadas/setores" : null);
   const setoresDisponiveis = setoresQuery.data?.items ?? [];
-  const [editando, setEditando] = useState<ChamadaContato | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
+  const [editando, setEditando, abrirEdicao, fecharEdicao] = useDraft<ChamadaContato>(confirm);
+  const telegramHintId = useId();
   const filtros = usePersistentFilters("gestor.filtros.chamada-contatos", FILTROS_INICIAIS);
 
   const contatos = useMemo(() => contatosQuery.data?.items ?? [], [contatosQuery.data]);
@@ -147,7 +151,7 @@ export function ManagementChamadasPage() {
       staleError={erroAtualizacao}
       actions={
         isAdmin ? (
-          <button type="button" className="button button--primary" onClick={() => setEditando({ ...NOVO })}>
+          <button type="button" className="button button--primary" onClick={() => abrirEdicao({ ...NOVO })}>
             Novo contato
           </button>
         ) : undefined
@@ -236,18 +240,16 @@ export function ManagementChamadasPage() {
                   key: "acoes",
                   label: "Ações",
                   render: (row) => (
-                    <span className="pause-actions">
-                      <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                      <button type="button" disabled={salvando} onClick={async () => { if (!row.ativo || await confirm({ title: "Desativar contato", message: `${row.nome} deixa de receber as chamadas até ser ativado de novo.`, confirmLabel: "Desativar contato", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); }}>
-                        {row.ativo ? "Desativar" : "Ativar"}
-                      </button>
-                      {row.padrao_gestao ? null : (
-                        <button type="button" disabled={salvando} onClick={() => void salvar({ ...row, padrao_gestao: true })}>
-                          Tornar padrão da gestão
-                        </button>
-                      )}
-                      <button type="button" disabled={salvando} onClick={async () => { if (await confirm({ title: "Remover contato", message: `${row.nome} será removido dos contatos de chamada. Esta ação não pode ser desfeita.`, confirmLabel: "Remover contato", tone: "danger" })) void remover(row.id); }}>Remover</button>
-                    </span>
+                    <RowActions
+                      label={row.nome}
+                      disabled={salvando}
+                      primary={{ label: "Editar", onClick: () => abrirEdicao(row) }}
+                      actions={[
+                        ...(row.padrao_gestao ? [] : [{ label: "Tornar padrão da gestão", onClick: () => void salvar({ ...row, padrao_gestao: true }) }]),
+                        { label: row.ativo ? "Desativar" : "Ativar", danger: row.ativo, onClick: async () => { if (!row.ativo || await confirm({ title: "Desativar contato", message: `${row.nome} deixa de receber as chamadas até ser ativado de novo.`, confirmLabel: "Desativar contato", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); } },
+                        { label: "Remover", danger: true, onClick: async () => { if (await confirm({ title: "Remover contato", message: `${row.nome} será removido dos contatos de chamada. Esta ação não pode ser desfeita.`, confirmLabel: "Remover contato", tone: "danger" })) void remover(row.id); } },
+                      ]}
+                    />
                   ),
                 },
               ]}
@@ -293,17 +295,12 @@ export function ManagementChamadasPage() {
       {isAdmin && editando ? (
         <OperatorDialog
           title={editando.id ? "Editar contato" : "Novo contato"}
-          onCancel={() => (salvando ? undefined : setEditando(null))}
+          onCancel={() => (salvando ? undefined : void fecharEdicao())}
         >
-          <form
-            className="pause-form pause-form--dialog"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void salvar(editando);
-            }}
-          >
+          <ValidatedForm className="pause-form pause-form--dialog" onValidSubmit={() => void salvar(editando)}>
             <label>
               Nome
+              <Obrigatorio />
               <input
                 value={editando.nome}
                 onChange={(event) => setEditando({ ...editando, nome: event.target.value })}
@@ -312,6 +309,7 @@ export function ManagementChamadasPage() {
             </label>
             <label>
               Função
+              <Obrigatorio />
               <input
                 value={editando.funcao}
                 onChange={(event) => setEditando({ ...editando, funcao: event.target.value })}
@@ -319,23 +317,21 @@ export function ManagementChamadasPage() {
                 required
               />
             </label>
-            <label>
-              Telegram do contato (opcional)
+            <label className="pause-form__wide">
+              ID do Telegram (opcional)
               <input
                 value={editando.telegram_chat_id ?? ""}
                 onChange={(event) => setEditando({ ...editando, telegram_chat_id: event.target.value })}
-                placeholder="Ex.: 123456789 — deixe em branco para usar o chat geral"
+                placeholder="Ex.: 123456789"
                 inputMode="numeric"
+                aria-describedby={telegramHintId}
               />
             </label>
-            <p className="operator-help">
-              <strong>Como conseguir o ID:</strong> é um número, não o @usuário do Telegram.
-              A pessoa abre o Telegram, procura <strong>@userinfobot</strong>, manda qualquer
-              mensagem pra ele, e ele responde com o "Id" numérico dela — é esse número que
-              vai aqui. Sem preencher, a chamada desse contato continua indo pro chat geral
-              já configurado no ambiente.
+            <p id={telegramHintId} className="pause-form__hint pause-form__wide">
+              É um número, não o @usuário: a pessoa manda qualquer mensagem para <strong>@userinfobot</strong> no
+              Telegram e ele responde com o “Id”. Em branco, a chamada vai para o chat geral do ambiente.
             </p>
-            <fieldset className="chamada-setores">
+            <fieldset className="chamada-setores pause-form__wide">
               <legend>Setores em que aparece</legend>
               <p className="operator-help">Nenhum setor marcado = aparece para todos os setores.</p>
               <div className="chamada-setores__grid">
@@ -377,16 +373,16 @@ export function ManagementChamadasPage() {
               Padrão da tela de gestão (pré-selecionado no botão de chamada)
             </label>
             <div className="pause-form__actions">
-              <button type="button" onClick={() => setEditando(null)}>Cancelar</button>
+              <button type="button" onClick={() => void fecharEdicao()}>Cancelar</button>
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={salvando || !editando.nome.trim() || !editando.funcao.trim()}
+                disabled={salvando}
               >
                 Salvar
               </button>
             </div>
-          </form>
+          </ValidatedForm>
         </OperatorDialog>
       ) : null}
       {confirmDialog}

@@ -210,7 +210,7 @@ describe("fluxo Web do operador", () => {
     // Selecionar outra etapa permitida abre a confirmação, sem nenhum evento.
     fireEvent.click(screen.getByRole("button", { name: "30 - DOBRA ESPECIAL — Próxima" }));
     await screen.findByRole("heading", { name: "Confirmar operação" });
-    const confirmacao = within(container.querySelector(".operator-route-confirm") as HTMLElement);
+    const confirmacao = within(document.querySelector(".operator-route-confirm") as HTMLElement);
     expect(confirmacao.getByText("OP-OVERRIDE")).toBeInTheDocument();
     expect(confirmacao.getByText("20 - DOBRA")).toBeInTheDocument();
     expect(confirmacao.getByText("30 - DOBRA ESPECIAL")).toBeInTheDocument();

@@ -24,11 +24,12 @@ const deletes = (mock: ReturnType<typeof stubFetch>) => mock.mock.calls.filter((
 
 afterEach(() => vi.restoreAllMocks());
 
+// O menu "⋯" usa popover nativo; o jsdom o esconde mas não implementa showPopover, daí `hidden: true` nos itens.
 describe("Contatos de chamada — GE-01", () => {
   it("só remove o contato depois da confirmação", async () => {
     const mock = stubFetch();
     render(<MemoryRouter><ManagementChamadasPage /></MemoryRouter>);
-    const remover = await screen.findByRole("button", { name: "Remover" });
+    const remover = await screen.findByRole("menuitem", { name: "Remover", hidden: true });
 
     fireEvent.click(remover);
     fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));

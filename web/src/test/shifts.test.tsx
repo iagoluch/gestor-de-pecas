@@ -41,6 +41,7 @@ function linhas() {
 beforeEach(() => window.sessionStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
+// O menu "⋯" usa popover nativo; o jsdom o esconde mas não implementa showPopover, daí `hidden: true` nos itens.
 describe("Turnos automáticos — tela IagoDev", () => {
   it("lista os turnos configurados com o expediente em destaque", async () => {
     stubFetch();
@@ -58,9 +59,9 @@ describe("Turnos automáticos — tela IagoDev", () => {
     await waitFor(() => expect(linhas()).toBe(3));
 
     fireEvent.click(screen.getByRole("button", { name: "Novo turno" }));
-    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "H3" } });
-    fireEvent.change(screen.getByLabelText("Início"), { target: { value: "21:30" } });
-    fireEvent.change(screen.getByLabelText("Fim"), { target: { value: "23:00" } });
+    fireEvent.change(screen.getByLabelText(/^Nome/), { target: { value: "H3" } });
+    fireEvent.change(screen.getByLabelText(/^Início/), { target: { value: "21:30" } });
+    fireEvent.change(screen.getByLabelText(/^Fim/), { target: { value: "23:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await screen.findByText("Turno salvo. O próximo ciclo já usa o novo horário.");
@@ -75,7 +76,8 @@ describe("Turnos automáticos — tela IagoDev", () => {
     renderShifts();
     await waitFor(() => expect(linhas()).toBe(3));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Remover" })[0]);
+    fireEvent.click(screen.getAllByRole("menuitem", { name: "Remover", hidden: true })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remover turno" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([path, init]) =>
       String(path).includes("/management/shift-parameters/1") && (init?.method ?? "GET").toUpperCase() === "DELETE")).toBe(true));

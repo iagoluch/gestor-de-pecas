@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { DataTable } from "../../components/DataTable";
+import { RowActions } from "../../components/RowActions";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { OperatorDialog } from "../../components/OperatorDialog";
+import { Obrigatorio, ValidatedForm } from "../../components/ValidatedForm";
 import { PageFrame } from "../../components/PageFrame";
 import { RecordToolbar } from "../../components/RecordToolbar";
 import { SectionCard } from "../../components/SectionCard";
@@ -13,6 +15,7 @@ import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { useDraft } from "../../hooks/useDraft";
 
 interface OperatorBadge {
   id: number;
@@ -75,10 +78,10 @@ function origemDoCracha(badge: OperatorBadge) {
  */
 export function ManagementBadgesPage() {
   const query = useApiQuery<BadgesResponse>("/api/v1/management/badges");
-  const [editando, setEditando] = useState<OperatorBadge | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
+  const [editando, setEditando, abrirEdicao, fecharEdicao] = useDraft<OperatorBadge>(confirm);
   const filtros = usePersistentFilters("gestor.filtros.crachas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
@@ -153,7 +156,7 @@ export function ManagementBadgesPage() {
       subtitle={subtitle}
       filters={false}
       actions={
-        <button type="button" className="button button--primary" onClick={() => setEditando({ ...NOVO })}>
+        <button type="button" className="button button--primary" onClick={() => abrirEdicao({ ...NOVO })}>
           Novo crachá
         </button>
       }
@@ -234,19 +237,15 @@ export function ManagementBadgesPage() {
                 key: "acoes",
                 label: "Ações",
                 render: (row) => (
-                  <span className="pause-actions">
-                    <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                    <button type="button" disabled={salvando} onClick={async () => { if (!row.ativo || await confirm({ title: "Desativar crachá", message: `O crachá ${row.cracha} (${row.nome}) deixa de ser aceito nos terminais até ser ativado de novo.`, confirmLabel: "Desativar crachá", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); }}>
-                      {row.ativo ? "Desativar" : "Ativar"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={salvando}
-                      onClick={async () => { if (!row.autorizador_retrabalho || await confirm({ title: "Remover responsável por retrabalho", message: `${row.nome} deixa de poder autorizar retrabalho no terminal.`, confirmLabel: "Remover responsável", tone: "danger" })) void salvar({ ...row, autorizador_retrabalho: !row.autorizador_retrabalho }); }}
-                    >
-                      {row.autorizador_retrabalho ? "Remover responsável" : "Tornar responsável"}
-                    </button>
-                  </span>
+                  <RowActions
+                    label={`${row.cracha} — ${row.nome}`}
+                    disabled={salvando}
+                    primary={{ label: "Editar", onClick: () => abrirEdicao(row) }}
+                    actions={[
+                      { label: row.autorizador_retrabalho ? "Remover responsável" : "Tornar responsável", onClick: async () => { if (!row.autorizador_retrabalho || await confirm({ title: "Remover responsável por retrabalho", message: `${row.nome} deixa de poder autorizar retrabalho no terminal.`, confirmLabel: "Remover responsável", tone: "danger" })) void salvar({ ...row, autorizador_retrabalho: !row.autorizador_retrabalho }); } },
+                      { label: row.ativo ? "Desativar" : "Ativar", danger: row.ativo, onClick: async () => { if (!row.ativo || await confirm({ title: "Desativar crachá", message: `O crachá ${row.cracha} (${row.nome}) deixa de ser aceito nos terminais até ser ativado de novo.`, confirmLabel: "Desativar crachá", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); } },
+                    ]}
+                  />
                 ),
               },
             ]}
@@ -267,17 +266,12 @@ export function ManagementBadgesPage() {
       {editando ? (
         <OperatorDialog
           title={editando.id ? "Editar crachá" : "Novo crachá"}
-          onCancel={() => (salvando ? undefined : setEditando(null))}
+          onCancel={() => (salvando ? undefined : void fecharEdicao())}
         >
-          <form
-            className="pause-form pause-form--dialog"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void salvar(editando);
-            }}
-          >
+          <ValidatedForm className="pause-form pause-form--dialog" onValidSubmit={() => void salvar(editando)}>
             <label>
               Crachá
+              <Obrigatorio />
               <input
                 value={editando.cracha}
                 onChange={(event) => setEditando({ ...editando, cracha: event.target.value })}
@@ -287,6 +281,7 @@ export function ManagementBadgesPage() {
             </label>
             <label>
               Nome
+              <Obrigatorio />
               <input
                 value={editando.nome}
                 onChange={(event) => setEditando({ ...editando, nome: event.target.value })}
@@ -310,16 +305,16 @@ export function ManagementBadgesPage() {
               Autorizado a liberar retrabalho da primeira peça
             </label>
             <div className="pause-form__actions">
-              <button type="button" onClick={() => setEditando(null)}>Cancelar</button>
+              <button type="button" onClick={() => void fecharEdicao()}>Cancelar</button>
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={salvando || !editando.cracha.trim() || !editando.nome.trim()}
+                disabled={salvando}
               >
                 Salvar
               </button>
             </div>
-          </form>
+          </ValidatedForm>
         </OperatorDialog>
       ) : null}
       {confirmDialog}

@@ -4,6 +4,7 @@ import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { OperatorDialog } from "../../components/OperatorDialog";
+import { Obrigatorio, ValidatedForm } from "../../components/ValidatedForm";
 import { PageFrame } from "../../components/PageFrame";
 import { RecordToolbar } from "../../components/RecordToolbar";
 import { SectionCard } from "../../components/SectionCard";
@@ -13,6 +14,7 @@ import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { useDraft } from "../../hooks/useDraft";
 import { useAuth } from "../../auth/AuthContext";
 
 interface UserAccount {
@@ -49,13 +51,13 @@ const PROPRIA_CONTA = "Sua própria conta: peça a outro administrador para desa
  */
 export function ManagementUsersPage() {
   const query = useApiQuery<UsersResponse>("/api/v1/management/users");
-  const [editando, setEditando] = useState<EditState | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const filtros = usePersistentFilters("gestor.filtros.usuarios", FILTROS_INICIAIS);
   const { user } = useAuth();
   const [confirm, confirmDialog] = useConfirm();
+  const [editando, setEditando, abrirEdicao, fecharEdicao] = useDraft<EditState>(confirm);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const niveis = query.data?.levels ?? [];
@@ -134,7 +136,7 @@ export function ManagementUsersPage() {
         <button
           type="button"
           className="button button--primary"
-          onClick={() => setEditando({ id: null, nome: "", nivel: "operador_destaque", ativo: true, senha: "" })}
+          onClick={() => abrirEdicao({ id: null, nome: "", nivel: "operador_destaque", ativo: true, senha: "" })}
         >
           Novo usuário
         </button>
@@ -208,7 +210,7 @@ export function ManagementUsersPage() {
                     <button
                       type="button"
                       disabled={salvando}
-                      onClick={() => setEditando({ id: row.id, nome: row.nome, nivel: row.nivel, ativo: row.ativo, senha: "" })}
+                      onClick={() => abrirEdicao({ id: row.id, nome: row.nome, nivel: row.nivel, ativo: row.ativo, senha: "" })}
                     >
                       Editar
                     </button>
@@ -235,17 +237,12 @@ export function ManagementUsersPage() {
       {editando ? (
         <OperatorDialog
           title={editando.id ? "Editar usuário" : "Novo usuário"}
-          onCancel={() => (salvando ? undefined : setEditando(null))}
+          onCancel={() => (salvando ? undefined : void fecharEdicao())}
         >
-          <form
-            className="pause-form pause-form--dialog"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void salvar(editando);
-            }}
-          >
+          <ValidatedForm className="pause-form pause-form--dialog" onValidSubmit={() => void salvar(editando)}>
             <label>
               Nome
+              <Obrigatorio />
               <input
                 value={editando.nome}
                 onChange={(event) => setEditando({ ...editando, nome: event.target.value })}
@@ -262,12 +259,14 @@ export function ManagementUsersPage() {
             </label>
             <label>
               {editando.id ? "Nova senha (deixe em branco para manter a atual)" : "Senha"}
+              {editando.id ? null : <Obrigatorio />}
               <input
                 type="password"
                 value={editando.senha}
                 onChange={(event) => setEditando({ ...editando, senha: event.target.value })}
                 placeholder={editando.id ? "Deixe em branco para manter" : "Mínimo de 6 caracteres"}
                 required={!editando.id}
+                minLength={6}
               />
             </label>
             <label className="pause-form__check">
@@ -281,16 +280,16 @@ export function ManagementUsersPage() {
             </label>
             {editando.id === user?.id ? <Notice>{PROPRIA_CONTA}</Notice> : null}
             <div className="pause-form__actions">
-              <button type="button" onClick={() => setEditando(null)}>Cancelar</button>
+              <button type="button" onClick={() => void fecharEdicao()}>Cancelar</button>
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={salvando || !editando.nome.trim() || (!editando.id && editando.senha.trim().length < 6)}
+                disabled={salvando}
               >
                 Salvar
               </button>
             </div>
-          </form>
+          </ValidatedForm>
         </OperatorDialog>
       ) : null}
       {confirmDialog}

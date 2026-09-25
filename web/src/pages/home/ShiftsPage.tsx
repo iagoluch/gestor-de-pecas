@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react";
-import { api } from "../../api/client";
+import { api, ApiError } from "../../api/client";
 import { DataTable } from "../../components/DataTable";
+import { RowActions } from "../../components/RowActions";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { OperatorDialog } from "../../components/OperatorDialog";
+import { Obrigatorio, ValidatedForm } from "../../components/ValidatedForm";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { Notice } from "../../components/Notice";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { useDraft } from "../../hooks/useDraft";
 
 interface ShiftParameter {
   id: number;
@@ -35,6 +39,11 @@ const NOVO = (ordem: number): ShiftParameter => ({
 });
 
 /** "17:30:00" e "17:30" chegam do backend conforme o driver; a tela mostra HH:mm. */
+// O servidor aceita fim antes do início (turno que cruza a meia-noite); a UI
+// só deixa isso explícito (GE-06), sem inventar regra de turno.
+const viraODia = (turno: Pick<ShiftParameter, "hora_inicio" | "hora_fim">) =>
+  Boolean(turno.hora_inicio && turno.hora_fim) && hora(turno.hora_fim) < hora(turno.hora_inicio);
+
 function hora(valor: string) {
   return String(valor ?? "").slice(0, 5);
 }
@@ -48,8 +57,9 @@ function hora(valor: string) {
  */
 export function ManagementShiftsPage() {
   const query = useApiQuery<ShiftParametersResponse>("/api/v1/management/shift-parameters");
-  const [editando, setEditando] = useState<ShiftParameter | null>(null);
   const [mensagem, setMensagem] = useState("");
+  const [confirm, confirmDialog] = useConfirm();
+  const [editando, setEditando, abrirEdicao, fecharEdicao] = useDraft<ShiftParameter>(confirm);
   const [salvando, setSalvando] = useState(false);
 
   const items = useMemo(
@@ -69,8 +79,8 @@ export function ManagementShiftsPage() {
       setMensagem("Turno salvo. O próximo ciclo já usa o novo horário.");
       setEditando(null);
       query.reload();
-    } catch {
-      setMensagem("Não foi possível salvar o turno. Confira o nome, o tipo e o horário informados.");
+    } catch (reason) {
+      setMensagem(reason instanceof ApiError && reason.status === 400 ? reason.message : "Não foi possível salvar o turno. Confira o nome, o tipo e o horário informados.");
     } finally {
       setSalvando(false);
     }
@@ -102,7 +112,7 @@ export function ManagementShiftsPage() {
       title={title}
       subtitle={subtitle}
       filters={false}
-      actions={<button type="button" className="button button--primary" onClick={() => setEditando(NOVO(items.length + 1))}>Novo turno</button>}
+      actions={<button type="button" className="button button--primary" onClick={() => abrirEdicao(NOVO(items.length + 1))}>Novo turno</button>}
     >
       <div className="metric-grid metric-grid--four">
         <MetricCard
@@ -138,17 +148,21 @@ export function ManagementShiftsPage() {
               { key: "nome", label: "Nome", render: (row) => row.nome },
               { key: "tipo", label: "Tipo", render: (row) => TIPOS.find((tipo) => tipo.value === row.tipo)?.label ?? row.tipo },
               { key: "inicio", label: "Início", render: (row) => hora(row.hora_inicio) },
-              { key: "fim", label: "Fim", render: (row) => hora(row.hora_fim) },
+              { key: "fim", label: "Fim", render: (row) => (viraODia(row) ? `${hora(row.hora_fim)} (dia seguinte)` : hora(row.hora_fim)) },
               { key: "estado", label: "Situação", render: (row) => <StatusBadge value={row.ativo ? "Ativo" : "Inativo"} /> },
               {
                 key: "acoes",
                 label: "Ações",
                 render: (row) => (
-                  <span className="pause-actions">
-                    <button type="button" disabled={salvando} onClick={() => setEditando(row)}>Editar</button>
-                    <button type="button" disabled={salvando} onClick={() => void salvar({ ...row, ativo: !row.ativo })}>{row.ativo ? "Desativar" : "Ativar"}</button>
-                    <button type="button" disabled={salvando} onClick={() => void remover(row)}>Remover</button>
-                  </span>
+                  <RowActions
+                    label={row.nome}
+                    disabled={salvando}
+                    primary={{ label: "Editar", onClick: () => abrirEdicao(row) }}
+                    actions={[
+                      { label: row.ativo ? "Desativar" : "Ativar", danger: row.ativo, onClick: async () => { if (!row.ativo || await confirm({ title: "Desativar turno", message: `O turno "${row.nome}" deixa de abrir e fechar o apontamento a partir do próximo ciclo.`, confirmLabel: "Desativar turno", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); } },
+                      { label: "Remover", danger: true, onClick: async () => { if (await confirm({ title: "Remover turno", message: `O turno "${row.nome}" será removido. Esta ação não pode ser desfeita.`, confirmLabel: "Remover turno", tone: "danger" })) void remover(row); } },
+                    ]}
+                  />
                 ),
               },
             ]}
@@ -158,33 +172,29 @@ export function ManagementShiftsPage() {
         )}
       </SectionCard>
 
+      {confirmDialog}
       {editando ? (
         <OperatorDialog
           title={editando.id ? "Editar turno" : "Novo turno"}
-          onCancel={() => (salvando ? undefined : setEditando(null))}
+          onCancel={() => (salvando ? undefined : void fecharEdicao())}
         >
-          <form
-            className="pause-form pause-form--dialog"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void salvar({ ...editando, id: editando.id || undefined });
-            }}
-          >
-            <label>Nome<input value={editando.nome} onChange={(event) => setEditando({ ...editando, nome: event.target.value })} placeholder="H1, Oficial, H2, H3…" required /></label>
+          <ValidatedForm className="pause-form pause-form--dialog" onValidSubmit={() => void salvar({ ...editando, id: editando.id || undefined })}>
+            <label>Nome<Obrigatorio /><input value={editando.nome} onChange={(event) => setEditando({ ...editando, nome: event.target.value })} placeholder="H1, Oficial, H2, H3…" required /></label>
             <label>Tipo
               <select value={editando.tipo} onChange={(event) => setEditando({ ...editando, tipo: event.target.value as ShiftParameter["tipo"] })}>
                 {TIPOS.map((tipo) => <option key={tipo.value} value={tipo.value}>{tipo.label}</option>)}
               </select>
             </label>
-            <label>Início<input type="time" value={hora(editando.hora_inicio)} onChange={(event) => setEditando({ ...editando, hora_inicio: event.target.value })} required /></label>
-            <label>Fim<input type="time" value={hora(editando.hora_fim)} onChange={(event) => setEditando({ ...editando, hora_fim: event.target.value })} required /></label>
+            <label>Início<Obrigatorio /><input type="time" value={hora(editando.hora_inicio)} onChange={(event) => setEditando({ ...editando, hora_inicio: event.target.value })} required /></label>
+            <label>Fim<Obrigatorio /><input type="time" value={hora(editando.hora_fim)} onChange={(event) => setEditando({ ...editando, hora_fim: event.target.value })} required /></label>
+            {viraODia(editando) ? <p className="pause-form__hint" role="status">Termina no dia seguinte: {hora(editando.hora_inicio)} de um dia até {hora(editando.hora_fim)} do outro.</p> : null}
             <label>Ordem<input type="number" min={1} max={99} value={editando.ordem} onChange={(event) => setEditando({ ...editando, ordem: Number(event.target.value) || 1 })} /></label>
             <label className="pause-form__check"><input type="checkbox" checked={editando.ativo} onChange={(event) => setEditando({ ...editando, ativo: event.target.checked })} />Ativo</label>
             <div className="pause-form__actions">
-              <button type="button" onClick={() => setEditando(null)}>Cancelar</button>
-              <button type="submit" className="button button--primary" disabled={salvando || !editando.nome.trim()}>Salvar</button>
+              <button type="button" onClick={() => void fecharEdicao()}>Cancelar</button>
+              <button type="submit" className="button button--primary" disabled={salvando}>Salvar</button>
             </div>
-          </form>
+          </ValidatedForm>
         </OperatorDialog>
       ) : null}
     </PageFrame>

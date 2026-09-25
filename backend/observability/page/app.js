@@ -12,6 +12,7 @@ const estado = {
   intervalo: 10000,
   timer: null,
   relatorioAberto: null,
+  ultimaLeitura: {},
 };
 
 function $(id) {
@@ -65,6 +66,39 @@ function avisar(mensagem) {
   avisar._timer = window.setTimeout(() => {
     caixa.hidden = true;
   }, 8000);
+}
+
+/**
+ * Mostra (ou limpa) a falha de um bloco dentro dos painéis que ele alimenta,
+ * mantendo os últimos valores na tela, esmaecidos (DO-02). O toast `avisar`
+ * fica só para o retorno de ações disparadas pelo usuário.
+ */
+function situacaoBloco(bloco, ids, erro) {
+  if (!erro) estado.ultimaLeitura[bloco] = new Date().toLocaleTimeString("pt-BR");
+  const ultima = estado.ultimaLeitura[bloco];
+  ids.forEach((id) => {
+    const painel = $(id).closest(".painel, section");
+    let faixa = painel.querySelector(":scope > .falha");
+    if (!erro) {
+      if (faixa) faixa.remove();
+      return;
+    }
+    if (!faixa) {
+      faixa = document.createElement("p");
+      faixa.className = "falha";
+      faixa.setAttribute("role", "status");
+      painel.querySelector("h2").after(faixa);
+    }
+    faixa.textContent = `Indisponível agora: ${erro.message.replace(/\.$/, "")}. ` +
+      (ultima ? `Mostrando a última leitura, das ${ultima}.` : "Ainda sem leitura nesta sessão.");
+  });
+}
+
+function blocoMonitorado(bloco, ids, promessa) {
+  return promessa.then(
+    () => situacaoBloco(bloco, ids, null),
+    (erro) => situacaoBloco(bloco, ids, erro),
+  );
 }
 
 async function pedir(caminho, opcoes) {
@@ -370,20 +404,17 @@ async function abrirRelatorio(nome) {
 // ---------------------------------------------------------------------------
 async function atualizar() {
   const ambiente = `?env=${encodeURIComponent(estado.ambiente)}`;
-  try {
-    desenharStatus(await pedir("/status"));
-  } catch (erro) {
-    avisar(erro.message);
-    return;
-  }
-  const tarefas = [
-    pedir(`/metrics${ambiente}`).then(desenharMetricas),
-    pedir(`/viewports${ambiente}`).then(desenharPostos),
-    pedir("/events?limit=200").then(desenharEventos),
-  ];
-  const resultados = await Promise.allSettled(tarefas);
-  const falha = resultados.find((item) => item.status === "rejected");
-  if (falha) avisar(falha.reason.message);
+  let status = true;
+  await blocoMonitorado("status", ["num-api"], pedir("/status").then(desenharStatus, (erro) => {
+    status = false;
+    throw erro;
+  }));
+  if (!status) return;
+  await Promise.all([
+    blocoMonitorado("metricas", ["num-banco", "num-processo", "lentidao"], pedir(`/metrics${ambiente}`).then(desenharMetricas)),
+    blocoMonitorado("postos", ["postos"], pedir(`/viewports${ambiente}`).then(desenharPostos)),
+    blocoMonitorado("eventos", ["erros", "bloqueios", "eventos"], pedir("/events?limit=200").then(desenharEventos)),
+  ]);
 }
 
 function reprogramar() {
@@ -404,8 +435,8 @@ function iniciar() {
   });
   $("atualizar").addEventListener("click", atualizar);
   atualizar();
-  desenharTurnos().catch((erro) => avisar(erro.message));
-  desenharRelatorios().catch((erro) => avisar(erro.message));
+  // Turnos e relatórios dividem o mesmo painel: uma falha só, para um não apagar o aviso do outro.
+  blocoMonitorado("relatorios", ["relatorios"], Promise.all([desenharTurnos(), desenharRelatorios()]));
   reprogramar();
 }
 
