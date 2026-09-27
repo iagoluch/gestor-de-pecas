@@ -1,13 +1,14 @@
 name: CI
 
-# Roda em push normal (branches) e PR. Tags v* são excluídas daqui de
-# propósito: deploy.yml chama este workflow via workflow_call para tags,
-# então rodar de novo pelo trigger `push` duplicaria a validação no mesmo
-# ref (mesmo commit sendo validado duas vezes em paralelo).
+# Roda em push de branch e PR. Tags não disparam daqui de propósito:
+# deploy.yml chama este workflow via workflow_call para tags v*, então
+# rodar de novo pelo trigger `push` duplicaria a validação no mesmo ref.
+# Filtrar só por `branches` já exclui tags; NÃO usar apenas `tags-ignore`,
+# que faz o GitHub ignorar todo push de branch (master ficou sem CI assim).
 on:
   push:
-    tags-ignore:
-      - "v*"
+    branches:
+      - "**"
   pull_request:
   workflow_call:
 
