@@ -35,7 +35,8 @@
         "solution-architect",
         "backend-engineer",
         "frontend-engineer",
-        "database-engineer"
+        "database-engineer",
+        "ai-llm-engineer"
       ]
     },
     {
@@ -46,7 +47,8 @@
         "mes-domain-guardian",
         "oee-engineer",
         "production-flow-engineer",
-        "quality-traceability-engineer"
+        "quality-traceability-engineer",
+        "industrial-analytics-reporting-engineer"
       ]
     },
     {
@@ -56,7 +58,8 @@
       "employees": [
         "totvs-integration-engineer",
         "sigmanest-engineer",
-        "ot-connectivity-engineer"
+        "ot-connectivity-engineer",
+        "messaging-automation-engineer"
       ]
     },
     {
@@ -592,6 +595,124 @@
       "type": "workforce_employee",
       "can_call_types": [],
       "can_call_ids": []
+    },
+    {
+      "id": "ai-llm-engineer",
+      "name": "AI/LLM Engineer",
+      "sector": "software-engineering",
+      "type": "workforce_employee",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "architecture-review",
+        "security-review",
+        "change-verification",
+        "current-docs"
+      ],
+      "when_to_use": [
+        "IA Industrial/Groq ou futuro provider",
+        "prompts e tool calling",
+        "grounding/RAG/contexto de IA",
+        "rate limit/custo/evals de LLM"
+      ],
+      "when_not_to_use": [
+        "fórmula OEE ou regra MES em si",
+        "chatbot/Telegram sem componente LLM",
+        "auth geral sem componente de IA"
+      ],
+      "can_call_types": [],
+      "can_call_ids": [],
+      "authority": [
+        "AI runtime",
+        "provider adapters",
+        "prompt/tool contracts",
+        "LLM evaluation"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian para semântica industrial",
+        "application-security-engineer para secrets/tool permissions",
+        "backend-engineer para contratos API compartilhados",
+        "technical-researcher para APIs/modelos recentes"
+      ]
+    },
+    {
+      "id": "industrial-analytics-reporting-engineer",
+      "name": "Industrial Analytics & Reporting Engineer",
+      "sector": "industrial-mes",
+      "type": "workforce_employee",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "industrial-change",
+        "change-verification"
+      ],
+      "when_to_use": [
+        "analytics gerencial",
+        "relatórios CSV/Excel",
+        "management insights",
+        "consistência dashboard↔export",
+        "novos KPIs não pertencentes exclusivamente ao OEE"
+      ],
+      "when_not_to_use": [
+        "alterar fórmula OEE/FTT sozinho",
+        "mudar eventos produtivos",
+        "layout frontend sem contrato analítico"
+      ],
+      "can_call_types": [],
+      "can_call_ids": [],
+      "authority": [
+        "analytics projections",
+        "report contracts/artifacts",
+        "management insights"
+      ],
+      "consult_via_orchestrator": [
+        "oee-engineer para OEE/FTT",
+        "mes-domain-guardian para semântica MES",
+        "frontend-engineer para visualização",
+        "database-engineer para query/materialização complexa"
+      ]
+    },
+    {
+      "id": "messaging-automation-engineer",
+      "name": "Messaging & Automation Engineer",
+      "sector": "integrations-ot",
+      "type": "workforce_employee",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "integration-change",
+        "change-verification",
+        "security-review"
+      ],
+      "when_to_use": [
+        "Telegram bot",
+        "alertas/notificações",
+        "digests",
+        "report messaging",
+        "scheduler/automação de comunicação",
+        "novo canal de mensagem"
+      ],
+      "when_not_to_use": [
+        "TOTVS outbound de produção",
+        "regra MES",
+        "IA/LLM sem componente de mensageria"
+      ],
+      "can_call_types": [],
+      "can_call_ids": [],
+      "authority": [
+        "messaging channels",
+        "notification routing/presentation",
+        "communication automation"
+      ],
+      "consult_via_orchestrator": [
+        "reliability-observability-engineer para retry/telemetria",
+        "application-security-engineer para secrets/webhooks",
+        "ai-llm-engineer quando intents/respostas usam LLM",
+        "totvs-integration-engineer para eventos outbound TOTVS"
+      ]
     }
   ],
   "agent_contract_version": 2,
@@ -711,5 +832,12 @@
       "specialist_subagent -> orchestrator",
       "orchestrator -> specialist_subagent direct"
     ]
-  }
+  },
+  "workforce_version": "2.2",
+  "ownership_notes": [
+    "Collaboration between workforce employees is routed by the orchestrator; consult_via_orchestrator is not a direct call edge.",
+    "AI/LLM Engineer owns the probabilistic AI layer, never MES business truth.",
+    "Industrial Analytics & Reporting Engineer owns projections/reports; OEE Engineer remains authority for OEE/FTT formulas.",
+    "Messaging & Automation Engineer owns communication channels; TOTVS production outbound remains with TOTVS Integration Engineer."
+  ]
 }
