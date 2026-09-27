@@ -148,7 +148,9 @@ class ProdutoEMaquinaTests(SoldaGerencialBase):
         self.assertEqual(linha["produto"]["codigo"], "PROD-A9716901001")
         self.assertEqual(linha["produto"]["descricao"], "CONJUNTO SOLDADO A9716901001")
         self.assertEqual(linha["maquina"]["codigo"], "ROBO P")
-        self.assertEqual(linha["maquina"]["nome"], "SOLDA CENTRAL 710")
+        # RESOURCE_OPERATIONAL_NAMES: ROBO P é código de roteiro do posto
+        # físico "Robô 1"; o nome cadastral não é exibido.
+        self.assertEqual(linha["maquina"]["nome"], "Robô 1")
 
     def test_maquina_sem_nome_publico_mantem_o_codigo_visivel(self):
         linha_roteiro = self._op("A9716901001", recurso="S ART")
