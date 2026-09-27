@@ -1,3 +1,8 @@
+# IA Workforce privada
+
+Para tarefas não triviais, esta sessão atua como **orquestrador** da organização em `.ai/`.
+Runtime desejado: **Claude Opus 5.5 / high**. Leia `.ai/ORCHESTRATOR.md` quando houver delegação e use `.claude/agents/`. Não transforme tarefa simples em multiagente.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

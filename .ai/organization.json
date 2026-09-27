@@ -1,0 +1,322 @@
+{
+  "version": 1,
+  "visibility": "developer-private",
+  "product_runtime_impact": "none",
+  "orchestrators": {
+    "claude": {
+      "model": "Claude Opus 5.5",
+      "effort": "high",
+      "role": "orchestrator"
+    },
+    "codex": {
+      "model": "GPT-5.6 Sol",
+      "model_alias": "gpt-5.6",
+      "effort": "high",
+      "role": "orchestrator"
+    }
+  },
+  "principles": [
+    "O usuário fala com o orquestrador; especialistas são delegados sob demanda.",
+    "Setores organizam ownership; não criam cadeia hierárquica nem handoffs artificiais.",
+    "Mudança simples usa no máximo um especialista; multiagente é reservado para risco ou independência real.",
+    "Um único writer por conjunto de arquivos sobreposto.",
+    "Regra industrial ausente ou ambígua não é inventada: escalar para Iago.",
+    "Frontend nunca cria cálculo industrial paralelo.",
+    "REAL/TOTVS/OT destrutivo exige confirmação humana explícita.",
+    "Contexto é progressivo: Graphify/busca direcionada antes de leitura ampla.",
+    "Toda mudança crítica tem validação e revisão independente."
+  ],
+  "sectors": [
+    {
+      "id": "software-engineering",
+      "name": "Engenharia de Software",
+      "purpose": "Arquitetura, backend, frontend e persistência do produto.",
+      "employees": [
+        "solution-architect",
+        "backend-engineer",
+        "frontend-engineer",
+        "database-engineer"
+      ]
+    },
+    {
+      "id": "industrial-mes",
+      "name": "Engenharia Industrial & MES",
+      "purpose": "Semântica industrial, fluxo produtivo, OEE, qualidade e rastreabilidade.",
+      "employees": [
+        "mes-domain-guardian",
+        "oee-engineer",
+        "production-flow-engineer",
+        "quality-traceability-engineer"
+      ]
+    },
+    {
+      "id": "integrations-ot",
+      "name": "Integrações & OT",
+      "purpose": "ERP, SigmaNEST e conectividade com máquinas/automação industrial.",
+      "employees": [
+        "totvs-integration-engineer",
+        "sigmanest-engineer",
+        "ot-connectivity-engineer"
+      ]
+    },
+    {
+      "id": "assurance",
+      "name": "Qualidade, Segurança & Confiabilidade",
+      "purpose": "Testes, segurança, observabilidade, confiabilidade e revisão independente.",
+      "employees": [
+        "qa-test-engineer",
+        "application-security-engineer",
+        "reliability-observability-engineer",
+        "technical-reviewer"
+      ]
+    },
+    {
+      "id": "platform-delivery",
+      "name": "Plataforma & Entrega",
+      "purpose": "CI/CD, ambientes, performance técnica, build e disciplina de entrega.",
+      "employees": [
+        "devops-ci-engineer",
+        "performance-engineer"
+      ]
+    },
+    {
+      "id": "research-knowledge",
+      "name": "Pesquisa & Conhecimento",
+      "purpose": "Pesquisa técnica atual e manutenção da memória/documentação canônica.",
+      "employees": [
+        "technical-researcher",
+        "knowledge-curator"
+      ]
+    }
+  ],
+  "employees": [
+    {
+      "id": "solution-architect",
+      "name": "Arquiteto de Soluções",
+      "sector": "software-engineering",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "architecture-review",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "backend-engineer",
+      "name": "Engenheiro Backend",
+      "sector": "software-engineering",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "change-verification"
+      ]
+    },
+    {
+      "id": "frontend-engineer",
+      "name": "Engenheiro Frontend/HMI",
+      "sector": "software-engineering",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "change-verification"
+      ]
+    },
+    {
+      "id": "database-engineer",
+      "name": "Engenheiro de Banco de Dados",
+      "sector": "software-engineering",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "architecture-review",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "mes-domain-guardian",
+      "name": "Guardião do Domínio MES",
+      "sector": "industrial-mes",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "industrial-change",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "oee-engineer",
+      "name": "Engenheiro OEE & Performance Industrial",
+      "sector": "industrial-mes",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "industrial-change",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "production-flow-engineer",
+      "name": "Engenheiro de Fluxo de Produção",
+      "sector": "industrial-mes",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "industrial-change",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "quality-traceability-engineer",
+      "name": "Engenheiro de Qualidade & Rastreabilidade",
+      "sector": "industrial-mes",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "industrial-change",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "totvs-integration-engineer",
+      "name": "Engenheiro de Integração TOTVS/Protheus",
+      "sector": "integrations-ot",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "integration-change",
+        "industrial-change",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "sigmanest-engineer",
+      "name": "Engenheiro SigmaNEST & Corte",
+      "sector": "integrations-ot",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "integration-change",
+        "industrial-change",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "ot-connectivity-engineer",
+      "name": "Engenheiro OT & Conectividade de Máquinas",
+      "sector": "integrations-ot",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "integration-change",
+        "security-review",
+        "current-docs"
+      ]
+    },
+    {
+      "id": "qa-test-engineer",
+      "name": "Engenheiro QA & Testes",
+      "sector": "assurance",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "change-verification",
+        "release-gate"
+      ]
+    },
+    {
+      "id": "application-security-engineer",
+      "name": "Engenheiro de Segurança de Aplicação",
+      "sector": "assurance",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "security-review",
+        "change-verification",
+        "release-gate"
+      ]
+    },
+    {
+      "id": "reliability-observability-engineer",
+      "name": "Engenheiro de Confiabilidade & Observabilidade",
+      "sector": "assurance",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "change-verification",
+        "release-gate"
+      ]
+    },
+    {
+      "id": "technical-reviewer",
+      "name": "Revisor Técnico Independente",
+      "sector": "assurance",
+      "claude_model": "opus",
+      "effort": "high",
+      "write": false,
+      "skills": [
+        "architecture-review",
+        "security-review",
+        "change-verification"
+      ]
+    },
+    {
+      "id": "devops-ci-engineer",
+      "name": "Engenheiro DevOps & CI",
+      "sector": "platform-delivery",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "release-gate",
+        "security-review"
+      ]
+    },
+    {
+      "id": "performance-engineer",
+      "name": "Engenheiro de Performance",
+      "sector": "platform-delivery",
+      "claude_model": "sonnet",
+      "effort": "high",
+      "write": true,
+      "skills": [
+        "change-verification"
+      ]
+    },
+    {
+      "id": "technical-researcher",
+      "name": "Pesquisador Técnico",
+      "sector": "research-knowledge",
+      "claude_model": "sonnet",
+      "effort": "medium",
+      "write": false,
+      "skills": [
+        "current-docs"
+      ]
+    },
+    {
+      "id": "knowledge-curator",
+      "name": "Curador de Conhecimento",
+      "sector": "research-knowledge",
+      "claude_model": "sonnet",
+      "effort": "medium",
+      "write": true,
+      "skills": [
+        "change-verification"
+      ]
+    }
+  ]
+}

@@ -1,3 +1,8 @@
+# IA Workforce privada — Codex
+
+Para tarefas não triviais, o agente principal atua como **orquestrador** de `.ai/ORCHESTRATOR.md`.
+Runtime desejado: **GPT-5.6 Sol / high**. Use `.ai/employees/` e `.agents/skills/`; delegue só com independência real ou gate de risco. A workforce nunca faz parte do runtime MES.
+
 # AGENTS.md — Gestor de Peças
 
 ## Disciplina de execução do agente
