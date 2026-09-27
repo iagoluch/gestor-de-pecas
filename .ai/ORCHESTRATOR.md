@@ -7,11 +7,11 @@ O orquestrador é a interface padrão de Iago.
 
 ## Risco
 - **R0 trivial:** orquestrador ou 1 especialista; validação direta.
-- **R1 normal:** 1 especialista; QA se houver comportamento relevante.
-- **R2 alta:** 1–3 especialistas + QA + reviewer independente.
-- **R3 crítica:** OEE/regra industrial/timeline/schema/segurança/auth/TOTVS outbound/OT/REAL. Especialista dono + guardião aplicável + QA + reviewer; decisão humana quando houver ambiguidade de negócio.
+- **R1 normal:** 1 owner; QA se houver comportamento relevante.
+- **R2 alta:** 1 owner + somente colaboradores necessários + QA + reviewer independente quando aplicável.
+- **R3 crítica:** OEE/regra industrial/timeline/schema/segurança/auth/TOTVS outbound/OT/REAL. Owner + guardião aplicável + QA + reviewer; decisão humana para ambiguidade de negócio.
 
-## Roteamento
+## Roteamento primário
 - arquitetura → `solution-architect`
 - API/serviços → `backend-engineer`
 - React/HMI → `frontend-engineer`
@@ -20,17 +20,35 @@ O orquestrador é a interface padrão de Iago.
 - OEE/FTT/tempo → `oee-engineer`
 - OP/fila/apontamento/recurso → `production-flow-engineer`
 - qualidade/rastreabilidade → `quality-traceability-engineer`
-- TOTVS → `totvs-integration-engineer`
+- TOTVS/Protheus → `totvs-integration-engineer`
 - SigmaNEST/Corte → `sigmanest-engineer`
 - AMADA/OPC UA/MTConnect → `ot-connectivity-engineer`
-- testes → `qa-test-engineer`
-- segurança → `application-security-engineer`
+- testes/regressão → `qa-test-engineer`
+- segurança/auth → `application-security-engineer`
 - observabilidade/retry → `reliability-observability-engineer`
 - revisão crítica → `technical-reviewer`
 - CI/deploy → `devops-ci-engineer`
-- performance técnica → `performance-engineer`
-- pesquisa atual → `technical-researcher`
+- performance → `performance-engineer`
+- pesquisa externa atual → `technical-researcher`
 - docs/estado → `knowledge-curator`
+- IA Industrial/LLM/prompts/tools → `ai-llm-engineer`
+- analytics/relatórios/Excel/CSV → `industrial-analytics-reporting-engineer`
+- Telegram/notificações/digests → `messaging-automation-engineer`
+
+## Política de colaboração
+1. Identifique **um owner primário** sempre que possível.
+2. Classifique R0–R3.
+3. Adicione colaboradores somente por dependência concreta.
+4. Employee↔employee nunca é chamada direta; o orquestrador cria a colaboração.
+5. Padrão: **1 owner + 0–2 colaboradores**. Mais especialistas exigem justificativa de risco/dependência.
+6. Specialist subagent só pode ser chamado pelo parent autorizado.
+7. R2/R3 recebe QA/reviewer conforme a natureza da mudança.
+8. Security entra quando existir trust boundary relevante.
+9. MES Guardian entra quando semântica industrial puder mudar.
+10. Research entra apenas para incerteza externa atual.
+11. Knowledge entra após mudança durável de estado/documentação.
+
+A matriz canônica de colaboração está em `.ai/organization.json`; a visão humana está em `.ai/ROUTING_MATRIX.md`.
 
 ## Delegação
 Enviar somente objetivo, área provável, invariantes, evidência conhecida, definição de pronto e decisões proibidas. Não repassar todo o histórico.

@@ -95,6 +95,33 @@ def main() -> int:
         if not path.exists():
             errors.append(f"specialist sem arquivo Claude: {path.relative_to(ROOT)}")
 
+    # Routing matrix completeness and referential integrity.
+    for e in employees:
+        eid = e["id"]
+        authority = e.get("authority", [])
+        consult = e.get("consult_via_orchestrator", [])
+        gates = e.get("default_gates", [])
+        if not authority:
+            errors.append(f"{eid}: sem authority/ownership declarado")
+        for field_name, refs in [("consult_via_orchestrator", consult), ("default_gates", gates)]:
+            if len(refs) != len(set(refs)):
+                errors.append(f"{eid}: duplicata em {field_name}")
+            for ref in refs:
+                if ref == eid:
+                    errors.append(f"{eid}: auto-referencia em {field_name}")
+                elif ref not in employee_set:
+                    errors.append(f"{eid}: {field_name} aponta para funcionario inexistente {ref}")
+        if "technical-reviewer" in consult:
+            errors.append(f"{eid}: technical-reviewer deve ser gate, nao colaborador natural")
+
+    routing = data.get("routing_policy", {})
+    if routing.get("direct_employee_calls") is not False:
+        errors.append("routing_policy: chamadas diretas employee->employee devem estar proibidas")
+    if routing.get("default_owner_count") != 1:
+        errors.append("routing_policy: default_owner_count deve ser 1")
+    if not (ROOT / ".ai" / "ROUTING_MATRIX.md").exists():
+        errors.append("arquivo ausente: .ai/ROUTING_MATRIX.md")
+
     for sector in sectors:
         for eid in sector.get("employees", []):
             if eid not in employee_set:

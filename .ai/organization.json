@@ -117,7 +117,26 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "system architecture",
+        "cross-layer boundaries",
+        "architectural decisions"
+      ],
+      "consult_via_orchestrator": [
+        "backend-engineer",
+        "frontend-engineer",
+        "database-engineer",
+        "mes-domain-guardian",
+        "application-security-engineer",
+        "reliability-observability-engineer",
+        "devops-ci-engineer",
+        "performance-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "technical-reviewer"
+      ]
     },
     {
       "id": "backend-engineer",
@@ -142,7 +161,24 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "FastAPI/API contracts",
+        "application services",
+        "backend behavior"
+      ],
+      "consult_via_orchestrator": [
+        "solution-architect",
+        "database-engineer",
+        "mes-domain-guardian",
+        "application-security-engineer",
+        "reliability-observability-engineer",
+        "qa-test-engineer",
+        "ai-llm-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "frontend-engineer",
@@ -174,6 +210,21 @@
         "impeccable-documenter",
         "impeccable-finish-reviewer",
         "impeccable-manual-edit-applier"
+      ],
+      "authority": [
+        "React/HMI",
+        "browser interaction",
+        "accessibility and responsive presentation"
+      ],
+      "consult_via_orchestrator": [
+        "backend-engineer",
+        "mes-domain-guardian",
+        "industrial-analytics-reporting-engineer",
+        "qa-test-engineer",
+        "application-security-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
       ]
     },
     {
@@ -200,7 +251,25 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "PostgreSQL schema",
+        "migrations",
+        "queries and persistence concurrency"
+      ],
+      "consult_via_orchestrator": [
+        "solution-architect",
+        "backend-engineer",
+        "mes-domain-guardian",
+        "industrial-analytics-reporting-engineer",
+        "reliability-observability-engineer",
+        "performance-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "technical-reviewer"
+      ]
     },
     {
       "id": "mes-domain-guardian",
@@ -228,7 +297,26 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "canonical MES semantics",
+        "industrial invariants",
+        "physical fact semantics"
+      ],
+      "consult_via_orchestrator": [
+        "oee-engineer",
+        "production-flow-engineer",
+        "quality-traceability-engineer",
+        "industrial-analytics-reporting-engineer",
+        "totvs-integration-engineer",
+        "sigmanest-engineer",
+        "ot-connectivity-engineer",
+        "backend-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "technical-reviewer"
+      ]
     },
     {
       "id": "oee-engineer",
@@ -255,7 +343,24 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "OEE/FTT formulas",
+        "industrial time classification",
+        "OEE loss buckets"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian",
+        "industrial-analytics-reporting-engineer",
+        "production-flow-engineer",
+        "quality-traceability-engineer",
+        "database-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "technical-reviewer"
+      ]
     },
     {
       "id": "production-flow-engineer",
@@ -282,7 +387,24 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "production order flow",
+        "pointing/resource eligibility",
+        "operational state transitions"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian",
+        "totvs-integration-engineer",
+        "sigmanest-engineer",
+        "quality-traceability-engineer",
+        "backend-engineer",
+        "database-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "quality-traceability-engineer",
@@ -308,7 +430,23 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "quality events",
+        "scrap/rework semantics",
+        "product genealogy and traceability"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian",
+        "production-flow-engineer",
+        "oee-engineer",
+        "industrial-analytics-reporting-engineer",
+        "database-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "totvs-integration-engineer",
@@ -335,7 +473,26 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "TOTVS/Protheus adapters",
+        "ERP synchronization",
+        "TOTVS outbound"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian",
+        "production-flow-engineer",
+        "database-engineer",
+        "backend-engineer",
+        "messaging-automation-engineer",
+        "reliability-observability-engineer",
+        "application-security-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "application-security-engineer"
+      ]
     },
     {
       "id": "sigmanest-engineer",
@@ -361,7 +518,24 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "SigmaNEST integration",
+        "cutting/nesting plan import",
+        "nesting identity and revisions"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian",
+        "production-flow-engineer",
+        "database-engineer",
+        "backend-engineer",
+        "industrial-analytics-reporting-engineer",
+        "reliability-observability-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "ot-connectivity-engineer",
@@ -389,7 +563,26 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "AMADA/VCBox/V-factory connectivity",
+        "OPC UA/MTConnect telemetry",
+        "OT protocol adapters"
+      ],
+      "consult_via_orchestrator": [
+        "mes-domain-guardian",
+        "application-security-engineer",
+        "reliability-observability-engineer",
+        "backend-engineer",
+        "database-engineer",
+        "technical-researcher",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "technical-reviewer",
+        "application-security-engineer"
+      ]
     },
     {
       "id": "qa-test-engineer",
@@ -414,7 +607,16 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "test strategy",
+        "regression evidence",
+        "E2E/integration verification"
+      ],
+      "consult_via_orchestrator": [
+        "technical-reviewer"
+      ],
+      "default_gates": []
     },
     {
       "id": "application-security-engineer",
@@ -442,7 +644,27 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "application security",
+        "auth/session trust boundaries",
+        "secrets and dependency security"
+      ],
+      "consult_via_orchestrator": [
+        "solution-architect",
+        "backend-engineer",
+        "database-engineer",
+        "ot-connectivity-engineer",
+        "totvs-integration-engineer",
+        "ai-llm-engineer",
+        "messaging-automation-engineer",
+        "devops-ci-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer",
+        "technical-reviewer"
+      ]
     },
     {
       "id": "reliability-observability-engineer",
@@ -468,7 +690,25 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "observability",
+        "retry/timeout policy",
+        "health and failure recovery"
+      ],
+      "consult_via_orchestrator": [
+        "backend-engineer",
+        "database-engineer",
+        "totvs-integration-engineer",
+        "sigmanest-engineer",
+        "ot-connectivity-engineer",
+        "messaging-automation-engineer",
+        "devops-ci-engineer",
+        "performance-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "technical-reviewer",
@@ -495,7 +735,13 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "independent R2/R3 review",
+        "material defect review"
+      ],
+      "consult_via_orchestrator": [],
+      "default_gates": []
     },
     {
       "id": "devops-ci-engineer",
@@ -521,7 +767,22 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "CI/CD",
+        "build and delivery automation",
+        "development toolchain"
+      ],
+      "consult_via_orchestrator": [
+        "solution-architect",
+        "application-security-engineer",
+        "reliability-observability-engineer",
+        "qa-test-engineer",
+        "performance-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "performance-engineer",
@@ -546,7 +807,23 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "performance profiling",
+        "performance baselines",
+        "hot-path optimization"
+      ],
+      "consult_via_orchestrator": [
+        "backend-engineer",
+        "frontend-engineer",
+        "database-engineer",
+        "reliability-observability-engineer",
+        "devops-ci-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
+      ]
     },
     {
       "id": "technical-researcher",
@@ -570,7 +847,13 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "current external technical research",
+        "official documentation evidence"
+      ],
+      "consult_via_orchestrator": [],
+      "default_gates": []
     },
     {
       "id": "knowledge-curator",
@@ -594,7 +877,13 @@
       ],
       "type": "workforce_employee",
       "can_call_types": [],
-      "can_call_ids": []
+      "can_call_ids": [],
+      "authority": [
+        "canonical project documentation",
+        "status and decision documentation"
+      ],
+      "consult_via_orchestrator": [],
+      "default_gates": []
     },
     {
       "id": "ai-llm-engineer",
@@ -630,10 +919,16 @@
         "LLM evaluation"
       ],
       "consult_via_orchestrator": [
-        "mes-domain-guardian para semântica industrial",
-        "application-security-engineer para secrets/tool permissions",
-        "backend-engineer para contratos API compartilhados",
-        "technical-researcher para APIs/modelos recentes"
+        "mes-domain-guardian",
+        "application-security-engineer",
+        "backend-engineer",
+        "technical-researcher",
+        "reliability-observability-engineer",
+        "messaging-automation-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
       ]
     },
     {
@@ -668,10 +963,17 @@
         "management insights"
       ],
       "consult_via_orchestrator": [
-        "oee-engineer para OEE/FTT",
-        "mes-domain-guardian para semântica MES",
-        "frontend-engineer para visualização",
-        "database-engineer para query/materialização complexa"
+        "oee-engineer",
+        "mes-domain-guardian",
+        "quality-traceability-engineer",
+        "production-flow-engineer",
+        "database-engineer",
+        "backend-engineer",
+        "frontend-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
       ]
     },
     {
@@ -708,10 +1010,16 @@
         "communication automation"
       ],
       "consult_via_orchestrator": [
-        "reliability-observability-engineer para retry/telemetria",
-        "application-security-engineer para secrets/webhooks",
-        "ai-llm-engineer quando intents/respostas usam LLM",
-        "totvs-integration-engineer para eventos outbound TOTVS"
+        "backend-engineer",
+        "reliability-observability-engineer",
+        "application-security-engineer",
+        "ai-llm-engineer",
+        "industrial-analytics-reporting-engineer",
+        "totvs-integration-engineer",
+        "qa-test-engineer"
+      ],
+      "default_gates": [
+        "qa-test-engineer"
       ]
     }
   ],
@@ -833,11 +1141,28 @@
       "orchestrator -> specialist_subagent direct"
     ]
   },
-  "workforce_version": "2.2",
+  "workforce_version": "2.3",
   "ownership_notes": [
     "Collaboration between workforce employees is routed by the orchestrator; consult_via_orchestrator is not a direct call edge.",
     "AI/LLM Engineer owns the probabilistic AI layer, never MES business truth.",
     "Industrial Analytics & Reporting Engineer owns projections/reports; OEE Engineer remains authority for OEE/FTT formulas.",
     "Messaging & Automation Engineer owns communication channels; TOTVS production outbound remains with TOTVS Integration Engineer."
-  ]
+  ],
+  "routing_policy": {
+    "direct_employee_calls": false,
+    "default_owner_count": 1,
+    "default_max_collaborators": 2,
+    "collaboration": "All workforce_employee collaboration is mediated by an orchestrator.",
+    "rules": [
+      "Identify one primary owner whenever possible.",
+      "Classify risk R0-R3 before delegation.",
+      "Add collaborators only for a concrete dependency.",
+      "R2/R3 add QA and/or independent review according to risk.",
+      "Add application-security-engineer when a relevant trust boundary changes.",
+      "Add mes-domain-guardian when industrial semantics may change.",
+      "Add technical-researcher only for unresolved external/current information.",
+      "Add knowledge-curator after a durable project-state or documentation change.",
+      "Specialist subagents may be called only by explicitly authorized parent employees."
+    ]
+  }
 }
