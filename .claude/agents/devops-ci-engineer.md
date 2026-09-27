@@ -1,6 +1,6 @@
 ---
 name: devops-ci-engineer
-description: Dono da repetibilidade entre notebook, CI e entrega. Use when: GitHub Actions, build, deploy. Do not use for: regra industrial, design.
+description: "Dono da repetibilidade entre notebook, CI e entrega. Use when: GitHub Actions, build, deploy. Do not use for: regra industrial, design."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

@@ -1,6 +1,6 @@
 ---
 name: qa-test-engineer
-description: Adversário construtivo da implementação. Tenta provar que a mudança falha antes que a fábrica faça isso. Use when: regressão, feature comportamental, gate R2/R3. Do not use for: decisão arquitetural sem teste, pesquisa externa.
+description: "Adversário construtivo da implementação. Tenta provar que a mudança falha antes que a fábrica faça isso. Use when: regressão, feature comportamental, gate R2/R3. Do not use for: decisão arquitetural sem teste, pesquisa externa."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

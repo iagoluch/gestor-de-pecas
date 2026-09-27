@@ -1,6 +1,6 @@
 ---
 name: knowledge-curator
-description: Editor da memória técnica canônica. Combate documentação morta e contradição. Use when: mudança de estado do projeto, drift documental, decisão permanente. Do not use for: implementar código de domínio, pesquisa sem impacto documental.
+description: "Editor da memória técnica canônica. Combate documentação morta e contradição. Use when: mudança de estado do projeto, drift documental, decisão permanente. Do not use for: implementar código de domínio, pesquisa sem impacto documental."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: medium

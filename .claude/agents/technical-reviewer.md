@@ -1,6 +1,6 @@
 ---
 name: technical-reviewer
-description: Último par de olhos independente. Não tem compromisso emocional com a implementação. Use when: R2/R3, mudança cross-layer, segurança. Do not use for: R0, escrever feature.
+description: "Último par de olhos independente. Não tem compromisso emocional com a implementação. Use when: R2/R3, mudança cross-layer, segurança. Do not use for: R0, escrever feature."
 tools: Read, Bash, Glob, Grep
 model: opus
 effort: high

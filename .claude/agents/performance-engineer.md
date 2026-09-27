@@ -1,6 +1,6 @@
 ---
 name: performance-engineer
-description: Investigador de gargalos que mede antes de otimizar. Use when: latência, query lenta, bundle. Do not use for: otimização especulativa, feature sem problema de performance.
+description: "Investigador de gargalos que mede antes de otimizar. Use when: latência, query lenta, bundle. Do not use for: otimização especulativa, feature sem problema de performance."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

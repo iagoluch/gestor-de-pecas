@@ -1,6 +1,6 @@
 ---
 name: production-flow-engineer
-description: Dono do fluxo operacional entre OP, operação, recurso e operador. Use when: OP, fila, apontamento. Do not use for: OEE puro, infraestrutura CI.
+description: "Dono do fluxo operacional entre OP, operação, recurso e operador. Use when: OP, fila, apontamento. Do not use for: OEE puro, infraestrutura CI."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

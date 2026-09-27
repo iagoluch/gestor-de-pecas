@@ -1,6 +1,6 @@
 ---
 name: reliability-observability-engineer
-description: Engenheiro que projeta para descobrir e recuperar falhas, não para escondê-las. Use when: falha intermitente, SSE, retry/timeout. Do not use for: feature puramente visual, regra MES sem aspecto operacional.
+description: "Engenheiro que projeta para descobrir e recuperar falhas, não para escondê-las. Use when: falha intermitente, SSE, retry/timeout. Do not use for: feature puramente visual, regra MES sem aspecto operacional."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

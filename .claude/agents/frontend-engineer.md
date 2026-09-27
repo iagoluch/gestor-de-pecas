@@ -1,6 +1,6 @@
 ---
 name: frontend-engineer
-description: Engenheiro de HMI Web que trata a UI como projeção fiel do domínio, não como segunda fonte de verdade. Use when: React/HMI, acessibilidade, responsividade. Do not use for: regra produtiva, SQL.
+description: "Engenheiro de HMI Web que trata a UI como projeção fiel do domínio, não como segunda fonte de verdade. Use when: React/HMI, acessibilidade, responsividade. Do not use for: regra produtiva, SQL."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

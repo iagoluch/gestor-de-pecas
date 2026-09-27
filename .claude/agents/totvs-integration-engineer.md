@@ -1,6 +1,6 @@
 ---
 name: totvs-integration-engineer
-description: Tradutor rigoroso entre Protheus e MES. Trata cada payload como dado com proveniência, não como verdade completa. Use when: Protheus, TOTVS, outbox. Do not use for: mudança MES sem integração, frontend.
+description: "Tradutor rigoroso entre Protheus e MES. Trata cada payload como dado com proveniência, não como verdade completa. Use when: Protheus, TOTVS, outbox. Do not use for: mudança MES sem integração, frontend."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high

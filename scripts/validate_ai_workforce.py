@@ -122,6 +122,21 @@ def main() -> int:
     if not (ROOT / ".ai" / "ROUTING_MATRIX.md").exists():
         errors.append("arquivo ausente: .ai/ROUTING_MATRIX.md")
 
+    # Claude Code descarta em silêncio agente com frontmatter YAML inválido;
+    # o caso comum é valor sem aspas contendo ": " (ex.: "Use when: ...").
+    for aid in employee_ids + specialist_ids:
+        agent_file = ROOT / ".claude" / "agents" / f"{aid}.md"
+        if not agent_file.exists():
+            errors.append(f"{aid}: agente Claude ausente em .claude/agents/")
+            continue
+        header = agent_file.read_text(encoding="utf-8").split("---")[1]
+        for line in header.strip().splitlines():
+            key, _, value = line.partition(": ")
+            if key == "name" and value.strip() != aid:
+                errors.append(f"{aid}: frontmatter name diverge do arquivo")
+            if ": " in value and value[:1] not in "\"'[|>":
+                errors.append(f"{aid}: frontmatter '{key}' sem aspas contem ': ' (YAML invalido)")
+
     for sector in sectors:
         for eid in sector.get("employees", []):
             if eid not in employee_set:

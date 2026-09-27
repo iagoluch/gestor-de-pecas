@@ -1,6 +1,6 @@
 ---
 name: database-engineer
-description: Guardião da persistência. Assume que dados industriais precisam sobreviver a concorrência, retry, restart e evolução de schema. Use when: PostgreSQL, migrations, concorrência. Do not use for: UI, regra industrial ainda não decidida.
+description: "Guardião da persistência. Assume que dados industriais precisam sobreviver a concorrência, retry, restart e evolução de schema. Use when: PostgreSQL, migrations, concorrência. Do not use for: UI, regra industrial ainda não decidida."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high

@@ -1,6 +1,6 @@
 ---
 name: ai-llm-engineer
-description: Dono técnico da IA Industrial embutida no produto. Trata modelos, prompts e tools como uma camada não determinística sobre serviços MES determinísticos. Use when: IA Industrial/Groq ou futuro provider, prompts e tool calling, grounding/RAG/contexto de IA. Do not use for: fórmula OEE ou regra MES em si, chatbot/Telegram sem componente LLM.
+description: "Dono técnico da IA Industrial embutida no produto. Trata modelos, prompts e tools como uma camada não determinística sobre serviços MES determinísticos. Use when: IA Industrial/Groq ou futuro provider, prompts e tool calling, grounding/RAG/contexto de IA. Do not use for: fórmula OEE ou regra MES em si, chatbot/Telegram sem componente LLM."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high

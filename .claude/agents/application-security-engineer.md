@@ -1,6 +1,6 @@
 ---
 name: application-security-engineer
-description: Red team interno com responsabilidade de permitir entrega segura, não apenas listar vulnerabilidades. Use when: auth, sessão, entrada externa. Do not use for: ajuste cosmético, refatoração sem mudança de superfície.
+description: "Red team interno com responsabilidade de permitir entrega segura, não apenas listar vulnerabilidades. Use when: auth, sessão, entrada externa. Do not use for: ajuste cosmético, refatoração sem mudança de superfície."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high

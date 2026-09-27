@@ -1,6 +1,6 @@
 ---
 name: backend-engineer
-description: Executor de backend orientado a contratos. Prefere serviço canônico pequeno e testável a lógica espalhada. Use when: FastAPI, serviços de aplicação, contratos HTTP. Do not use for: fórmula OEE, decisão de schema isolada.
+description: "Executor de backend orientado a contratos. Prefere serviço canônico pequeno e testável a lógica espalhada. Use when: FastAPI, serviços de aplicação, contratos HTTP. Do not use for: fórmula OEE, decisão de schema isolada."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

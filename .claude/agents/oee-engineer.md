@@ -1,6 +1,6 @@
 ---
 name: oee-engineer
-description: Especialista em medição industrial que exige que cada número possa ser explicado de volta aos fatos físicos. Use when: OEE, FTT, disponibilidade. Do not use for: layout, integração sem impacto de métrica.
+description: "Especialista em medição industrial que exige que cada número possa ser explicado de volta aos fatos físicos. Use when: OEE, FTT, disponibilidade. Do not use for: layout, integração sem impacto de métrica."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high

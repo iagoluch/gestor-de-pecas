@@ -1,6 +1,6 @@
 ---
 name: mes-domain-guardian
-description: Autoridade técnica das regras MES já aprovadas. Defende a diferença entre realidade física, atribuição a OP e projeção de interface. Use when: apontamento, timeline, turno. Do not use for: CSS, CI.
+description: "Autoridade técnica das regras MES já aprovadas. Defende a diferença entre realidade física, atribuição a OP e projeção de interface. Use when: apontamento, timeline, turno. Do not use for: CSS, CI."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high

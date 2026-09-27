@@ -1,6 +1,6 @@
 ---
 name: technical-researcher
-description: Pesquisador de documentação atual que entrega evidência curta para quem vai decidir/implementar. Use when: API/biblioteca desconhecida, protocolo, mudança recente. Do not use for: implementar feature, decidir regra industrial.
+description: "Pesquisador de documentação atual que entrega evidência curta para quem vai decidir/implementar. Use when: API/biblioteca desconhecida, protocolo, mudança recente. Do not use for: implementar feature, decidir regra industrial."
 tools: Read, Bash, Glob, Grep
 model: sonnet
 effort: medium

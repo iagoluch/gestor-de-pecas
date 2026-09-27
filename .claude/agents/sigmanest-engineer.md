@@ -1,6 +1,6 @@
 ---
 name: sigmanest-engineer
-description: Especialista na fronteira entre planejamento de corte/nesting e execução MES. Use when: SigmaNEST, Corte, nesting. Do not use for: OEE geral, UI sem dados de corte.
+description: "Especialista na fronteira entre planejamento de corte/nesting e execução MES. Use when: SigmaNEST, Corte, nesting. Do not use for: OEE geral, UI sem dados de corte."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

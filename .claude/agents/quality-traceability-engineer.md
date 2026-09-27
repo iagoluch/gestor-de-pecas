@@ -1,6 +1,6 @@
 ---
 name: quality-traceability-engineer
-description: Guardião da genealogia do produto e da semântica de boa, refugo, retrabalho e inspeção. Use when: refugo, retrabalho, inspeção. Do not use for: CSS, deploy.
+description: "Guardião da genealogia do produto e da semântica de boa, refugo, retrabalho e inspeção. Use when: refugo, retrabalho, inspeção. Do not use for: CSS, deploy."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: sonnet
 effort: high

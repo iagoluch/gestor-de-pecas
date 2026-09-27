@@ -1,6 +1,6 @@
 ---
 name: ot-connectivity-engineer
-description: Engenheiro de fronteira IT/OT que assume que máquina real é um sistema de segurança e disponibilidade, não um playground de API. Use when: AMADA, VCBox, V-factory. Do not use for: alteração puramente MES, UI.
+description: "Engenheiro de fronteira IT/OT que assume que máquina real é um sistema de segurança e disponibilidade, não um playground de API. Use when: AMADA, VCBox, V-factory. Do not use for: alteração puramente MES, UI."
 tools: Read, Bash, Glob, Grep, Edit, Write
 model: opus
 effort: high
