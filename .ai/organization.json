@@ -100,6 +100,17 @@
       "skills": [
         "architecture-review",
         "change-verification"
+      ],
+      "when_to_use": [
+        "refatoração transversal",
+        "novo subsistema",
+        "mudança de contrato entre camadas",
+        "dívida estrutural com impacto amplo"
+      ],
+      "when_not_to_use": [
+        "bug localizado",
+        "ajuste visual",
+        "mudança documental sem arquitetura"
       ]
     },
     {
@@ -111,6 +122,17 @@
       "write": true,
       "skills": [
         "change-verification"
+      ],
+      "when_to_use": [
+        "FastAPI",
+        "serviços de aplicação",
+        "contratos HTTP",
+        "bugs backend"
+      ],
+      "when_not_to_use": [
+        "fórmula OEE",
+        "decisão de schema isolada",
+        "mudança puramente visual"
       ]
     },
     {
@@ -122,6 +144,17 @@
       "write": true,
       "skills": [
         "change-verification"
+      ],
+      "when_to_use": [
+        "React/HMI",
+        "acessibilidade",
+        "responsividade",
+        "fluxo de operador no navegador"
+      ],
+      "when_not_to_use": [
+        "regra produtiva",
+        "SQL",
+        "integração ERP"
       ]
     },
     {
@@ -134,6 +167,17 @@
       "skills": [
         "architecture-review",
         "change-verification"
+      ],
+      "when_to_use": [
+        "PostgreSQL",
+        "migrations",
+        "concorrência",
+        "índices",
+        "persistência"
+      ],
+      "when_not_to_use": [
+        "UI",
+        "regra industrial ainda não decidida"
       ]
     },
     {
@@ -146,6 +190,19 @@
       "skills": [
         "industrial-change",
         "change-verification"
+      ],
+      "when_to_use": [
+        "apontamento",
+        "timeline",
+        "turno",
+        "estado físico",
+        "elegibilidade",
+        "mudança MES"
+      ],
+      "when_not_to_use": [
+        "CSS",
+        "CI",
+        "biblioteca sem efeito industrial"
       ]
     },
     {
@@ -158,6 +215,18 @@
       "skills": [
         "industrial-change",
         "change-verification"
+      ],
+      "when_to_use": [
+        "OEE",
+        "FTT",
+        "disponibilidade",
+        "performance",
+        "qualidade",
+        "perdas/tempo"
+      ],
+      "when_not_to_use": [
+        "layout",
+        "integração sem impacto de métrica"
       ]
     },
     {
@@ -170,6 +239,18 @@
       "skills": [
         "industrial-change",
         "change-verification"
+      ],
+      "when_to_use": [
+        "OP",
+        "fila",
+        "apontamento",
+        "recurso",
+        "retomada",
+        "transições"
+      ],
+      "when_not_to_use": [
+        "OEE puro",
+        "infraestrutura CI"
       ]
     },
     {
@@ -182,6 +263,17 @@
       "skills": [
         "industrial-change",
         "change-verification"
+      ],
+      "when_to_use": [
+        "refugo",
+        "retrabalho",
+        "inspeção",
+        "FTT",
+        "rastreabilidade"
+      ],
+      "when_not_to_use": [
+        "CSS",
+        "deploy"
       ]
     },
     {
@@ -195,6 +287,17 @@
         "integration-change",
         "industrial-change",
         "change-verification"
+      ],
+      "when_to_use": [
+        "Protheus",
+        "TOTVS",
+        "outbox",
+        "GPOPSYNC",
+        "mapeamento ERP"
+      ],
+      "when_not_to_use": [
+        "mudança MES sem integração",
+        "frontend"
       ]
     },
     {
@@ -208,6 +311,16 @@
         "integration-change",
         "industrial-change",
         "change-verification"
+      ],
+      "when_to_use": [
+        "SigmaNEST",
+        "Corte",
+        "nesting",
+        "plano de chapa"
+      ],
+      "when_not_to_use": [
+        "OEE geral",
+        "UI sem dados de corte"
       ]
     },
     {
@@ -221,6 +334,18 @@
         "integration-change",
         "security-review",
         "current-docs"
+      ],
+      "when_to_use": [
+        "AMADA",
+        "VCBox",
+        "V-factory",
+        "OPC UA",
+        "MTConnect",
+        "telemetria"
+      ],
+      "when_not_to_use": [
+        "alteração puramente MES",
+        "UI"
       ]
     },
     {
@@ -233,6 +358,16 @@
       "skills": [
         "change-verification",
         "release-gate"
+      ],
+      "when_to_use": [
+        "regressão",
+        "feature comportamental",
+        "gate R2/R3",
+        "bug difícil"
+      ],
+      "when_not_to_use": [
+        "decisão arquitetural sem teste",
+        "pesquisa externa"
       ]
     },
     {
@@ -246,6 +381,18 @@
         "security-review",
         "change-verification",
         "release-gate"
+      ],
+      "when_to_use": [
+        "auth",
+        "sessão",
+        "entrada externa",
+        "segredos",
+        "dependências",
+        "integração externa"
+      ],
+      "when_not_to_use": [
+        "ajuste cosmético",
+        "refatoração sem mudança de superfície"
       ]
     },
     {
@@ -258,6 +405,17 @@
       "skills": [
         "change-verification",
         "release-gate"
+      ],
+      "when_to_use": [
+        "falha intermitente",
+        "SSE",
+        "retry/timeout",
+        "health",
+        "observabilidade"
+      ],
+      "when_not_to_use": [
+        "feature puramente visual",
+        "regra MES sem aspecto operacional"
       ]
     },
     {
@@ -271,6 +429,17 @@
         "architecture-review",
         "security-review",
         "change-verification"
+      ],
+      "when_to_use": [
+        "R2/R3",
+        "mudança cross-layer",
+        "segurança",
+        "OEE/schema/TOTVS"
+      ],
+      "when_not_to_use": [
+        "R0",
+        "escrever feature",
+        "aprovar própria implementação"
       ]
     },
     {
@@ -283,6 +452,17 @@
       "skills": [
         "release-gate",
         "security-review"
+      ],
+      "when_to_use": [
+        "GitHub Actions",
+        "build",
+        "deploy",
+        "toolchain",
+        "CI"
+      ],
+      "when_not_to_use": [
+        "regra industrial",
+        "design"
       ]
     },
     {
@@ -294,6 +474,17 @@
       "write": true,
       "skills": [
         "change-verification"
+      ],
+      "when_to_use": [
+        "latência",
+        "query lenta",
+        "bundle",
+        "carga",
+        "CPU/memória"
+      ],
+      "when_not_to_use": [
+        "otimização especulativa",
+        "feature sem problema de performance"
       ]
     },
     {
@@ -305,6 +496,16 @@
       "write": false,
       "skills": [
         "current-docs"
+      ],
+      "when_to_use": [
+        "API/biblioteca desconhecida",
+        "protocolo",
+        "mudança recente",
+        "benchmark técnico"
+      ],
+      "when_not_to_use": [
+        "implementar feature",
+        "decidir regra industrial"
       ]
     },
     {
@@ -316,7 +517,33 @@
       "write": true,
       "skills": [
         "change-verification"
+      ],
+      "when_to_use": [
+        "mudança de estado do projeto",
+        "drift documental",
+        "decisão permanente",
+        "handoff"
+      ],
+      "when_not_to_use": [
+        "implementar código de domínio",
+        "pesquisa sem impacto documental"
       ]
     }
-  ]
+  ],
+  "agent_contract_version": 2,
+  "agent_contract_sections": [
+    "identity_memory",
+    "mission",
+    "critical_rules",
+    "workflow",
+    "deliverables",
+    "success_metrics",
+    "communication_style",
+    "when_to_use",
+    "when_not_to_use"
+  ],
+  "design_reference": {
+    "name": "msitarzewski/agency-agents",
+    "adaptation": "structure-only; Gestor MES governance remains authoritative"
+  }
 }
