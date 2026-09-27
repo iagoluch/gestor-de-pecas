@@ -613,10 +613,10 @@
         "regression evidence",
         "E2E/integration verification"
       ],
-      "consult_via_orchestrator": [
+      "consult_via_orchestrator": [],
+      "default_gates": [
         "technical-reviewer"
-      ],
-      "default_gates": []
+      ]
     },
     {
       "id": "application-security-engineer",
