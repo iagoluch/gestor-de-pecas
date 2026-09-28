@@ -43,7 +43,7 @@ Fonte machine-readable: `.ai/organization.json`. Chamada direta entre `workforce
 
 `workforce_employee → workforce_employee`: **proibido**.
 
-Exceção atual: `frontend-engineer` pode chamar diretamente os quatro `specialist_subagent` Impeccable declarados no `organization.json`.
+Exceção atual: `frontend-engineer` é o único parent autorizado dos quatro `specialist_subagent` Impeccable declarados no `organization.json`. Ele pede o specialist no resultado; o orquestrador despacha o pedido sem alterar e devolve a saída a ele (subagente não abre subagente no Claude Code).
 
 ## Exemplos
 

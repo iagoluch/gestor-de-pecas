@@ -1119,7 +1119,7 @@
         "allowed_callee_types": [
           "workforce_employee"
         ],
-        "note": "Orchestrators delegate directly to employees; they do not bypass employees to call specialist subagents."
+        "note": "Orchestrators delegate directly to employees; they never start a specialist call on their own, only relay one requested by an authorized parent (see specialist_dispatch)."
       },
       {
         "caller_type": "workforce_employee",
@@ -1138,8 +1138,9 @@
       "workforce_employee -> workforce_employee direct orchestration",
       "specialist_subagent -> workforce_employee",
       "specialist_subagent -> orchestrator",
-      "orchestrator -> specialist_subagent direct"
-    ]
+      "orchestrator -> specialist_subagent on its own initiative"
+    ],
+    "specialist_dispatch": "Claude Code subagents cannot spawn subagents. An authorized parent employee requests a specialist in its result (specialist id + exact input); the orchestrator dispatches that request unchanged and returns the output to the same parent, which stays owner of the work."
   },
   "workforce_version": "2.3",
   "ownership_notes": [

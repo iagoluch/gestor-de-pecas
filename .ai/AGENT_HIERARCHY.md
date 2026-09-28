@@ -27,7 +27,7 @@ Os quatro subagentes Impeccable existentes são `specialist_subagent` do `fronte
 - `impeccable-finish-reviewer`
 - `impeccable-manual-edit-applier`
 
-O orquestrador não deve pular o Frontend Engineer para chamá-los diretamente.
+O orquestrador não chama esses specialists por iniciativa própria. Como subagente não abre subagente no Claude Code, o Frontend Engineer pede o specialist no resultado dele e o orquestrador apenas despacha esse pedido e devolve a saída ao Frontend Engineer (`call_policy.specialist_dispatch`).
 
 ## Por que workforce employees não chamam outros employees?
 

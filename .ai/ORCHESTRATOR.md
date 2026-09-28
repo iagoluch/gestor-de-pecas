@@ -41,7 +41,7 @@ O orquestrador é a interface padrão de Iago.
 3. Adicione colaboradores somente por dependência concreta.
 4. Employee↔employee nunca é chamada direta; o orquestrador cria a colaboração.
 5. Padrão: **1 owner + 0–2 colaboradores**. Mais especialistas exigem justificativa de risco/dependência.
-6. Specialist subagent só pode ser chamado pelo parent autorizado.
+6. Specialist subagent só pode ser chamado a pedido do parent autorizado. Subagente não abre subagente no Claude Code: o parent pede o specialist no resultado (id + entrada exata), o orquestrador despacha sem alterar e devolve a saída ao parent, que continua owner. O orquestrador nunca chama specialist por iniciativa própria.
 7. R2/R3 recebe QA/reviewer conforme a natureza da mudança.
 8. Security entra quando existir trust boundary relevante.
 9. MES Guardian entra quando semântica industrial puder mudar.
