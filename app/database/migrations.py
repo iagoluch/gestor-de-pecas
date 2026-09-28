@@ -2317,6 +2317,27 @@ PARAMETROS_TURNO_VIGENCIA_STATEMENTS = (
 )
 
 
+
+# Nomes de posto e aliases que nunca podem ser a identidade gravada do estado
+# físico: o recurso é o código canônico (resolve_resource_identity). Gravar o
+# nome ("Laser Ensis 3015") ao lado do código (LASER1) duplicava o recurso nas
+# telas. NOT VALID: trava toda gravação nova sem reescrever histórico. Lista
+# congelada; test_resource_state_canonical_constraint exige nova migration
+# quando RESOURCE_DISPLAY_NAMES/OFFICIAL_RESOURCE_ALIASES ganhar nome novo.
+RESOURCE_STATE_FORBIDDEN_IDENTITIES = (
+    "1303", "2204", "eurostec", "fresadora ftv31", "gasparini", "inspeção final",
+    "laser", "laser ensis 3015", "pintura", "plasma terrablade 4", "preparação",
+    "romi d 1000", "romi gl 350m", "s4220", "sfg-330", "sfha-10", "soldagem",
+    "torno mecânico",
+)
+RESOURCE_STATE_CANONICAL_CODE_DESCRIPTION = "estado de recurso gravado só pelo código canônico"
+RESOURCE_STATE_CANONICAL_CODE_STATEMENTS = (
+    "ALTER TABLE eventos_estado_recurso ADD CONSTRAINT ck_eventos_estado_recurso_codigo_canonico"
+    " CHECK (LOWER(BTRIM(recurso)) NOT IN ("
+    + ", ".join("'" + name + "'" for name in RESOURCE_STATE_FORBIDDEN_IDENTITIES)
+    + ")) NOT VALID",
+)
+
 MIGRATIONS = {
     2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2370,6 +2391,7 @@ MIGRATIONS = {
     48: (LOGIN_THROTTLE_DESCRIPTION, LOGIN_THROTTLE_STATEMENTS),
     49: (OPERATOR_IDENTITY_DESCRIPTION, OPERATOR_IDENTITY_STATEMENTS),
     50: (PARAMETROS_TURNO_VIGENCIA_DESCRIPTION, PARAMETROS_TURNO_VIGENCIA_STATEMENTS),
+    51: (RESOURCE_STATE_CANONICAL_CODE_DESCRIPTION, RESOURCE_STATE_CANONICAL_CODE_STATEMENTS),
 }
 
 

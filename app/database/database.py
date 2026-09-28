@@ -64,8 +64,6 @@ PASSWORD_SCHEME = "pbkdf2_sha256"  # nosec B105 -- identificador de algoritmo de
 PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
 CATALOG_SYNC_LOCK_ID = 874_210_307
-SCHEDULED_OP_REASON = "OP programada aguardando início"
-SCHEDULED_OP_INTERRUPTION_TYPE = "op_programada"
 AUTOMATIC_BREAK_INTERRUPTION = "intervalo_programado"
 # Estados copiados de uma OP/nesting: só valem enquanto a execução existir.
 EXECUTION_STATE_ORIGINS = frozenset({"apontamento_operador", "corte_nesting"})
@@ -3250,14 +3248,13 @@ class Database(
                     interruption_type=previous.get("tipo_interrupcao"),
                     operation=previous.get("op"),
                 ):
-                    # Sem demanda não é restaurado às cegas: uma OP pode ter
-                    # sido programada no recurso durante a pausa.
                     previous = {
                         "categoria": "fila",
                         "tipo_setor": current.get("tipo_setor"),
                         "operador": operador,
                         "automatico": True,
-                        **self._fila_sem_execucao_tx(cursor, resource),
+                        "motivo": NO_DEMAND_REASON,
+                        "tipo_interrupcao": NO_DEMAND_INTERRUPTION_TYPE,
                     }
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
@@ -3410,9 +3407,8 @@ class Database(
         """Encerra o fora de turno e publica ausência de demanda às 08:00.
 
         A OP interrompida permanece em ``Parada`` e exige retomada manual. A
-        fila criada aqui não carrega estado produtivo: carrega a OP programada
-        no recurso (``_fila_sem_execucao_tx``), se houver; senão registra que o
-        recurso voltou à janela oficial sem demanda.
+        fila criada aqui não carrega estado produtivo: registra que o recurso
+        voltou à janela oficial sem demanda.
 
         Recurso com execução em curso fica de fora: o Corte é interrompido no
         fim do turno sem encerrar o nesting, então o estado físico pode dizer
@@ -3496,9 +3492,6 @@ class Database(
                 ),
             )
             for current in [dict(row) for row in cursor.fetchall()]:
-                queue = self._fila_sem_execucao_tx(cursor, current["recurso"])
-                if not queue.get("op"):
-                    queue.update(motivo=str(motivo or "").strip(), tipo_interrupcao=tipo_interrupcao)
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
                     current["recurso"],
@@ -3510,7 +3503,8 @@ class Database(
                     referencia_origem=f"evento_estado:{current.get('id')}",
                     planejado=None,
                     automatico=True,
-                    **queue,
+                    motivo=str(motivo or "").strip(),
+                    tipo_interrupcao=tipo_interrupcao,
                 )
                 if state and not state.get("retroativo_ignorado"):
                     changed.append(dict(state))
@@ -4337,59 +4331,9 @@ class Database(
             origem=origem,
             referencia_origem=referencia_origem,
             automatico=True,
-            **self._fila_sem_execucao_tx(cursor, resource),
+            motivo=NO_DEMAND_REASON,
+            tipo_interrupcao=NO_DEMAND_INTERRUPTION_TYPE,
         )
-
-    def _fila_sem_execucao_tx(self, cursor, recurso):
-        """Fila do recurso sem execução: com OP programada ou sem demanda.
-
-        OP programada é uma operação do roteiro TOTVS vigente (OP ativa no
-        catálogo PCP) cujo recurso é este e que ainda não foi apontada —
-        apontamento ``Aguardando`` não conta, é só um início recusado. Com
-        ela, o recurso fica em fila com a OP (demanda); sem ela, em Recurso
-        sem demanda. Ordem: prazo de entrega, emissão, OP, sequência.
-        """
-
-        resource = str(recurso or "").upper()
-        cursor.execute(
-            "SELECT DISTINCT codigo_recurso FROM catalogo_operacoes_op"
-            " WHERE ativo = TRUE AND BTRIM(COALESCE(codigo_recurso, '')) <> ''"
-        )
-        codes = [
-            row["codigo_recurso"] for row in cursor.fetchall()
-            if str(resolve_resource_identity(row["codigo_recurso"]) or "").upper() == resource
-        ]
-        scheduled = None
-        if codes:
-            cursor.execute(
-                """
-                SELECT o.codigo_op, o.numero_operacao, o.produto_codigo
-                FROM catalogo_operacoes_op o
-                JOIN catalogo_pcp_ops p ON p.codigo_op = o.codigo_op AND p.ativo = TRUE
-                WHERE o.ativo = TRUE
-                  AND o.codigo_recurso = ANY(%s)
-                  AND NOT EXISTS (
-                      SELECT 1 FROM apontamentos_operacionais a
-                      WHERE UPPER(a.op) = UPPER(o.codigo_op)
-                        AND a.numero_operacao = o.numero_operacao
-                        AND a.status <> 'Aguardando'
-                  )
-                ORDER BY p.prazo_entrega NULLS LAST, p.data_emissao NULLS LAST,
-                         o.codigo_op, o.ordem, o.id
-                LIMIT 1
-                """,
-                (codes,),
-            )
-            scheduled = cursor.fetchone()
-        if not scheduled:
-            return {"motivo": NO_DEMAND_REASON, "tipo_interrupcao": NO_DEMAND_INTERRUPTION_TYPE}
-        return {
-            "op": scheduled["codigo_op"],
-            "numero_operacao": scheduled["numero_operacao"],
-            "produto_codigo": scheduled["produto_codigo"],
-            "motivo": SCHEDULED_OP_REASON,
-            "tipo_interrupcao": SCHEDULED_OP_INTERRUPTION_TYPE,
-        }
 
     def _reconciliar_estado_recurso_apontamentos_tx(
         self, cursor, recurso, instante, *, operador=None, origem="apontamento_operador",
@@ -4670,6 +4614,9 @@ class Database(
 
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
+            # Estado ainda aberto vale até agora: com filtro "hoje" o fim do
+            # período é 23:59:59 e o resto do dia seria contado antes de ocorrer.
+            open_end = min(end, agora_db())
             result = []
             for raw in cursor.fetchall():
                 row = dict(raw)
@@ -4678,7 +4625,7 @@ class Database(
                 if not participa_da_timeline(row.get("recurso")):
                     continue
                 state_start = _period_value(row.get("data_inicio"))
-                state_end = _period_value(row.get("data_fim")) or end
+                state_end = _period_value(row.get("data_fim")) or open_end
                 row["inicio_periodo"] = max(state_start, start)
                 row["fim_periodo"] = min(state_end, end)
                 row["segundos_periodo"] = max(
@@ -5084,7 +5031,7 @@ class Database(
             session = sessions.get(session_id)
             if session is None:
                 session_start = _period_value(row.get("data_inicio"))
-                session_end = _period_value(row.get("data_fim")) or end
+                session_end = _period_value(row.get("data_fim")) or min(end, agora_db())
                 clip_start = max(session_start, start)
                 clip_end = min(session_end, end)
                 period_seconds = max(0.0, (clip_end - clip_start).total_seconds())

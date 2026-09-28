@@ -217,53 +217,26 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
                 [(code, code, number, resource, self.t0) for code, number, resource in operations],
             )
 
-    def test_fim_da_ultima_op_com_op_programada_no_recurso_fica_em_fila_com_a_op(self):
-        # OP-ESTADO/10 é a que será apontada; OP-LASER é de outro recurso.
-        self._program_ops(("OP-ESTADO", "10", RESOURCE), ("OP-PROG", "20", RESOURCE),
-                          ("OP-LASER", "10", "LASER"))
+    def test_fim_da_ultima_op_com_roteiro_totvs_no_recurso_fica_sem_demanda(self):
+        # Não existe OP programada: roteiro TOTVS no recurso não vira fila com OP.
+        self._program_ops(("OP-ESTADO", "10", RESOURCE), ("OP-PROG", "20", RESOURCE))
         item = self._started_op()
-        with self.db.connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                "UPDATE apontamentos_operacionais SET numero_operacao = '10' WHERE id = %s",
-                (item["id"],),
-            )
         self._finish(item, 60)
 
         timeline = self._timeline()
         self.assertEqual([row["categoria"] for row in timeline], ["producao", "fila"])
-        current = timeline[-1]
-        self.assertEqual((current["op"], current["numero_operacao"]), ("OP-PROG", "20"))
-        self.assertEqual(current["tipo_interrupcao"], "op_programada")
-        self.assertFalse(ManufacturingRules.state_is_no_demand(
-            category=current["categoria"], operation=current["op"]
-        ))
+        self._assert_no_demand(timeline[-1])
+        self.assertIsNone(timeline[-1]["op"])
         self._assert_continuous(timeline)
-        # Fila com OP é espera (QUEUE): fora das duas bases, como sem demanda.
-        totals, _, calc = self._oee_bases(0, 120)
-        self.assertEqual(totals[EventCategory.QUEUE], 3600)
-        self.assertEqual(calc.time_bases["available_seconds"], 3600)
 
-    def test_op_apontada_nao_e_programada_e_o_recurso_fica_sem_demanda(self):
-        self._program_ops(("OP-ESTADO", "10", RESOURCE))
-        item = self._started_op()
-        with self.db.connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                "UPDATE apontamentos_operacionais SET numero_operacao = '10' WHERE id = %s",
-                (item["id"],),
-            )
-        self._finish(item, 60)
-
-        self._assert_no_demand(self._timeline()[-1])
-
-    def test_op_programada_durante_a_pausa_sai_da_pausa_em_fila_com_a_op(self):
+    def test_roteiro_totvs_publicado_na_pausa_sai_da_pausa_em_sem_demanda(self):
         item = self._started_op()
         self._finish(item, 30)
         self._program_ops(("OP-PROG", "20", RESOURCE))
         self._break(60, 120)
 
         current = self._timeline()[-1]
-        self.assertEqual((current["categoria"], current["op"]), ("fila", "OP-PROG"))
-        self.assertEqual(current["tipo_interrupcao"], "op_programada")
+        self._assert_no_demand(current)
         self.assertEqual(current["data_inicio"], self._at(120))
 
     def test_c10_intervalo_durante_sem_demanda_volta_para_sem_demanda(self):

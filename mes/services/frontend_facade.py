@@ -9,7 +9,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.core.operator_sectors import is_apontavel_resource, operator_sector_for_level
-from app.core.resource_mapping import resource_display_name, shared_post_name, station_resource_code
+from app.core.resource_mapping import (
+    resolve_resource_identity,
+    resource_display_name,
+    shared_post_name,
+    station_resource_code,
+)
 from app.database.schema import SCHEMA_VERSION
 from mes.analytics.resource_state import classify_state_row
 from mes.contracts import (
@@ -52,6 +57,17 @@ FACADE_REPORT_TYPES = (
 )
 
 
+def _resource_key(resource):
+    """Chave única do recurso físico para cruzar fontes diferentes.
+
+    Estado físico grava a identidade canônica (``LASER1``, ``DOBRA1``), mas
+    Corte e apontamentos gravam o nome do posto (``Laser Ensis 3015``,
+    ``Gasparini``). Comparar o texto cru duplica o recurso na consulta.
+    """
+
+    return str(resolve_resource_identity(resource) or "").strip().casefold()
+
+
 def _post_identities(resource, sector=None):
     """Nome do posto, código de catálogo e rótulos de ambos, em casefold.
 
@@ -63,7 +79,7 @@ def _post_identities(resource, sector=None):
     return {
         identity
         for code in codes if code
-        for identity in (code.casefold(), resource_display_name(code).casefold())
+        for identity in (code.casefold(), resource_display_name(code).casefold(), _resource_key(code))
     }
 
 
@@ -389,7 +405,7 @@ class FrontendBackendFacade:
             resource = str(fact.get("maquina") or "").strip()
             if not resource:
                 continue
-            active_by_resource.setdefault(resource.casefold(), []).append({
+            active_by_resource.setdefault(_resource_key(resource), []).append({
                 "apontamento_id": fact.get("id"),
                 "recurso": resource,
                 "setor": fact.get("tipo_setor"),
@@ -423,7 +439,7 @@ class FrontendBackendFacade:
                 elapsed = max(0.0, (now - start).total_seconds())
             # Classificação e cor decididas uma única vez, no domínio.
             classification = classify_state_row(state)
-            ops_ativas = active_by_resource.get(resource.casefold(), [])
+            ops_ativas = active_by_resource.get(_resource_key(resource), [])
             # A OP interrompida no fim do turno continua aberta para retomada
             # manual (status ``Parada``), mas não é execução ativa no estado
             # lógico criado às 08:00: não a associe ao card de recurso sem
@@ -468,7 +484,7 @@ class FrontendBackendFacade:
                     or bool(ops_ativas)
                     or not bool(state.get("automatico"))
                 ),
-                "conta_operador_ativa": resource.casefold() in account_resource_identities,
+                "conta_operador_ativa": bool(_post_identities(resource) & account_resource_identities),
                 "estado_recurso_id": state.get("id"),
                 "recurso": resource,
                 "setor": state.get("tipo_setor"),
@@ -632,7 +648,7 @@ class FrontendBackendFacade:
             resource = str(cut.get("maquina") or "").strip()
             if not resource:
                 continue
-            item = next((row for row in items if str(row.get("recurso") or "").strip().casefold() == resource.casefold()), None)
+            item = next((row for row in items if _resource_key(row.get("recurso")) == _resource_key(resource)), None)
             if item is None:
                 item = {"recurso": resource, "setor": "Corte"}
                 items.append(item)
@@ -645,6 +661,10 @@ class FrontendBackendFacade:
                 # das 08:00 — nenhum dos dois pode rotular de "sem demanda" uma
                 # máquina que está cortando.
                 "sem_demanda": False,
+                # O motivo do estado de fila (sem demanda) não
+                # vale para a máquina cortando: o Corte acompanha o plano.
+                "motivo": f"Plano {cut.get('programa') or ''}".strip(),
+                "tipo_interrupcao": None,
                 "inicio": cut.get("data_inicio"),
                 "duracao_segundos": max(0.0, (now - cut["data_inicio"]).total_seconds()) if isinstance(cut.get("data_inicio"), datetime) else None,
                 "op_estado": None,
@@ -665,7 +685,7 @@ class FrontendBackendFacade:
                 identity
                 for item in items
                 for resource in (str(item.get("recurso") or "").strip(),)
-                for identity in (resource.casefold(), resource_display_name(resource).casefold())
+                for identity in (resource.casefold(), resource_display_name(resource).casefold(), _resource_key(resource))
             }
             for resource, sector in account_resources.values():
                 identities = _post_identities(resource, sector)
