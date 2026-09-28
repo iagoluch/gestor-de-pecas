@@ -63,7 +63,8 @@ ferramentas do Claude, use o equivalente do OpenCode:
 |---|---|
 | `Skill({skill:"x"})` / "invoque a skill x" | ferramenta `skill` com `name: "x"` |
 | `Agent` / subagente / funcionário da workforce | ferramenta `task` com o subagente de mesmo nome (`@nome`) |
-| `mcp__servidor__ferramenta` | ferramenta `servidor_ferramenta` (ex.: `headroom_headroom_compress`) |
+| `mcp__servidor__ferramenta` | ferramenta `servidor_ferramenta` (ex.: `headroom_headroom_compress`); no OpenCode 2.x (Desktop) as ferramentas MCP e de plugin ficam dentro de `execute` — ache o nome com `search` lá dentro |
+| comando de terminal (`graphify`, `pytest`, `npm`...) | ferramenta `shell`/`bash` — nunca como ferramenta ou MCP |
 | `Read` / `Edit` / `Write` / `Bash` / `Grep` / `Glob` | `read` / `edit` / `write` / `bash` / `grep` / `glob` |
 | `TodoWrite` | `todowrite` |
 | `WebFetch` | `webfetch` |
@@ -260,6 +261,21 @@ def export_global_plugins() -> None:
             dest.write_text(content, encoding="utf-8", newline="\n")
 
 
+# `uv tool` rodado de dentro do Claude Desktop (app MSIX) instala o venv no
+# AppData virtualizado do pacote: o lançador em ~/.local/bin só funciona para o
+# Claude e, no serviço do OpenCode, morre com "uv trampoline failed to
+# canonicalize script path" (MCP "Connection closed"). As ferramentas
+# reinstaladas com UV_TOOL_DIR=~/.local/share/uv/tools valem para qualquer processo.
+LOCAL_BIN = HOME / ".local" / "bin"
+SHARED_BIN = HOME / ".local" / "share" / "uv" / "bin"
+
+
+def shared_launcher(command: str) -> str:
+    exe = Path(command)
+    shared = SHARED_BIN / exe.name
+    return str(shared) if exe.parent == LOCAL_BIN and shared.is_file() else command
+
+
 def to_opencode_mcp(server: dict) -> dict:
     kind = server.get("type", "stdio")
     if kind in ("http", "sse") or "url" in server:
@@ -272,7 +288,7 @@ def to_opencode_mcp(server: dict) -> dict:
         return out
     out = {
         "type": "local",
-        "command": [server["command"], *server.get("args", [])],
+        "command": [shared_launcher(server["command"]), *server.get("args", [])],
         "enabled": True,
     }
     if server.get("env"):

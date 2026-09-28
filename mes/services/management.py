@@ -530,6 +530,8 @@ class ManagementService:
                 "out_of_shift_seconds": totals[EventCategory.OUT_OF_SHIFT],
                 "out_of_shift_attributed_seconds": physical["out_of_shift_attributed_seconds"],
                 "out_of_shift_duplicated_seconds": physical["out_of_shift_duplicated_seconds"],
+                # Recursos com tempo no período: divisor da média por recurso.
+                "resource_count": len(physical["by_resource"]),
             },
             "kpis": {
                 "availability": availability.to_dict(),

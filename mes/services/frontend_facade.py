@@ -251,7 +251,10 @@ class FrontendBackendFacade:
         payload["sector_highlights"] = self._sector_highlights(
             payload.get("sectors", [])
         )
+        # Total somado entre recursos (35 recursos sem demanda por 1h = 35h) e média
+        # por recurso. Fora do turno é do calendário: vale a união, sem somar nem dividir.
         hours = payload.get("hours", {})
+        resource_count = int(hours.get("resource_count") or 0)
         composition = (
             ("Produção", "production_seconds"),
             ("Setup", "setup_seconds"),
@@ -265,11 +268,15 @@ class FrontendBackendFacade:
             {"label": label, "seconds": float(hours.get(field) or 0.0), "source_field": field}
             for label, field in composition
         ]
+        for item in items:
+            per_resource = resource_count and item["source_field"] != "out_of_shift_seconds"
+            item["average_seconds"] = item["seconds"] / resource_count if per_resource else None
         total = sum(item["seconds"] for item in items)
         for item in items:
             item["percentage"] = item["seconds"] / total * 100.0 if total > 0 else None
         payload["time_composition"] = {
             "items": items,
+            "resource_count": resource_count,
             "total_seconds": total,
             "availability": "disponivel" if total > 0 else "sem_registros",
         }

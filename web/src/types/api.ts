@@ -319,6 +319,7 @@ export interface TimeCompositionItem {
   seconds: number;
   percentage: number | null;
   source_field: string;
+  average_seconds?: number | null;
 }
 
 export interface SimulationSummary {
@@ -458,6 +459,7 @@ export interface ManagementOverview {
   sectors: SectorSummary[];
   time_composition: {
     items: TimeCompositionItem[];
+    resource_count?: number;
     total_seconds: number;
     availability: Availability;
   };

@@ -48,6 +48,12 @@ export function formatSignedDuration(seconds: number | null | undefined) {
   return `${sign}${formatDuration(Math.abs(seconds))}`;
 }
 
+/** Média por recurso de um total somado entre recursos; só aparece com 2 ou mais recursos. */
+export function formatAveragePerResource(totalSeconds: number | null | undefined, resourceCount: number) {
+  if (totalSeconds === null || totalSeconds === undefined || resourceCount < 2) return undefined;
+  return `Média ${formatHours(totalSeconds / resourceCount)} por recurso (${formatNumber(resourceCount)} recursos)`;
+}
+
 export function formatHours(seconds: number | null | undefined) {
   if (seconds === null || seconds === undefined) return "Não disponível";
   const total = Math.max(0, Math.round(seconds));

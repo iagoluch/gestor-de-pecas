@@ -188,10 +188,20 @@ export function ManagementOverviewPage() {
               <EmptyState state={data.time_composition.availability} />
             ) : (
               <div className="time-composition">
+                {(data.time_composition.resource_count ?? 0) > 1 ? (
+                  <p className="time-composition__note">
+                    Total somado em {data.time_composition.resource_count} recursos · média por recurso ao lado
+                  </p>
+                ) : null}
                 {data.time_composition.items.map((item) => (
                   <div key={item.source_field}>
                     <span>{item.label}</span>
-                    <strong>{hours(item.seconds)}</strong>
+                    <strong>
+                      {hours(item.seconds)}
+                      {(data.time_composition.resource_count ?? 0) > 1 && item.average_seconds != null ? (
+                        <small> · média {hours(item.average_seconds)}</small>
+                      ) : null}
+                    </strong>
                     <div><i style={{ width: `${item.percentage ?? 0}%` }} /></div>
                   </div>
                 ))}

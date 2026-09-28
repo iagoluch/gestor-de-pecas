@@ -8,7 +8,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
-import { formatHours, formatNumber } from "../../utils/format";
+import { formatAveragePerResource, formatHours, formatNumber } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 
 type ReportType = "gerencial" | "producao" | "perdas" | "indicadores" | "dados_analiticos";
@@ -118,7 +118,7 @@ function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecor
     const totals = record(quality.totals);
     return <>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Tempo de parada" value={formatHours(numeric(downtimes.total_seconds))} accent="danger" />
+        <MetricCard label="Tempo de parada" value={formatHours(numeric(downtimes.total_seconds))} detail={formatAveragePerResource(numeric(downtimes.total_seconds), rows(downtimes.by_resource).length)} accent="danger" />
         <MetricCard label="Ocorrências" value={formatNumber(numeric(downtimes.count))} accent="warning" />
         <MetricCard label="Refugo" value={formatNumber(numeric(totals.refugo))} accent="danger" />
         <MetricCard label="Retrabalho" value={formatNumber(numeric(totals.retrabalho))} accent="warning" />
@@ -141,7 +141,7 @@ function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecor
       <div className="metric-grid metric-grid--four">
         <MetricCard label="OEE" value={metricValue(oee)} detail={String(oee.reason ?? "")} accent="purple" availability={String(oee.availability ?? "nao_configurado") as never} />
         <MetricCard label="FTT" value={metricValue(ftt)} detail={String(ftt.reason ?? "")} accent="teal" availability={String(ftt.availability ?? "dados_insuficientes") as never} />
-        <MetricCard label="Tempo físico" value={formatHours(numeric(time.physical_seconds))} accent="success" />
+        <MetricCard label="Tempo físico" value={formatHours(numeric(time.physical_seconds))} detail={formatAveragePerResource(numeric(time.physical_seconds), rows(time.by_resource).length)} accent="success" />
         <MetricCard label="Utilização" value={record(analytics.capacidade).utilizacao_percentual == null ? humanizeSystemState(record(analytics.capacidade).availability ?? "dados_insuficientes", { fallback: "Dados insuficientes" }) : `${formatNumber(numeric(record(analytics.capacidade).utilizacao_percentual), 1)}%`} detail={String(record(analytics.capacidade).reason ?? "")} accent="warning" />
       </div>
       <SectionCard title="Confiabilidade e capacidade" className="content-section">

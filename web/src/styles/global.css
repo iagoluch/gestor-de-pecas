@@ -233,6 +233,8 @@ table, .metric-card__value, .insight-drawer__summary strong, .resource-card dd, 
 .time-composition > div > div { grid-column: 1 / -1; height: 7px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; }
 .time-composition i { display: block; height: 100%; border-radius: inherit; background: var(--primary-fill); }
 .time-composition strong { font-size: var(--text-xs); }
+.time-composition small { color: var(--muted); font-weight: 500; }
+.time-composition__note { margin: 0; color: var(--muted); font-size: var(--text-xs); }
 .plan-actual-summary { display: grid; gap: 14px; padding: 8px 4px; }
 .plan-actual-summary > div:not(.plan-actual-summary__progress) { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--divider); }
 .plan-actual-summary span { color: var(--muted); font-size: var(--text-sm); }

@@ -20,6 +20,7 @@ import type {
 import {
   availabilityLabel,
   formatDateTime,
+  formatAveragePerResource,
   formatDuration,
   formatHours,
   formatNumber,
@@ -394,8 +395,8 @@ export function AnalyticsHoursPage() {
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Tempo físico" value={formatHours(data?.physical_seconds)} />
-        <MetricCard label="Tempo atribuído bruto" value={formatHours(data?.raw_attributed_timeline_seconds)} accent="teal" />
+        <MetricCard label="Tempo físico" value={formatHours(data?.physical_seconds)} detail={formatAveragePerResource(data?.physical_seconds, data?.by_resource?.length ?? 0)} />
+        <MetricCard label="Tempo atribuído bruto" value={formatHours(data?.raw_attributed_timeline_seconds)} detail={formatAveragePerResource(data?.raw_attributed_timeline_seconds, data?.by_resource?.length ?? 0)} accent="teal" />
         <MetricCard label="Sobreposição removida" value={formatHours(data?.overlap_removed_seconds)} accent="warning" />
         <MetricCard
           label="Utilização"
@@ -458,7 +459,7 @@ function SegmentPage() {
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       {toggle}
       <div className="metric-grid metric-grid--four">
-        <MetricCard label={`Tempo total de ${isStop ? "parada" : "setup"}`} value={formatHours(data?.total_seconds)} accent={isStop ? "danger" : "teal"} />
+        <MetricCard label={`Tempo total de ${isStop ? "parada" : "setup"}`} value={formatHours(data?.total_seconds)} detail={formatAveragePerResource(data?.total_seconds, data?.by_resource?.length ?? 0)} accent={isStop ? "danger" : "teal"} />
         <MetricCard label="Ocorrências" value={formatNumber(data?.count)} detail={data?.count ? `Média de ${formatDuration((data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
         <MetricCard label={isStop ? "Recurso mais parado" : "Recurso com mais setup"} value={topResource?.label ?? "Não determinado"} detail={topResource ? formatHours(topResource.value) : undefined} availability={topResource ? "disponivel" : "sem_registros"} accent="warning" />
         <MetricCard
@@ -712,14 +713,20 @@ export function AnalyticsCapacityPage() {
         <MetricCard
           label="Tempo disponível"
           value={configured && data?.total_capacity_seconds != null ? formatHours(data.total_capacity_seconds) : "Não configurado"}
-          detail={data?.recursos_sem_calendario ? `${formatNumber(data.recursos_sem_calendario)} recurso(s) sem calendário` : undefined}
+          detail={[
+            configured ? formatAveragePerResource(data?.total_capacity_seconds, data?.recursos_com_calendario ?? 0) : undefined,
+            data?.recursos_sem_calendario ? `${formatNumber(data.recursos_sem_calendario)} recurso(s) sem calendário` : undefined,
+          ].filter(Boolean).join(" · ") || undefined}
           availability={configured ? "disponivel" : "nao_configurado"}
           accent="warning"
         />
         <MetricCard
           label="Capacidade livre"
           value={configured && data?.total_remaining_seconds != null ? formatHours(data.total_remaining_seconds) : "Não configurado"}
-          detail={configured && data?.total_load_seconds != null ? `${formatHours(data.total_load_seconds)} já ocupados` : undefined}
+          detail={configured ? [
+            data?.total_load_seconds != null ? `${formatHours(data.total_load_seconds)} já ocupados` : undefined,
+            formatAveragePerResource(data?.total_remaining_seconds, data?.recursos_com_calendario ?? 0),
+          ].filter(Boolean).join(" · ") || undefined : undefined}
           availability={configured ? "disponivel" : "nao_configurado"}
           accent="success"
         />

@@ -219,8 +219,6 @@ export interface TimeBreakdown {
   periodo: Record<string, string | null>;
   totals: Record<string, number>;
   physical_seconds: number;
-  clock_totals?: Record<string, number>;
-  clock_seconds?: number;
   raw_attributed_timeline_seconds: number;
   overlap_removed_seconds: number;
   overlap_seconds: number;
