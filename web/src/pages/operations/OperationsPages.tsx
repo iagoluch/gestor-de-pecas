@@ -216,12 +216,26 @@ export function OperationsTimePage() {
     value: Number(row.producao ?? 0),
     detail: formatHours(Number(row.producao ?? 0)),
   }));
+  // ``totals`` soma o tempo de cada recurso (35 recursos parados 1h = 35h) e anda
+  // 35x mais rápido que o relógio. A tela mostra a média por recurso e o total em
+  // tempo de relógio (``clock_totals``), os dois no ritmo do relógio.
+  const resources = data?.by_resource ?? [];
+  const resourceCount = resources.length;
+  const resourceSum = (keys: string[]) => resourceCount
+    ? resources.reduce((sum, row) => sum + keys.reduce((acc, key) => acc + Number(row[key] ?? 0), 0), 0)
+    : keys.reduce((acc, key) => acc + Number(data?.totals?.[key] ?? 0), 0);
+  const perResource = (seconds: number) => formatHours(resourceCount ? seconds / resourceCount : seconds);
+  const clockTotal = (keys: string[]) => keys.reduce((acc, key) => acc + Number(data?.clock_totals?.[key] ?? 0), 0);
+  const clockDetail = (keys: string[]) => resourceCount > 1 ? `Total ${formatHours(clockTotal(keys))}` : undefined;
+  const productive = resourceSum(["producao", "setup"]);
+  const stopped = resourceSum(["parada"]);
+  const measured = resourceCount ? resourceSum(Object.keys(data?.totals ?? {})) : Number(data?.physical_seconds ?? 0);
   return (
     <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Tempo produtivo" value={formatHours(Number(data?.totals?.producao ?? 0) + Number(data?.totals?.setup ?? 0))} detail="Produção e setup" accent="success" />
-        <MetricCard label="Tempo parado" value={formatHours(data?.totals?.parada)} accent="danger" />
-        <MetricCard label="Tempo total medido" value={formatHours(data?.physical_seconds)} accent="primary" />
+        <MetricCard label="Tempo produtivo" value={perResource(productive)} detail="Produção e setup" accent="success" />
+        <MetricCard label="Tempo parado" value={perResource(stopped)} detail={clockDetail(["parada"])} accent="danger" />
+        <MetricCard label="Tempo total medido" value={perResource(measured)} detail={resourceCount > 1 ? `Total ${formatHours(data?.clock_seconds)}` : undefined} accent="primary" />
         <MetricCard label="Tempo a esclarecer" value={formatHours(data?.conflicting_state_seconds)} detail={Number(data?.conflicting_state_seconds ?? 0) > 0 ? "Estados simultâneos incompatíveis no mesmo recurso" : "Sem conflito no período"} accent={Number(data?.conflicting_state_seconds ?? 0) > 0 ? "warning" : "success"} />
       </div>
       <div className="two-column-grid content-section">
@@ -232,7 +246,8 @@ export function OperationsTimePage() {
             rowKey={(row) => row[0]}
             columns={[
               { key: "category", label: "Categoria", render: (row) => humanize(row[0]) },
-              { key: "time", label: "Tempo físico", render: (row) => formatHours(row[1]) },
+              { key: "time", label: resourceCount > 1 ? "Média por recurso" : "Tempo físico", render: (row) => perResource(resourceSum([row[0]])) },
+              ...(resourceCount > 1 ? [{ key: "total", label: "Tempo total", render: (row: [string, number]) => formatHours(clockTotal([row[0]])) }] : []),
             ]}
           />
         </SectionCard>

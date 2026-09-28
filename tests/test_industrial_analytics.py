@@ -96,6 +96,20 @@ class PhysicalTimeConsolidationTests(unittest.TestCase):
         self.assertEqual(result["totals"][EventCategory.PRODUCTION], 1800)
         self.assertEqual(result["totals"][EventCategory.UNKNOWN], 1800)
 
+    def test_total_de_relogio_nao_multiplica_pelo_numero_de_recursos(self):
+        # 35 recursos em Sem Demanda por 1h somam 35h, mas no relógio passou 1h.
+        inicio = datetime(2026, 9, 28, 8, 0)
+        segments = [
+            PhysicalInputSegment(
+                f"REC{n}", "Setor", EventCategory.QUEUE, inicio, inicio + timedelta(hours=1), f"r{n}",
+            )
+            for n in range(35)
+        ]
+        result = consolidate_physical_time(segments)
+        self.assertEqual(result["totals"][EventCategory.QUEUE], 35 * 3600)
+        self.assertEqual(result["clock_totals"][EventCategory.QUEUE], 3600)
+        self.assertEqual(result["clock_seconds"], 3600)
+
 
 class RateioTests(unittest.TestCase):
     def test_rateio_conserva_tempo_fisico(self):

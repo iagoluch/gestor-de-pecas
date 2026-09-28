@@ -105,6 +105,9 @@ class IndustrialAnalyticsService:
             "periodo": filters.to_dict(),
             "totals": _category_dict(totals),
             "physical_seconds": physical["physical_seconds"] + undated_cutting_seconds,
+            # Totais em tempo de relógio (união entre recursos); ``totals`` soma por recurso.
+            "clock_totals": _category_dict(physical["clock_totals"]),
+            "clock_seconds": physical["clock_seconds"],
             "raw_attributed_timeline_seconds": (
                 physical["raw_attributed_seconds"] + undated_cutting_seconds
             ),
