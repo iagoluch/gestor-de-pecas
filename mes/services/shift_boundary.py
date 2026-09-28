@@ -21,6 +21,11 @@ from mes.domain.manufacturing_rules import (
 from mes.domain import ShiftWindowKind
 from mes.services.calendar import CalendarService
 
+# Sexta 17:30 → segunda 08:00 são 62h30; 96h cobrem o fim de semana com folga.
+# ponytail: limites de dias diferentes são aplicados por tipo, não em ordem
+# cronológica única; uma parada de vários dias úteis pede um merge ordenado.
+RECOVERY_LOOKBACK_HOURS = 96
+
 
 class ShiftBoundaryService:
     """Aplica interrupções de fim de turno de forma idempotente."""
@@ -30,19 +35,27 @@ class ShiftBoundaryService:
         self._now = now_func or datetime.now
         self.rules = rules or ManufacturingRules()
 
-    def due_boundaries(self, now=None, *, lookback_hours=24):
+    def _work_days(self, now, floor):
+        """Dias úteis que a janela de recuperação alcança (inclui a véspera)."""
+
+        day = floor.date() - timedelta(days=1)
+        while day <= now.date():
+            if day.weekday() in self.rules.official_work_days:
+                yield day
+            day += timedelta(days=1)
+
+    def due_boundaries(self, now=None, *, lookback_hours=RECOVERY_LOOKBACK_HOURS):
         """Limites já ocorridos dentro da janela de recuperação.
 
-        A janela cobre o dia atual e o anterior para recuperar uma aplicação
-        que ficou fechada durante um fim de turno, sem reprocessar histórico
-        antigo indefinidamente.
+        A janela cobre um fim de semana inteiro: a aplicação desligada na
+        sexta ainda aplica o 17:30 de sexta na segunda, sem reprocessar
+        histórico antigo indefinidamente. Sábado e domingo não têm limite.
         """
 
         now = now or self._now()
         floor = now - timedelta(hours=max(1, int(lookback_hours)))
         candidates = []
-        for day_offset in (-1, 0):
-            day = now.date() + timedelta(days=day_offset)
+        for day in self._work_days(now, floor):
             for boundary_time in self.rules.shift_end_boundaries:
                 boundary = datetime.combine(day, boundary_time)
                 if floor <= boundary <= now:
@@ -53,17 +66,15 @@ class ShiftBoundaryService:
         boundaries = self.due_boundaries(now)
         return boundaries[-1] if boundaries else None
 
-    def due_shift_starts(self, now=None, *, lookback_hours=24):
+    def due_shift_starts(self, now=None, *, lookback_hours=RECOVERY_LOOKBACK_HOURS):
         """Aberturas do turno oficial alcançadas na janela de recuperação."""
 
         now = now or self._now()
         floor = now - timedelta(hours=max(1, int(lookback_hours)))
         shift_start = self.rules.official_work_window[0]
         candidates = []
-        for day_offset in (-1, 0):
-            moment = datetime.combine(
-                now.date() + timedelta(days=day_offset), shift_start
-            )
+        for day in self._work_days(now, floor):
+            moment = datetime.combine(day, shift_start)
             if floor <= moment <= now:
                 candidates.append(moment)
         return tuple(sorted(set(candidates)))
@@ -111,7 +122,7 @@ class ShiftBoundaryService:
             (start, end, name, None) for start, end, name in self.rules.automatic_breaks
         )
 
-    def due_break_events(self, now=None, *, lookback_hours=24):
+    def due_break_events(self, now=None, *, lookback_hours=RECOVERY_LOOKBACK_HOURS):
         """Inícios e fins de intervalos automáticos já alcançados.
 
         Cada evento carrega o setor da configuração; ``None`` significa fábrica
@@ -122,8 +133,7 @@ class ShiftBoundaryService:
         now = now or self._now()
         floor = now - timedelta(hours=max(1, int(lookback_hours)))
         events = []
-        for day_offset in (-1, 0):
-            day = now.date() + timedelta(days=day_offset)
+        for day in self._work_days(now, floor):
             for start_time, end_time, name, sector in self.configured_breaks():
                 start = datetime.combine(day, start_time)
                 end = datetime.combine(day, end_time)
@@ -245,7 +255,7 @@ class ShiftBoundaryService:
                 current.append(state)
         return created
 
-    def due_resource_calendar_events(self, now, profiles, *, lookback_hours=24):
+    def due_resource_calendar_events(self, now, profiles, *, lookback_hours=RECOVERY_LOOKBACK_HOURS):
         """Aberturas/fechamentos dos calendários próprios por recurso."""
 
         floor = now - timedelta(hours=max(1, int(lookback_hours)))

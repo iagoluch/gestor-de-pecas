@@ -140,6 +140,26 @@ class AutomaticBreakTests(unittest.TestCase):
         self.assertEqual(returns_today[0][0], datetime(2026, 9, 4, 8, 0))
         self.assertEqual(returns_today[0][3], "retorno_turno_sem_demanda")
 
+    def test_fim_de_semana_nao_tem_turno_e_sexta_e_recuperada_na_segunda(self):
+        """Servidor desligado sexta 15:00 → segunda 08:30 (25–28/09/2026)."""
+
+        service = ShiftBoundaryService(BreakRepositoryFake())
+        monday = datetime(2026, 9, 28, 8, 30)
+        boundaries = service.due_boundaries(monday)
+        self.assertIn(datetime(2026, 9, 25, 17, 30), boundaries)
+        self.assertIn(datetime(2026, 9, 25, 21, 30), boundaries)
+        self.assertFalse([moment for moment in boundaries if moment.weekday() >= 5])
+        starts = service.due_shift_starts(monday)
+        self.assertEqual(starts[-1], datetime(2026, 9, 28, 8, 0))
+        self.assertFalse([moment for moment in starts if moment.weekday() >= 5])
+        self.assertFalse(
+            [event for event in service.due_break_events(monday) if event[0].weekday() >= 5]
+        )
+        self.assertEqual(
+            ManufacturingRules.shift_window_kind(datetime(2026, 9, 27, 10, 0)),
+            ShiftWindowKind.OUT_OF_SHIFT,
+        )
+
     def test_sem_configuracao_a_pausa_vale_para_a_fabrica_inteira(self):
         """Fallback do domínio: nenhum setor declarado, nenhuma filtragem."""
 
@@ -924,6 +944,37 @@ class OperationalViewIdentityTests(unittest.TestCase):
 
         self.assertEqual([item["recurso"] for item in payload["resources"]], ["Laser Ensis 3015"])
         self.assertEqual(payload["resources"][0]["fonte"], "apontamentos_corte")
+
+    def test_corte_ativo_nao_duplica_estado_gravado_pela_identidade_canonica(self):
+        """Estado físico grava LASER1; o Corte grava o nome do posto."""
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repository = OperationalViewRepositoryFake()
+        repository.states = [{
+            **repository.states[0],
+            "id": 1647,
+            "recurso": "LASER1",
+            "tipo_setor": "Corte",
+            "categoria": "fila",
+            "data_inicio": datetime(2026, 9, 4, 8, 0),
+        }]
+        repository.listar_cortes_ativos_andon = lambda: [{
+            "maquina": "Laser Ensis 3015",
+            "programa": "001",
+            "data_inicio": datetime(2026, 9, 3, 14, 39),
+        }]
+        moment = datetime(2026, 9, 4, 8, 24)
+        facade = FrontendBackendFacade(repository, now_func=lambda: moment)
+
+        resources = facade.consulta_operacional(
+            AnalyticsFilter(inicio=datetime(2026, 9, 4, 8, 0), fim=moment)
+        )["resources"]
+
+        self.assertEqual(len(resources), 1)
+        self.assertEqual(resources[0]["estado_recurso_id"], 1647)
+        self.assertEqual(resources[0]["categoria"], "producao")
+        self.assertEqual(resources[0]["motivo"], "Plano 001")
+        self.assertEqual(resources[0]["fonte"], "apontamentos_corte")
 
     def test_retorno_das_0800_e_sem_demanda_sem_reabrir_op_interrompida(self):
         from mes.services.frontend_facade import FrontendBackendFacade

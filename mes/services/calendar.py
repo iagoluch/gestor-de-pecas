@@ -383,6 +383,7 @@ class CalendarService:
             timestamp,
             planned_overtime_windows=self.rules.overtime_windows,
             official_work_window=self.rules.official_work_window,
+            work_days=self.rules.official_work_days,
         )
 
     def _exceptions(self, turns, inicio, fim):
@@ -455,14 +456,18 @@ def _exception_bounds(row):
     return start, end
 
 
-def _official_window_intervals(inicio, fim, official_work_window=None):
+def _official_window_intervals(inicio, fim, official_work_window=None, work_days=None):
     """Janela oficial da Manufatura para recursos ainda sem calendário."""
 
     start_time, end_time = official_work_window or ManufacturingRules.official_work_window
+    work_days = work_days or ManufacturingRules.official_work_days
     intervals = []
     day = inicio.date() - timedelta(days=1)
     last_day = fim.date()
     while day <= last_day:
+        if day.weekday() not in work_days:
+            day += timedelta(days=1)
+            continue
         start = datetime.combine(day, start_time)
         end = datetime.combine(day, end_time)
         if end <= start:
@@ -485,9 +490,10 @@ def _default_operational_intervals(inicio, fim, rules):
     ao mesmo tempo.
     """
 
-    windows = _official_window_intervals(inicio, fim, rules.official_work_window)
+    days = rules.official_work_days
+    windows = _official_window_intervals(inicio, fim, rules.official_work_window, days)
     for overtime_window in rules.overtime_windows:
-        windows.extend(_official_window_intervals(inicio, fim, overtime_window))
+        windows.extend(_official_window_intervals(inicio, fim, overtime_window, days))
     return merge_intervals(windows)
 
 

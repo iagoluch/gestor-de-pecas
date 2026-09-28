@@ -50,6 +50,9 @@ AUTOMATIC_BREAKS = (
 AUTOMATIC_BREAK_INTERRUPTION_TYPE = "intervalo_programado"
 OFFICIAL_WORK_WINDOW = (time(8, 0), time(17, 30))
 OVERTIME_WINDOWS = ((time(6, 0), time(8, 0)), (time(17, 30), time(21, 30)))
+# Dias da janela global (``date.weekday()``: 0 = segunda). Sábado e domingo
+# ficam fora de turno; trabalho no fim de semana é exceção de calendário.
+OFFICIAL_WORK_DAYS = (0, 1, 2, 3, 4)
 SYSTEM_OPERATOR = "SISTEMA"
 
 
@@ -170,6 +173,7 @@ class ManufacturingRules:
     automatic_breaks: tuple[tuple[time, time, str], ...] = AUTOMATIC_BREAKS
     official_work_window: tuple[time, time] = OFFICIAL_WORK_WINDOW
     overtime_windows: tuple[tuple[time, time], ...] = OVERTIME_WINDOWS
+    official_work_days: tuple[int, ...] = OFFICIAL_WORK_DAYS
 
     @staticmethod
     def attended_quantity(good_quantity: int, scrap_quantity: int = 0) -> int:
@@ -264,6 +268,7 @@ class ManufacturingRules:
         *,
         planned_overtime_windows=None,
         official_work_window=None,
+        work_days=None,
     ) -> ShiftWindowKind:
         """Classifica um instante em turno / hora extra planejada / fora de turno.
 
@@ -278,6 +283,8 @@ class ManufacturingRules:
 
         if not isinstance(timestamp, datetime):
             raise TypeError("timestamp deve ser datetime")
+        if timestamp.weekday() not in (work_days or cls.official_work_days):
+            return ShiftWindowKind.OUT_OF_SHIFT
         moment = timestamp.time()
         start, end = official_work_window or cls.official_work_window
         if _time_within(moment, start, end):
