@@ -95,7 +95,6 @@ def consolidate_physical_time(
     conflict_seconds = 0.0
     sector_conflict_seconds = 0.0
     out_of_shift_intervals = []
-    category_intervals = defaultdict(list)
 
     for segment in consolidated:
         seconds = segment.seconds
@@ -108,7 +107,6 @@ def consolidate_physical_time(
             by_resource_stop[segment.resource][segment.category][
                 segment.stop_classification
             ] += seconds
-        category_intervals[segment.category].append((segment.start, segment.end))
         if segment.category is EventCategory.OUT_OF_SHIFT:
             out_of_shift_intervals.append((segment.start, segment.end))
         if segment.active_sources > 1:
@@ -130,20 +128,8 @@ def consolidate_physical_time(
     if out_of_shift_intervals:
         totals[EventCategory.OUT_OF_SHIFT] = global_out_of_shift
 
-    # Tempo de relógio: quanto tempo a categoria esteve presente em pelo menos
-    # um recurso. Anda no ritmo do relógio, ao contrário da soma por recurso.
-    clock_totals = {
-        category: _union_seconds(intervals)
-        for category, intervals in category_intervals.items()
-    }
-    clock_seconds = _union_seconds(
-        [interval for intervals in category_intervals.values() for interval in intervals]
-    )
-
     return {
         "segments": tuple(consolidated),
-        "clock_totals": clock_totals,
-        "clock_seconds": clock_seconds,
         "totals": dict(totals),
         "by_resource": {key: dict(value) for key, value in by_resource.items()},
         "by_sector": {key: dict(value) for key, value in by_sector.items()},
@@ -170,10 +156,6 @@ def consolidate_physical_time(
             0.0, attributed_out_of_shift - global_out_of_shift
         ),
     }
-
-
-def _union_seconds(intervals) -> float:
-    return sum((end - start).total_seconds() for start, end in merge_intervals(intervals))
 
 
 def _normalize(raw, index):
