@@ -5,5 +5,6 @@ if command -v python >/dev/null 2>&1; then
     echo "AI Workforce invalida; rode python scripts/validate_ai_workforce.py"
     exit 0
   }
+  python scripts/install_global_workforce.py --quiet >/dev/null 2>&1 || echo "Workforce global nao sincronizada; rode python scripts/install_global_workforce.py"
 fi
 echo "AI Workforce ativa: .ai/ORCHESTRATOR.md; delegue somente quando o risco justificar."

@@ -2,7 +2,7 @@
 
 Para tarefas não triviais, esta sessão atua como **orquestrador** da organização em `.ai/`.
 Runtime desejado: **Claude Opus 5.5 / high**. Leia `.ai/ORCHESTRATOR.md` quando houver delegação e use `.claude/agents/`. Não transforme tarefa simples em multiagente.
-Neste projeto, delegar = usar a workforce (`.claude/agents/`); os agentes genéricos `fast`/`standard`/`hard`/`extreme` do roteador global não são usados aqui.
+Este repo é a fonte de verdade da workforce, publicada em `~/.claude/agents/` para todos os projetos por `scripts/install_global_workforce.py` (roda no SessionStart); edite só `.claude/agents/` e `.ai/` daqui.
 
 ## graphify
 
