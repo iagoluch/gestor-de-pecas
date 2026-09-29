@@ -165,8 +165,19 @@ def rebuild_frontend(_user=Depends(require_admin_user)):
     return {"ok": True, "output": output, "duration_seconds": duration}
 
 
+@router.get("/live")
+def live():
+    """Liveness: o processo responde. Não toca o banco nem o pool (BK-14)."""
+
+    return {"status": "alive", "api": "available"}
+
+
+# ``/health`` segue como alias de ``/ready`` para o gate do deploy e o front.
+@router.get("/ready")
 @router.get("/health")
 def health(request: Request):
+    """Readiness: só 200 com o PostgreSQL respondendo."""
+
     payload = request.app.state.database_manager.health()
     payload["api"] = "available"
     return JSONResponse(

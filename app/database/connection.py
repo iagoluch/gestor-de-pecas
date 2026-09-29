@@ -8,11 +8,15 @@ from psycopg import OperationalError
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool, PoolTimeout
 
+from app.database.config import verificar_fuso_do_host
 from app.database.errors import DatabaseUnavailableError
 
 
 class PostgresPoolManager:
     def __init__(self, config, *, open_immediately=True):
+        timezone = str(getattr(config, "session_timezone", "") or "").strip()
+        if timezone:
+            verificar_fuso_do_host(timezone)
         self.config = config
         self._lock = threading.Lock()
         self._closed = False
@@ -39,42 +43,25 @@ class PostgresPoolManager:
         servidor, inflando tempo produtivo de execuções ainda abertas.
         """
 
+        # Falha fechada (BK-11): se o ajuste não pegar, a exceção sobe e o pool
+        # descarta a conexão em vez de entregá-la com fuso ou timeout errados.
         timezone = str(getattr(self.config, "session_timezone", "") or "").strip()
         if timezone:
-            try:
-                # ``set_config`` aceita parâmetro; ``SET`` não. O ``false`` mantém o
-                # ajuste por toda a sessão, não apenas pela transação corrente.
-                connection.execute("SELECT set_config('TimeZone', %s, false)", (timezone,))
-                connection.commit()
-            except Exception:
-                logging.warning(
-                    "Não foi possível fixar o fuso da sessão PostgreSQL em %s", timezone
-                )
-                try:
-                    connection.rollback()
-                except Exception:  # nosec B110 -- best-effort: a falha original já foi logada acima; nada mais a fazer se o rollback também falhar
-                    pass
+            # ``set_config`` aceita parâmetro; ``SET`` não. O ``false`` mantém o
+            # ajuste por toda a sessão, não apenas pela transação corrente.
+            connection.execute("SELECT set_config('TimeZone', %s, false)", (timezone,))
+            connection.commit()
 
         statement_timeout_ms = int(getattr(self.config, "statement_timeout_ms", 0) or 0)
         if statement_timeout_ms > 0:
-            try:
-                # Limita quanto tempo uma única query pode reter uma das poucas
-                # conexões do pool. Sem isso, uma query travada por lock ou por
-                # falta de índice no banco real derruba a vazão de toda a API.
-                connection.execute(
-                    "SELECT set_config('statement_timeout', %s, false)",
-                    (str(statement_timeout_ms),),
-                )
-                connection.commit()
-            except Exception:
-                logging.warning(
-                    "Não foi possível fixar statement_timeout da sessão PostgreSQL em %sms",
-                    statement_timeout_ms,
-                )
-                try:
-                    connection.rollback()
-                except Exception:  # nosec B110 -- best-effort: a falha original já foi logada acima; nada mais a fazer se o rollback também falhar
-                    pass
+            # Limita quanto tempo uma única query pode reter uma das poucas
+            # conexões do pool. Sem isso, uma query travada por lock ou por
+            # falta de índice no banco real derruba a vazão de toda a API.
+            connection.execute(
+                "SELECT set_config('statement_timeout', %s, false)",
+                (str(statement_timeout_ms),),
+            )
+            connection.commit()
 
     def open(self):
         with self._lock:

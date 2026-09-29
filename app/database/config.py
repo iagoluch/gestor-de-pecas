@@ -1,8 +1,11 @@
 """Environment-only PostgreSQL configuration."""
 
 from dataclasses import dataclass
+from datetime import datetime
 import os
 from pathlib import Path
+
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
@@ -15,6 +18,40 @@ load_dotenv(Path(base_dir()) / ".env", override=False)
 
 
 DEFAULT_SESSION_TIMEZONE = "America/Sao_Paulo"
+
+
+def session_timezone_from_env(environ=None) -> str:
+    env = environ if environ is not None else os.environ
+    return str(env.get("GESTOR_DB_TIMEZONE") or DEFAULT_SESSION_TIMEZONE).strip() or DEFAULT_SESSION_TIMEZONE
+
+
+def verificar_fuso_do_host(session_timezone: str, *, agora: datetime | None = None) -> None:
+    """Recusa o processo quando o fuso do SO diverge do fuso da sessão (BK-11).
+
+    ``agora_db()`` grava hora local *naive* do SO; se a VM subir em UTC, todo
+    apontamento fica deslocado e o OEE por turno sai errado sem erro algum.
+    """
+
+    try:
+        fuso = ZoneInfo(session_timezone)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise DatabaseConfigurationError(
+            f"GESTOR_DB_TIMEZONE inválido: {session_timezone!r}."
+        ) from exc
+    agora = agora or datetime.now().astimezone()
+    do_host, esperado = agora.utcoffset(), agora.astimezone(fuso).utcoffset()
+    if do_host != esperado:
+        raise DatabaseConfigurationError(
+            f"Fuso do sistema operacional (UTC{_offset(do_host)}) diverge do fuso da "
+            f"aplicação {session_timezone} (UTC{_offset(esperado)}). Ajuste o fuso do "
+            "servidor (ou TZ) antes de iniciar: os apontamentos seriam gravados deslocados."
+        )
+
+
+def _offset(delta) -> str:
+    minutos = int(delta.total_seconds() // 60)
+    sinal = "-" if minutos < 0 else "+"
+    return f"{sinal}{abs(minutos) // 60:02d}:{abs(minutos) % 60:02d}"
 
 
 @dataclass(frozen=True)
@@ -150,9 +187,7 @@ def load_postgres_config(*, testing=False, environ=None):
     if connection_defaults:
         dsn = make_conninfo(dsn, **connection_defaults)
 
-    session_timezone = str(
-        env.get("GESTOR_DB_TIMEZONE") or DEFAULT_SESSION_TIMEZONE
-    ).strip() or DEFAULT_SESSION_TIMEZONE
+    session_timezone = session_timezone_from_env(env)
     min_size = _positive_int("PGPOOL_MIN_SIZE", 1, environ=env)
     max_size = _positive_int("PGPOOL_MAX_SIZE", 10, environ=env)
     if max_size < min_size:

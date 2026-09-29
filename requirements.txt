@@ -1,12 +1,12 @@
-openpyxl
+openpyxl>=3.1,<4
 # Driver PostgreSQL 3 com distribuição binária para o backend Web.
-psycopg[binary]
+psycopg[binary]>=3.3,<4
 # Pool síncrono thread-safe usado pela facade Database.
-psycopg_pool
+psycopg_pool>=3.3,<4
 # Parser XML endurecido contra DTD, entidades e XXE.
 defusedxml>=0.7,<1
 # Carrega o arquivo local .env sem sobrescrever variáveis do sistema.
-python-dotenv
+python-dotenv>=1.2,<2
 # Adaptador HTTP oficial. O domínio e os serviços continuam neutros.
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1

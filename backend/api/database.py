@@ -51,6 +51,8 @@ class DatabaseManager:
                 cursor.execute("SELECT 1 AS ok")
                 row = cursor.fetchone()
             schema_version = database.obter_schema_version()
+            # Sucesso fecha o incidente: a próxima queda volta a ser logada.
+            self._last_error = None
             return {
                 "status": "ok" if row and int(row.get("ok", 0)) == 1 else "degraded",
                 "database": "available",

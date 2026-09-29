@@ -48,7 +48,17 @@ jobs:
           python-version: "3.14"
       - name: IA Workforce (organization.json / matriz / agentes coerentes)
         run: python scripts/validate_ai_workforce.py
-      - run: pip install -r requirements.txt
+      # Instala exatamente o que o deploy instala na VM (BK-08).
+      - run: pip install --require-hashes -r requirements.lock
+      - name: requirements.lock cobre requirements.txt
+        # O Dependabot só mexe no requirements.txt. Se o lock ficou para trás,
+        # falha aqui até regenerá-lo com o comando do cabeçalho do lock.
+        run: |
+          pip install --dry-run -r requirements.txt | tee pip-dry-run.txt
+          if grep -q "Would install" pip-dry-run.txt; then
+            echo "::error::requirements.lock desatualizado em relação ao requirements.txt"
+            exit 1
+          fi
       - run: python -m unittest discover -s tests -p "test_*.py"
 
   frontend:
@@ -87,9 +97,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.14"
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+      # Separados: um arquivo com hash liga --require-hashes para todos.
+      - run: pip install --require-hashes -r requirements.lock
+      - run: pip install -r requirements-dev.txt
       - name: pip-audit (dependências com CVE conhecida)
-        run: pip-audit -r requirements.txt -r requirements-dev.txt
+        run: |
+          pip-audit -r requirements.lock
+          pip-audit -r requirements-dev.txt
       - name: bandit (padrões inseguros no código Python)
         # Bloqueante: os 44 achados da auditoria de 20/09/2026 foram todos
         # triados (ver docs/CLAUDE_CODE_SETUP.md) — reais corrigidos, falsos

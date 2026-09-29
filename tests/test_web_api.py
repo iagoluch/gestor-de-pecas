@@ -1926,3 +1926,96 @@ class LoginThrottleTests(unittest.TestCase):
         router._register_login_failure(self.key, now=1_000.0)
         depois = 1_000.0 + router.LOGIN_DELAY_WINDOW_SECONDS + 1
         self.assertEqual(router._login_delay_seconds(self.key, now=depois), 0.0)
+
+
+class _BancoIntermitente(ApiFakeDatabase):
+    def __init__(self):
+        super().__init__()
+        self.fora = False
+
+    @contextmanager
+    def connection(self):
+        if self.fora:
+            raise OSError("conexão recusada")
+        yield _Connection()
+
+
+class HealthProbeTests(unittest.TestCase):
+    """BK-14: liveness sem banco, readiness com banco e incidente que fecha."""
+
+    def setUp(self):
+        self.db = _BancoIntermitente()
+        self.app = create_app(settings=_settings(), database_factory=lambda: self.db)
+        self.client = TestClient(self.app)
+        self.addCleanup(self.client.close)
+
+    def test_live_responde_com_banco_fora_e_ready_nao(self):
+        self.db.fora = True
+        live = self.client.get("/api/v1/system/live")
+        self.assertEqual(live.status_code, 200)
+        self.assertEqual(live.json()["status"], "alive")
+        for rota in ("/api/v1/system/ready", "/api/v1/system/health"):
+            with self.subTest(rota=rota):
+                resposta = self.client.get(rota)
+                self.assertEqual(resposta.status_code, 503)
+                self.assertEqual(resposta.json()["database"], "unavailable")
+
+    def test_recuperacao_limpa_o_erro_e_nova_queda_volta_a_ser_logada(self):
+        manager = self.app.state.database_manager
+        self.db.fora = True
+        with self.assertLogs(level="WARNING"):
+            self.assertEqual(self.client.get("/api/v1/system/ready").status_code, 503)
+
+        self.db.fora = False
+        pronto = self.client.get("/api/v1/system/ready")
+        self.assertEqual(pronto.status_code, 200)
+        self.assertEqual(pronto.json()["status"], "ok")
+        self.assertIsNone(manager._last_error)
+
+        # Antes do BK-14 o erro velho ficava preso e esta queda saía muda.
+        self.db.fora = True
+        with self.assertLogs(level="WARNING") as capturado:
+            self.assertEqual(self.client.get("/api/v1/system/ready").status_code, 503)
+        self.assertIn("Health do PostgreSQL falhou", capturado.output[0])
+
+
+class RequestIdLogTests(unittest.TestCase):
+    """BK-13: log de camada interna carrega o X-Request-ID da resposta."""
+
+    def setUp(self):
+        import logging
+
+        from backend.api.request_context import LOG_FORMAT
+
+        self.saida = io.StringIO()
+        handler = logging.StreamHandler(self.saida)
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        raiz = logging.getLogger()
+        raiz.addHandler(handler)
+        self.addCleanup(raiz.removeHandler, handler)
+        # O create_app é quem liga o filtro nos handlers raiz já existentes.
+        self.db = _BancoIntermitente()
+        self.client = TestClient(create_app(settings=_settings(), database_factory=lambda: self.db))
+        self.addCleanup(self.client.close)
+
+    def test_log_emitido_no_threadpool_carrega_o_id_da_resposta(self):
+        self.db.fora = True
+        resposta = self.client.get("/api/v1/system/ready")
+        linhas = [linha for linha in self.saida.getvalue().splitlines() if "Health do PostgreSQL" in linha]
+        self.assertEqual(len(linhas), 1)
+        self.assertIn(f"[{resposta.headers['X-Request-ID']}]", linhas[0])
+
+    def test_log_de_servico_mes_e_log_fora_de_requisicao(self):
+        import logging
+
+        def obter_schema_version():
+            logging.getLogger("mes.services.teste").warning("marcador-servico")
+            return SCHEMA_VERSION
+
+        self.db.obter_schema_version = obter_schema_version
+        resposta = self.client.get("/api/v1/system/ready")
+        self.assertEqual(resposta.status_code, 200)
+        logging.getLogger("mes.services.teste").warning("marcador-fora")
+        saida = self.saida.getvalue()
+        self.assertIn(f"[{resposta.headers['X-Request-ID']}] mes.services.teste: marcador-servico", saida)
+        self.assertIn("[-] mes.services.teste: marcador-fora", saida)

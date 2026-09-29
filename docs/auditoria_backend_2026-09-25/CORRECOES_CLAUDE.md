@@ -342,3 +342,106 @@ Commit `fix: harden backend trust boundaries`. O REAL não foi acessado. O Sigma
 | Auth / CSRF / SOAP F4 / relatórios / qualidade / SigmaNEST | ✅ 388 passed, 993 subtests: `test_web_api`, `test_totvs_integration`, `test_ai`, `test_dev_observatory`, `test_database_professionalization`, `test_intelligence_reports`, `test_report_automation_messaging`, `test_stage4b_factory_shift`, `test_quality_inspection`, `test_wave6b_gate_setup_qualidade`, `test_sigmanest_planning`, `test_sigmanest_gateway` |
 | Front | ✅ `tsc --noEmit`; vitest `pauses` + `shifts` 18/18 |
 | REAL acessado | ❌ Não |
+
+---
+
+## ONDA 4 — Operação e observabilidade
+
+Commit `fix: harden backend operations and observability`. O REAL não foi acessado, e nenhum deploy real foi disparado: o runner da VM não existe.
+
+### BK-08 · Deps sem pin e deploy sem rollback — **CORRIGIDO E PROVADO localmente; validação na VM BLOQUEADA EXTERNAMENTE**
+
+- **Antes:**
+  - `openpyxl`, `psycopg[binary]`, `psycopg_pool` e `python-dotenv` estavam sem versão.
+  - O deploy fazia `pip install -r requirements.txt`, então cada release resolvia versões novas.
+  - O `deploy.yml` fazia `/MIR` → `pip` → `Restart-Service` → health e terminava num `throw`. Não havia snapshot nem backup do banco antes das migrations do startup. Um release quebrado deixava a fábrica parada até alguém agir à mão.
+- **Alteração:**
+  - `requirements.txt`: faixas nas 4 deps sem versão. O arquivo continua sendo a entrada humana.
+  - `requirements.lock` (novo):
+    - gerado com `uv pip compile --universal --generate-hashes --python-version 3.14`, com hash sha256 de cada wheel;
+    - vale para o Linux (CI) e o Windows (VM): o `uvloop` e o `tzdata` têm markers de plataforma.
+  - CI (`backend`/`security`) e e2e instalam o lock com `--require-hashes`.
+    - A instalação é separada da de dev, porque um arquivo com hash liga o modo de hash para todos.
+    - O pip-audit audita o lock.
+  - Novo passo no CI: **"requirements.lock cobre requirements.txt"**. O Dependabot só mexe no `.txt`; se o lock ficar para trás, o `pip install --dry-run` mostra `Would install` e o job falha.
+  - `scripts/deploy_release.ps1` (novo), chamado pelo `deploy.yml`:
+    1. snapshot de `APP_DIR` (com `.venv`) em `APP_DIR.previous`;
+    2. `pg_dump` pré-deploy. Se falhar, aborta antes de parar o serviço;
+    3. `Stop-Service`, `/MIR` (`.env` e dados de runtime ficam fora), `pip --require-hashes`, `Start-Service`, espera o `/ready`;
+    4. se falhar: volta código + `.venv` do snapshot e reinicia. Se o código antigo também não fica pronto (schema já migrado), falha com o caminho do dump para restauração manual.
+  - **O banco nunca é restaurado automaticamente:** restaurar produção apagaria apontamentos feitos depois do dump.
+- **Evidência / testes:**
+  - venv limpo (`pip install --require-hashes -r requirements.lock`) → `test_web_api` + `test_timezone_guard`: 75/75 OK, com starlette 1.7.0 do lock.
+  - `pip-audit -r requirements.lock`: *No known vulnerabilities found*.
+  - Guarda de drift: com `httpx>=0.27,<0.28` no `.txt`, o dry-run mostra `Would install httpx-0.27.2`, e o passo falharia. Com o `.txt` atual, 0 linhas.
+  - `scripts/test_deploy_rollback.ps1` (diretórios temporários + serviço HTTP fake que lê a versão ao subir), 4 cenários verdes em ~25 s:
+    - **saudável:** v2 aplicada; ordem `backup → stop → install → start`; `.env`/`dados` preservados;
+    - **quebrada (503):** volta v1 no código e na `.venv`; `.env`/`dados` preservados; mensagem "código anterior foi restaurado";
+    - **backup falha:** o deploy aborta sem parar o serviço nem tocar no código;
+    - **schema migrado:** o código volta, mas a v1 recusa o schema novo, e a falha cita "Restaure manualmente o backup pré-deploy do banco (…dump)".
+  - **Contraprova:** sem a linha de restore do snapshot, o teste falha (exit 1, a v2 quebrada permanece).
+  - O passo do `deploy.yml` foi extraído e passou no parser do PowerShell sem erros. A extração do `DATABASE_URL` foi testada com as variações `X=`, ` X = "…" ` e `X='…'`.
+- **Bloqueio externo:**
+  - O runner self-hosted `gestor-pecas-vm` não está provisionado, e não há staging.
+  - Pré-requisitos da VM: `pg_dump` no PATH e `DATABASE_URL` no `.env`. Sem eles o deploy aborta, por desenho.
+  - O DSN vai na linha de comando do `pg_dump`, visível só a usuários locais da VM.
+
+### BK-11 · Fuso do host sem guarda; `SET TIME ZONE` com falha aberta — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - `agora_db()` grava a hora local *naive* do SO. Uma VM em UTC subia normalmente e deslocava todos os apontamentos em 3 h.
+  - `_configure_session` engolia a falha do `set_config('TimeZone')` e do `statement_timeout` com um warning, e a conexão era entregue com o fuso do servidor.
+- **Alteração:**
+  - `app/database/config.py`:
+    - `session_timezone_from_env()` é a fonte única de `GESTOR_DB_TIMEZONE`;
+    - `verificar_fuso_do_host()` compara o offset do SO com o do fuso configurado e levanta `DatabaseConfigurationError` com os dois offsets.
+  - `create_app` (só com banco real) e `PostgresPoolManager.__init__` (scripts e jobs) chamam a guarda antes de abrir o pool.
+  - `_configure_session`: falha fechada. A exceção sobe e o pool descarta a conexão.
+  - Continua `America/Sao_Paulo`.
+- **Evidência / testes (`tests/test_timezone_guard.py`, 6/6):**
+  - subprocess `TZ=UTC0 python -c "import backend.api.main"` → returncode ≠ 0, com a mensagem "diverge do fuso da aplicação America/Sao_Paulo";
+  - `TZ=BRT3` → sobe (controle positivo);
+  - pool de script com `UTC0` → `DatabaseConfigurationError`;
+  - `set_config` falho → a exceção se propaga, sem commit.
+  - **Contraprova:** stash de `connection.py` + `main.py` → 3 falhas comportamentais.
+  - Pool real no TEST continua abrindo: `test_database_professionalization` verde.
+
+### BK-13 · Logs sem correlação com a requisição — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - O `X-Request-ID` saía na resposta, mas nenhum log de `backend/`, `mes/` ou `app/` o carregava.
+  - Sob o uvicorn o logger raiz não tem handler, e os warnings caíam no `lastResort` só com a mensagem.
+- **Alteração:**
+  - `backend/api/request_context.py` (novo): `ContextVar REQUEST_ID`, `RequestIdFilter` e `configure_logging()`.
+    - `configure_logging()` é idempotente: só cria um handler se a raiz não tiver nenhum, e põe o filtro em todos os handlers.
+  - O middleware `request_context` faz `set` antes do `call_next` e `reset` no `finally`. O contexto chega ao threadpool dos endpoints `def`.
+- **Evidência / testes (`RequestIdLogTests`, 2/2):**
+  - o log emitido no threadpool (health) contém `[<X-Request-ID da resposta>]`;
+  - o log de `mes.services.*` dentro da requisição carrega o ID, e o log fora de requisição sai com `[-]`.
+  - **Contraprova:** sem o `set` no middleware → 2 falhas.
+
+### BK-14 · `/health` misturava liveness e readiness; `_last_error` nunca limpava — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - Só havia `/health`, que depende do banco: um orquestrador reiniciaria o processo por uma queda do PostgreSQL.
+  - `_last_error` nunca voltava a `None`, então a segunda queda saía muda no log.
+- **Alteração:**
+  - `GET /api/v1/system/live`: só o processo, sem tocar no banco nem no pool.
+  - `GET /api/v1/system/ready`: 200 só com o PostgreSQL respondendo. `/health` segue como alias, para o front e deploys antigos; o deploy novo espera o `/ready`.
+  - `DatabaseManager.health()` limpa `_last_error` no sucesso.
+- **Evidência / testes (`HealthProbeTests`, 2/2):**
+  - banco fora → `/live` 200, `/ready` e `/health` 503;
+  - queda → recuperação (`_last_error is None`) → nova queda volta a logar "Health do PostgreSQL falhou".
+  - **Contraprova:** stash de `database.py` + `system.py` → 2 falhas. Só de `database.py` → o teste de recuperação falha (`OSError(...) is not None`).
+
+### GATE W4
+
+| Item | Resultado |
+|---|---|
+| Testes direcionados | ✅ 124/124: `test_web_api`, `test_timezone_guard`, `test_database_professionalization` (pool real no TEST), `test_execution_to_management_consistency` |
+| Lock limpo com hashes | ✅ 75/75 em venv novo instalado só pelo `requirements.lock` |
+| Rollback de deploy | ✅ `scripts/test_deploy_rollback.ps1` com 4 cenários; contraprova vermelha |
+| bandit `-r backend mes app -ll` | ✅ 0 Medium, 0 High |
+| pip-audit | ✅ `requirements.lock` limpo; `requirements-dev.txt` inalterado desde o W3 |
+| `git diff --check` | ✅ |
+| REAL acessado | ❌ Não |

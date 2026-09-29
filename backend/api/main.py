@@ -33,6 +33,7 @@ from app.database.leadership import (
 )
 from backend.api.body_limit import DEFAULT_MAX_BODY_BYTES, BodySizeLimitMiddleware
 from backend.api.errors import register_error_handlers
+from backend.api.request_context import REQUEST_ID, configure_logging
 from backend.api.routers import (
     ai,
     andon,
@@ -482,6 +483,13 @@ async def _dev_observatory_loop(application: FastAPI) -> None:
 
 def create_app(*, settings: WebSettings | None = None, database_factory=None) -> FastAPI:
     resolved_settings = settings or WebSettings.from_env()
+    configure_logging()
+    if database_factory is None:
+        # Banco real: recusa subir com o SO em outro fuso (BK-11), antes de
+        # qualquer apontamento ser gravado deslocado.
+        from app.database.config import session_timezone_from_env, verificar_fuso_do_host
+
+        verificar_fuso_do_host(session_timezone_from_env())
     clock = ApplicationClock(
         simulation_mode=resolved_settings.simulation_mode,
         reference_time=resolved_settings.simulation_reference_time,
@@ -704,6 +712,8 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     @application.middleware("http")
     async def request_context(request: Request, call_next):
         request.state.request_id = str(uuid.uuid4())
+        # Todo log emitido abaixo daqui (services, repositórios) sai com o ID.
+        token = REQUEST_ID.set(request.state.request_id)
         started = time.perf_counter()
         try:
             response = await call_next(request)
@@ -713,6 +723,8 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
             # A exceção segue o caminho normal logo em seguida.
             record_exception(request, exc, (time.perf_counter() - started) * 1000.0)
             raise
+        finally:
+            REQUEST_ID.reset(token)
         # A latência é medida aqui, no mesmo lugar onde o X-Request-ID nasce, e
         # não em uma camada ASGI extra: o funil de erros já anotou no request o
         # código de negócio, se houve recusa.

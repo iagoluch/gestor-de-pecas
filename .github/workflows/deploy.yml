@@ -64,42 +64,36 @@ jobs:
           name: web-dist
           path: web/dist
 
-      # Sincroniza somente artefatos versionados. Dados de runtime são
-      # deliberadamente excluídos do espelho destrutivo: não vivem no checkout
-      # e precisam sobreviver inclusive a um rollback de código.
-      # Códigos de saída do robocopy 0–7 são sucesso (arquivos copiados/
-      # já iguais); só >=8 é falha real.
-      - name: Sincronizar código para ${{ env.APP_DIR }}
+      # scripts/deploy_release.ps1 (BK-08; provado por
+      # scripts/test_deploy_rollback.ps1):
+      #   1. snapshot de APP_DIR (com .venv) em APP_DIR.previous;
+      #   2. pg_dump do banco ANTES do restart: as migrations rodam no startup
+      #      (auto_migrate) e não têm down; sem dump, não há deploy;
+      #   3. para o serviço, espelha o código (.env e dados de runtime ficam
+      #      fora do /MIR), instala o lock com hashes e sobe o serviço;
+      #   4. espera /ready; se não ficar pronto, volta código + .venv do
+      #      snapshot. O banco NUNCA é restaurado sozinho: se o código antigo
+      #      recusar o schema novo, o job falha com o caminho do dump.
+      # O serviço "gestor-pecas" é registrado via NSSM (nssm.cc).
+      # Pré-requisito da VM: pg_dump no PATH e DATABASE_URL no .env.
+      - name: Implantar com backup do banco e rollback de código
         shell: pwsh
         run: |
-          robocopy . "${env:APP_DIR}" /MIR /XF .env /XD .venv .git node_modules "web\node_modules" dados dev_reports backups
-          if ($LASTEXITCODE -ge 8) { exit 1 }
-
-      - name: Instalar dependências Python
-        shell: pwsh
-        run: |
-          & "${env:APP_DIR}\.venv\Scripts\pip.exe" install -r "${env:APP_DIR}\requirements.txt"
-
-      # Migrations aplicam automaticamente na inicialização do processo
-      # (auto_migrate em app/database/database.py) — não há passo manual
-      # aqui, só reiniciar o serviço. O serviço "gestor-pecas" é registrado
-      # via NSSM (nssm.cc), que expõe o processo uvicorn como um Serviço do
-      # Windows comum — por isso basta Restart-Service.
-      - name: Reiniciar o serviço
-        shell: pwsh
-        run: Restart-Service -Name gestor-pecas
-
-      - name: Validar saúde após o restart
-        shell: pwsh
-        run: |
-          $deadline = (Get-Date).AddSeconds(60)
-          do {
-            try {
-              $resposta = Invoke-WebRequest -Uri http://127.0.0.1:8000/api/v1/system/health -UseBasicParsing -TimeoutSec 5
-              if ($resposta.StatusCode -eq 200) { exit 0 }
-            } catch {
-              Write-Host "Aguardando o serviço responder: $($_.Exception.Message)"
-            }
-            Start-Sleep -Seconds 3
-          } while ((Get-Date) -lt $deadline)
-          throw "O serviço não respondeu ao health check em 60 segundos."
+          & .\scripts\deploy_release.ps1 -Source . -AppDir $env:APP_DIR `
+            -BackupDatabase {
+              $linha = Get-Content -LiteralPath "$env:APP_DIR\.env" | Where-Object { $_ -match '^\s*DATABASE_URL\s*=' } | Select-Object -First 1
+              $dsn = ($linha -replace '^\s*DATABASE_URL\s*=\s*', '').Trim().Trim('"', "'")
+              if (-not $dsn) { throw "DATABASE_URL ausente no .env da VM: sem backup não há deploy." }
+              $pasta = Join-Path $env:APP_DIR "backups"
+              New-Item -ItemType Directory -Force -Path $pasta | Out-Null
+              $arquivo = Join-Path $pasta ("pre-deploy-{0}-{1:yyyyMMdd-HHmmss}.dump" -f $env:GITHUB_REF_NAME, (Get-Date))
+              pg_dump --format=custom --file "$arquivo" --dbname "$dsn"
+              if ($LASTEXITCODE -ne 0) { throw "pg_dump falhou ($LASTEXITCODE): deploy abortado sem tocar no serviço." }
+              $arquivo
+            } `
+            -InstallDependencies {
+              & "$env:APP_DIR\.venv\Scripts\pip.exe" install --require-hashes -r "$env:APP_DIR\requirements.lock"
+              if ($LASTEXITCODE -ne 0) { throw "pip install do requirements.lock falhou ($LASTEXITCODE)." }
+            } `
+            -StopService { Stop-Service -Name gestor-pecas } `
+            -StartService { Start-Service -Name gestor-pecas }
