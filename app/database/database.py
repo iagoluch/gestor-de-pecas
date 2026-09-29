@@ -1,7 +1,8 @@
 """Facade de persistência PostgreSQL consumida pelo backend Web."""
 
 import csv
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from datetime import date, datetime, time, timedelta
 import hashlib
 import hmac
@@ -153,6 +154,10 @@ def _period_value(value):
 __all__ = ["Database", "FMT_DB", "SCHEMA_VERSION", "agora_db", "limpa_codigo", "normalizar_data_db"]
 
 
+# (Database, conexão) da transação cujas leituras aninhadas reutilizam a conexão.
+_CONEXAO_DA_TRANSACAO: ContextVar = ContextVar("gestor_conexao_da_transacao", default=None)
+
+
 class Database(
     SigmaNestRepositoryMixin,
     TotvsRepositoryMixin,
@@ -236,7 +241,32 @@ class Database(
                 apply_migrations(connection)
 
     def connection(self):
+        held = _CONEXAO_DA_TRANSACAO.get()
+        if held is not None and held[0] is self:
+            # Leitura aninhada numa transação aberta: reutiliza a conexão dela.
+            # Pedir outra ao pool aqui é hold-and-wait — com N ações
+            # simultâneas e pool N, todas seguram uma e esperam a segunda até
+            # o PGPOOL_TIMEOUT (BK-01).
+            return nullcontext(held[1])
         return self._pool.connection()
+
+    @contextmanager
+    def _na_conexao_da_transacao(self, cursor):
+        """Faz ``self.connection()`` devolver a conexão de ``cursor`` neste escopo.
+
+        Só para leituras de configuração chamadas de dentro de um ``*_tx``: o
+        commit/rollback continua sendo do dono da transação. Sem cursor, nada
+        muda.
+        """
+
+        if cursor is None:
+            yield
+            return
+        token = _CONEXAO_DA_TRANSACAO.set((self, cursor.connection))
+        try:
+            yield
+        finally:
+            _CONEXAO_DA_TRANSACAO.reset(token)
 
     @contextmanager
     def catalog_sync_lock(self):
@@ -356,6 +386,7 @@ class Database(
         )
 
     def criar_usuario(self, nome, senha, nivel="operador_destaque"):
+        senha_hash = self._hash_senha(senha)  # fora da conexão: o hash é CPU pura
         try:
             with self.connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
@@ -364,7 +395,7 @@ class Database(
                     VALUES (%s, %s, %s, TRUE, %s)
                     RETURNING id
                     """,
-                    (nome, self._hash_senha(senha), nivel, self._now()),
+                    (nome, senha_hash, nivel, self._now()),
                 )
                 return int(cursor.fetchone()["id"])
         except UniqueViolation as exc:
@@ -373,20 +404,26 @@ class Database(
             raise
 
     def autenticar_usuario(self, nome, senha):
+        # O PBKDF2 (~0,5 s de CPU) roda com a conexão já devolvida ao pool:
+        # segurá-la durante o hash esgotava o pool numa rajada de logins (BK-01).
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 "SELECT id, nome, senha_hash, nivel, session_version FROM usuarios WHERE nome = %s AND ativo IS TRUE",
                 (nome,),
             )
             row = cursor.fetchone()
-            if not row or not self._verificar_senha(senha, row["senha_hash"]):
-                return None
-            if self._senha_precisa_rehash(row["senha_hash"]):
+        if not row or not self._verificar_senha(senha, row["senha_hash"]):
+            return None
+        if self._senha_precisa_rehash(row["senha_hash"]):
+            novo_hash = self._hash_senha(senha)
+            with self.connection() as connection, connection.cursor() as cursor:
+                # Só troca o hash que foi verificado: uma troca de senha no meio
+                # do caminho não é sobrescrita pela senha antiga.
                 cursor.execute(
-                    "UPDATE usuarios SET senha_hash = %s WHERE id = %s",
-                    (self._hash_senha(senha), row["id"]),
+                    "UPDATE usuarios SET senha_hash = %s WHERE id = %s AND senha_hash = %s",
+                    (novo_hash, row["id"], row["senha_hash"]),
                 )
-            return dict(row)
+        return dict(row)
 
     def usuario_existe(self, nome):
         with self.connection() as connection, connection.cursor() as cursor:
@@ -4191,7 +4228,7 @@ class Database(
             and state.get("automatico")
         )
 
-    def _fora_do_turno(self, recurso, instante):
+    def _fora_do_turno(self, recurso, instante, *, cursor=None):
         """O instante está fora da janela operacional (turno + hora extra planejada)?
 
         Mesma referência do fim de turno automático: calendário do recurso
@@ -4201,15 +4238,17 @@ class Database(
         from mes.services.calendar import CalendarService
         from mes.services.shift_parameters import load_manufacturing_rules
 
-        calendar = CalendarService(self, load_manufacturing_rules(self, vigente_em=instante))
-        return calendar.shift_window_kind(recurso, instante) == ShiftWindowKind.OUT_OF_SHIFT
+        with self._na_conexao_da_transacao(cursor):
+            calendar = CalendarService(self, load_manufacturing_rules(self, vigente_em=instante))
+            return calendar.shift_window_kind(recurso, instante) == ShiftWindowKind.OUT_OF_SHIFT
 
-    def _intervalo_vigente(self, tipo_setor, instante):
+    def _intervalo_vigente(self, tipo_setor, instante, *, cursor=None):
         """``(início, nome)`` da pausa automática configurada para o setor, ou None."""
 
         from mes.services.shift_boundary import ShiftBoundaryService
 
-        return ShiftBoundaryService(self).active_break({"tipo_setor": tipo_setor}, instante)
+        with self._na_conexao_da_transacao(cursor):
+            return ShiftBoundaryService(self).active_break({"tipo_setor": tipo_setor}, instante)
 
     @staticmethod
     def _estado_encerrado_em_tx(cursor, recurso, instante, *, excluir_id=None):
@@ -4263,7 +4302,7 @@ class Database(
         if self._em_intervalo_automatico(current):
             return dict(current)
         sector = tipo_setor or (current or {}).get("tipo_setor")
-        window = self._intervalo_vigente(sector, instante)
+        window = self._intervalo_vigente(sector, instante, cursor=cursor)
         if not window:
             return None
         return self._abrir_intervalo_tx(
@@ -4301,12 +4340,12 @@ class Database(
         if self._recurso_em_execucao_tx(cursor, resource, instante):
             return dict(current) if current else None
         sector = tipo_setor or (current or {}).get("tipo_setor")
-        window = self._intervalo_vigente(sector, instante)
+        window = self._intervalo_vigente(sector, instante, cursor=cursor)
         if window:
             return self._abrir_intervalo_tx(
                 cursor, resource, instante, window, tipo_setor=sector, operador=operador
             )
-        if self._fora_do_turno(resource, instante):
+        if self._fora_do_turno(resource, instante, cursor=cursor):
             return self._transicionar_estado_recurso_tx(
                 cursor,
                 resource,
@@ -6651,10 +6690,11 @@ class Database(
             return cursor.rowcount == 1
 
     def resetar_senha_usuario(self, usuario_id, nova_senha):
+        senha_hash = self._hash_senha(nova_senha)  # fora da conexão: o hash é CPU pura
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE usuarios SET senha_hash = %s, session_version = session_version + 1 WHERE id = %s",
-                (self._hash_senha(nova_senha), usuario_id),
+                (senha_hash, usuario_id),
             )
             return cursor.rowcount == 1
 

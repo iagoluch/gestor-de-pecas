@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import Path as ApiPath
 from fastapi.responses import FileResponse, Response
 
+from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.auth import require_csrf, require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter, validated_business_datetime
@@ -35,7 +36,7 @@ from mes.contracts import (
 from backend.api.report_workbook import build_report_workbook
 
 
-router = APIRouter(prefix="/reports", tags=["Relatórios"])
+router = APIRouter(prefix="/reports", tags=["Relatórios"], dependencies=[Depends(management_read_slot)])
 
 
 def _report_error(exc: ReportError):

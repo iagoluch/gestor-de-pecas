@@ -28,7 +28,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 from pathlib import Path
 import sys
@@ -44,12 +44,14 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.core.operator_sectors import OPERATOR_SECTORS  # noqa: E402
+from app.core.operator_sectors import OPERATOR_PROFILES  # noqa: E402
 from app.core.resource_mapping import station_resource_code  # noqa: E402
 from app.database.config import load_postgres_config  # noqa: E402
 from app.database.database import Database, agora_db  # noqa: E402
 from backend.api.config import WebSettings  # noqa: E402
 from backend.api.main import create_app  # noqa: E402
+from mes.domain.first_piece import first_piece_gate_is_structured  # noqa: E402
+from mes.integrations.totvs.outbound_enqueue import load_outbound_enqueue_config  # noqa: E402
 from mes.integrations.totvs.mapper import TotvsProductionOrderMapper  # noqa: E402
 from mes.integrations.totvs.parser import TotvsMessageParser  # noqa: E402
 from mes.integrations.totvs.resource_mapping import TotvsResourceResolver  # noqa: E402
@@ -59,6 +61,8 @@ from mes.integrations.totvs.service import TotvsProductionOrderIngestionService 
 REPORT_PATH = Path(__file__).with_name("last_run_report.json")
 PASSWORD = "carga-2026"
 STOP_REASON_CODE = "LOADTEST-STOP"
+SETUP_STATUS_CODE = "LOADTEST-SETUP"
+QUALITY_TEMPLATE = [{"sequencia": 1, "descricao": "Altura", "padrao": "12,0 +/- 0,2"}]
 
 # Um único ActivityOrder por OP: cada operador recebe uma OP de verdade, já
 # apontável no recurso dele, ingerida pelo MESMO parser/mapper do TOTVS real.
@@ -130,12 +134,14 @@ XML_TEMPLATE = (
 def _resource_pool() -> list[tuple[str, str, str, str]]:
     """(nivel, setor, recurso_exibido, codigo_canonico_totvs) por posto real.
 
+    Só perfis que fazem login (``OPERATOR_PROFILES``): os níveis ``setor_*``
+    do catálogo não são contas e o login os recusa com 403 por desenho.
     Corte fica de fora: usa fila automática, não o Workbench manual. Destaque
     e Montagem ficam de fora: não têm recurso fixo.
     """
 
     pairs = []
-    for sector in OPERATOR_SECTORS:
+    for sector in OPERATOR_PROFILES:
         if sector.automatic_queue or not sector.resources:
             continue
         for resource in sector.resources:
@@ -160,8 +166,14 @@ def _drop_schema(base_dsn: str, schema: str) -> None:
 def _seed(db: Database, operator_count: int) -> list[dict]:
     """Motivo de parada, catálogo de recursos, N usuários e N OPs reais (via TOTVS)."""
 
+    # Motivo de parada + o status Set-Up do catálogo (espelho do 1005/0001 real):
+    # sem ele o botão Setup é recusado com status_especial_indisponivel.
+    status_rows = [
+        (STOP_REASON_CODE, "Parada — teste de carga", "LOADTEST", "Teste de carga", False, "parada"),
+        (SETUP_STATUS_CODE, "Set-Up", "0001", "PRODUÇÃO", True, "setup"),
+    ]
     with db.connection() as connection, connection.cursor() as cursor:
-        cursor.execute(
+        cursor.executemany(
             """
             INSERT INTO catalogo_status_recursos (
                 codigo, nome, grupo_codigo, grupo_nome, habilitado, classificacao,
@@ -170,12 +182,13 @@ def _seed(db: Database, operator_count: int) -> list[dict]:
                 categoria_gerencial, produtivo, planejado, afeta_disponibilidade,
                 afeta_performance, afeta_qualidade, atividade_sem_op, requer_causa_raiz
             ) VALUES (
-                %s, %s, 'LOADTEST', 'Teste de carga', TRUE, 1,
-                FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, 'load_test', %s,
-                'parada', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE
+                %s, %s, %s, %s, TRUE, 1,
+                %s, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, 'load_test', %s,
+                %s, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE
             )
             """,
-            (STOP_REASON_CODE, "Parada — teste de carga", agora_db()),
+            [(code, name, group, group_name, setup, agora_db(), category)
+             for code, name, group, group_name, setup, category in status_rows],
         )
 
     pool = _resource_pool()
@@ -206,10 +219,19 @@ def _seed(db: Database, operator_count: int) -> list[dict]:
     for index, (level, sector, resource, canonical) in enumerate(assignments):
         name = f"Carga {index + 1:03d} — {sector}"
         user_id = db.criar_usuario(name, PASSWORD, level)
+        # Crachá cadastrado: o Finalizar real exige ao menos um crachá ativo.
+        badge = f"LC{index + 1:04d}"
+        db.cadastrar_operador_apontamento(badge, name, fonte="load_test")
         op_code = f"LOADOP{index + 1:04d}"
+        item = f"ITEM-CARGA-{index + 1:04d}"
+        structured = first_piece_gate_is_structured(sector, {})
+        if structured:
+            # Dobra/Usinagem/Serra: sem cotas cadastradas o portão da primeira
+            # peça não libera o lote, e o Finalizar é recusado — como na fábrica.
+            db.salvar_template_qualidade(item, QUALITY_TEMPLATE)
         xml = XML_TEMPLATE.format(
             op=op_code,
-            item=f"ITEM-CARGA-{index + 1:04d}",
+            item=item,
             activity_id=f"9{index + 1:06d}",
             sector=sector,
             resource=canonical,
@@ -224,6 +246,8 @@ def _seed(db: Database, operator_count: int) -> list[dict]:
             "resource": resource,
             "canonical_resource": canonical,
             "op": op_code,
+            "badge": badge,
+            "first_piece_gate": structured,
         })
     return operators, ingest_failures
 
@@ -240,6 +264,7 @@ class Sample:
 @dataclass
 class Metrics:
     samples: list[Sample] = field(default_factory=list)
+    finalized: set[str] = field(default_factory=set)
 
     def add(self, sample: Sample) -> None:
         self.samples.append(sample)
@@ -299,55 +324,15 @@ async def _operator_loop(
         headers = {"X-CSRF-Token": csrf}
         resource = operator["resource"]
         op = operator["op"]
+        target = {"resource": resource, "op": op, "operation_number": "10"}
 
-        # Turno real: carregar o roteiro, Início, Parada, Retomar, tentar
-        # Finalizar — nessa ordem, uma vez, como um operador faria.
-        await _timed(
-            metrics, "carregar_roteiro",
-            client.get("/api/v1/operator/operations/" + op, params={"resource": resource}),
-        )
-        await _timed(
-            metrics, "acao_inicio",
-            client.post(
-                "/api/v1/operator/actions",
-                json={"action": "Início", "resource": resource, "op": op, "operation_number": "10"},
-                headers=headers,
-            ),
-        )
-        await _timed(metrics, "workbench", client.get("/api/v1/operator/workbench", params={"resource": resource}))
-        await asyncio.sleep(pace_seconds)
-        await _timed(
-            metrics, "acao_parada",
-            client.post(
-                "/api/v1/operator/actions",
-                json={
-                    "action": "Parada", "resource": resource, "op": op, "operation_number": "10",
-                    "stop_reason_code": STOP_REASON_CODE,
-                },
-                headers=headers,
-            ),
-        )
-        await asyncio.sleep(pace_seconds)
-        await _timed(
-            metrics, "acao_retomar",
-            client.post(
-                "/api/v1/operator/actions",
-                json={"action": "Retomar", "resource": resource, "op": op, "operation_number": "10"},
-                headers=headers,
-            ),
-        )
-        await asyncio.sleep(pace_seconds)
-        await _timed(
-            metrics, "acao_finalizar",
-            client.post(
-                "/api/v1/operator/actions",
-                json={
-                    "action": "Finalizado", "resource": resource, "op": op, "operation_number": "10",
-                    "good": 10, "scrap": 0,
-                },
-                headers=headers,
-            ),
-        )
+        # Turno real, uma vez, com os mesmos portões que o posto enfrenta:
+        # Início; nos setores com checklist (Dobra/Usinagem/Serra) o Setup e a
+        # conferência da primeira peça; Parada, Retomar e Finalizar com crachá.
+        # Há mais operadores que postos: quem divide o posto espera a vez (um
+        # posto roda uma OP por vez), em vez de colher operator_resource_occupied.
+        async with operator["station_lock"]:
+            await _run_cycle(client, metrics, operator, headers, target, pace_seconds)
 
         # Resto do turno: o operador majoritariamente OLHA a tela (polling
         # real do frontend) — isso é o grosso da "coleta de dados" sob carga.
@@ -356,6 +341,44 @@ async def _operator_loop(
             await _timed(metrics, "workbench", client.get("/api/v1/operator/workbench", params={"resource": resource}))
             await _timed(metrics, "history", client.get("/api/v1/operator/history", params={"resource": resource}))
             await asyncio.sleep(pace_seconds)
+
+
+async def _run_cycle(client, metrics: Metrics, operator: dict, headers: dict, target: dict, pace_seconds: float) -> None:
+    resource = operator["resource"]
+    op = operator["op"]
+
+    def action(endpoint: str, name: str, **extra):
+        return _timed(
+            metrics, endpoint,
+            client.post("/api/v1/operator/actions", json={"action": name, **target, **extra}, headers=headers),
+        )
+
+    await _timed(
+        metrics, "carregar_roteiro",
+        client.get("/api/v1/operator/operations/" + op, params={"resource": resource}),
+    )
+    await action("acao_inicio", "Início")
+    await _timed(metrics, "workbench", client.get("/api/v1/operator/workbench", params={"resource": resource}))
+    await asyncio.sleep(pace_seconds)
+    if operator["first_piece_gate"]:
+        await action("acao_setup", "Setup")
+        await action("acao_inicio", "Início")
+        await _timed(
+            metrics, "primeira_peca_checklist",
+            client.post(
+                "/api/v1/operator/first-piece",
+                json={**target, "action": "checklist", "measures": [{"sequencia": 1, "medida": "12,1"}]},
+                headers=headers,
+            ),
+        )
+        await asyncio.sleep(pace_seconds)
+    await action("acao_parada", "Parada", stop_reason_code=STOP_REASON_CODE)
+    await asyncio.sleep(pace_seconds)
+    await action("acao_retomar", "Retomar")
+    await asyncio.sleep(pace_seconds)
+    finished = await action("acao_finalizar", "Finalizado", good=10, scrap=0, badges=[operator["badge"]])
+    if finished is not None and finished.status_code == 200:
+        metrics.finalized.add(operator["username"])
 
 
 async def _manager_loop(app, username: str, settings: WebSettings, metrics: Metrics, stop_at: float) -> None:
@@ -402,11 +425,29 @@ def _report(metrics: Metrics, *, operator_count: int, seconds: float, pool_max: 
             "max_ms": round(max(latencies), 1) if latencies else 0.0,
         })
 
+    logins = by_endpoint.get("login", [])
+    logins_ok = sum(1 for s in logins if s.status == 200)
+    finalized = len(metrics.finalized)
+    server_errors = sum(1 for s in metrics.samples if s.status >= 500 or s.transport_error)
+    # O harness reprova a si mesmo: login recusado, operador sem finalização
+    # ou 5xx significam que a carga não exercitou o caminho real.
+    failures = []
+    if logins_ok != operator_count:
+        failures.append(f"logins de operador: {logins_ok}/{operator_count}")
+    if finalized != operator_count:
+        failures.append(f"operadores que finalizaram: {finalized}/{operator_count}")
+    if server_errors:
+        failures.append(f"5xx/falhas de transporte: {server_errors}")
+
     return {
         "operators_simulated": operator_count,
         "duration_seconds": seconds,
         "pgpool_max_size": pool_max,
         "sync_thread_pool_size": thread_pool,
+        "operator_logins_ok": logins_ok,
+        "operators_finalized": finalized,
+        "server_errors": server_errors,
+        "failures": failures,
         "total_requests": total,
         "by_endpoint": rows,
         "errors_by_endpoint_status_code": [
@@ -469,13 +510,25 @@ def _print_report(report: dict) -> None:
         print("Nenhum 5xx / erro interno — os erros observados (se houver) são recusas de "
               "regra de negócio (409/403/422), não falhas de sistema.")
 
+    print()
+    print(
+        f"Logins de operador: {report['operator_logins_ok']}/{report['operators_simulated']} · "
+        f"finalizações: {report['operators_finalized']}/{report['operators_simulated']}"
+    )
+    print("REPROVADO: " + "; ".join(report["failures"]) if report["failures"] else "APROVADO")
+
 
 async def _run(args: argparse.Namespace) -> None:
     base = load_postgres_config(testing=True)
     schema, dsn = _dedicated_schema(base.dsn)
     print(f"Schema isolado criado em TEST_DATABASE_URL: {schema}")
 
-    db = Database(dsn)
+    # Mesmo pool da aplicação (PGPOOL_* do ambiente), não o default do
+    # dataclass; --pool-max compara tamanhos sem editar o .env. A outbox TOTVS
+    # fica sempre desligada aqui: carga não pode enfileirar envio externo.
+    config = replace(base, dsn=dsn, max_pool_size=args.pool_max or base.max_pool_size)
+    db = Database(config=config, totvs_outbox_config=load_outbound_enqueue_config(env={}))
+    report = None
     try:
         operators, ingest_failures = _seed(db, args.operators)
         if ingest_failures:
@@ -493,7 +546,7 @@ async def _run(args: argparse.Namespace) -> None:
         app = create_app(settings=settings, database_factory=lambda: db)
 
         metrics = Metrics()
-        pool_max = getattr(getattr(db, "_pool", None).config, "max_pool_size", None)
+        pool_max = config.max_pool_size
 
         print(
             f"Disparando {len(operators)} operadores + {args.managers} gestores por "
@@ -501,6 +554,9 @@ async def _run(args: argparse.Namespace) -> None:
             f"thread_pool={args.thread_pool})..."
         )
         async with app.router.lifespan_context(app):
+            stations: dict[str, asyncio.Lock] = {}
+            for operator in operators:
+                operator["station_lock"] = stations.setdefault(operator["canonical_resource"], asyncio.Lock())
             stop_at = time.perf_counter() + args.seconds
             tasks = [
                 _operator_loop(app, operator, settings, metrics, stop_at, args.pace)
@@ -519,13 +575,15 @@ async def _run(args: argparse.Namespace) -> None:
             pool_max=pool_max,
             thread_pool=args.thread_pool,
         )
-        REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         _print_report(report)
-        print(f"Relatório completo: {REPORT_PATH.relative_to(ROOT)}")
+        print(f"Relatório completo: {args.report}")
     finally:
         db.close()
         _drop_schema(base.dsn, schema)
         print(f"Schema isolado removido: {schema}")
+    if report is None or report["failures"]:
+        raise SystemExit(1)
 
 
 def main() -> None:
@@ -538,6 +596,11 @@ def main() -> None:
         "--thread-pool", type=int, default=100,
         help="GESTOR_WEB_THREAD_POOL_SIZE simulado (padrão: 100, o default de produção)",
     )
+    parser.add_argument(
+        "--pool-max", type=int, default=None,
+        help="Sobrescreve PGPOOL_MAX_SIZE só nesta execução (padrão: o do ambiente)",
+    )
+    parser.add_argument("--report", type=Path, default=REPORT_PATH, help="Onde gravar o relatório JSON")
     args = parser.parse_args()
     asyncio.run(_run(args))
 

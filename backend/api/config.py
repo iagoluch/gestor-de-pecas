@@ -120,6 +120,10 @@ class WebSettings:
     # Isolada da threadpool geral para que um pico de logins não atrase quem
     # já está com o posto aberto.
     auth_thread_pool_size: int = 8
+    # Bulkhead das leituras gerenciais (painéis, análises, relatórios): poucas
+    # por vez, para que gestores atualizando a tela não atrasem as ações do
+    # operador. Medido no teste de carga (BK-01).
+    management_read_concurrency: int = 2
     session_cookie_name: str = "gestor_session"
     csrf_cookie_name: str = "gestor_csrf"
     simulation_mode: bool = False
@@ -378,6 +382,13 @@ class WebSettings:
                 minimum=1,
                 maximum=64,
                 name="GESTOR_WEB_AUTH_THREAD_POOL_SIZE",
+            ),
+            management_read_concurrency=_bounded_int(
+                env.get("GESTOR_WEB_MANAGEMENT_READ_CONCURRENCY"),
+                default=2,
+                minimum=1,
+                maximum=32,
+                name="GESTOR_WEB_MANAGEMENT_READ_CONCURRENCY",
             ),
             simulation_mode=simulation_mode,
             simulation_reference_time=simulation_reference_time,

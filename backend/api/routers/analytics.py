@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.auth import require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
@@ -8,7 +9,7 @@ from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 
 
-router = APIRouter(prefix="/analytics", tags=["Análises"])
+router = APIRouter(prefix="/analytics", tags=["Análises"], dependencies=[Depends(management_read_slot)])
 
 
 @router.get("")

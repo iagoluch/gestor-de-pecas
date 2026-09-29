@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app.core.permissions import USER_LEVELS
 from backend.api.database import get_database
+from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.auth import (
     require_admin_user,
     require_csrf,
@@ -27,6 +28,7 @@ from mes.services.internal_alerts import InternalAlertService
 router = APIRouter(
     prefix="/management",
     tags=["Gestão"],
+    dependencies=[Depends(management_read_slot)],
 )
 
 

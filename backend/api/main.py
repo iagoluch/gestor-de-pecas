@@ -586,6 +586,10 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.state.auth_thread_limiter = anyio.CapacityLimiter(
         resolved_settings.auth_thread_pool_size
     )
+    # Bulkhead das leituras gerenciais (ver backend/api/dependencies/bulkhead.py).
+    application.state.management_read_limiter = anyio.CapacityLimiter(
+        resolved_settings.management_read_concurrency
+    )
     # Segredo e cookie próprios: a sessão do Dev Observatory nunca compartilha
     # nada com a sessão principal (ver backend/api/config.py).
     application.state.dev_observatory_session_signer = SessionSigner(
