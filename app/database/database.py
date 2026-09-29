@@ -73,6 +73,23 @@ ACTIVE_OPERATIONAL_STATUSES = ("Em processo", "Parada", "Setup", "Retrabalho")
 WORKING_OPERATOR_STATES = frozenset(
     {OperatorState.PRODUCTION, OperatorState.SETUP, OperatorState.REWORK}
 )
+# Intervalo físico de cada linha, idêntico à expressão dos índices GiST da
+# migration 52 (BK-06): sem ele, sobreposição de período vira Seq Scan que
+# cresce com o histórico. As consultas somam "<expr> && tsrange(início, fim,
+# '[]')" ao predicado original, que continua decidindo as bordas exatas; o
+# '[]' evita range vazio para estado de duração zero.
+ESTADO_RECURSO_INTERVALO = (
+    "tsrange(e.data_inicio, COALESCE(e.data_fim, 'infinity'::timestamp), '[]')"
+)
+SESSAO_RECURSO_INTERVALO = (
+    "tsrange(s.data_inicio, COALESCE(s.data_fim, 'infinity'::timestamp), '[]')"
+)
+# apontamentos_operacionais não tem CHECK fim >= início: o GREATEST impede que
+# uma linha histórica invertida quebre o índice ou a consulta.
+APONTAMENTO_INTERVALO = (
+    "tsrange(COALESCE(a.data_inicio, a.data_entrada), GREATEST("
+    "COALESCE(a.data_inicio, a.data_entrada), COALESCE(a.data_fim, 'infinity'::timestamp)), '[]')"
+)
 
 
 
@@ -3798,6 +3815,9 @@ class Database(
               AND COALESCE(a.data_fim, %s) >= %s
         """
         params = [end, end, start]
+        if start is not None and end is not None and start <= end:
+            query += f" AND {APONTAMENTO_INTERVALO} && tsrange(%s, %s, '[]')"
+            params.extend((start, end))
         if setor:
             query += " AND UPPER(a.tipo_setor) = UPPER(%s)"
             params.append(str(setor).strip())
@@ -4661,7 +4681,7 @@ class Database(
         # O grupo/taxonomia do catálogo PCFactory viaja junto com o estado para
         # que a classificação PLANEJADA/NÃO_PLANEJADA seja decidida uma única vez
         # no domínio, sem uma consulta por parada.
-        query = """
+        query = f"""
             SELECT e.*,
                    s.nome AS status_nome,
                    s.grupo_codigo AS status_grupo_codigo,
@@ -4672,8 +4692,9 @@ class Database(
                    ON s.codigo = e.codigo_status_recurso
             WHERE e.data_inicio < %s
               AND COALESCE(e.data_fim, %s) > %s
-        """
-        params = [end, end, start]
+              AND {ESTADO_RECURSO_INTERVALO} && tsrange(%s, %s, '[]')
+        """  # nosec B608 -- expressão constante do módulo, valores via %s
+        params = [end, end, start, start, end]
         if setor:
             query += " AND UPPER(COALESCE(e.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())
@@ -5086,8 +5107,9 @@ class Database(
               ON r.sessao_recurso_id = s.id{join_clause}
             WHERE s.data_inicio < %s
               AND COALESCE(s.data_fim, %s) > %s
+              AND {SESSAO_RECURSO_INTERVALO} && tsrange(%s, %s, '[]')
         """  # nosec B608 -- colunas/condições vêm de constantes do módulo, valores via %s
-        params = list(join_params) + [end, end, start]
+        params = list(join_params) + [end, end, start, start, end]
         if setor:
             query += " AND UPPER(COALESCE(s.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())

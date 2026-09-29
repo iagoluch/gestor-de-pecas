@@ -445,3 +445,106 @@ Commit `fix: harden backend operations and observability`. O REAL não foi acess
 | pip-audit | ✅ `requirements.lock` limpo; `requirements-dev.txt` inalterado desde o W3 |
 | `git diff --check` | ✅ |
 | REAL acessado | ❌ Não |
+
+---
+
+## ONDA 5 — Dados e performance
+
+Commit `perf: optimize MES data access paths`. Tudo foi medido num schema isolado do TEST (`bk06_test_*`, seed de 600k estados, 300k apontamentos + 300k eventos, 300k sessões, `ANALYZE`). O REAL não foi acessado: nenhum SELECT, VALIDATE ou migration.
+
+### BK-06 · Sobreposição de período fazia Seq Scan na tabela inteira — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - O predicado `início < fim_janela AND COALESCE(fim, …) > início_janela` não tem B-tree que limite as duas pontas, então OEE, timeline e relatórios liam a tabela inteira.
+  - `listar_estados_recurso_periodo` com recurso: o `UPPER(e.recurso)` não casava com `idx_estado_recurso_periodo`.
+- **Alteração:**
+  - **Migration 52** (`SCHEMA_VERSION = 52`): 3 índices GiST sobre o intervalo físico `tsrange(início, COALESCE(fim, 'infinity'), '[]')`:
+    - `idx_estado_recurso_intervalo`;
+    - `idx_sessao_recurso_intervalo`;
+    - `idx_apontamentos_intervalo`. Neste índice o início é `COALESCE(data_inicio, data_entrada)`, e o fim passa por `GREATEST`, porque `apontamentos_operacionais` não tem `CHECK fim >= início` e uma linha histórica invertida não pode quebrar o índice.
+  - O `'[]'` evita range vazio em estado de duração zero.
+  - `app/database/database.py`:
+    - as constantes `*_INTERVALO` repetem a expressão do índice;
+    - os 3 métodos de período somam `<intervalo> && tsrange(início, fim, '[]')` ao predicado original.
+  - O `&&` é um superconjunto redundante: as bordas exatas continuam decididas pelo predicado antigo. Por isso o resultado não muda.
+  - `listar_fatos_operacionais_periodo` não tinha guarda de janela, então o `&&` só entra com `início <= fim`.
+- **Evidência (EXPLAIN ANALYZE, melhor de 3):**
+
+| Consulta | Janela | Antes | Depois | Plano depois |
+|---|---|---|---|---|
+| Estados, sem filtro | hoje / dia há 100 d / semana | 60 / 57 / 79 ms | **4,5 / 4,8 / 34 ms** | Bitmap Index Scan `idx_estado_recurso_intervalo` |
+| Estados, setor | idem | 52 / 65 / 67 ms | **1,6 / 1,9 / 12 ms** | idem |
+| Estados, recurso | idem | 54 / 51 / 56 ms | **1,3 / 1,4 / 7 ms** | idem |
+| Apontamentos (fatos), setor | idem | 37 / 39 / 61 ms | **7,9 / 8,1 / 31 ms** | Bitmap Index Scan `idx_apontamentos_intervalo` |
+| Apontamentos (fatos), sem filtro | idem | 63 / 66 / 170 ms | **25 / 21 / 135 ms** | idem |
+| Rateios/sessões | idem | 23 / 32 / 30 ms | **2,2 / 2,7 / 14 ms** | Bitmap Index Scan `idx_sessao_recurso_intervalo` |
+
+- Nos planos da auditoria, `periodo_recurso` (377 ms, Seq Scan) e `periodo_setor` (93,7 ms, Parallel Seq Scan) correspondem a "estados" e "fatos, setor" num dia. Ficaram em **4,5 ms** e **8 ms**, abaixo da meta de 20 ms.
+- **Limitação honesta:** "fatos" sem filtro de setor e as janelas de uma semana passam de 20 ms por volume devolvido, não por falta de índice.
+  - No caso "fatos" de um dia, o Bitmap Index Scan leva cerca de 1 ms para 681 linhas; o resto é o `GroupAggregate` que monta o JSON dos eventos de cada apontamento.
+  - Uma semana devolve cerca de 5,8 mil apontamentos e 13 mil estados.
+  - Reduzir isso exigiria mudar o formato da resposta, o que está fora do BK.
+- **Testes (`tests/test_period_overlap_indexes.py`):**
+  - `test_bordas_do_periodo_preservam_o_resultado`:
+    - estados e sessões em janela meio-aberta: termina no início → fora; começa no fim → fora; duração zero, atravessa e aberto → dentro;
+    - apontamentos em janela fechada: fim = início e início = fim → dentro; só entrada e aberto → dentro; invertido dentro → dentro; invertido fora e entrada depois → fora.
+  - `test_consultas_de_periodo_usam_indice_gist_de_intervalo`: o SQL real gerado pelos 3 métodos é capturado e, sobre 8 mil linhas com `enable_seqscan = off`, o EXPLAIN precisa citar o índice GiST de cada tabela.
+  - **Contraprova:**
+    - stash de `database.py` → 3 subtestes de plano falham: o planner cai em `idx_estado_recurso_apontamento`, `sessoes_recurso_pkey` e `apontamentos_operacionais_pkey` com Filter;
+    - o teste de semântica passa nos dois lados, o que prova resultado idêntico.
+
+### BK-16 · FKs sem índice de suporte — **CORRIGIDO E PROVADO (1 de 21); 20 NÃO APLICÁVEIS COM EVIDÊNCIA**
+
+- **Antes:** 21 FKs sem índice líder (`pg_constraint` × `pg_index`, schema migrado até a 52).
+- **Critério:** indexar só a FK que aparece em join ou delete quente medido.
+  - No código, nenhuma dessas 21 colunas aparece em `WHERE`/`JOIN` de leitura.
+  - Os únicos `DELETE` de pai em fluxo operacional:
+    - `descartar_inicio_nao_iniciado`: apaga o apontamento "Aguardando" que perdeu a disputa do recurso, e o `CASCADE` leva os eventos junto;
+    - `remover_chamada_contato`: ação administrativa rara sobre `chamadas`, tabela pequena.
+- **Evidência:** `EXPLAIN ANALYZE DELETE FROM apontamentos_operacionais WHERE id = …` no seed, com rollback, 3 execuções:
+
+| Trigger de FK | Antes | Depois |
+|---|---|---|
+| `eventos_estado_recurso_evento_apontamento_id_fkey` (ON DELETE SET NULL) | 85–131 ms | **0,10–0,34 ms** |
+| DELETE inteiro | 86–152 ms | **1,2–9,8 ms** |
+| `totvs_outbox_canonical_event_id_fkey`, `qualidade_inspecoes_apontamento_id_fkey` | 0,07–3,9 ms | inalterado |
+
+- **Alteração:**
+  - Na migration 52, `idx_estado_recurso_evento_apontamento ON eventos_estado_recurso (evento_apontamento_id) WHERE evento_apontamento_id IS NOT NULL`.
+  - Parcial porque quase todo estado não nasce de um evento de apontamento. A busca `= $1` do SET NULL implica `IS NOT NULL`, então o índice parcial atende.
+  - Construção no seed de 600k: 0,13 s.
+- **As outras 20:** tabelas filhas pequenas ou de configuração (qualidade, report_*, usuários, catálogos, chamadas), e pais que o código não apaga no fluxo operacional. Os triggers ficam abaixo de 4 ms no seed. Criar índices "às cegas" seria contra a recomendação do próprio BK.
+  - Se `totvs_outbox` crescer sem expurgo no REAL, `canonical_event_id` é a próxima candidata (fora do escopo, sem medição que justifique hoje).
+- **Teste:** `test_fk_de_estado_por_evento_tem_indice_para_o_set_null`, em que o EXPLAIN da busca do SET NULL precisa usar o índice.
+  - **Contraprova:** sem o statement na migration → o teste falha.
+
+### BK-17 · `ck_apontamentos_quantidade_atendida_planejada` NOT VALID — **VALIDADO NO TEST; REAL BLOQUEADO (exige aprovação)**
+
+- **Antes:** a constraint nasceu `NOT VALID` de propósito. O comentário da migration diz que o histórico da regra anterior não pode ser reescrito.
+- **TEST (`gestor_pecas_test`, schema `public`):**
+  - 26 linhas e **0 violações**;
+  - `ALTER TABLE … VALIDATE CONSTRAINT` → OK, `convalidated = true`.
+- **Schema limpo migrado do zero:** `VALIDATE` OK.
+- **Contraprova (schema descartável):**
+  1. drop da constraint;
+  2. linha com boa 3 + refugo 3 > quantidade 5;
+  3. re-add `NOT VALID`;
+  4. `VALIDATE` → `CheckViolation` em `ck_apontamentos_quantidade_atendida_planejada`.
+- **Sem migration:** uma migration de `VALIDATE` rodaria no REAL no próximo startup, e o pedido proíbe SELECT e VALIDATE no REAL.
+- **Pendência para o usuário (REAL):**
+  1. com aprovação, contar as violações (somente leitura): `SELECT count(*) FROM apontamentos_operacionais WHERE NOT (quantidade_boa + quantidade_refugo <= quantidade)`;
+  2. com 0 violações, rodar o `VALIDATE`;
+  3. com violações, a decisão é de negócio: corrigir o histórico ou manter `NOT VALID`.
+
+### GATE W5
+
+| Item | Resultado |
+|---|---|
+| Migrations do zero (schema TEST limpo) | ✅ 1,6 s; `schema_migrations` 1..52; os 4 índices da 52 presentes |
+| Migration 52 sobre o seed de 1,2 M linhas | ✅ 40,5 s para os 3 GiST, 0,13 s para o índice parcial. Nenhum statement se aproxima do `statement_timeout` de 60 s da migration |
+| Testes de OEE, timeline e relatórios | ✅ 260 passed, 1 skipped, 275 subtests: concurrency, dashboard/timeline, professionalization, execution→management, industrial analytics, intelligence reports, management insights, 3× OEE, operational report, period overlap, report automation/idempotency/postgres, calendário 6A, web API |
+| bandit `-r backend mes app -ll` | ✅ 0 Medium, 0 High |
+| `git diff --check` | ✅ |
+| REAL acessado | ❌ Não |
+
+- **Nota operacional:** a migration 52 usa `CREATE INDEX` sem `CONCURRENTLY` (o runner roda em transação). No REAL ela roda no startup do deploy, com o serviço ainda sem tráfego (`deploy_release.ps1` espera o `/ready`). O volume do REAL não foi medido, porque consultá-lo é proibido. O seed, com cerca de um ano de histórico de 80 recursos, serve de teto de referência. Se o REAL for maior, o tempo do deploy cresce na mesma proporção.

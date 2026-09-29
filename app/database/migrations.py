@@ -2338,8 +2338,29 @@ RESOURCE_STATE_CANONICAL_CODE_STATEMENTS = (
     + ")) NOT VALID",
 )
 
+# BK-06: sobreposição de período ("início < fim_janela AND fim > início_janela")
+# não tem B-tree que limite os dois lados; com histórico grande, OEE, timeline
+# e relatórios faziam Seq Scan na tabela inteira. GiST sobre o intervalo físico
+# atende "&&" para qualquer janela. As expressões são idênticas às constantes
+# *_INTERVALO de app/database/database.py — o planner só casa texto igual.
+PERIOD_OVERLAP_INDEX_DESCRIPTION = "índices GiST de sobreposição de período e FK de estado por evento"
+PERIOD_OVERLAP_INDEX_STATEMENTS = (
+    "CREATE INDEX idx_estado_recurso_intervalo ON eventos_estado_recurso"
+    " USING gist (tsrange(data_inicio, COALESCE(data_fim, 'infinity'::timestamp), '[]'))",
+    "CREATE INDEX idx_sessao_recurso_intervalo ON sessoes_recurso"
+    " USING gist (tsrange(data_inicio, COALESCE(data_fim, 'infinity'::timestamp), '[]'))",
+    "CREATE INDEX idx_apontamentos_intervalo ON apontamentos_operacionais USING gist ("
+    "tsrange(COALESCE(data_inicio, data_entrada), GREATEST("
+    "COALESCE(data_inicio, data_entrada), COALESCE(data_fim, 'infinity'::timestamp)), '[]'))",
+    # BK-16: apagar um apontamento (Início que perdeu a disputa do recurso)
+    # apaga seus eventos, e o ON DELETE SET NULL desta FK varria todos os
+    # estados do recurso. Parcial: quase todo estado não vem de um evento.
+    "CREATE INDEX idx_estado_recurso_evento_apontamento ON eventos_estado_recurso (evento_apontamento_id)"
+    " WHERE evento_apontamento_id IS NOT NULL",
+)
+
 MIGRATIONS = {
-    2: ("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
+    2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
     4: (OPERATOR_FLOW_DESCRIPTION, OPERATOR_FLOW_STATEMENTS),
     5: (SCHEMA_DESCRIPTION, PCFACTORY_CATALOG_STATEMENTS),
@@ -2392,6 +2413,7 @@ MIGRATIONS = {
     49: (OPERATOR_IDENTITY_DESCRIPTION, OPERATOR_IDENTITY_STATEMENTS),
     50: (PARAMETROS_TURNO_VIGENCIA_DESCRIPTION, PARAMETROS_TURNO_VIGENCIA_STATEMENTS),
     51: (RESOURCE_STATE_CANONICAL_CODE_DESCRIPTION, RESOURCE_STATE_CANONICAL_CODE_STATEMENTS),
+    52: (PERIOD_OVERLAP_INDEX_DESCRIPTION, PERIOD_OVERLAP_INDEX_STATEMENTS),
 }
 
 
