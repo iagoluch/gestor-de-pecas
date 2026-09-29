@@ -46,6 +46,7 @@ from mes.integrations.totvs.outbound_enqueue import (
 )
 from mes.integrations.totvs.outbox import (
     BACKOFF_SECONDS,
+    OutboxEnqueueRequest,
     DeliveryAttempt,
     DeliveryClass,
     OutboxStatus,
@@ -778,6 +779,51 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
     def _run_worker_with(self, handler, *, worker_name="w1"):
         worker = TotvsOutboxWorker(self.db, gateway=_client(handler), worker_name=worker_name)
         return worker.run_once()
+
+    def test_lote_lento_nao_envia_o_mesmo_item_duas_vezes(self):
+        # BK-12: o lote inteiro recebia um único lease de 120 s, mas cada POST
+        # pode levar o timeout inteiro. Os últimos itens venciam na fila, outro
+        # worker os recuperava e o mesmo item saía duas vezes.
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            for numero in range(3):
+                self.db.enfileirar_outbound_totvs_tx(
+                    cursor,
+                    OutboxEnqueueRequest(
+                        event_type="teste", aggregate_type="op",
+                        aggregate_id=f"OP-LOTE-{numero}", idempotency_key=f"lote-{numero}",
+                        transaction="productionappointment", production_order=f"OP-LOTE-{numero}",
+                        payload_xml="<TOTVSMessage/>",
+                    ),
+                )
+        relogio = [self.db._now()]
+        enviados = []
+        totvs = _client(lambda r: httpx.Response(200, text=ACK_OK))
+
+        class _Gateway:
+            def __init__(self, depois_do_envio=None):
+                self.depois_do_envio = depois_do_envio
+
+            def send_result(self, message):
+                enviados.append(message.idempotency_key)
+                relogio[0] += timedelta(seconds=70)  # POST lento, perto do timeout
+                if self.depois_do_envio and len(enviados) == 2:
+                    self.depois_do_envio()
+                return totvs.send_result(message)
+
+        outro = TotvsOutboxWorker(
+            self.db, gateway=_Gateway(), worker_name="w-b", now_func=lambda: relogio[0]
+        )
+        TotvsOutboxWorker(
+            self.db, gateway=_Gateway(outro.run_once), worker_name="w-a",
+            batch_size=3, lease_seconds=120, now_func=lambda: relogio[0],
+        ).run_once()
+        relogio[0] += timedelta(hours=1)
+        outro.run_once()
+
+        self.assertEqual(sorted(enviados), ["lote-0", "lote-1", "lote-2"])
+        self.assertEqual(
+            self._scalar("SELECT COUNT(*) AS total FROM totvs_outbox WHERE status <> 'SENT'"), 0
+        )
 
     def test_timeout_volta_para_retry_com_a_mesma_chave(self):
         self._produce_and_finish("10", boas=10)

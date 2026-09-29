@@ -25,6 +25,12 @@ from backend.api.clock import ApplicationClock
 from backend.ai import GroqProvider
 from backend.ai.rate_limit_state import AIRateLimitState
 from backend.api.database import DatabaseManager
+from app.database.leadership import (
+    REPORT_SCHEDULER_LEADER_LOCK_ID,
+    TELEGRAM_BOT_LEADER_LOCK_ID,
+    TELEGRAM_DIGEST_LEADER_LOCK_ID,
+    LeaderLease,
+)
 from backend.api.errors import register_error_handlers
 from backend.api.routers import (
     ai,
@@ -155,17 +161,29 @@ def _build_background_scheduler(application: FastAPI) -> ReportScheduler:
     )
 
 
+async def _leader_cycle(application: FastAPI, lease: LeaderLease) -> bool:
+    """Só o processo líder executa o ciclo de um laço com efeito externo (BK-07)."""
+
+    database = application.state.database_manager.get()
+    return await asyncio.to_thread(lease.hold, database)
+
+
 async def _report_scheduler_loop(application: FastAPI) -> None:
     interval = application.state.settings.report_scheduler_interval_seconds
-    while True:
-        try:
-            scheduler = _build_background_scheduler(application)
-            await scheduler.run_due()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logging.exception("Falha controlada no ciclo do agendador de relatórios.")
-        await asyncio.sleep(interval)
+    lease = LeaderLease(REPORT_SCHEDULER_LEADER_LOCK_ID)
+    try:
+        while True:
+            try:
+                if await _leader_cycle(application, lease):
+                    scheduler = _build_background_scheduler(application)
+                    await scheduler.run_due()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.exception("Falha controlada no ciclo do agendador de relatórios.")
+            await asyncio.sleep(interval)
+    finally:
+        lease.release()
 
 
 def _build_totvs_outbox_worker(application: FastAPI) -> TotvsOutboxWorker:
@@ -223,45 +241,54 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
     token = settings.telegram_bot_token
     cursor_key = "factory_bot"
     offset = None
-    while True:
-        try:
-            database = application.state.database_manager.get()
-            load_cursor = getattr(database, "obter_cursor_telegram_bot", None)
-            if offset is None and callable(load_cursor):
-                offset = await asyncio.to_thread(load_cursor, cursor_key)
-            service = TelegramFactoryBotService(database)
-            updates = await asyncio.to_thread(
-                fetch_telegram_updates, bot_token=token, offset=offset
-            )
-            for update in updates:
-                # ``handle_update`` consulta o PostgreSQL de forma síncrona;
-                # fora do laço de eventos ele não congela as demais requisições.
-                reply = await asyncio.to_thread(service.handle_update, update)
-                if reply is not None:
-                    if reply.callback_query_id:
+    lease = LeaderLease(TELEGRAM_BOT_LEADER_LOCK_ID)
+    try:
+        while True:
+            try:
+                if not await _leader_cycle(application, lease):
+                    # Outro processo faz o getUpdates; o cursor dele vale para todos.
+                    offset = None
+                    await asyncio.sleep(interval)
+                    continue
+                database = application.state.database_manager.get()
+                load_cursor = getattr(database, "obter_cursor_telegram_bot", None)
+                if offset is None and callable(load_cursor):
+                    offset = await asyncio.to_thread(load_cursor, cursor_key)
+                service = TelegramFactoryBotService(database)
+                updates = await asyncio.to_thread(
+                    fetch_telegram_updates, bot_token=token, offset=offset
+                )
+                for update in updates:
+                    # ``handle_update`` consulta o PostgreSQL de forma síncrona;
+                    # fora do laço de eventos ele não congela as demais requisições.
+                    reply = await asyncio.to_thread(service.handle_update, update)
+                    if reply is not None:
+                        if reply.callback_query_id:
+                            await asyncio.to_thread(
+                                answer_telegram_callback_query,
+                                bot_token=token,
+                                callback_query_id=reply.callback_query_id,
+                            )
                         await asyncio.to_thread(
-                            answer_telegram_callback_query,
+                            deliver_telegram_message,
                             bot_token=token,
-                            callback_query_id=reply.callback_query_id,
+                            chat_id=reply.chat_id,
+                            text=reply.text,
+                            message_id=reply.message_id,
+                            parse_mode=reply.parse_mode,
+                            reply_markup=reply.reply_markup,
                         )
-                    await asyncio.to_thread(
-                        deliver_telegram_message,
-                        bot_token=token,
-                        chat_id=reply.chat_id,
-                        text=reply.text,
-                        message_id=reply.message_id,
-                        parse_mode=reply.parse_mode,
-                        reply_markup=reply.reply_markup,
-                    )
-                offset = int(update.get("update_id", 0)) + 1
-                save_cursor = getattr(database, "avancar_cursor_telegram_bot", None)
-                if callable(save_cursor):
-                    offset = await asyncio.to_thread(save_cursor, cursor_key, offset)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logging.exception("Falha controlada no ciclo do bot de fábrica no Telegram.")
-        await asyncio.sleep(interval)
+                    offset = int(update.get("update_id", 0)) + 1
+                    save_cursor = getattr(database, "avancar_cursor_telegram_bot", None)
+                    if callable(save_cursor):
+                        offset = await asyncio.to_thread(save_cursor, cursor_key, offset)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.exception("Falha controlada no ciclo do bot de fábrica no Telegram.")
+            await asyncio.sleep(interval)
+    finally:
+        lease.release()
 
 
 async def _telegram_digest_loop(application: FastAPI) -> None:
@@ -290,28 +317,35 @@ async def _telegram_digest_loop(application: FastAPI) -> None:
         factory_chat_id=settings.telegram_factory_chat_id,
         sector_chat_ids=settings.telegram_sector_chat_ids,
     )
-    while True:
-        try:
-            database = application.state.database_manager.get()
-            scheduler = TelegramFactoryDigestScheduler(
-                database,
-                bot_token=settings.telegram_bot_token,
-                destinations=destinations,
-                run_time=horario_execucao,
-                timezone=fuso,
-            )
-            outcomes = await asyncio.to_thread(scheduler.run_due)
-            enviados = [item for item in outcomes if item.sent]
-            if enviados:
-                logging.info(
-                    "Resumo(s) de fábrica enviado(s) ao Telegram: %s",
-                    [f"{item.frequency}:{item.destination}" for item in enviados],
+    lease = LeaderLease(TELEGRAM_DIGEST_LEADER_LOCK_ID)
+    try:
+        while True:
+            try:
+                if not await _leader_cycle(application, lease):
+                    await asyncio.sleep(interval)
+                    continue
+                database = application.state.database_manager.get()
+                scheduler = TelegramFactoryDigestScheduler(
+                    database,
+                    bot_token=settings.telegram_bot_token,
+                    destinations=destinations,
+                    run_time=horario_execucao,
+                    timezone=fuso,
                 )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logging.exception("Falha controlada no ciclo do resumo de fábrica no Telegram.")
-        await asyncio.sleep(interval)
+                outcomes = await asyncio.to_thread(scheduler.run_due)
+                enviados = [item for item in outcomes if item.sent]
+                if enviados:
+                    logging.info(
+                        "Resumo(s) de fábrica enviado(s) ao Telegram: %s",
+                        [f"{item.frequency}:{item.destination}" for item in enviados],
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.exception("Falha controlada no ciclo do resumo de fábrica no Telegram.")
+            await asyncio.sleep(interval)
+    finally:
+        lease.release()
 
 
 def build_sigmanest_refresh(application: FastAPI) -> SigmaNestRefreshCoordinator:

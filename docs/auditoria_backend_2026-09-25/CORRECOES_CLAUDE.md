@@ -115,3 +115,106 @@
   | Sem regressão no operador | ✅ |
   | Testes e harness verdes | ✅ |
   | `acao_inicio` p95 < 1 s com pool 4 e pool 10 | ❌ precisa de decisão de infraestrutura ou de critério. **Parado para decisão.** |
+
+- **Decisão do usuário (29/09/2026):** seguir para a Onda 2. A meta de p95 < 1 s fica **BLOQUEADA EXTERNAMENTE**, pois depende de decisão de infraestrutura (multiprocesso) ou de critério de carga. O 503 continua **CORRIGIDO E PROVADO**.
+
+---
+
+## ONDA 2 — Invariantes de concorrência
+
+Todos os testes desta onda rodam só no TEST, cada um em schema próprio (`gestor_test_<uuid>`), criado e destruído pelo próprio teste.
+
+### BK-02 · Lock do rateio sem identidade canônica — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - `registrar_rateio_recurso` travava `hashtext(UPPER(recurso))` com o texto recebido.
+  - `Laser Ensis 3015` e `LASER1` caíam em travas distintas, e cada uma gravava uma sessão física na mesma hora do mesmo recurso.
+- **Alteração** (`app/database/database.py`):
+  - Nova função única `_travar_recurso_tx(cursor, recurso)`. Ela resolve a identidade canônica (`resolve_resource_identity`), toma o `pg_advisory_xact_lock` e devolve o código canônico.
+  - Todos os pontos que travavam recurso passam por ela.
+  - O rateio grava e compara o recurso canônico. `listar_rateios_tempo_periodo` filtra pela identidade canônica.
+- **Evidência / testes** (`tests/test_concurrency_invariants.py::test_rateio_por_alias_e_por_codigo_nao_se_sobrepoem`):
+  - duas threads liberadas por barreira, uma com o alias e outra com o código, em horários sobrepostos;
+  - resultado: 1 gravação e 1 `ValueError` "sobreposta"; o recurso salvo é `{LASER1}`;
+  - **contraprova:** com o `database.py` do HEAD (via `git stash`), o teste falha com as duas sessões gravadas.
+
+### BK-03 · TOCTOU no Início (enfileirar sem lock) — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - A checagem de ocupação do fluxo (`recurso_em_uso`) roda antes e fora da transação do INSERT em `enfileirar_apontamento_operacional`, que não travava o recurso.
+  - Dois Inícios simultâneos no mesmo recurso passavam a checagem.
+  - Quem perdia na transição deixava a linha `Aguardando` recém-criada para trás.
+- **Alteração:**
+  - `app/database/database.py`:
+    - `_conflito_recurso_exclusivo_tx` é a revalidação canônica: considera os 4 status que ocupam o recurso (`Em processo`, `Parada`, `Setup`, `Retrabalho`), pela máquina **ou** pelo evento de estado aberto.
+    - `enfileirar_apontamento_operacional(..., recurso_exclusivo=False)` trava e revalida dentro da transação do INSERT quando o recurso é exclusivo. Em produção, o fluxo do operador sempre passa `recurso_exclusivo=True` (`backend/api/routers/operator.py:601`).
+    - `transicionar_apontamento_operador` usa a mesma função.
+    - Novo `descartar_inicio_nao_iniciado(id)`: apaga **somente** a linha `Aguardando` sem `data_inicio` e que não é retorno de retrabalho da Qualidade.
+  - `mes/services/operator_flow.py`:
+    - o conflito no INSERT devolve `operator_resource_occupied`;
+    - o Início que perde na transição apaga apenas a linha que ele próprio acabou de criar.
+- **Não aplicado, de propósito:** contar outras linhas `Aguardando` como ocupação. Fila legítima existe (finalização parcial, retorno de retrabalho, fila sem Início), e linhas órfãs travariam máquinas para sempre. `test_recurso_exclusivo_nao_permite_contornar_por_parada_e_retomada` continua verde e prova que a fila legítima sobrevive.
+- **Evidência / testes:**
+  - `test_dois_inicios_simultaneos_deixam_um_apontamento_e_um_conflito`: 5 rodadas com alias × código por barreira; sempre `["conflito", "iniciado"]` e exatamente 1 linha ativa (`Em processo`).
+  - `test_revalidacao_no_insert_ve_o_recurso_ocupado_pelo_alias`.
+  - `test_descarte_nao_apaga_fila_que_ja_produziu`.
+  - `tests/test_operator_flow.py::test_inicio_que_perde_a_disputa_nao_deixa_fila_para_tras`. **Contraprova:** com o descarte neutralizado, o teste falha.
+- **Fora do escopo, registrado:** a transição trava a linha (`FOR UPDATE`) antes do advisory lock, na ordem inversa do enfileirar. Não houve deadlock nas rodadas, porque o INSERT não trava linhas de outros apontamentos. Fica como observação.
+
+### BK-07 · Loops de background sem líder — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - Com mais de um processo web, cada processo subia o agendador de relatórios, o bot e o resumo do Telegram.
+  - `send_report` faz check-then-act, e o mesmo relatório podia sair duas vezes.
+  - Dois `getUpdates` concorrentes geram `409 Conflict`.
+- **Alteração:**
+  - Novo `app/database/leadership.py` com `LeaderLease`: `pg_try_advisory_lock` de sessão numa **conexão dedicada, fora do pool**.
+    - Um lock por ciclo ocuparia 1 das 4 vagas do pool do operador o tempo todo no polling do Telegram.
+    - A cada ciclo, o líder confirma a sessão com `SELECT 1` e quem não é líder tenta assumir.
+    - Se o líder morrer, o PostgreSQL solta o lock com a conexão.
+    - Sem PostgreSQL (fakes, prévia local), fica no-op e devolve `True`, pois há um único processo.
+  - `backend/api/main.py`:
+    - `_report_scheduler_loop`, `_telegram_bot_loop` e `_telegram_digest_loop` só executam o ciclo quando `_leader_cycle` confirma a liderança, com locks 874_210_308/309/310, na faixa do lock do catálogo (874_210_307);
+    - o lease é liberado no `finally` do cancelamento;
+    - o bot que não é líder zera o offset em memória e relê o cursor persistido ao assumir.
+  - A operação com processo único não muda: o primeiro ciclo já pega o lock.
+- **Não alterados, pois a auditoria os confirmou mitigados:** shift_boundary (`FOR UPDATE`), outbox TOTVS (`SKIP LOCKED` + lease, ver BK-12) e catálogo (advisory lock).
+- **Evidência / testes** (`test_um_so_lider_e_a_morte_dele_libera_a_vez`, com PostgreSQL real):
+  - dois leases disputam por barreira e exatamente 1 vira líder;
+  - o líder reconfirma e o reserva segue recusado;
+  - com `pg_terminate_backend` na sessão do líder (processo morto), o reserva assume e o antigo líder passa a ser recusado.
+  - A prova é no nível do lock, que é o único ponto de decisão dos 3 laços. O teste com dois `TestClient` sugerido pela auditoria não foi montado, porque exigiria Telegram e relógio reais nos laços.
+  - Regressão: `test_report_automation_messaging`, `test_telegram_bot` e `test_telegram_alerts` (54 passed) e `test_web_api` (59 passed).
+
+### BK-12 · Lease da outbox menor que o pior lote — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - O lote inteiro (até 10) recebia um único lease de 120 s, mas cada POST pode levar o timeout inteiro (30 s).
+  - Os últimos itens venciam ainda na fila do worker. Outro worker os recuperava (`recuperar_envios_abandonados_totvs`) e os enviava de novo, e o primeiro worker também os enviava.
+- **Alteração:**
+  - `app/database/totvs_outbox_repository.py`: novo `renovar_reserva_outbound_totvs(ids, worker, lease_seconds)`. Ele estende o lease só dos itens ainda `SENDING` deste worker e não vencidos, e devolve os ids ainda reservados.
+  - `mes/services/totvs_outbox_worker.py`:
+    - antes de cada envio, faz o heartbeat do restante do lote; o item que já não é do worker é pulado, sem envio;
+    - o lease efetivo nunca fica abaixo de 2 × o timeout do gateway.
+  - Preservados:
+    - at-least-once: o item recuperado volta a `RETRY` com a mesma `idempotency_key`;
+    - `idempotency_key`;
+    - ordem causal por OP (F19): a reserva não mudou;
+    - a cadência de um lote por ciclo.
+- **Evidência / testes** (`tests/test_totvs_outbox.py::test_lote_lento_nao_envia_o_mesmo_item_duas_vezes`):
+  - 3 itens de OPs distintas; POST de 70 s em relógio controlado;
+  - o worker B roda no meio do lote do worker A e depois de 1 h;
+  - resultado: cada chave enviada **uma** vez e tudo `SENT`;
+  - **contraprova:** sem o heartbeat, o resultado é `['lote-0', 'lote-1', 'lote-1', 'lote-2', 'lote-2']`.
+  - F19 (`test_reinicio_processa_pending_antigo_sem_perder_mensagem`) e `test_totvs_outbox_notifications` verdes.
+
+### GATE W2
+
+| Item | Resultado |
+|---|---|
+| Alias × código com zero sobreposição | ✅ `test_rateio_por_alias_e_por_codigo_nao_se_sobrepoem` |
+| 2 threads → 1 sucesso + 1 conflito | ✅ 5/5 rodadas |
+| Teste com 2 processos | ✅ 2 sessões PostgreSQL de líder, e a morte de uma libera a vez |
+| 1 envio lógico por `idempotency_key` | ✅ `test_lote_lento_nao_envia_o_mesmo_item_duas_vezes` |
+| F19 segue válido | ✅ |
+| Regressão direcionada | ✅ 217 passed, 6 subtests (operador, concorrência, outbox, profissionalização, estado de recurso, primeira peça, regras MES, load path) + 54 (relatórios/Telegram) + 59 (`test_web_api`) |

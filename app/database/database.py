@@ -2130,6 +2130,7 @@ class Database(
         data_entrada=None,
         operacao=None,
         etapa_anterior_pendente_confirmada=False,
+        recurso_exclusivo=False,
     ):
         operacao = dict(operacao or {})
         entrada = _period_value(data_entrada) or self._now()
@@ -2141,6 +2142,13 @@ class Database(
             raise ValueError("Quantidade planejada do apontamento deve ser maior que zero.")
         try:
             with self.connection() as connection, connection.cursor() as cursor:
+                if recurso_exclusivo:
+                    # A leitura prévia do fluxo roda em outra transação: sem a
+                    # trava, dois Inícios simultâneos passam por ela (BK-03).
+                    resource = self._travar_recurso_tx(cursor, maquina)
+                    conflito = self._conflito_recurso_exclusivo_tx(cursor, resource)
+                    if conflito:
+                        return conflito
                 cursor.execute(
                     """
                     INSERT INTO apontamentos_operacionais (
@@ -2181,6 +2189,26 @@ class Database(
             if exc.diag.constraint_name == "idx_apontamento_ativo_op_setor":
                 return None
             raise
+
+    def descartar_inicio_nao_iniciado(self, apontamento_id):
+        """Desfaz o enfileiramento de um Início que perdeu a disputa do recurso.
+
+        Só apaga a linha que nunca produziu: `Aguardando`, sem `data_inicio` e
+        fora do retorno de retrabalho. O evento `fila` vai junto (CASCADE).
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM apontamentos_operacionais
+                WHERE id = %s
+                  AND status = 'Aguardando'
+                  AND data_inicio IS NULL
+                  AND retorno_retrabalho_qualidade IS FALSE
+                """,
+                (apontamento_id,),
+            )
+            return cursor.rowcount == 1
 
     def listar_apontamentos_operacionais(self, tipo_setor, maquina=None, somente_ativos=True):
         query = "SELECT * FROM apontamentos_operacionais WHERE UPPER(tipo_setor) = UPPER(%s)"
@@ -2403,36 +2431,12 @@ class Database(
                     OperatorState.REWORK,
                 }
             ):
-                resource = resolve_resource_identity(atual.get("maquina"))
-                self._bloquear_recursos_tx(cursor, [resource])
-                cursor.execute(
-                    """
-                    SELECT a.id, a.operador_inicio, a.operador_fila
-                    FROM apontamentos_operacionais a
-                    LEFT JOIN eventos_estado_recurso e
-                      ON e.apontamento_id = a.id
-                     AND e.data_fim IS NULL
-                    WHERE a.id <> %s
-                      AND a.status IN ('Em processo', 'Parada', 'Setup', 'Retrabalho')
-                      AND (
-                          UPPER(a.maquina) = UPPER(%s)
-                          OR UPPER(COALESCE(e.recurso, '')) = UPPER(%s)
-                      )
-                    ORDER BY a.id
-                    LIMIT 1
-                    FOR UPDATE OF a
-                    """,
-                    (apontamento_id, resource, resource),
+                resource = self._travar_recurso_tx(cursor, atual.get("maquina"))
+                conflito = self._conflito_recurso_exclusivo_tx(
+                    cursor, resource, excluir_id=apontamento_id
                 )
-                occupied = cursor.fetchone()
-                if occupied:
-                    return {
-                        "exclusive_resource_conflict": True,
-                        "resource": resource,
-                        "operator": occupied.get("operador_inicio")
-                        or occupied.get("operador_fila")
-                        or "outro operador",
-                    }
+                if conflito:
+                    return conflito
 
             operadores = []
             finalizacao_parcial = False
@@ -4025,6 +4029,60 @@ class Database(
         }.get(str(status or "").strip())
 
     @staticmethod
+    def _conflito_recurso_exclusivo_tx(cursor, resource, excluir_id=None):
+        """Execução que ocupa fisicamente o recurso, já sob a trava dele.
+
+        Chamado com `_travar_recurso_tx` tomado: é a checagem feita dentro da
+        transação que grava, não a leitura prévia do fluxo (BK-03).
+        """
+
+        cursor.execute(
+            """
+            SELECT a.id, a.operador_inicio, a.operador_fila
+            FROM apontamentos_operacionais a
+            LEFT JOIN eventos_estado_recurso e
+              ON e.apontamento_id = a.id
+             AND e.data_fim IS NULL
+            WHERE a.id IS DISTINCT FROM %s
+              AND a.status IN ('Em processo', 'Parada', 'Setup', 'Retrabalho')
+              AND (
+                  UPPER(a.maquina) = UPPER(%s)
+                  OR UPPER(COALESCE(e.recurso, '')) = UPPER(%s)
+              )
+            ORDER BY a.id
+            LIMIT 1
+            FOR UPDATE OF a
+            """,
+            (excluir_id, resource, resource),
+        )
+        occupied = cursor.fetchone()
+        if not occupied:
+            return None
+        return {
+            "exclusive_resource_conflict": True,
+            "resource": resource,
+            "operator": occupied.get("operador_inicio")
+            or occupied.get("operador_fila")
+            or "outro operador",
+        }
+
+    @staticmethod
+    def _travar_recurso_tx(cursor, recurso):
+        """Advisory lock do recurso na transação; devolve a identidade canônica.
+
+        Única derivação da chave: alias ("Laser Ensis 3015") e código
+        ("LASER1") precisam cair na mesma trava, senão não se excluem (BK-02).
+        """
+
+        identidade = resolve_resource_identity(recurso)
+        if identidade:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
+                (identidade,),
+            )
+        return identidade
+
+    @staticmethod
     def _bloquear_recursos_tx(cursor, recursos):
         """Toma os advisory locks de vários recursos em ordem determinística.
 
@@ -4042,10 +4100,7 @@ class Database(
             if resolve_resource_identity(recurso)
         })
         for identidade in identidades:
-            cursor.execute(
-                "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-                (identidade,),
-            )
+            Database._travar_recurso_tx(cursor, identidade)
 
     def _estado_recurso_aberto_tx(self, cursor, recurso, *, instante=None):
         """Retorna o estado físico aberto mais recente do recurso.
@@ -4079,13 +4134,9 @@ class Database(
         return current
 
     def _encerrar_estado_recurso_tx(self, cursor, recurso, instante, *, somente_origem=None):
-        resource = resolve_resource_identity(recurso)
+        resource = self._travar_recurso_tx(cursor, recurso)
         if not resource:
             return None
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-            (resource,),
-        )
         current = self._estado_recurso_aberto_tx(cursor, resource, instante=instante)
         if not current:
             return None
@@ -4126,10 +4177,7 @@ class Database(
         if category not in PHYSICAL_STATE_VALUES:
             raise ValueError(f"Categoria de estado inválida: {categoria}")
 
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-            (resource,),
-        )
+        self._travar_recurso_tx(cursor, resource)
         current = self._estado_recurso_aberto_tx(cursor, resource, instante=instante)
         if current and current.get("data_inicio") and current["data_inicio"] > instante:
             result = dict(current)
@@ -4293,11 +4341,7 @@ class Database(
         recurso havia saído dela por trabalho apontado na pausa, volta a ela.
         """
 
-        identity = resolve_resource_identity(recurso)
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-            (identity,),
-        )
+        identity = self._travar_recurso_tx(cursor, recurso)
         current = self._estado_recurso_aberto_tx(cursor, identity, instante=instante)
         if self._em_intervalo_automatico(current):
             return dict(current)
@@ -4324,13 +4368,9 @@ class Database(
         que o retorno do turno seguinte converte em sem demanda.
         """
 
-        resource = resolve_resource_identity(recurso)
+        resource = self._travar_recurso_tx(cursor, recurso)
         if not resource:
             return None
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-            (resource,),
-        )
         current = self._estado_recurso_aberto_tx(cursor, resource, instante=instante)
         if current and (
             current.get("categoria") == "fora_turno"
@@ -4957,11 +4997,9 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             # Serializa sessões do mesmo recurso e recusa sobreposição física.
             # Assim duas requisições Web simultâneas não conseguem
-            # transformar 60 minutos reais em duas sessões concorrentes.
-            cursor.execute(
-                "SELECT pg_advisory_xact_lock(hashtext(UPPER(%s)))",
-                (str(recurso or "").strip(),),
-            )
+            # transformar 60 minutos reais em duas sessões concorrentes. A
+            # sessão grava a identidade canônica: alias e código são o mesmo recurso.
+            resource = self._travar_recurso_tx(cursor, recurso)
             cursor.execute(
                 """
                 SELECT id FROM sessoes_recurso
@@ -4970,7 +5008,7 @@ class Database(
                   AND COALESCE(data_fim, 'infinity'::timestamp) > %s
                 LIMIT 1
                 """,
-                (str(recurso or "").strip(), end, start),
+                (resource, end, start),
             )
             if cursor.fetchone():
                 raise ValueError("Já existe uma sessão física sobreposta para este recurso.")
@@ -4983,7 +5021,7 @@ class Database(
                 RETURNING *
                 """,
                 (
-                    str(recurso or "").strip(), tipo_setor, start, end, physical,
+                    resource, tipo_setor, start, end, physical,
                     str(origem or "gestor_pecas"), referencia_origem,
                 ),
             )
@@ -5055,7 +5093,7 @@ class Database(
             params.append(str(setor).strip())
         if recurso:
             query += " AND UPPER(s.recurso) = UPPER(%s)"
-            params.append(str(recurso).strip())
+            params.append(resolve_resource_identity(recurso))
         if join_filters:
             query += " AND r.id IS NOT NULL"
         query += " ORDER BY s.data_inicio, s.id, r.id"

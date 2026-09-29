@@ -286,6 +286,34 @@ class TotvsOutboxRepositoryMixin:
             )
             return [_outbox_row(row) for row in cursor.fetchall()]
 
+    def renovar_reserva_outbound_totvs(self, ids, *, worker: str, lease_seconds: int, now=None):
+        """Estende o lease dos itens do lote que ainda são deste worker (BK-12).
+
+        O lote inteiro é reservado de uma vez, mas enviado item a item; sem
+        renovação, os últimos expiravam na fila, outro worker os recuperava e o
+        mesmo item saía duas vezes. Devolve os ids ainda reservados — item fora
+        do conjunto foi recuperado por outro e não deve ser enviado aqui.
+        """
+
+        if not ids:
+            return set()
+        instante = (now or self._now()).replace(microsecond=0)
+        expira = instante + timedelta(seconds=int(lease_seconds))
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE totvs_outbox
+                SET lease_expires_at = %(expira)s, updated_at = %(now)s
+                WHERE id = ANY(%(ids)s)
+                  AND status = 'SENDING'
+                  AND lease_owner = %(worker)s
+                  AND lease_expires_at > %(now)s
+                RETURNING id
+                """,
+                {"ids": [int(i) for i in ids], "worker": str(worker), "expira": expira, "now": instante},
+            )
+            return {row["id"] for row in cursor.fetchall()}
+
     def concluir_item_outbound_totvs(
         self,
         outbox_id: int,

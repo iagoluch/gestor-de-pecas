@@ -45,6 +45,9 @@ class _FakeDatabaseFixedOutcome:
         items, self._reserved_items = self._reserved_items, []
         return items
 
+    def renovar_reserva_outbound_totvs(self, ids, *, worker, lease_seconds, now):
+        return set(ids)
+
     def concluir_item_outbound_totvs(self, item_id, **kwargs):
         return {"id": item_id, **self._final}
 

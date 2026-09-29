@@ -979,6 +979,7 @@ class OperatorFlowService:
                 )
 
         atual = self._buscar_ativo(codigo, setor, recurso, operacao)
+        enfileirado_agora = None
         ocupacao = self.recurso_em_uso(setor, recurso)
         if atual is None and ocupacao is not None:
             return OperatorFlowResult(
@@ -1181,9 +1182,19 @@ class OperatorFlowService:
                     etapa_pendente is not None
                     and confirmar_etapa_anterior_pendente
                 ),
+                recurso_exclusivo=bool(recurso_exclusivo),
             )
+            if atual is not None and atual.get("exclusive_resource_conflict"):
+                return OperatorFlowResult(
+                    False,
+                    "Este recurso já possui um apontamento ativo. Finalize ou altere o estado atual antes de iniciar outro.",
+                    "operator_resource_occupied",
+                    atual,
+                )
             if atual is None:
                 atual = self._buscar_ativo(codigo, setor, recurso, operacao)
+            else:
+                enfileirado_agora = atual.get("id")
         if atual is None:
             return OperatorFlowResult(
                 False,
@@ -1388,6 +1399,11 @@ class OperatorFlowService:
                 "concorrencia",
             )
         if row.get("exclusive_resource_conflict"):
+            if enfileirado_agora is not None:
+                # Dois Inícios passaram juntos pela fila; a transição elegeu o
+                # outro. A linha deste Início nunca produziu e sairia na fila e
+                # no Andon como um segundo apontamento ativo (BK-03).
+                self.db.descartar_inicio_nao_iniciado(enfileirado_agora)
             return OperatorFlowResult(
                 False,
                 "Este recurso já possui um apontamento ativo. Finalize ou altere o estado atual antes de iniciar outro.",

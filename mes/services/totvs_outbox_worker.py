@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import logging
+import math
 import os
 import socket
 import threading
@@ -91,7 +92,10 @@ class TotvsOutboxWorker:
         self.gateway = gateway
         self.worker_name = worker_name or default_worker_name()
         self.batch_size = max(1, int(batch_size))
-        self.lease_seconds = max(5, int(lease_seconds))
+        # O lease precisa sobreviver a um envio inteiro: vencido no meio do
+        # POST, outro worker recupera o item e o manda de novo (BK-12).
+        gateway_timeout = getattr(getattr(gateway, "config", None), "timeout_seconds", 0) or 0
+        self.lease_seconds = max(5, int(lease_seconds), math.ceil(2 * float(gateway_timeout)))
         self.max_attempts = max(1, int(max_attempts))
         self.max_authentication_attempts = max(1, int(max_authentication_attempts))
         self._now = now_func or getattr(database, "_now", None)
@@ -203,7 +207,21 @@ class TotvsOutboxWorker:
             now=self._instant(),
         )
         cycle.reserved = len(reserved)
-        for item in reserved:
+        for posicao, item in enumerate(reserved):
+            # Heartbeat do lote: renova o lease do que ainda falta enviar e
+            # não envia o que outro worker já recuperou (BK-12).
+            ainda_meus = self.database.renovar_reserva_outbound_totvs(
+                [pendente["id"] for pendente in reserved[posicao:]],
+                worker=self.worker_name,
+                lease_seconds=self.lease_seconds,
+                now=self._instant(),
+            )
+            if item["id"] not in ainda_meus:
+                logging.warning(
+                    "Item %s da outbox TOTVS não é mais deste worker; envio pulado.",
+                    item.get("id"),
+                )
+                continue
             try:
                 final = self.deliver(item)
             except Exception:

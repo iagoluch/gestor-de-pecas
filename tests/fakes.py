@@ -1761,7 +1761,7 @@ class FakeDatabase:
     def enfileirar_apontamento_operacional(
         self, op, peca, tarefa_id, tipo_setor, maquina, operador,
         quantidade=1, data_entrada=None, operacao=None,
-        etapa_anterior_pendente_confirmada=False,
+        etapa_anterior_pendente_confirmada=False, recurso_exclusivo=False,
     ):
         normalized = limpa_codigo(op)
         if any(
@@ -1812,6 +1812,19 @@ class FakeDatabase:
             return None
         row["quantidade_refugo"] = int(row.get("quantidade_refugo") or 0) + qty
         return dict(row)
+
+    def descartar_inicio_nao_iniciado(self, apontamento_id):
+        antes = len(self.appointments)
+        self.appointments = [
+            item for item in self.appointments
+            if not (
+                item["id"] == apontamento_id
+                and item.get("status") == "Aguardando"
+                and not item.get("data_inicio")
+                and not item.get("retorno_retrabalho_qualidade")
+            )
+        ]
+        return len(self.appointments) < antes
 
     def listar_apontamentos_operacionais(self, tipo_setor, maquina=None, somente_ativos=True):
         rows = [item for item in self.appointments if item["tipo_setor"].upper() == tipo_setor.upper()]

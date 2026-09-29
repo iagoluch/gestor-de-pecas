@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app.core.operator_sectors import operator_route_resource_label
 from mes.services.operator_flow import OperatorFlowService, OperatorState, validate_transition
@@ -153,6 +154,40 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(stopped.ok)
         self.assertEqual(stopped.code, "operator_resource_occupied")
         self.assertEqual(db.buscar_apontamento_operacional(queued["id"])["status"], "Aguardando")
+
+    def test_inicio_que_perde_a_disputa_nao_deixa_fila_para_tras(self):
+        # BK-03: a leitura prévia do recurso ficou velha (outro Início passou
+        # junto). A transição recusa, e a linha criada por este Início some.
+        db, service, first_operation = self._service()
+        second_task = db.inserir_tarefa("T-OPERADOR-DISPUTA")
+        db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-DISPUTA", "PECA-2", "Dobra", 1)
+        second_operation = {
+            **first_operation,
+            "id": 13,
+            "codigo_op": "OP-OPERADOR-DISPUTA",
+            "produto_codigo": "PECA-2",
+            "quantidade": 1,
+        }
+        db.catalog_operations.append(second_operation)
+        liberar_primeira_peca(
+            db, "OPERADOR TESTE", op="OP-OPERADOR-DISPUTA", setor="Dobra",
+            recurso="1303", operacao=second_operation,
+        )
+        first = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=first_operation, recurso_exclusivo=True,
+        )
+
+        with patch.object(service, "recurso_em_uso", return_value=None):
+            second = service.executar(
+                "Início", op="OP-OPERADOR-DISPUTA", setor="Dobra", recurso="1303",
+                operacao=second_operation, recurso_exclusivo=True,
+            )
+
+        self.assertTrue(first.ok)
+        self.assertEqual(second.code, "operator_resource_occupied")
+        ativos = db.listar_apontamentos_operacionais("Dobra", maquina="1303")
+        self.assertEqual([row["op"] for row in ativos], ["OP-OPERADOR"])
 
     def test_parada_exige_motivo_e_finalizacao_exige_quantidades_e_operador(self):
         self.assertEqual(
