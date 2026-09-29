@@ -652,3 +652,72 @@ Commit `refactor: close backend audit maintenance findings`. Tudo foi validado s
 | bandit `-r backend mes app -ll` | ✅ 0 Medium, 0 High |
 | pip-audit `-r requirements.lock` | ✅ No known vulnerabilities found |
 | REAL acessado | ❌ Não |
+
+---
+
+## GATE FINAL — 29/09/2026
+
+Tudo rodou no HEAD `2e791ea`, no TEST (`gestor_pecas_test`, em schemas descartáveis criados e removidos pelo próprio gate). O REAL não foi acessado.
+
+| Item | Resultado |
+|---|---|
+| Suíte completa | ✅ 1364 passed, 1 skipped, 2121 subtests (9 min 16 s), sem `test_e2e_smoke`. Esse teste rodou à parte com o preview `tests.web_preview_api` em `127.0.0.1:8010`: ✅ 1 passed |
+| Concorrência | ✅ Dentro da suíte: `test_concurrency_invariants`, `test_resource_lock_order`, `test_report_idempotency`, `test_operator_load_path` e `test_login_throttle_postgres` |
+| Migrations em schema TEST limpo | ✅ 1..52 em 1,7 s, `SCHEMA_VERSION = 52`, com os 4 índices da 52 presentes |
+| Constraints `NOT VALID` | 2, ambas intencionais e exigidas por `test_migration_chain_11_19.py:383-384`: `ck_apontamentos_quantidade_atendida_planejada` (BK-17, REAL pendente) e `ck_eventos_estado_recurso_codigo_canonico` (migration 51, não reescreve o histórico) |
+| Harness de carga (40 op., 45 s) | ✅ Pool 4: 2874 req, **0 respostas 5xx**, 40/40 logins, 40/40 finalizações, `acao_inicio` p95 2346 ms. Pool 10: 3212 req, **0 respostas 5xx**, 40/40, 40/40, p95 2011 ms. `tests/load_test/last_run_report.json` ficou intacto |
+| p95 `acao_inicio` < 1 s | ❌ Continua **BLOQUEADO EXTERNAMENTE** (BK-01, decisão de 29/09): depende de multiprocesso ou de um critério de carga |
+| EXPLAIN (seed de 1,2 M linhas) | ✅ Todas as consultas de período usam o GiST (`idx_estado_recurso_intervalo`, `idx_apontamentos_intervalo`, `idx_sessao_recurso_intervalo`). Os tempos batem com a ONDA 5: estados 1,2–5,8 ms/dia; fatos por setor 10–15 ms/dia; rateios 2,9–3,7 ms/dia. Seq Scan só nos catálogos pequenos. Seed removido |
+| `/live`, `/ready`, `/health` com PG TEST | ✅ 200 / 200 / 200 (`schema_version 52`) |
+| `/live`, `/ready`, `/health` com PG indisponível | ✅ 200 / **503** / **503** (liveness não depende do banco, BK-14) |
+| bandit `-r backend mes app -ll` | ✅ 0 Medium, 0 High |
+| pip-audit `-r requirements.lock` | ✅ No known vulnerabilities found |
+| `git diff --check` | ✅ |
+| Schemas deixados no TEST | Só os 12 órfãos anteriores do BK-23. O gate não deixou nenhum |
+| REAL acessado | ❌ Não. Os scripts do gate só usam `load_postgres_config(testing=True)`/`TEST_DATABASE_URL`, e nenhum lê `GESTOR_DEVOBS_REAL_DATABASE_URL` |
+
+### Tabela final
+
+| BK | Onda | Antes | Depois | Testes | Status | Commit |
+|---|---|---|---|---|---|---|
+| BK-05 | 1 | 24/40 logins; nunca finalizava; sempre verde | Perfis reais, gates reais; reprova (código 1) em 5xx/login/finalização | harness pool 4/10 | CORRIGIDO E PROVADO | `ed3d623` |
+| BK-01 | 1 | >100 × 503, 4/40 finalizações | 0 × 5xx, 40/40; p95 de 2,0–2,3 s | harness pool 4/10 | 503 CORRIGIDO E PROVADO; p95 < 1 s BLOQUEADO EXTERNAMENTE | `ed3d623` |
+| BK-02 | 2 | Alias e código travavam locks distintos | `_travar_recurso_tx` canônico | `test_concurrency_invariants::test_rateio_por_alias_e_por_codigo_nao_se_sobrepoem` | CORRIGIDO E PROVADO | `77e7320` |
+| BK-03 | 2 | TOCTOU no Início | Início que perde a disputa não deixa fila | `test_operator_flow::test_inicio_que_perde_a_disputa_nao_deixa_fila_para_tras` | CORRIGIDO E PROVADO | `77e7320` |
+| BK-07 | 2 | Cada processo rodava agendador/bot/digest | `LeaderLease` (advisory lock em conexão dedicada) | `test_um_so_lider_e_a_morte_dele_libera_a_vez` | CORRIGIDO E PROVADO | `77e7320` |
+| BK-12 | 2 | Lote lento reenviava item | Mesmo item não sai duas vezes | `test_totvs_outbox::test_lote_lento_nao_envia_o_mesmo_item_duas_vezes` | CORRIGIDO E PROVADO | `77e7320` |
+| BK-04 | 3 | CSV cru; TAB/CR não neutralizados | `safe_text` único p/ CSV e XLSX | `test_web_api::test_relatorio_csv_neutraliza_formula_de_texto_livre` | CORRIGIDO E PROVADO | `8178c95` |
+| BK-10 | 3 | Sem teto de corpo | `BodySizeLimitMiddleware` 1 MiB → 413 (desenho/SOAP isentos) | `test_corpo_gigante_recebe_413_sem_chegar_ao_handler`, `test_teto_de_corpo_respeita_upload_de_desenho_e_soap` | CORRIGIDO E PROVADO | `8178c95` |
+| BK-18 | 3 | `capabilities` completo sem sessão | Anônimo recebe só `simulation` | `test_capabilities_anonimo_recebe_so_o_relogio` | CORRIGIDO E PROVADO | `8178c95` |
+| BK-21 | 3 | Campo desconhecido aceito | `extra="forbid"` nos 18 comandos → 422 | `test_comando_com_campo_desconhecido_recebe_422`, `test_todo_comando_de_escrita_recusa_campo_extra` | CORRIGIDO E PROVADO | `8178c95` |
+| BK-15 | 3 | Senha sem escape, TLS aberto, timeout aberto | Escape e timeout fechados; TLS com mecanismo pronto | `test_sigmanest_planning` | Escape/timeout CORRIGIDOS; ativação do TLS BLOQUEADA EXTERNAMENTE | `8178c95` |
+| BK-09 | 4 | Mesmo role para TEST e REAL | — | — | BLOQUEADO EXTERNAMENTE | — |
+| BK-08 | 4 | 4 deps sem versão; deploy sem rollback | `requirements.lock` com hashes + `deploy_release.ps1` | venv limpo 75/75; pip-audit | CORRIGIDO localmente; VM BLOQUEADA EXTERNAMENTE | `7317e6e` |
+| BK-11 | 4 | Fuso sem guarda, `SET TIME ZONE` com falha aberta | Falha fechada | `test_timezone_guard` | CORRIGIDO E PROVADO | `7317e6e` |
+| BK-13 | 4 | Logs sem `X-Request-ID` | `ContextVar` + `RequestIdFilter` | `RequestIdLogTests` | CORRIGIDO E PROVADO | `7317e6e` |
+| BK-14 | 4 | Só `/health` (dependente do banco) | `/live` separado; `_last_error` limpa no sucesso | `HealthProbeTests` + gate acima | CORRIGIDO E PROVADO | `7317e6e` |
+| BK-06 | 5 | Seq Scan de 37–377 ms | GiST, 1,2–10 ms/dia | `test_period_overlap_indexes` | CORRIGIDO E PROVADO | `d0c369b` |
+| BK-16 | 5 | 21 FKs sem índice | 1 índice parcial (DELETE de 86–152 → 1–10 ms); 20 N/A | `test_period_overlap_indexes` | CORRIGIDO E PROVADO (1); 20 NÃO APLICÁVEIS | `d0c369b` |
+| BK-17 | 5 | `NOT VALID` | `VALIDATE` OK no TEST | contraprova `CheckViolation` | VALIDADO NO TEST; REAL BLOQUEADO | `d0c369b` (sem migration) |
+| BK-23 | 6 | O teste contava constraints de outros schemas | Filtra por `connamespace` | `test_migration_chain_11_19` | CORRIGIDO E PROVADO; limpeza dos 12 órfãos PENDENTE | `2e791ea` |
+| BK-22 | 6 | Throttle em memória por processo | Só `login_throttle` no PG | `test_login_throttle_postgres`, `test_web_api`, `test_dev_observatory` | CORRIGIDO E PROVADO | `2e791ea` |
+| BK-19 | 6 | SOAPAction inválida → 500 | 400 `soap:Client` | `test_totvs_integration` | CORRIGIDO E PROVADO | `2e791ea` |
+| BK-20 | 6 | Um usuário esgotava a cota de IA | Bucket de 6/60 s por usuário | `test_ai` | CORRIGIDO E PROVADO | `2e791ea` |
+| BK-26 | 6 | 13 `except` sem log | 1 corrigido; 12 N/A | `test_operator_flow` | CORRIGIDO E PROVADO (1); 12 NÃO APLICÁVEIS | `2e791ea` |
+| BK-24/25 | 6 | God-functions e vazamento de camadas | — | — | REGISTRADOS (fora do código tocado) | — |
+
+**Totais:** 6 commits; 49 arquivos de código, teste, CI e script (+3115/−463). Uma migration nova (**52**, só índices, não destrutiva).
+
+### Pendências que exigem o usuário
+
+1. **BK-01:** a meta de p95 < 1 s precisa de decisão de infraestrutura (workers/multiprocesso) ou de outro critério de carga.
+2. **BK-17 (REAL):** com aprovação, contar as violações (somente leitura) e então rodar o `VALIDATE`.
+3. **BK-23:** aprovar o `DROP SCHEMA … CASCADE` dos 12 órfãos do TEST.
+4. **BK-09, BK-15 (TLS) e BK-08 (VM):** dependem de infraestrutura externa: role separado, certificado e runner da VM.
+
+### Achados fora do escopo (registrados, não corrigidos)
+
+- **ONDA 2:** a transição trava a linha (`FOR UPDATE`) antes do advisory lock, na ordem inversa do enfileirar. Não houve deadlock nas rodadas.
+- **ONDA 5:** se a `totvs_outbox` crescer sem expurgo, `canonical_event_id` é a próxima FK a indexar.
+- **ONDA 6:** o `AIUserRateLimiter` é por processo. Com vários workers, o limite efetivo se multiplica.
+- **GATE (novo, P3):** com `serve_static`, um caminho inexistente sob `/api/v1/*` (por exemplo `/api/v1/ready` sem `/system`) cai no fallback da SPA e devolve **200 com `index.html`**, e não 404. O gate de deploy usa o caminho certo (`deploy_release.ps1:5`), mas um erro de digitação nessa URL passaria como saudável.
