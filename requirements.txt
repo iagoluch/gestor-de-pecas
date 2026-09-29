@@ -13,7 +13,7 @@ uvicorn[standard]>=0.30,<1
 # Cliente usado pelos testes de contrato HTTP do FastAPI.
 httpx>=0.27,<1
 # SDK assíncrono oficial usado somente quando a IA gerencial está habilitada.
-groq>=1.6,<2
+groq>=1.7.0,<2
 # Driver ODBC usado somente para LER o banco SigmaNEST (planejamento de Corte).
 # O produto importa pyodbc sob demanda: sem ele o Gestor sobe normalmente e
 # apenas a sincronização do Corte fica indisponível.
