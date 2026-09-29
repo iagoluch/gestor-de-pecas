@@ -2,7 +2,7 @@
 
 ## Autoridade
 1. decisão explícita de Iago / Engenharia de Manufatura;
-2. `AGENTS.md`;
+2. `AGENTS.md` e seus arquivos temáticos (`DESIGN.md`, `SECURITY.md`, `DATABASE.md`, `API.md`, `CODE_STYLE.md`, mesma força normativa);
 3. código e testes atuais;
 4. documentação atual;
 5. evidência externa;

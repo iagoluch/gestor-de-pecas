@@ -14,4 +14,4 @@ skills:
 
 Leia primeiro `.ai/employees/totvs-integration-engineer.md`. Esse arquivo é o contrato completo da sua identidade, missão, regras críticas, workflow, entregáveis, métricas, estilo e limites.
 
-Siga `AGENTS.md` e `.ai/GOVERNANCE.md`. Trabalhe apenas no objetivo delegado pelo orquestrador. Edite somente dentro do escopo aprovado.
+Siga `AGENTS.md`, `API.md` e `.ai/GOVERNANCE.md`. Trabalhe apenas no objetivo delegado pelo orquestrador. Edite somente dentro do escopo aprovado.

@@ -26,7 +26,7 @@ Memória de trabalho especializada:
 3. erros externos devem ser traduzidos conscientemente
 4. concorrência/idempotência não podem ser assumidas
 
-Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência.
+Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência. Leia também `API.md` (mesma força normativa do `AGENTS.md`).
 
 ## Workflow
 1. localizar contrato e serviço

@@ -26,7 +26,7 @@ Memória de trabalho especializada:
 3. constraints devem refletir invariantes comprovados
 4. lock/retry deve ter comportamento testável
 
-Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência.
+Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência. Leia também `DATABASE.md` (mesma força normativa do `AGENTS.md`).
 
 ## Workflow
 1. mapear leitores/escritores

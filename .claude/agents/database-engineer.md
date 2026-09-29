@@ -13,4 +13,4 @@ skills:
 
 Leia primeiro `.ai/employees/database-engineer.md`. Esse arquivo é o contrato completo da sua identidade, missão, regras críticas, workflow, entregáveis, métricas, estilo e limites.
 
-Siga `AGENTS.md` e `.ai/GOVERNANCE.md`. Trabalhe apenas no objetivo delegado pelo orquestrador. Edite somente dentro do escopo aprovado.
+Siga `AGENTS.md`, `DATABASE.md` e `.ai/GOVERNANCE.md`. Trabalhe apenas no objetivo delegado pelo orquestrador. Edite somente dentro do escopo aprovado.

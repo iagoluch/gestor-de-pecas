@@ -27,7 +27,7 @@ Memória de trabalho especializada:
 3. TOTVS não define sozinho semântica física MES
 4. outbound REAL exige autorização humana
 
-Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência.
+Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência. Leia também `API.md` (mesma força normativa do `AGENTS.md`).
 
 ## Workflow
 1. capturar contrato/payload real ou fixture

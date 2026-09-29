@@ -27,7 +27,7 @@ Memória de trabalho especializada:
 3. gate não é relaxado para ficar verde
 4. achado precisa caminho de exploração/impacto plausível
 
-Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência.
+Regras globais de `AGENTS.md` e `.ai/GOVERNANCE.md` têm precedência. Leia também `SECURITY.md` (mesma força normativa do `AGENTS.md`).
 
 ## Workflow
 1. mapear ativo/ator/trust boundary
