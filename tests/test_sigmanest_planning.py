@@ -246,6 +246,73 @@ class SigmaNestSegurancaTests(unittest.TestCase):
         self.assertNotIn("segredo-super-secreto", mask_dsn(dsn))
         self.assertIn("PWD=***", mask_dsn(dsn))
 
+    @staticmethod
+    def _parse_odbc(dsn: str) -> dict:
+        """Parser de referência da gramática ODBC (valor ``{...}`` com ``}}``)."""
+
+        pares, i = {}, 0
+        while i < len(dsn):
+            igual = dsn.index("=", i)
+            chave = dsn[i:igual].strip().upper()
+            i = igual + 1
+            if dsn.startswith("{", i):
+                valor, i = [], i + 1
+                while True:
+                    if dsn[i] == "}" and dsn.startswith("}}", i):
+                        valor.append("}")
+                        i += 2
+                    elif dsn[i] == "}":
+                        i += 1
+                        break
+                    else:
+                        valor.append(dsn[i])
+                        i += 1
+                pares[chave] = "".join(valor)
+                i += 1  # ';'
+            else:
+                fim = dsn.find(";", i)
+                fim = len(dsn) if fim < 0 else fim
+                pares[chave] = dsn[i:fim]
+                i = fim + 1
+        return pares
+
+    def test_senha_com_separadores_chega_inteira_ao_driver(self):
+        # BK-15: sem escape, ';' encerrava o PWD e o resto virava outra chave.
+        senha = "a;b=c}d{e"
+        dsn = build_sigmanest_dsn(
+            {
+                "SIGMANEST_SERVER": "servidor,1433",
+                "SIGMANEST_DATABASE": "SNDBase2026",
+                "SIGMANEST_USER": "ti;consulta",
+                "SIGMANEST_PASSWORD": senha,
+            }
+        )
+        pares = self._parse_odbc(dsn)
+        self.assertEqual(pares["PWD"], senha)
+        self.assertEqual(pares["UID"], "ti;consulta")
+        self.assertEqual(pares["APPLICATIONINTENT"], "ReadOnly")
+        mascarado = mask_dsn(dsn)
+        for trecho in ("a;b", "c}d", "e}"):
+            self.assertNotIn(trecho, mascarado)
+        self.assertTrue(mascarado.endswith(";PWD=***"), mascarado)
+
+    def test_certificado_validado_quando_a_ca_interna_for_configurada(self):
+        base = {"SIGMANEST_SERVER": "192.168.0.218,55035", "SIGMANEST_DATABASE": "SNDBase2026"}
+        legado = self._parse_odbc(build_sigmanest_dsn(base))
+        self.assertEqual(legado["TRUSTSERVERCERTIFICATE"], "yes")
+        validado = self._parse_odbc(
+            build_sigmanest_dsn(
+                {
+                    **base,
+                    "SIGMANEST_TRUST_SERVER_CERTIFICATE": "no",
+                    "SIGMANEST_HOSTNAME_IN_CERTIFICATE": "svr-dblantek.lantek.local",
+                }
+            )
+        )
+        self.assertEqual(validado["ENCRYPT"], "yes")
+        self.assertEqual(validado["TRUSTSERVERCERTIFICATE"], "no")
+        self.assertEqual(validado["HOSTNAMEINCERTIFICATE"], "svr-dblantek.lantek.local")
+
     def test_dominio_do_gestor_nao_conhece_tabelas_do_sigmanest(self):
         tabelas = ("ProgArchive", "STPIPArc", "WONumber", "SNDBase")
         permitidos = {
@@ -319,6 +386,43 @@ class SigmaNestConexaoTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             gateway.ler_planejamento()
         self.assertTrue(conexao.fechada)
+
+
+class _ConexaoSemTimeout(_ConexaoOdbcFalsa):
+    def __init__(self):
+        super().__init__()
+        self.executou = False
+
+    def __setattr__(self, nome, valor):
+        if nome == "timeout":
+            raise AttributeError("driver sem suporte a timeout")
+        super().__setattr__(nome, valor)
+
+    def execute(self, *_args):
+        self.executou = True
+
+
+class SigmaNestTimeoutTests(unittest.TestCase):
+    def test_timeout_aplicado_em_toda_conexao(self):
+        conexao = _ConexaoOdbcFalsa()
+        SigmaNestSqlServerGateway(
+            "DSN=fake", connect=lambda _dsn: conexao, environ={"SIGMANEST_QUERY_TIMEOUT": "12"}
+        ).ler_planejamento()
+        self.assertEqual(conexao.timeout, 12)
+
+    def test_timeout_nao_aplicado_aborta_o_sync_sem_consultar(self):
+        # BK-15: antes era só um warning e a consulta seguia sem limite.
+        conexao = _ConexaoSemTimeout()
+        gateway = SigmaNestSqlServerGateway("DSN=fake", connect=lambda _dsn: conexao, environ={})
+        with self.assertRaises(SigmaNestConfigurationError):
+            gateway.ler_planejamento()
+        self.assertFalse(conexao.executou)
+        self.assertTrue(conexao.fechada)
+
+    def test_timeout_invalido_recusa_o_gateway(self):
+        for valor in ("abc", "0", "-5"):
+            with self.subTest(valor=valor), self.assertRaises(SigmaNestConfigurationError):
+                SigmaNestSqlServerGateway("DSN=fake", environ={"SIGMANEST_QUERY_TIMEOUT": valor})
 
 
 class _GatewayFixo:

@@ -34,6 +34,7 @@ from mes.contracts import (
 )
 
 from backend.api.report_workbook import build_report_workbook
+from backend.api.report_workbook.kit import safe_text
 
 
 router = APIRouter(prefix="/reports", tags=["Relatórios"], dependencies=[Depends(management_read_slot)])
@@ -213,6 +214,14 @@ def _tabular_rows(payload):
     return [{"dados": json.dumps(encoded, ensure_ascii=False, separators=(",", ":"))}]
 
 
+def _csv_cell(value):
+    # Texto livre do chão de fábrica (observação, motivo) não pode virar
+    # fórmula no Excel do gestor (BK-04). Números seguem números.
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return safe_text(value) if isinstance(value, str) else value
+
+
 @router.get("/{report_type}/export.csv")
 def export_csv(
     report_type: str,
@@ -230,10 +239,7 @@ def export_csv(
     writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore", delimiter=";")
     writer.writeheader()
     for row in rows:
-        writer.writerow({
-            key: json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value
-            for key, value in row.items()
-        })
+        writer.writerow({key: _csv_cell(value) for key, value in row.items()})
     content = "\ufeff" + output.getvalue()
     safe_type = report_type.strip().casefold().replace("-", "_")
     return Response(

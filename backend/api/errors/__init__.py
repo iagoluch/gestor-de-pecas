@@ -31,6 +31,16 @@ class AppError(RuntimeError):
         self.details = details
 
 
+class PayloadTooLarge(HTTPException):
+    """Corpo acima do teto do ``BodySizeLimitMiddleware`` (BK-10)."""
+
+    code = "payload_too_large"
+    message = "O corpo da requisição excede o tamanho máximo permitido."
+
+    def __init__(self):
+        super().__init__(status_code=413, detail=self.message)
+
+
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
@@ -131,6 +141,14 @@ def register_error_handlers(app: FastAPI) -> None:
                 "database_unavailable",
                 "O banco de dados está indisponível no momento.",
             ),
+        )
+
+    @app.exception_handler(PayloadTooLarge)
+    async def payload_too_large_handler(request: Request, exc: PayloadTooLarge):
+        mark_error(request, code=exc.code, message=exc.message, exception=exc)
+        return JSONResponse(
+            status_code=413,
+            content=error_payload(request, exc.code, exc.message),
         )
 
     @app.exception_handler(HTTPException)

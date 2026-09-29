@@ -130,7 +130,10 @@ export function ManagementPausesPage() {
     setSalvando(true);
     setMensagem("");
     try {
-      await api.post("/api/v1/management/pauses", pausa);
+      // Só o comando: a linha lida traz auditoria (atualizado_em...) que o
+      // contrato de escrita recusa.
+      const { id, tipo_setor, nome, hora_inicio, hora_fim, ativo, ordem } = pausa;
+      await api.post("/api/v1/management/pauses", { id, tipo_setor, nome, hora_inicio, hora_fim, ativo, ordem });
       setMensagem("Pausa salva. O próximo ciclo já usa o novo horário.");
       setEditando(null);
       query.reload();

@@ -105,10 +105,13 @@ def bottom_border(color: str = LINE, style: str = "thin") -> Border:
 
 
 def safe_text(value: Any) -> str:
-    """Neutraliza fórmula injetada por dado de origem."""
+    """Neutraliza fórmula injetada por dado de origem (XLSX e CSV).
+
+    TAB e CR também abrem fórmula no Excel/LibreOffice (OWASP CSV Injection).
+    """
 
     text = str(value)
-    return "'" + text if text.startswith(("=", "+", "-", "@")) else text
+    return "'" + text if text.startswith(("=", "+", "-", "@", "\t", "\r")) else text
 
 
 def parse_datetime(value: Any):

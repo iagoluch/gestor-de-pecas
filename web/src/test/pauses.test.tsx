@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManagementPausesPage } from "../pages/home/PausesPage";
 
 const PAUSAS = [
-  { id: 1, tipo_setor: "Corte", nome: "Almoço", hora_inicio: "12:10:00", hora_fim: "12:52:00", ativo: true, ordem: 1 },
+  { id: 1, tipo_setor: "Corte", nome: "Almoço", hora_inicio: "12:10:00", hora_fim: "12:52:00", ativo: true, ordem: 1, atualizado_por: "Gestor", atualizado_em: "2026-09-01T10:00:00" },
   { id: 2, tipo_setor: "Corte", nome: "Café", hora_inicio: "15:30:00", hora_fim: "15:45:00", ativo: true, ordem: 2 },
   { id: 3, tipo_setor: "Dobra", nome: "Almoço", hora_inicio: "11:40:00", hora_fim: "12:22:00", ativo: false, ordem: 1 },
   { id: 4, tipo_setor: "Solda", nome: "Pausa para ginástica", hora_inicio: "09:00:00", hora_fim: "09:10:00", ativo: true, ordem: 1 },
@@ -155,7 +155,10 @@ describe("Pausas automáticas — organização e filtros", () => {
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Pausa salva"));
     const post = mock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "POST");
-    expect(JSON.parse(String((post?.[1] as RequestInit).body))).toMatchObject({ hora_fim: "12:55", ativo: true });
+    const corpo = JSON.parse(String((post?.[1] as RequestInit).body));
+    expect(corpo).toMatchObject({ hora_fim: "12:55", ativo: true });
+    // A auditoria da linha lida não volta no comando: o backend recusa campo extra (BK-21).
+    expect(Object.keys(corpo).sort()).toEqual(["ativo", "hora_fim", "hora_inicio", "id", "nome", "ordem", "tipo_setor"]);
   });
 
   it("pergunta antes de descartar uma edição alterada (Esc) e fecha direto quando nada mudou", async () => {

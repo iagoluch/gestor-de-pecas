@@ -218,3 +218,127 @@ Todos os testes desta onda rodam só no TEST, cada um em schema próprio (`gesto
 | 1 envio lógico por `idempotency_key` | ✅ `test_lote_lento_nao_envia_o_mesmo_item_duas_vezes` |
 | F19 segue válido | ✅ |
 | Regressão direcionada | ✅ 217 passed, 6 subtests (operador, concorrência, outbox, profissionalização, estado de recurso, primeira peça, regras MES, load path) + 54 (relatórios/Telegram) + 59 (`test_web_api`) |
+
+---
+
+## ONDA 3 — Segurança de fronteira
+
+Commit `fix: harden backend trust boundaries`. O REAL não foi acessado. O SigmaNEST de produção também não foi consultado: os testes usam conexão falsa e um parser de referência da gramática ODBC.
+
+### BK-04 · CSV/XLSX com injeção de fórmula — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - `export_csv` (`backend/api/routers/reports.py`) gravava o texto de origem cru.
+  - `safe_text` (`backend/api/report_workbook/kit.py`) só neutralizava `= + - @`. TAB e CR também abrem fórmula no Excel e no LibreOffice (OWASP CSV Injection).
+- **Alteração:**
+  - `safe_text` passa a cobrir também `\t` e `\r`.
+  - O CSV usa o mesmo `safe_text` via `_csv_cell`: há uma só regra para XLSX e CSV. Número continua número (`-5` não vira texto), e dict/list viram JSON.
+- **Evidência / testes:**
+  - `test_web_api::test_relatorio_csv_neutraliza_formula_de_texto_livre`: `=HYPERLINK(...)`, `\tcmd` e `\r@SUM(1)` saem com o prefixo `'`; `-5` e `Normal` saem intactos.
+  - **Contraprova:** sem a correção, o teste falha.
+
+### BK-10 · Sem teto de corpo — **CORRIGIDO E PROVADO**
+
+- **Antes:** nenhum middleware limitava o corpo. Um POST de 10 MB no login público era lido inteiro e parseado.
+- **Alteração:**
+  - `backend/api/body_limit.py`: `BodySizeLimitMiddleware`, ASGI puro, com teto padrão de 1 MiB:
+    - recusa pelo `Content-Length` sem ler o corpo;
+    - no corpo chunked, conta os bytes reais e interrompe no estouro com `PayloadTooLarge`, um `HTTPException` que o FastAPI repassa sem virar 400.
+  - Exceções explícitas:
+    - `/api/v1/quality/drawings`: teto próprio de 20 MB de PDF em base64;
+    - `/PcfIntegService`: o SOAP já tem limite e responde com fault SOAP.
+  - Registrado como middleware mais interno. Por isso o 413 sai com `X-Request-ID` e os headers de segurança.
+  - `backend/api/errors/__init__.py`: um handler dedicado devolve o payload padrão (`code=payload_too_large`).
+- **Evidência / testes:**
+  - `test_corpo_gigante_recebe_413_sem_chegar_ao_handler`:
+    - 10 MB com `Content-Length` → 413;
+    - 20 × 128 KB chunked → 413;
+    - `autenticar_usuario` nunca é chamado.
+  - `test_teto_de_corpo_respeita_upload_de_desenho_e_soap`: 2 MB de desenho e 2 MB de SOAP não recebem o 413 genérico.
+  - **Contraprova:** sem o middleware, a resposta é 422 ou 401, e o handler roda.
+
+### BK-18 · `capabilities` expunha configuração sem sessão — **CORRIGIDO E PROVADO**
+
+- **Antes:** `GET /api/v1/system/capabilities` devolvia regras, integrações e flags a qualquer anônimo, inclusive pelo túnel público.
+- **Alteração:**
+  - `backend/api/routers/system.py`: sem sessão válida, a resposta é só `{"simulation": ...}`, o único campo que o `ReferenceClockProvider` do front lê antes do login.
+  - Um cookie forjado ou expirado conta como anônimo.
+  - O bloco `simulation` passou a vir de um helper único, sem duplicação.
+- **Evidência / testes:**
+  - `test_capabilities_anonimo_recebe_so_o_relogio`: as chaves são `{"simulation"}`, também com o cookie `gestor_session` forjado.
+  - O teste antigo do payload completo agora faz login antes.
+
+### BK-21 · Comandos aceitavam campo desconhecido — **CORRIGIDO E PROVADO**
+
+- **Antes:** os comandos de escrita em `backend/api/schemas/common.py` e `quality.py` ignoravam campo extra em silêncio. Um cliente podia mandar `usuario_id` e acreditar que ele fosse aplicado.
+- **Alteração:**
+  - `model_config = ConfigDict(extra="forbid")` nos 18 comandos: 9 em `common` e 9 em `quality`. `ErrorResponse` e `PageMeta` são de leitura e ficaram de fora.
+  - O strip de strings não mudou: `str_strip_whitespace` não foi adicionado, para não alterar comportamento.
+  - **Consumidor corrigido na origem:**
+    - `web/src/pages/home/PausesPage.tsx` e `ShiftsPage.tsx` reenviavam a linha lida inteira, com `atualizado_por` e `atualizado_em`, no Ativar/Desativar. Com `forbid`, isso daria 422.
+    - As duas telas passam a enviar só os campos do comando.
+    - Os demais POSTs do front já montavam o payload campo a campo (conferidos: chamadas, crachás, usuários, qualidade, bancada).
+- **Evidência / testes:**
+  - `test_comando_com_campo_desconhecido_recebe_422`: `{"op":..., "usuario_id": 1}` → 422 `extra_forbidden`, e nada é aberto.
+  - `test_todo_comando_de_escrita_recusa_campo_extra`: 18 subtestes, um por schema. Um comando novo sem `forbid` quebra o teste.
+  - `web/src/test/pauses.test.tsx`: a fixture ganhou os campos de auditoria, e o corpo do POST tem exatamente as 7 chaves do comando.
+  - **Contraprova:**
+    - sem o `forbid`: 19 falhas;
+    - sem a correção da tela: o vitest falha.
+  - `tsc --noEmit` verde; `pauses` e `shifts`: 18/18.
+
+### BK-15 · SigmaNEST: senha sem escape, TLS confiando em qualquer certificado, timeout que falhava aberto — **escape e timeout CORRIGIDOS E PROVADOS; validação TLS com mecanismo pronto e ativação BLOQUEADA EXTERNAMENTE**
+
+- **Antes** (`backend/integrations/sigmanest_sqlserver.py`):
+  - `PWD={senha}` era concatenado cru. Um `;` na senha encerrava o valor e o resto virava outra chave do DSN.
+  - O `mask_dsn` mascarava só até o primeiro `;`.
+  - `TrustServerCertificate=yes` era fixo.
+  - Se `conexao.timeout` falhasse, havia só um `LOGGER.warning`, e a consulta seguia sem limite.
+- **Alteração:**
+  - `UID` e `PWD` vão entre chaves, com `}` dobrado (gramática ODBC). O `mask_dsn` reconhece o valor entre chaves.
+  - `Encrypt=yes` passa a ser explícito. `SIGMANEST_TRUST_SERVER_CERTIFICATE=no` liga a validação do certificado pela CA do Windows. `SIGMANEST_HOSTNAME_IN_CERTIFICATE` é opcional, porque o `SERVER` é um IP.
+  - `SIGMANEST_QUERY_TIMEOUT` inválido ou ≤ 0 recusa o gateway já na construção.
+  - Se a atribuição do timeout falhar, a conexão é fechada e `SigmaNestConfigurationError` é levantado. O sync aborta sem consultar.
+  - O timeout agora vale também para a conexão injetada.
+  - Documentado no `.env.example`.
+- **Por que a validação TLS não virou padrão:**
+  - O sync está ativo no `.env` deste ambiente; conferi só a presença das chaves, sem valores.
+  - O certificado do SQL Server do SigmaNEST (`192.168.0.218`) não foi comprovado como emitido por uma CA interna. Um SQL Server sem certificado provisionado usa um certificado autoassinado.
+  - Ligar a validação por padrão derrubaria o sync em produção sem a CA instalada.
+  - **Para ativar:** a TI instala a CA interna no Windows do servidor do Gestor e define `SIGMANEST_TRUST_SERVER_CERTIFICATE=no`. Isso depende de infraestrutura externa.
+- **Evidência / testes** (`tests/test_sigmanest_planning.py`):
+  - `test_senha_com_separadores_chega_inteira_ao_driver`: a senha `a;b=c}d{e` e o usuário `ti;consulta` chegam íntegros pelo parser ODBC de referência, e nenhum trecho aparece no DSN mascarado.
+  - `test_certificado_validado_quando_a_ca_interna_for_configurada`: sem a variável, o DSN mantém `TrustServerCertificate=yes`; com `=no`, sai `TrustServerCertificate=no` e `HostNameInCertificate`.
+  - `test_timeout_aplicado_em_toda_conexao`, `test_timeout_nao_aplicado_aborta_o_sync_sem_consultar` (nenhum `execute`; conexão fechada) e `test_timeout_invalido_recusa_o_gateway`.
+  - **Contraprova:** sem a correção, os 5 testes novos falham.
+  - Os 37 testes existentes, com 808 subtestes, seguem verdes.
+
+### BK-09 · Mesmo role de banco para TEST e REAL — **BLOQUEADO EXTERNAMENTE**
+
+- **Motivo:** a correção é `REVOKE CONNECT ON DATABASE gestor_pecas FROM <role de TEST>` mais a troca da credencial de `DATABASE_URL` ou `TEST_DATABASE_URL`.
+  - Isso altera a ACL do banco REAL.
+  - Isso cria roles na instância que hospeda o REAL.
+  - Isso troca segredos no `.env`.
+  - Os três casos são critério de parada ("REAL necessário" / "segredo necessário"). Nada foi executado, e o REAL não foi consultado.
+- **Runbook para a janela aprovada** (rodar como superusuário, fora do app):
+
+  ```sql
+  CREATE ROLE gestor_test LOGIN PASSWORD '<nova-senha>';
+  ALTER DATABASE gestor_pecas_test OWNER TO gestor_test;   -- e REASSIGN OWNED no banco de teste
+  REVOKE CONNECT ON DATABASE gestor_pecas FROM PUBLIC, gestor_test;
+  REVOKE CONNECT ON DATABASE gestor_pecas_test FROM PUBLIC, gestor_app;
+  GRANT CONNECT ON DATABASE gestor_pecas TO gestor_app;
+  ```
+
+  Depois, atualize `TEST_DATABASE_URL` com `gestor_test`.
+- **Teste de aceite:** a DSN de TEST apontada para `gestor_pecas` deve receber `permission denied for database`.
+
+### GATE W3
+
+| Item | Resultado |
+|---|---|
+| bandit `-r backend mes app -ll` (M/H) | ✅ 0 Medium, 0 High |
+| pip-audit `-r requirements.txt -r requirements-dev.txt` | ✅ No known vulnerabilities found |
+| Auth / CSRF / SOAP F4 / relatórios / qualidade / SigmaNEST | ✅ 388 passed, 993 subtests: `test_web_api`, `test_totvs_integration`, `test_ai`, `test_dev_observatory`, `test_database_professionalization`, `test_intelligence_reports`, `test_report_automation_messaging`, `test_stage4b_factory_shift`, `test_quality_inspection`, `test_wave6b_gate_setup_qualidade`, `test_sigmanest_planning`, `test_sigmanest_gateway` |
+| Front | ✅ `tsc --noEmit`; vitest `pauses` + `shifts` 18/18 |
+| REAL acessado | ❌ Não |

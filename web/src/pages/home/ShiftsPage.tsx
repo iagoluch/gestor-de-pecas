@@ -75,7 +75,9 @@ export function ManagementShiftsPage() {
     setSalvando(true);
     setMensagem("");
     try {
-      await api.post("/api/v1/management/shift-parameters", turno);
+      // Só o comando: a linha lida pode trazer campos que o contrato recusa.
+      const { id, nome, tipo, hora_inicio, hora_fim, ativo, ordem } = turno;
+      await api.post("/api/v1/management/shift-parameters", { id, nome, tipo, hora_inicio, hora_fim, ativo, ordem });
       setMensagem("Turno salvo. O próximo ciclo já usa o novo horário.");
       setEditando(null);
       query.reload();

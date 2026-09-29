@@ -27,7 +27,6 @@ from __future__ import annotations
 
 from contextlib import closing
 from datetime import datetime
-import logging
 import os
 import re
 from typing import Iterable
@@ -40,13 +39,25 @@ from mes.integrations.sigmanest.models import (
 )
 
 
-LOGGER = logging.getLogger(__name__)
-
 DEFAULT_ODBC_DRIVER = "ODBC Driver 18 for SQL Server"
+DEFAULT_QUERY_TIMEOUT_SECONDS = 30
 
 
 class SigmaNestConfigurationError(RuntimeError):
     """Configuração ausente ou insegura para o acesso ao SigmaNEST."""
+
+
+def _odbc_value(valor) -> str:
+    """Valor entre chaves (``}`` dobrado): ``;`` ou ``=`` na senha não quebram o DSN."""
+
+    return "{" + str(valor).replace("}", "}}") + "}"
+
+
+def _flag(valor, *, default: bool) -> bool:
+    texto = str(valor or "").strip().casefold()
+    if not texto:
+        return default
+    return texto in {"1", "true", "yes", "sim", "on"}
 
 
 def build_sigmanest_dsn(environ=None) -> str:
@@ -65,17 +76,26 @@ def build_sigmanest_dsn(environ=None) -> str:
         )
     driver = str(env.get("SIGMANEST_ODBC_DRIVER") or DEFAULT_ODBC_DRIVER).strip()
     usuario = str(env.get("SIGMANEST_USER") or "").strip()
+    # BK-15: com a CA interna instalada no repositório do Windows, defina
+    # SIGMANEST_TRUST_SERVER_CERTIFICATE=no e o driver valida o certificado
+    # (HostNameInCertificate quando o SERVER é um IP). O padrão ainda confia no
+    # certificado para não derrubar o sync atual antes da CA existir.
+    confiar = _flag(env.get("SIGMANEST_TRUST_SERVER_CERTIFICATE"), default=True)
     partes = [
         f"DRIVER={{{driver}}}",
         f"SERVER={servidor}",
         f"DATABASE={banco}",
-        "TrustServerCertificate=yes",
+        "Encrypt=yes",
+        f"TrustServerCertificate={'yes' if confiar else 'no'}",
         "ApplicationIntent=ReadOnly",
         f"Connect Timeout={str(env.get('SIGMANEST_CONNECT_TIMEOUT') or '10').strip()}",
     ]
+    nome_certificado = str(env.get("SIGMANEST_HOSTNAME_IN_CERTIFICATE") or "").strip()
+    if not confiar and nome_certificado:
+        partes.append(f"HostNameInCertificate={nome_certificado}")
     if usuario:
-        partes.append(f"UID={usuario}")
-        partes.append(f"PWD={env.get('SIGMANEST_PASSWORD') or ''}")
+        partes.append(f"UID={_odbc_value(usuario)}")
+        partes.append(f"PWD={_odbc_value(env.get('SIGMANEST_PASSWORD') or '')}")
     else:
         partes.append("Trusted_Connection=yes")
     return ";".join(partes)
@@ -84,7 +104,27 @@ def build_sigmanest_dsn(environ=None) -> str:
 def mask_dsn(dsn: str) -> str:
     """Versão segura para log: nunca expõe a senha."""
 
-    return re.sub(r"(PWD|PASSWORD)=[^;]*", r"\1=***", str(dsn or ""), flags=re.I)
+    # O valor entre chaves pode conter ``;``: mascara até a chave de fechamento.
+    return re.sub(
+        r"(PWD|PASSWORD)=(\{(?:[^}]|\}\})*\}|[^;]*)",
+        r"\1=***",
+        str(dsn or ""),
+        flags=re.I,
+    )
+
+
+def _query_timeout(environ=None) -> int:
+    env = environ if environ is not None else os.environ
+    bruto = str(env.get("SIGMANEST_QUERY_TIMEOUT") or DEFAULT_QUERY_TIMEOUT_SECONDS).strip()
+    try:
+        segundos = int(bruto)
+    except ValueError:
+        segundos = 0
+    if segundos <= 0:
+        raise SigmaNestConfigurationError(
+            "SIGMANEST_QUERY_TIMEOUT inválido: informe segundos inteiros maiores que zero."
+        )
+    return segundos
 
 
 # Consultas fixas e auditáveis. Nenhuma é montada por concatenação de dados.
@@ -133,27 +173,27 @@ class SigmaNestSqlServerGateway:
 
     def __init__(self, dsn: str | None = None, *, connect=None, environ=None):
         self.dsn = dsn or build_sigmanest_dsn(environ)
+        self._query_timeout = _query_timeout(environ)
         self._connect = connect
 
     def _abrir(self):
         if self._connect is not None:
-            return self._connect(self.dsn)
-        import pyodbc  # importado sob demanda: o produto não exige o driver
+            conexao = self._connect(self.dsn)
+        else:
+            import pyodbc  # importado sob demanda: o produto não exige o driver
 
-        conexao = pyodbc.connect(self.dsn, readonly=True, autocommit=True)
+            conexao = pyodbc.connect(self.dsn, readonly=True, autocommit=True)
         # Sem isso, uma consulta presa (lock, servidor sobrecarregado) no SQL
         # Server do SigmaNEST fica bloqueada indefinidamente — o timeout de
         # conexão do DSN não cobre a execução da query, só o handshake inicial.
+        # Falha fechada (BK-15): sem timeout, o sync não consulta.
         try:
-            conexao.timeout = int(
-                str(os.environ.get("SIGMANEST_QUERY_TIMEOUT") or "30").strip()
-            )
-        except (AttributeError, ValueError) as exc:
-            LOGGER.warning(
-                "Timeout de consulta do SigmaNEST não aplicado (SIGMANEST_QUERY_TIMEOUT): %s; "
-                "consultas ficam sem limite de execução.",
-                exc,
-            )
+            conexao.timeout = self._query_timeout
+        except Exception as exc:
+            conexao.close()
+            raise SigmaNestConfigurationError(
+                "Timeout de consulta do SigmaNEST não aplicado; sincronização abortada."
+            ) from exc
         return conexao
 
     @staticmethod

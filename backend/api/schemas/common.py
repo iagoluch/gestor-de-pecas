@@ -1,7 +1,7 @@
 from datetime import time
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ErrorResponse(BaseModel):
@@ -22,6 +22,8 @@ class PageMeta(BaseModel):
 class AutomaticPauseRequest(BaseModel):
     """Pausa automática de um setor, mantida pela tela dos gestores."""
 
+    model_config = ConfigDict(extra="forbid")
+
     id: int | None = None
     tipo_setor: str = Field(min_length=1, max_length=60)
     nome: str = Field(min_length=1, max_length=60)
@@ -41,6 +43,8 @@ class ShiftParameterRequest(BaseModel):
     fim de turno).
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     id: int | None = None
     nome: str = Field(min_length=1, max_length=60)
     tipo: str = Field(pattern="^(expediente|hora_extra)$")
@@ -53,6 +57,8 @@ class ShiftParameterRequest(BaseModel):
 class ProductiveCalendarRequest(BaseModel):
     """Cadastro do calendário que pode ser vinculado a recursos físicos."""
 
+    model_config = ConfigDict(extra="forbid")
+
     codigo: str = Field(min_length=1, max_length=60)
     nome: str = Field(min_length=1, max_length=120)
     timezone: str = Field(default="America/Sao_Paulo", min_length=1, max_length=80)
@@ -61,6 +67,8 @@ class ProductiveCalendarRequest(BaseModel):
 
 class ProductiveShiftRequest(BaseModel):
     """Janela semanal de um calendário produtivo."""
+
+    model_config = ConfigDict(extra="forbid")
 
     nome: str = Field(min_length=1, max_length=80)
     dia_semana: int = Field(ge=0, le=6)
@@ -73,6 +81,8 @@ class ProductiveShiftRequest(BaseModel):
 
 class ProductiveResourceCalendarRequest(BaseModel):
     """Vínculo entre recurso físico, calendário e capacidade temporal."""
+
+    model_config = ConfigDict(extra="forbid")
 
     recurso_codigo: str = Field(min_length=1, max_length=120)
     calendario_codigo: str = Field(min_length=1, max_length=60)
@@ -88,6 +98,8 @@ class OperatorBadgeRequest(BaseModel):
     nenhum login novo e nenhuma autenticação paralela são criados.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     cracha: str = Field(min_length=1, max_length=40)
     nome: str = Field(min_length=1, max_length=120)
     ativo: bool = True
@@ -101,6 +113,8 @@ class UserAccountRequest(BaseModel):
     enviar em branco preserva a senha atual.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     id: int | None = None
     nome: str = Field(min_length=1, max_length=120)
     nivel: str = Field(min_length=1, max_length=40)
@@ -110,6 +124,8 @@ class UserAccountRequest(BaseModel):
 
 class ChamadaContatoRequest(BaseModel):
     """Pessoa que pode ser chamada, mantida pela gestão numa tela própria."""
+
+    model_config = ConfigDict(extra="forbid")
 
     id: int | None = None
     nome: str = Field(min_length=1, max_length=120)
@@ -133,6 +149,8 @@ class ChamadaRequest(BaseModel):
     operador, conta genérica da gestão); a obrigatoriedade por perfil é
     validada no endpoint, que conhece o papel de quem está logado.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     contato_id: int
     motivo: str = Field(min_length=1, max_length=60)

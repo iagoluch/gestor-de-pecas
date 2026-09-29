@@ -31,6 +31,7 @@ from app.database.leadership import (
     TELEGRAM_DIGEST_LEADER_LOCK_ID,
     LeaderLease,
 )
+from backend.api.body_limit import DEFAULT_MAX_BODY_BYTES, BodySizeLimitMiddleware
 from backend.api.errors import register_error_handlers
 from backend.api.routers import (
     ai,
@@ -673,6 +674,18 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     # entre o timer de fundo e o botão Atualizar da tela de Corte.
     application.state.sigmanest_refresh = None
 
+    # Primeiro a ser registrado = mais interno: o 413 ainda recebe X-Request-ID,
+    # headers de segurança e registro no observatório (BK-10).
+    application.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=DEFAULT_MAX_BODY_BYTES,
+        overrides={
+            # PDF em base64 (4/3 do binário) mais o JSON em volta.
+            "/api/v1/quality/drawings": quality.MAX_DRAWING_BYTES * 4 // 3 + 64 * 1024,
+            # O receptor SOAP lê o envelope com teto próprio e responde fault SOAP.
+            "/PcfIntegService": None,
+        },
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(resolved_settings.allowed_origins),

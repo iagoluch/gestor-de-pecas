@@ -1,4 +1,6 @@
 import base64
+import csv
+import io
 import json
 import tempfile
 import unittest
@@ -237,7 +239,19 @@ class WebApiTests(unittest.TestCase):
         self.assertTrue(received)
         self.assertEqual(received[0]["reference_time"], reference)
 
+    def test_capabilities_anonimo_recebe_so_o_relogio(self):
+        # BK-18: pelo túnel público, sem sessão, nada de regras ou integração.
+        # O relógio de referência monta antes do login e só lê a simulação.
+        response = self.client.get("/api/v1/system/capabilities")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(set(payload), {"simulation"})
+        self.assertFalse(payload["simulation"]["enabled"])
+        self.client.cookies.set("gestor_session", "forjado")
+        self.assertEqual(set(self.client.get("/api/v1/system/capabilities").json()), {"simulation"})
+
     def test_capabilities_expoem_backend_only_sem_banco(self):
+        self.login_manager()
         response = self.client.get("/api/v1/system/capabilities")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -885,6 +899,50 @@ class WebApiTests(unittest.TestCase):
                 )
                 self.assertEqual(generated.status_code, 201, generated.text)
 
+    def test_corpo_gigante_recebe_413_sem_chegar_ao_handler(self):
+        # BK-10: 10 MB no login público; o teto vem antes do parse do corpo.
+        with patch.object(self.db, "autenticar_usuario", wraps=self.db.autenticar_usuario) as autenticar:
+            response = self.client.post(
+                "/api/v1/auth/login",
+                content=b"x" * (10 * 1024 * 1024),
+                headers={"Content-Type": "application/json"},
+            )
+            self.assertEqual(response.status_code, 413, response.text)
+            self.assertEqual(response.json()["code"], "payload_too_large")
+            self.assertIn("X-Request-ID", response.headers)
+
+            # Sem Content-Length (chunked): o teto conta os bytes de verdade.
+            def chunks():
+                for _ in range(20):
+                    yield b" " * (128 * 1024)
+
+            chunked = self.client.post(
+                "/api/v1/auth/login",
+                content=chunks(),
+                headers={"Content-Type": "application/json"},
+            )
+            self.assertEqual(chunked.status_code, 413, chunked.text)
+            self.assertEqual(chunked.json()["code"], "payload_too_large")
+            autenticar.assert_not_called()
+
+    def test_teto_de_corpo_respeita_upload_de_desenho_e_soap(self):
+        # O desenho em base64 tem teto próprio (20 MB de PDF) e o SOAP responde
+        # fault SOAP com o próprio limite: nenhum dos dois cai no 413 genérico.
+        self.login_manager()
+        csrf = self.client.cookies.get("gestor_csrf")
+        drawing = self.client.post(
+            "/api/v1/quality/drawings",
+            json={"produto": "PECA-WEB", "filename": "d.pdf", "conteudo_base64": "A" * (2 * 1024 * 1024)},
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertNotEqual(drawing.status_code, 413, drawing.text)
+        soap = self.client.post(
+            "/PcfIntegService",
+            content=b"x" * (2 * 1024 * 1024),
+            headers={"Content-Type": "text/xml"},
+        )
+        self.assertNotIn("payload_too_large", soap.text)
+
     def test_logout_exige_csrf_e_expira_cookies(self):
         self.login_manager()
         denied = self.client.post("/api/v1/auth/logout")
@@ -900,6 +958,27 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(response.content.startswith(b"\xef\xbb\xbf"))
         self.assertIn("attachment", response.headers["content-disposition"])
+
+    def test_relatorio_csv_neutraliza_formula_de_texto_livre(self):
+        # BK-04: observação digitada no chão não pode virar fórmula no Excel.
+        from backend.api.dependencies.facade import get_frontend_facade
+
+        class Facade:
+            def relatorio(self, report_type, filters):
+                return {"linhas": [
+                    {"obs": '=HYPERLINK("http://x")', "motivo": "\tcmd", "extra": "\r@SUM(1)", "saldo": -5, "ok": "Normal"},
+                ]}
+
+        self.app.dependency_overrides[get_frontend_facade] = lambda: Facade()
+        self.login_manager()
+        response = self.client.get("/api/v1/reports/producao/export.csv")
+        self.assertEqual(response.status_code, 200, response.text)
+        rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"), newline=""), delimiter=";"))
+        self.assertEqual(rows[0]["obs"], "\'=HYPERLINK(\"http://x\")")
+        self.assertEqual(rows[0]["motivo"], "\'\tcmd")
+        self.assertEqual(rows[0]["extra"], "\'\r@SUM(1)")
+        self.assertEqual(rows[0]["saldo"], "-5")
+        self.assertEqual(rows[0]["ok"], "Normal")
 
     def test_relatorio_excel_formatado(self):
         self.login_manager()
@@ -1632,6 +1711,43 @@ class QualityWebApiTests(unittest.TestCase):
         )
         self.assertEqual(alterado.status_code, 200, alterado.text)
         self.assertEqual(alterado.json()["data"]["revisao"], 2)
+
+    def test_comando_com_campo_desconhecido_recebe_422(self):
+        # BK-21: campo fora do contrato (ex.: autoria forjada) é recusado em vez
+        # de ignorado em silêncio; nada é aberto.
+        self._liberar_inspecao()
+        self._login("Operador Dobra", "senha-dobra")
+        forjado = self.client.post(
+            "/api/v1/quality/inspections",
+            headers=self._csrf(),
+            json={"op": "OP-QUAL-API", "usuario_id": 1},
+        )
+        self.assertEqual(forjado.status_code, 422, forjado.text)
+        self.assertEqual(forjado.json()["code"], "validation_error")
+        self.assertEqual(forjado.json()["details"][0]["type"], "extra_forbidden")
+        aberta = self.client.post(
+            "/api/v1/quality/inspections",
+            headers=self._csrf(),
+            json={"op": "OP-QUAL-API"},
+        )
+        self.assertEqual(aberta.status_code, 200, aberta.text)
+
+    def test_todo_comando_de_escrita_recusa_campo_extra(self):
+        from pydantic import BaseModel
+
+        from backend.api.schemas import common, quality
+
+        leitura = {"ErrorResponse", "PageMeta"}
+        for module in (common, quality):
+            for name, model in vars(module).items():
+                if (
+                    isinstance(model, type)
+                    and issubclass(model, BaseModel)
+                    and model.__module__ == module.__name__
+                    and name not in leitura
+                ):
+                    with self.subTest(model=name):
+                        self.assertEqual(model.model_config.get("extra"), "forbid")
 
     def test_peca_exige_csrf_e_respeita_a_sequencia(self):
         self._liberar_inspecao()

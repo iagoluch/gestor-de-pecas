@@ -15,6 +15,8 @@ from backend.api.dependencies.auth import (
     require_csrf,
     require_management_user,
 )
+from app.database.errors import DatabaseError
+from backend.api.database import get_database
 from backend.api.errors import AppError
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.corporate_integration import totvs_production_order_status
@@ -49,8 +51,23 @@ def _simulation_clock_payload(settings, clock) -> dict:
     }
 
 
+def _session_user_or_none(request: Request):
+    if not request.cookies.get(request.app.state.settings.session_cookie_name):
+        return None
+    try:
+        return get_current_user(request, get_database(request))
+    except (AppError, DatabaseError):
+        return None
+
+
 @router.get("/capabilities")
 def capabilities(request: Request):
+    settings = request.app.state.settings
+    clock = getattr(request.app.state, "clock", None)
+    # O relógio de referência monta antes do login e só precisa da simulação;
+    # regras, integração e metadados da API ficam para quem tem sessão (BK-18).
+    if _session_user_or_none(request) is None:
+        return {"simulation": _simulation_clock_payload(settings, clock)}
     payload = FrontendBackendFacade(None).capabilities()
     payload["api"] = {
         "version": "v1",
@@ -59,20 +76,7 @@ def capabilities(request: Request):
         "operator_web_enabled": True,
         "management_web_enabled": True,
     }
-    settings = request.app.state.settings
-    clock = getattr(request.app.state, "clock", None)
-    simulation_now = clock.now() if clock is not None and settings.simulation_mode else None
-    payload["simulation"] = {
-        "enabled": settings.simulation_mode,
-        "reference_time": (
-            simulation_now.isoformat()
-            if simulation_now is not None
-            else None
-        ),
-        "time_scale": settings.simulation_time_scale,
-        "running": bool(clock.running) if clock is not None else False,
-        "paused": bool(clock.paused) if clock is not None else False,
-    }
+    payload["simulation"] = _simulation_clock_payload(settings, clock)
     corporate = totvs_production_order_status(settings)
     payload["corporate_integration"] = {
         "provider": corporate.provider,

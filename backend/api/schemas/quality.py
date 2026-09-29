@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QualityDimensionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     sequencia: int = Field(ge=1, le=200)
     descricao: str | None = Field(default=None, max_length=200)
     padrao: str = Field(min_length=1, max_length=120)
@@ -13,22 +15,30 @@ class QualityDimensionInput(BaseModel):
 
 
 class QualityTemplateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     produto: str = Field(min_length=1, max_length=60)
     cotas: list[QualityDimensionInput] = Field(min_length=1, max_length=60)
 
 
 class QualityMeasureInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     sequencia: int = Field(ge=1, le=200)
     medida: str = Field(min_length=1, max_length=60)
     status: str = Field(min_length=1, max_length=20)
 
 
 class QualityRncInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     motivo: str = Field(min_length=3, max_length=500)
     observacao: str | None = Field(default=None, max_length=500)
 
 
 class QualityPieceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     numero_peca: int = Field(ge=1, le=100_000)
     resultado: str = Field(min_length=1, max_length=20)
     medidas: list[QualityMeasureInput] = Field(min_length=1, max_length=60)
@@ -37,11 +47,15 @@ class QualityPieceRequest(BaseModel):
 
 
 class QualityOpenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     op: str = Field(min_length=1, max_length=60)
 
 
 class QualityBypassRequest(BaseModel):
     """Seguir sem a inspeção formal, pela regra transitória de implantação."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: str = Field(min_length=1, max_length=40)
     badges: list[str] = Field(default_factory=list, max_length=10)
@@ -49,6 +63,8 @@ class QualityBypassRequest(BaseModel):
 
 
 class QualityFinishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     badges: list[str] = Field(default_factory=list, max_length=10)
 
 
@@ -58,6 +74,8 @@ class QualityDrawingRequest(BaseModel):
     O conteúdo chega embutido no JSON para não introduzir uma dependência nova
     de upload multipart apenas por causa desta tela.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     produto: str = Field(min_length=1, max_length=60)
     filename: str = Field(min_length=1, max_length=240)
