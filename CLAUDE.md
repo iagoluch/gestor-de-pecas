@@ -4,6 +4,19 @@ Para tarefas não triviais, esta sessão atua como **orquestrador** da organiza�
 Runtime desejado: **Claude Opus 5.5 / high**. Leia `.ai/ORCHESTRATOR.md` quando houver delegação e use `.claude/agents/`. Não transforme tarefa simples em multiagente.
 Este repo é a fonte de verdade da workforce, publicada em `~/.claude/agents/` para todos os projetos por `scripts/install_global_workforce.py` (roda no SessionStart); edite só `.claude/agents/` e `.ai/` daqui.
 
+## Skills do projeto (prevalecem sobre a tabela genérica do CLAUDE.md global)
+
+São curtas e específicas do Gestor; carregue a que casar com a tarefa, junto com o owner da matriz:
+
+- MES/OEE/apontamento/timeline/qualidade → `industrial-change`
+- TOTVS/SigmaNEST/OT → `integration-change`
+- Mudança de camada, contrato ou subsistema (R2+) → `architecture-review`
+- Auth, sessão, segredos, entrada externa → `security-review`
+- Biblioteca/API externa → `current-docs` (Context7)
+- Escolher o que testar após qualquer mudança de código → `change-verification`
+- Antes de commit de R2/R3 → `release-gate`
+- Delegação R1+ → `ai-orchestrate`
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
