@@ -251,12 +251,15 @@ class MigrationChain11To19Tests(unittest.TestCase):
 
     def test_migration_16_troca_a_unique_do_roteiro_sem_perder_exclusividade(self):
         # A constraint que a migration remove precisa existir no ponto de partida.
+        # O filtro por schema isola a contagem de schemas de teste antigos.
         self.assertEqual(
             self._scalar(
                 """
                 SELECT COUNT(*) AS total FROM pg_constraint
                 WHERE conname = 'uq_catalogo_operacao_op_recurso'
-                """
+                  AND connamespace = to_regnamespace(%s)
+                """,
+                (self.schema,),
             ),
             1,
         )
@@ -267,7 +270,9 @@ class MigrationChain11To19Tests(unittest.TestCase):
                 """
                 SELECT COUNT(*) AS total FROM pg_constraint
                 WHERE conname = 'uq_catalogo_operacao_op_recurso'
-                """
+                  AND connamespace = to_regnamespace(%s)
+                """,
+                (self.schema,),
             ),
             0,
         )

@@ -109,7 +109,7 @@ def _fault(code: str, message: str, *, status_code: int = 500) -> Response:
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
         f"<soap:Envelope xmlns:soap=\"{SOAP_ENV}\">"
         "<soap:Body><soap:Fault>"
-        "<faultcode>soap:Server</faultcode>"
+        f"<faultcode>{'soap:Client' if status_code < 500 else 'soap:Server'}</faultcode>"
         f"<faultstring>{safe_message}</faultstring>"
         f"<detail><code>{safe_code}</code></detail>"
         "</soap:Fault></soap:Body></soap:Envelope>",
@@ -261,7 +261,8 @@ async def receive_message(request: Request):
         )
     action = str(request.headers.get("SOAPAction") or "").strip().strip('"')
     if action != RECEIVE_ACTION:
-        return _fault("invalid_soap_action", "SOAPAction não suportado.")
+        # Erro do cliente na camada HTTP, antes de ler o envelope (BK-19).
+        return _fault("invalid_soap_action", "SOAPAction não suportado.", status_code=400)
     max_soap_bytes = settings.totvs_max_xml_bytes * 5 + 16_384
     body = await _read_limited_body(request, max_soap_bytes)
     if body is None:

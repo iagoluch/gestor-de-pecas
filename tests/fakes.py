@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import date, datetime, time, timedelta
+import time as epoch_time
 
 from app.core.normalization import limpa_codigo, normalizar_data_db
 from app.core.resource_mapping import resolve_resource_identity, resource_display_name
@@ -38,6 +39,8 @@ class FakeDatabase:
         self.sigmanest_ops = []
         self.pcp_ops = []
         self.catalog_operations = []
+        # Espelho de `login_throttle`: throttle_key -> (falhas, last_seen_epoch).
+        self.login_throttle = {}
         self.operator_events = []
         self.quantity_events = []
         self.participations = []
@@ -213,6 +216,24 @@ class FakeDatabase:
         if not user or user["senha"] != senha:
             return None
         return {key: user[key] for key in ("id", "nome", "nivel", "session_version")}
+
+    def obter_falhas_login(self, throttle_key, *, agora=None, janela_segundos=300):
+        agora = float(epoch_time.time() if agora is None else agora)
+        failures, last_seen = self.login_throttle.get(str(throttle_key), (0, 0.0))
+        if failures and agora - last_seen > float(janela_segundos):
+            self.login_throttle.pop(str(throttle_key), None)
+            return 0
+        return failures
+
+    def registrar_falha_login(self, throttle_key, *, agora=None, janela_segundos=300):
+        agora = float(epoch_time.time() if agora is None else agora)
+        failures, last_seen = self.login_throttle.get(str(throttle_key), (0, 0.0))
+        failures = 1 if agora - last_seen > float(janela_segundos) else failures + 1
+        self.login_throttle[str(throttle_key)] = (failures, agora)
+        return failures
+
+    def limpar_falhas_login(self, throttle_key):
+        return self.login_throttle.pop(str(throttle_key), None) is not None
 
     def usuario_existe(self, nome):
         return any(item["nome"] == nome for item in self.users)

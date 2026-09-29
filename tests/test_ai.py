@@ -9,7 +9,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from backend.ai.groq_provider import GroqProvider
-from backend.ai.rate_limit_state import AIRateLimitState
+from backend.ai.rate_limit_state import AIRateLimitState, AIUserRateLimiter
 from backend.api.config import WebSettings
 from backend.api.main import create_app
 from mes.ai.context_budget import (
@@ -890,6 +890,23 @@ class AIRateLimitStateTests(unittest.TestCase):
         self.assertEqual(state.activate({})["retry_after_seconds"], 17)
 
 
+class AIUserRateLimiterTests(unittest.TestCase):
+    def test_bucket_por_usuario_recusa_rajada_e_repoe_com_o_tempo(self):
+        clock = [datetime(2026, 9, 29, 10, 0, tzinfo=timezone.utc)]
+        limiter = AIUserRateLimiter(capacity=3, window_seconds=60, now=lambda: clock[0])
+        for _ in range(3):
+            self.assertFalse(limiter.acquire(1)["active"])
+        blocked = limiter.acquire(1)
+        self.assertTrue(blocked["active"])
+        self.assertEqual(blocked["retry_after_seconds"], 20)  # 60 s / 3 fichas
+        self.assertEqual(blocked["blocked_until"], "2026-09-29T10:00:20+00:00")
+        # O limite é de cada usuário: o colega não herda a rajada do outro.
+        self.assertFalse(limiter.acquire(2)["active"])
+        clock[0] += timedelta(seconds=20)
+        self.assertFalse(limiter.acquire(1)["active"])
+        self.assertTrue(limiter.acquire(1)["active"])
+
+
 def ai_settings(*, enabled=True, api_key="chave-local-de-teste"):
     return WebSettings(
         environment="test",
@@ -989,6 +1006,35 @@ class AIApiTests(unittest.TestCase):
         serialized = json.dumps(blocked.json())
         self.assertNotIn("SEGREDO_NAO_EXPOR", serialized)
         self.assertNotIn("remaining_tokens", serialized)
+
+    def test_rajada_do_mesmo_usuario_recebe_429_local_sem_chamar_o_provider(self):
+        """BK-20: N+1 mensagens na janela são recusadas antes do provider."""
+
+        self.app.state.ai_user_rate_limit = AIUserRateLimiter(capacity=2, window_seconds=60)
+        self.login()
+        created = self.client.post("/api/v1/ai/conversations", headers=self.csrf(), json={}).json()
+        url = f"/api/v1/ai/conversations/{created['id']}/messages"
+        for _ in range(2):
+            self.assertEqual(
+                self.client.post(url, headers=self.csrf(), json={"content": "Olá"}).status_code, 200
+            )
+        calls_before = len(self.app.state.ai_provider.stream_messages)
+        blocked = self.client.post(url, headers=self.csrf(), json={"content": "De novo"})
+        self.assertEqual(blocked.status_code, 429, blocked.text)
+        self.assertEqual(blocked.json()["code"], "rate_limit")
+        self.assertGreater(blocked.json()["details"]["retry_after_seconds"], 0)
+        self.assertEqual(len(self.app.state.ai_provider.stream_messages), calls_before)
+        # A cota é por usuário: o outro gestor segue consultando.
+        self.login("Outro Gestor", "senha-outro")
+        other = self.client.post("/api/v1/ai/conversations", headers=self.csrf(), json={}).json()
+        self.assertEqual(
+            self.client.post(
+                f"/api/v1/ai/conversations/{other['id']}/messages",
+                headers=self.csrf(),
+                json={"content": "Olá"},
+            ).status_code,
+            200,
+        )
 
     def test_413_publica_consulta_grande_sem_iniciar_cooldown(self):
         self.app.state.ai_provider = FakeProvider(

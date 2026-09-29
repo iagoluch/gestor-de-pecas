@@ -941,5 +941,22 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(next_queue[0]["codigo_recurso"], "CNC-01")
 
 
+class OperatorCardEventFailureTests(unittest.TestCase):
+    def test_falha_ao_ler_eventos_da_parada_fica_no_log(self):
+        """BK-26: o card continua, mas o erro do banco não some em silêncio."""
+
+        db = FakeDatabase()
+
+        def falha(_apontamento_id):
+            raise RuntimeError("banco indisponível")
+
+        db.listar_eventos_apontamento_operador = falha
+        service = OperatorFlowService(db, "OPERADOR TESTE")
+        with self.assertLogs(level="ERROR") as logs:
+            card = service._card({"id": 7, "status": "Parada", "op": "OP1"})
+        self.assertIn("apontamento 7", logs.output[0])
+        self.assertIsNotNone(card)
+
+
 if __name__ == "__main__":
     unittest.main()

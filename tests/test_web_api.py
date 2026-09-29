@@ -1895,37 +1895,42 @@ class LoginThrottleTests(unittest.TestCase):
         from backend.api.routers import auth as auth_router
 
         self.auth_router = auth_router
+        self.db = FakeDatabase()
         self.key = "10.0.0.1:operador teste"
-        self.auth_router._clear_login_failures(self.key)
 
-    def tearDown(self):
-        self.auth_router._clear_login_failures(self.key)
+    def _delay(self, now):
+        return self.auth_router._login_delay_for_failures(
+            self.db.obter_falhas_login(
+                self.key, agora=now, janela_segundos=self.auth_router.LOGIN_DELAY_WINDOW_SECONDS
+            )
+        )
+
+    def _falhar(self, now):
+        self.db.registrar_falha_login(
+            self.key, agora=now, janela_segundos=self.auth_router.LOGIN_DELAY_WINDOW_SECONDS
+        )
 
     def test_sem_falha_recente_nao_ha_atraso(self):
-        self.assertEqual(self.auth_router._login_delay_seconds(self.key, now=1_000.0), 0.0)
+        self.assertEqual(self._delay(1_000.0), 0.0)
 
     def test_atraso_cresce_e_satura_no_teto(self):
         router = self.auth_router
-        now = 1_000.0
-        router._register_login_failure(self.key, now=now)
-        self.assertEqual(router._login_delay_seconds(self.key, now=now), router.LOGIN_DELAY_BASE_SECONDS)
+        self._falhar(1_000.0)
+        self.assertEqual(self._delay(1_000.0), router.LOGIN_DELAY_BASE_SECONDS)
         for _ in range(8):
-            router._register_login_failure(self.key, now=now)
-        self.assertEqual(router._login_delay_seconds(self.key, now=now), router.LOGIN_DELAY_MAX_SECONDS)
+            self._falhar(1_000.0)
+        self.assertEqual(self._delay(1_000.0), router.LOGIN_DELAY_MAX_SECONDS)
 
     def test_sucesso_zera_o_atraso(self):
-        router = self.auth_router
-        now = 1_000.0
-        router._register_login_failure(self.key, now=now)
-        self.assertGreater(router._login_delay_seconds(self.key, now=now), 0.0)
-        router._clear_login_failures(self.key)
-        self.assertEqual(router._login_delay_seconds(self.key, now=now), 0.0)
+        self._falhar(1_000.0)
+        self.assertGreater(self._delay(1_000.0), 0.0)
+        self.db.limpar_falhas_login(self.key)
+        self.assertEqual(self._delay(1_000.0), 0.0)
 
     def test_janela_vencida_reseta_o_contador(self):
-        router = self.auth_router
-        router._register_login_failure(self.key, now=1_000.0)
-        depois = 1_000.0 + router.LOGIN_DELAY_WINDOW_SECONDS + 1
-        self.assertEqual(router._login_delay_seconds(self.key, now=depois), 0.0)
+        self._falhar(1_000.0)
+        depois = 1_000.0 + self.auth_router.LOGIN_DELAY_WINDOW_SECONDS + 1
+        self.assertEqual(self._delay(depois), 0.0)
 
 
 class _BancoIntermitente(ApiFakeDatabase):

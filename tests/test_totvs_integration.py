@@ -871,7 +871,11 @@ class TotvsSoapContractTests(unittest.TestCase):
                 ),
                 headers={"SOAPAction": SOAP_ACTION},
             )
-        self.assertEqual(wrong_action.status_code, 500)
+        # SOAPAction errada é erro do cliente (BK-19); fault de envelope segue
+        # 500, como manda o SOAP 1.1 para falha no processamento da mensagem.
+        self.assertEqual(wrong_action.status_code, 400)
+        self.assertIn("<faultcode>soap:Client</faultcode>", wrong_action.text)
+        self.assertIn("invalid_soap_action", wrong_action.text)
         self.assertEqual(wrong_operation.status_code, 500)
         self.assertEqual(missing.status_code, 500)
         self.assertFalse(service.payloads)

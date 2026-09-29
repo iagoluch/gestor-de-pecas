@@ -132,7 +132,10 @@ async def message(
             "IA não configurada. Defina a chave da Groq no servidor.",
             status_code=503,
         )
+    # O cooldown global vem antes: esperar o provider não gasta a cota do usuário.
     cooldown = _cooldown(request).snapshot()
+    if not cooldown["active"]:
+        cooldown = request.app.state.ai_user_rate_limit.acquire(user.id)
     if cooldown["active"]:
         raise AppError(
             "rate_limit",

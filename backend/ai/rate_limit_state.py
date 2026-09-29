@@ -81,3 +81,43 @@ class AIRateLimitState:
             "retry_after_seconds": remaining,
             "blocked_until": self._blocked_until.isoformat(),
         }
+
+
+class AIUserRateLimiter:
+    """Token bucket por usuário: um gestor não esgota a cota do provider para todos (BK-20).
+
+    Cada usuário tem ``capacity`` mensagens de rajada, repostas continuamente
+    ao longo de ``window_seconds``. Devolve o mesmo formato de
+    ``AIRateLimitState.snapshot`` para a UI reaproveitar o contador.
+    """
+
+    # ponytail: estado por processo, como o cooldown acima; com vários workers
+    # o limite efetivo multiplica — mover para o banco se isso importar.
+    def __init__(
+        self,
+        *,
+        capacity: int = 6,
+        window_seconds: float = 60.0,
+        now: Callable[[], datetime] | None = None,
+    ):
+        self._capacity = float(capacity)
+        self._refill_per_second = float(capacity) / float(window_seconds)
+        self._now = now or (lambda: datetime.now().astimezone())
+        self._buckets: dict[int, tuple[float, datetime]] = {}
+        self._lock = Lock()
+
+    def acquire(self, user_id: int) -> dict[str, Any]:
+        now = self._now()
+        with self._lock:
+            tokens, last = self._buckets.get(user_id, (self._capacity, now))
+            tokens = min(self._capacity, tokens + (now - last).total_seconds() * self._refill_per_second)
+            if tokens >= 1.0:
+                self._buckets[user_id] = (tokens - 1.0, now)
+                return {"active": False, "retry_after_seconds": 0, "blocked_until": None}
+            self._buckets[user_id] = (tokens, now)
+        wait = (1.0 - tokens) / self._refill_per_second
+        return {
+            "active": True,
+            "retry_after_seconds": max(1, math.ceil(wait)),
+            "blocked_until": (now + timedelta(seconds=wait)).isoformat(),
+        }

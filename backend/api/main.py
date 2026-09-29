@@ -23,7 +23,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from backend.api.config import WebSettings
 from backend.api.clock import ApplicationClock
 from backend.ai import GroqProvider
-from backend.ai.rate_limit_state import AIRateLimitState
+from backend.ai.rate_limit_state import AIRateLimitState, AIUserRateLimiter
 from backend.api.database import DatabaseManager
 from app.database.leadership import (
     REPORT_SCHEDULER_LEADER_LOCK_ID,
@@ -666,6 +666,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         timeout_seconds=resolved_settings.ai_timeout_seconds,
     )
     application.state.ai_rate_limit = AIRateLimitState()
+    application.state.ai_user_rate_limit = AIUserRateLimiter()
     application.state.totvs_service_factory = (
         lambda database: build_totvs_ingestion_service(database, resolved_settings)
     )

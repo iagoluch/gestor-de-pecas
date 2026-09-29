@@ -1,6 +1,4 @@
 from functools import partial
-import threading
-import time
 
 import anyio
 import anyio.to_thread
@@ -33,16 +31,6 @@ router = APIRouter(prefix="/auth", tags=["Autenticação"])
 LOGIN_DELAY_BASE_SECONDS = 0.5
 LOGIN_DELAY_MAX_SECONDS = 8.0
 LOGIN_DELAY_WINDOW_SECONDS = 300
-_login_failures: dict[str, tuple[int, float]] = {}
-_login_failures_lock = threading.Lock()
-
-
-def _login_delay_seconds(key: str, *, now: float) -> float:
-    with _login_failures_lock:
-        failures, last_seen = _login_failures.get(key, (0, 0.0))
-        if failures == 0 or now - last_seen > LOGIN_DELAY_WINDOW_SECONDS:
-            return 0.0
-        return min(LOGIN_DELAY_MAX_SECONDS, LOGIN_DELAY_BASE_SECONDS * (2 ** (failures - 1)))
 
 
 def _login_delay_for_failures(failures: int) -> float:
@@ -50,21 +38,6 @@ def _login_delay_for_failures(failures: int) -> float:
     if failures <= 0:
         return 0.0
     return min(LOGIN_DELAY_MAX_SECONDS, LOGIN_DELAY_BASE_SECONDS * (2 ** (failures - 1)))
-
-
-def _register_login_failure(key: str, *, now: float) -> None:
-    with _login_failures_lock:
-        for vencida in [
-            k for k, (_f, seen) in _login_failures.items() if now - seen > LOGIN_DELAY_WINDOW_SECONDS
-        ]:
-            _login_failures.pop(vencida, None)
-        failures, _seen = _login_failures.get(key, (0, 0.0))
-        _login_failures[key] = (failures + 1, now)
-
-
-def _clear_login_failures(key: str) -> None:
-    with _login_failures_lock:
-        _login_failures.pop(key, None)
 
 
 def _cookie_options(request: Request):
@@ -80,19 +53,17 @@ def _cookie_options(request: Request):
 @router.post("/login", response_model=SessionUser)
 async def login(payload: LoginRequest, request: Request, database=Depends(get_database)):
     throttle_key = login_throttle_key(request, payload.username)
-    persistent_lookup = getattr(database, "obter_falhas_login", None)
-    if callable(persistent_lookup):
-        failures = await anyio.to_thread.run_sync(
-            partial(
-                persistent_lookup,
-                throttle_key,
-                janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
-            ),
-            limiter=request.app.state.auth_thread_limiter,
-        )
-        delay = _login_delay_for_failures(failures)
-    else:
-        delay = _login_delay_seconds(throttle_key, now=time.monotonic())
+    # O contador vive no PostgreSQL (`login_throttle`): compartilhado entre
+    # workers e reinícios, sem um segundo caminho em memória (BK-22).
+    failures = await anyio.to_thread.run_sync(
+        partial(
+            database.obter_falhas_login,
+            throttle_key,
+            janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
+        ),
+        limiter=request.app.state.auth_thread_limiter,
+    )
+    delay = _login_delay_for_failures(failures)
     if delay:
         await anyio.sleep(delay)
     # O hash da senha (PBKDF2, 600 mil iterações) é caro de propósito — é o
@@ -106,31 +77,23 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         limiter=request.app.state.auth_thread_limiter,
     )
     if not user:
-        persistent_register = getattr(database, "registrar_falha_login", None)
-        if callable(persistent_register):
-            await anyio.to_thread.run_sync(
-                partial(
-                    persistent_register,
-                    throttle_key,
-                    janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
-                ),
-                limiter=request.app.state.auth_thread_limiter,
-            )
-        else:
-            _register_login_failure(throttle_key, now=time.monotonic())
+        await anyio.to_thread.run_sync(
+            partial(
+                database.registrar_falha_login,
+                throttle_key,
+                janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
+            ),
+            limiter=request.app.state.auth_thread_limiter,
+        )
         raise AppError(
             "invalid_credentials",
             "Usuário ou senha inválidos.",
             status_code=401,
         )
-    persistent_clear = getattr(database, "limpar_falhas_login", None)
-    if callable(persistent_clear):
-        await anyio.to_thread.run_sync(
-            partial(persistent_clear, throttle_key),
-            limiter=request.app.state.auth_thread_limiter,
-        )
-    else:
-        _clear_login_failures(throttle_key)
+    await anyio.to_thread.run_sync(
+        partial(database.limpar_falhas_login, throttle_key),
+        limiter=request.app.state.auth_thread_limiter,
+    )
     role = normalize_user_level(user.get("nivel"))
     if role is None:
         raise AppError(

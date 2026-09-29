@@ -1782,6 +1782,8 @@ class OperatorFlowService:
                 try:
                     events = list(event_loader(row.get("id")) or [])
                 except Exception:
+                    # BK-26: o card segue sem "parada desde", mas a falha fica no log.
+                    logging.exception("Falha ao ler eventos do apontamento %s.", row.get("id"))
                     events = []
                 last_stop = next(
                     (event for event in reversed(events) if str(event.get("estado") or "").casefold() == "parada"),

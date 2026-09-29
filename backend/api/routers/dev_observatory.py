@@ -23,8 +23,6 @@ from pathlib import Path
 import html
 import hmac
 import secrets
-import threading
-import time
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
@@ -212,43 +210,6 @@ def _require_dev_observatory_csrf(request: Request) -> None:
 # senha fica exposta a tentativa ilimitada por quem alcançar a URL.
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCKOUT_SECONDS = 300
-_login_failures: dict[str, tuple[int, float]] = {}
-_login_failures_lock = threading.Lock()
-
-
-def _login_client_key(request: Request) -> str:
-    client = request.client
-    return str(getattr(client, "host", "") or "desconhecido")
-
-
-def _login_lockout_remaining(key: str, *, now: float) -> int:
-    """Segundos restantes de bloqueio, ou 0 quando a tentativa é permitida."""
-
-    with _login_failures_lock:
-        failures, until = _login_failures.get(key, (0, 0.0))
-        if failures < LOGIN_MAX_FAILURES:
-            return 0
-        if now >= until:
-            # Janela vencida: o contador recomeça do zero.
-            _login_failures.pop(key, None)
-            return 0
-        return max(1, int(until - now))
-
-
-def _register_login_failure(key: str, *, now: float) -> None:
-    with _login_failures_lock:
-        # Descarta as janelas já vencidas antes de contar: sem isto a tabela
-        # cresceria sem limite e falhas separadas por horas somariam como se
-        # fossem seguidas.
-        for vencida in [k for k, (_f, until) in _login_failures.items() if now >= until]:
-            _login_failures.pop(vencida, None)
-        failures, _until = _login_failures.get(key, (0, 0.0))
-        _login_failures[key] = (failures + 1, now + LOGIN_LOCKOUT_SECONDS)
-
-
-def _clear_login_failures(key: str) -> None:
-    with _login_failures_lock:
-        _login_failures.pop(key, None)
 
 
 def _credential_matches(sent: str, configured: str) -> bool:
@@ -270,31 +231,16 @@ def dev_observatory_login(
     database=Depends(get_database),
 ):
     settings = request.app.state.settings
-    now = time.monotonic()
-    client_key = _login_client_key(request)
-    persistent_key = login_throttle_key(request, payload.username)
-    persistent_lookup = getattr(database, "obter_falhas_login", None)
-    if callable(persistent_lookup):
-        if int(
-            persistent_lookup(
-                persistent_key,
-                janela_segundos=LOGIN_LOCKOUT_SECONDS,
-            )
-            or 0
-        ) >= LOGIN_MAX_FAILURES:
-            raise AppError(
-                "dev_observatory_login_blocked",
-                "Muitas tentativas seguidas. Aguarde alguns minutos para tentar de novo.",
-                status_code=429,
-            )
-    else:
-        remaining = _login_lockout_remaining(client_key, now=now)
-        if remaining:
-            raise AppError(
-                "dev_observatory_login_blocked",
-                f"Muitas tentativas seguidas. Aguarde {remaining}s para tentar de novo.",
-                status_code=429,
-            )
+    throttle_key = login_throttle_key(request, payload.username)
+    # Contador persistente em `login_throttle`, sem caminho em memória (BK-22).
+    if int(
+        database.obter_falhas_login(throttle_key, janela_segundos=LOGIN_LOCKOUT_SECONDS) or 0
+    ) >= LOGIN_MAX_FAILURES:
+        raise AppError(
+            "dev_observatory_login_blocked",
+            "Muitas tentativas seguidas. Aguarde alguns minutos para tentar de novo.",
+            status_code=429,
+        )
     configured_username = settings.dev_observatory_login_username
     configured_password = settings.dev_observatory_login_password
     # As duas comparações são feitas sempre: avaliar a senha só quando o usuário
@@ -303,24 +249,13 @@ def dev_observatory_login(
     password_ok = _credential_matches(payload.password, configured_password)
     valid = bool(configured_username) and bool(configured_password) and username_ok and password_ok
     if not valid:
-        persistent_register = getattr(database, "registrar_falha_login", None)
-        if callable(persistent_register):
-            persistent_register(
-                persistent_key,
-                janela_segundos=LOGIN_LOCKOUT_SECONDS,
-            )
-        else:
-            _register_login_failure(client_key, now=now)
+        database.registrar_falha_login(throttle_key, janela_segundos=LOGIN_LOCKOUT_SECONDS)
         raise AppError(
             "dev_observatory_invalid_credentials",
             "Usuário ou senha inválidos.",
             status_code=401,
         )
-    persistent_clear = getattr(database, "limpar_falhas_login", None)
-    if callable(persistent_clear):
-        persistent_clear(persistent_key)
-    else:
-        _clear_login_failures(client_key)
+    database.limpar_falhas_login(throttle_key)
     token, claims = request.app.state.dev_observatory_session_signer.issue(
         user_id=0, username=payload.username, role="dev_observatory",
     )

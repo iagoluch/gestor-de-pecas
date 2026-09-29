@@ -152,10 +152,6 @@ class ReadOnlyConfigTests(unittest.TestCase):
 
 class DevObservatoryApiTests(unittest.TestCase):
     def setUp(self):
-        # O freio de tentativa de senha vive no módulo do roteador e sobrevive
-        # entre testes: sem zerar, as recusas somadas de um teste travariam o
-        # login do próximo.
-        dev_observatory_router._login_failures.clear()
         self._temp = tempfile.TemporaryDirectory()
         self.report_dir = Path(self._temp.name)
         self.db = ApiFakeDatabase()
@@ -280,7 +276,7 @@ class DevObservatoryApiTests(unittest.TestCase):
 
         # Senha fora do ASCII recusa com 401 — antes derrubava o endpoint com
         # 500, porque `secrets.compare_digest` não compara `str` acentuada.
-        dev_observatory_router._login_failures.clear()
+        self.db.login_throttle.clear()
         acentuada = self.client.post(
             "/api/v1/dev-observatory/login",
             json={"username": "devobs", "password": "senhá-com-acento"},
@@ -289,7 +285,7 @@ class DevObservatoryApiTests(unittest.TestCase):
 
         # E o sucesso zera o contador acumulado.
         self._login_dev_observatory()
-        self.assertEqual(dev_observatory_router._login_failures, {})
+        self.assertEqual(self.db.login_throttle, {})
 
     def test_pagina_mostra_login_proprio_para_quem_nao_entrou(self):
         anonimo = self.client.get("/dev-observatory")

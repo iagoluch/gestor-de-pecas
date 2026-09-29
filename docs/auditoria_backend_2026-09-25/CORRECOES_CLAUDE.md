@@ -548,3 +548,107 @@ Commit `perf: optimize MES data access paths`. Tudo foi medido num schema isolad
 | REAL acessado | ❌ Não |
 
 - **Nota operacional:** a migration 52 usa `CREATE INDEX` sem `CONCURRENTLY` (o runner roda em transação). No REAL ela roda no startup do deploy, com o serviço ainda sem tráfego (`deploy_release.ps1` espera o `/ready`). O volume do REAL não foi medido, porque consultá-lo é proibido. O seed, com cerca de um ano de histórico de 80 recursos, serve de teto de referência. Se o REAL for maior, o tempo do deploy cresce na mesma proporção.
+
+---
+
+## ONDA 6 — Manutenção
+
+Commit `refactor: close backend audit maintenance findings`. Tudo foi validado só no TEST (`gestor_pecas_test`, schemas isolados). O REAL não foi acessado.
+
+### BK-23 · Teste da cadeia 11→19 contava constraints de outros schemas — **CORRIGIDO E PROVADO (teste); limpeza dos órfãos PENDENTE DE APROVAÇÃO**
+
+- **Antes:**
+  - `tests/test_migration_chain_11_19.py` contava `pg_constraint` pelo nome, sem filtrar o schema.
+  - Com 12 schemas de teste antigos esquecidos no TEST, o teste falhava com `AssertionError: 2 != 1`, e não era por regressão.
+- **Alteração:** as duas contagens ganharam `AND connamespace = to_regnamespace(%s)` com o schema do próprio teste. As consultas das linhas ~369/386 já filtravam por `n.nspname`.
+- **Evidência:** com os 12 órfãos ainda presentes, 9/9 passam. Sem o filtro, o mesmo teste falha com `2 != 1`.
+- **Órfãos NÃO apagados** (o pedido exige aprovação). Estão no `gestor_pecas_test`, com prefixo mais hash:
+  - `cadeia11a19_096c9cc3…` e `cadeia11a19_2100100b…`;
+  - `gestor_etapa7c_` ×4;
+  - `gestor_ondemand_test_` ×1;
+  - `gestor_outbox_test_` ×2;
+  - `gestor_test_` ×3.
+- **Pendência para o usuário:** aprovar o `DROP SCHEMA … CASCADE` desses 12, que ficam só no TEST.
+
+### BK-22 · Throttle de login em memória por processo — **CORRIGIDO E PROVADO**
+
+- **Antes:**
+  - `auth.py` e `dev_observatory.py` mantinham `_login_failures` em um dict local mais lock. O contador persistente em `login_throttle` (`obter/registrar/limpar_falhas_login`) só era usado como complemento.
+  - Com vários workers, cada processo tinha o próprio contador. Os fakes não tinham os métodos persistentes, então os testes de API exercitavam só o dict.
+- **Alteração:**
+  - Os dicts, os locks e os helpers em memória foram removidos dos dois routers.
+  - O login principal e o do Dev Observatory leem, registram e limpam as falhas **só** no banco, via `anyio.to_thread.run_sync(..., limiter=auth_thread_limiter)`.
+  - O Dev Observatory passou a usar a chave `login_throttle_key(request, username)`, com 429 `dev_observatory_login_blocked` depois de `LOGIN_MAX_FAILURES`.
+  - `tests/fakes.py` ganhou os 3 métodos com a mesma semântica de janela, reset e pop.
+- **Testes:**
+  - `tests/test_login_throttle_postgres.py` (novo, `Database` real):
+    - 2 senhas erradas → a tabela registra `[2]`; um sucesso → a tabela fica vazia;
+    - 5 × 401 no Dev Observatory → o contador vai a `[5]`; senha certa → 429.
+  - `LoginThrottleTests` foi reescrito sobre o fake, com os mesmos 4 cenários.
+  - Módulos afetados (web_api, dev_observatory, user_management, database_professionalization, login_throttle_postgres): **138 passed, 77 subtests**.
+  - **Contraprova:** sem os métodos no fake → o lockout do Dev Observatory falha. Não existe mais fallback silencioso para memória.
+
+### BK-19 · SOAPAction inválida respondia 500 — **CORRIGIDO E PROVADO**
+
+- **Antes:** o receptor SOAP devolvia HTTP 500 com `soap:Server` para SOAPAction desconhecida, que é erro do cliente.
+- **Alteração:**
+  - Em `backend/integrations/totvs_soap.py`, `_fault` escolhe `soap:Client` para status < 500 e `soap:Server` nos demais casos.
+  - A SOAPAction inválida → **400** `invalid_soap_action`.
+  - Envelope inválido, payload grande e falha de processamento **continuam 500**: SOAP 1.1 §6.2 manda responder 500 a fault de processamento, e o EAI do Protheus espera esse contrato.
+  - A guarda de host público e origem (403/503) ficou intacta.
+- **Teste:** `test_receptor_desabilitado_action_operacao_e_payload_invalidos_falham` espera 400 + `soap:Client` + `invalid_soap_action`.
+  - `test_totvs_integration` + `test_totvs_outbound`: **74 passed**.
+  - **Contraprova:** sem a correção → `AssertionError: 500 != 400`.
+
+### BK-20 · Um gestor esgotava a cota do provider de IA para todos — **CORRIGIDO E PROVADO**
+
+- **Antes:** só existia o cooldown global (`AIRateLimitState`), acionado depois de um 429 do provider. Uma rajada de um único usuário consumia a cota de todos.
+- **Alteração:**
+  - `AIUserRateLimiter` em `backend/ai/rate_limit_state.py`: token bucket por `user.id`, com 6 mensagens por 60 s e reposição contínua.
+  - Ligado em `create_app` (`app.state.ai_user_rate_limit`).
+  - Em `POST /ai/conversations/{id}/messages`, o limite por usuário é consultado depois do cooldown global. Quando bloqueia, devolve o **mesmo** contrato 429 `rate_limit` com `retryable`, `retry_after_seconds` e `blocked_until`. O `AIPage.tsx` já trata esse contrato, então não houve mudança no frontend.
+  - `ponytail`: o estado é por processo, como o cooldown global. Com vários workers o limite efetivo se multiplica; se isso importar, a próxima etapa é mover o bucket para o banco.
+- **Testes (`tests/test_ai.py`):**
+  - `AIUserRateLimiterTests`:
+    - com capacidade 3, a 4ª chamada bloqueia com `retry_after_seconds = 20` e `blocked_until` exato;
+    - outro usuário segue livre;
+    - depois de 20 s, 1 ficha volta.
+  - `test_rajada_do_mesmo_usuario_recebe_429_local_sem_chamar_o_provider`:
+    - com capacidade 2, a 3ª mensagem → 429 `rate_limit`, e o provider **não** é chamado;
+    - outro gestor → 200.
+  - Suíte do módulo: **43 passed, 21 subtests**.
+  - **Contraprova:** sem a checagem no router → `AssertionError: 200 != 429`.
+
+### BK-26 · `except Exception` que engolem erro sem log — **CORRIGIDO E PROVADO (1); demais NÃO APLICÁVEIS COM EVIDÊNCIA**
+
+- **Varredura AST** em `backend/`, `mes/` e `app/`: handlers de `Exception`/`BaseException` sem `raise`, log, `print` ou registro. Foram 13 blocos:
+
+| Local | Veredito |
+|---|---|
+| `mes/services/operator_flow.py:1784` (eventos da parada no card do operador) | **Corrigido.** Uma falha do banco sumia em silêncio e só apagava o "parada desde". Agora faz `logging.exception` com o id do apontamento, e o card continua sendo montado |
+| `backend/observability/readonly_db.py:165,277`, `dev_observatory.py:312,515,666`, `database.py:6702,6727`, `totvs_outbox_worker.py:169` | Não engolem: o erro volta na resposta, na lista de erros da importação ou na tentativa de entrega do outbox |
+| `backend/observability/metrics.py:131,192` | Dev Observatory: `-1` ou `None` são sentinelas visíveis na tela de diagnóstico |
+| `mes/integrations/totvs/on_demand_gateway.py:139`, `product_model_gateway.py:114` | Parse de resposta HTTP: o chamador converte o "sem JSON" em `resposta_sem_json` ou `unavailable_reason` |
+| `app/database/connection.py:55,76` (citados no relatório) | Já não existem: desde o BK-11 (ONDA 4), `_configure_session` falha fechado |
+
+- **Teste:** `OperatorCardEventFailureTests.test_falha_ao_ler_eventos_da_parada_fica_no_log`, com `assertLogs(ERROR)` e card não nulo. `tests/test_operator_flow.py`: **34 passed**.
+  - **Contraprova:** sem o log → `no logs of level ERROR or higher triggered`.
+
+### BK-24 / BK-25 · God-functions e vazamento de camadas — **REGISTRADOS (fora do código tocado)**
+
+- O relatório condiciona a refatoração a "quando a área for tocada".
+- Nesta onda não se alterou `operator_flow.executar`, `management.get_overview`, `transicionar_apontamento_operador`, `config.from_env`, `consulta_operacional` nem `build_snapshot`. A única mudança em `operator_flow.py` foi a linha de log do `_card`.
+- O import de `app.database.schema` em `frontend_facade`, e a docstring morta e a mensagem invertida em `Database`, também não foram tocados.
+- Quebrar funções de 400 a 600 linhas sem mudança funcional associada seria refatoração especulativa, com risco de regressão em regra MES. Fica como backlog.
+
+### GATE W6
+
+| Item | Resultado |
+|---|---|
+| Suíte completa (sem `test_e2e_smoke`) | ✅ 1364 passed, 1 skipped, 2121 subtests (9 min 16 s) |
+| `test_e2e_smoke` | ⏭️ exige o preview em `127.0.0.1:8010` no ar (docstring do teste). Sem ele: `ERR_CONNECTION_REFUSED`, o que é ambiente e não regressão. Roda no GATE FINAL com o preview de pé |
+| `git diff --check` | ✅ |
+| pyflakes nos arquivos alterados | ✅ limpo |
+| bandit `-r backend mes app -ll` | ✅ 0 Medium, 0 High |
+| pip-audit `-r requirements.lock` | ✅ No known vulnerabilities found |
+| REAL acessado | ❌ Não |
