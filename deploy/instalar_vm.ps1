@@ -88,9 +88,14 @@ Restringir $AppDir
 # --- Banco --------------------------------------------------------------------
 Passo "Banco $Database"
 $envPath = "$AppDir\.env"
-$senhaPostgres = Read-Host "Senha do superusuário postgres (definida na instalação do PostgreSQL)" -AsSecureString
-$env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($senhaPostgres))
+$senhaArq = "$Pacote\postgres-senha.txt"  # gerado pelo instalar_prerequisitos.ps1
+if (Test-Path $senhaArq) {
+    $env:PGPASSWORD = (Get-Content $senhaArq -TotalCount 1).Trim()
+} else {
+    $senhaPostgres = Read-Host "Senha do superusuário postgres (definida na instalação do PostgreSQL)" -AsSecureString
+    $env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($senhaPostgres))
+}
 try {
     $existe = & psql -h 127.0.0.1 -U postgres -d postgres -tAc "select 1 from pg_database where datname = '$Database'"
     Exigir ($LASTEXITCODE -eq 0) "Não conectou no PostgreSQL como postgres."

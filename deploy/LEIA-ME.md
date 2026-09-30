@@ -21,6 +21,19 @@ O script gera `dev_reports/deploy_vm/gestor-pecas-deploy.zip` com:
 **O zip carrega segredos e dados de produção.** Copie-o só por meio
 controlado (pasta compartilhada da VM ou pendrive) e nunca o versione.
 
+Ensaio em VirtualBox no próprio notebook: a pasta compartilhada só aparece
+depois de reiniciar a VM com os Adicionais instalados, e o NAT do VirtualBox 7
+não alcança o `localhost` do notebook (`10.0.2.2` não responde). O caminho que
+funciona sem reiniciar é servir a pasta pela interface host-only, que só existe
+dentro do notebook:
+
+```bash
+python -m http.server 8765 --bind 192.168.56.1 --directory dev_reports/deploy_vm
+```
+
+Na VM: `curl.exe -fLo C:\instalacao\pacote.zip http://192.168.56.1:8765/gestor-pecas-deploy.zip`.
+Pare o servidor logo depois do download.
+
 ## 2. Antes de instalar: o que é compartilhado com o notebook
 
 O `.env` vem do notebook, então a VM usa os **mesmos** Telegram, TOTVS e SigmaNEST:
@@ -38,7 +51,17 @@ O `.env` vem do notebook, então a VM usa os **mesmos** Telegram, TOTVS e SigmaN
    - Recomendado: 8 vCPU, 16 GB, 200 GB.
    - Rede: uma que alcance a internet (Protheus cloud) e a rede da fábrica (SigmaNEST `192.168.0.218`).
 2. Ajuste o fuso para Brasília: `Set-TimeZone -Id 'E. South America Standard Time'`. O instalador para se o fuso estiver errado.
-3. Instale os pré-requisitos:
+   - Confira também a **hora**: apontamento e OEE dependem dela. No ensaio, o relógio da VM atrasou ~8 min durante a instalação do PostgreSQL e só voltou quando o `VBoxService` ressincronizou. Em VM, deixe a sincronização do hipervisor ou o `w32time` ativos (`w32tm /query /status`) e compare com um relógio confiável antes de liberar para a fábrica.
+3. Instale os pré-requisitos. Caminho automático, depois de extrair o zip (seção 4), num PowerShell como Administrador:
+
+   ```powershell
+   Set-ExecutionPolicy -Scope Process Bypass
+   C:\instalacao\gestor-pecas-deploy\app\deploy\instalar_prerequisitos.ps1
+   ```
+
+   O script baixa e instala tudo da tabela abaixo sem perguntas e aceita as licenças do ODBC da Microsoft e do instalador EDB. Ele gera a senha do `postgres` em `C:\instalacao\gestor-pecas-deploy\postgres-senha.txt` (só Administradores), que o `instalar_vm.ps1` usa sem perguntar. O PostgreSQL leva uns 20 min numa VM de 2 vCPU/3 GB. Abra um PowerShell novo depois, para pegar o PATH atualizado.
+
+   Caminho manual, componente por componente:
 
 | Componente | Onde | Observação |
 | --- | --- | --- |
@@ -58,7 +81,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 C:\instalacao\gestor-pecas-deploy\app\deploy\instalar_vm.ps1
 ```
 
-A única pergunta é a senha do `postgres`. O script executa, nesta ordem:
+A única pergunta é a senha do `postgres`, e ela é pulada quando o `instalar_prerequisitos.ps1` gerou o `postgres-senha.txt`. O script executa, nesta ordem:
 
 1. confere os pré-requisitos;
 2. copia o código para `C:\gestor-pecas` e restringe a pasta a Administradores e SYSTEM;
@@ -76,7 +99,7 @@ Pode rodar de novo sem risco:
 - se o restore falhar, o banco incompleto é apagado;
 - para restaurar um dump mais novo, rode `DROP DATABASE gestor_pecas` como `postgres` e execute de novo. A senha do `.env` é reaproveitada.
 
-Depois do sucesso, **apague `C:\instalacao`**: o dump do REAL e a chave do certificado ficam lá sem restrição de acesso.
+Depois do sucesso, **apague `C:\instalacao`**: o dump do REAL e a chave do certificado ficam lá sem restrição de acesso. Antes, guarde num cofre a senha do `postgres` (`postgres-senha.txt`, se veio do script): ela é necessária para `DROP DATABASE` e manutenção.
 
 ## 5. Acessar
 
@@ -84,6 +107,7 @@ Depois do sucesso, **apague `C:\instalacao`**: o dump do REAL e a chave do certi
 - De outra máquina: adicione `<IP da VM>  gestor-peca` em `C:\Windows\System32\drivers\etc\hosts` e abra <https://gestor-peca>.
 - O certificado é autoassinado, então o navegador vai avisar. Para parar o aviso, importe `certs\gestor-pecas.crt` em *Autoridades de Certificação Raiz Confiáveis* da máquina cliente.
 - Pelo IP também abre, mas sempre com aviso de certificado (o IP da VM não está no certificado). Isso só vale se o IP for o mesmo da instalação: ele entra na lista de hosts aceitos. Se o DHCP trocar o IP, ajuste `GESTOR_WEB_ALLOWED_HOSTS`/`ORIGINS` no `.env` e rode `Restart-Service gestor-pecas`.
+- Ensaio em VirtualBox com rede NAT: crie os redirecionamentos de porta 443→443 e 80→80 (Configurações → Rede → Avançado → Redirecionamento de Portas, IP do hospedeiro `127.0.0.1`) e abra <https://localhost> no notebook. O `.env` já aceita `localhost` e o IP de NAT da VM (`10.0.2.15`), que entra na lista de hosts por ser o IP dela na instalação.
 - Os logins são os mesmos do REAL, porque o banco é o REAL restaurado.
 
 Diagnóstico:
