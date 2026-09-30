@@ -21,7 +21,12 @@ from app.core.resource_mapping import (
 )
 from app.database.config import load_postgres_config
 from app.database.database import Database
-from app.database.migrations import RESOURCE_STATE_FORBIDDEN_IDENTITIES
+from app.database.migrations import (
+    MIGRATIONS,
+    RESOURCE_STATE_CANONICAL_CODE_STATEMENTS,
+    RESOURCE_STATE_FORBIDDEN_IDENTITIES,
+    RESOURCE_STATE_LEGACY_TO_CANONICAL,
+)
 
 
 class ForbiddenIdentitiesInSyncTests(unittest.TestCase):
@@ -30,6 +35,11 @@ class ForbiddenIdentitiesInSyncTests(unittest.TestCase):
         names = set(RESOURCE_DISPLAY_NAMES.values()) | set(OFFICIAL_RESOURCE_ALIASES)
         expected = {name.lower() for name in names if resolve_resource_identity(name) != name}
         self.assertEqual(set(RESOURCE_STATE_FORBIDDEN_IDENTITIES), expected)
+
+    def test_migration_53_converte_cada_nome_travado_no_codigo_atual(self):
+        self.assertEqual(set(RESOURCE_STATE_LEGACY_TO_CANONICAL), set(RESOURCE_STATE_FORBIDDEN_IDENTITIES))
+        for legacy, code in RESOURCE_STATE_LEGACY_TO_CANONICAL.items():
+            self.assertEqual(resolve_resource_identity(legacy), code, legacy)
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
@@ -82,3 +92,38 @@ class ResourceStateCanonicalConstraintTests(unittest.TestCase):
             self.db._transicionar_estado_recurso_tx(cursor, "Laser Ensis 3015", "parada")
             cursor.execute("SELECT recurso FROM eventos_estado_recurso")
             self.assertEqual([row["recurso"] for row in cursor.fetchall()], ["LASER1"])
+
+    def test_migration_53_converte_historico_legado_e_valida_a_trava(self):
+        # Reproduz o REAL de 30/09: 1303 e Laser Ensis 3015 abertos desde agosto,
+        # e o código canônico já com estado aberto (cópia na VM).
+        agosto, hoje = datetime(2026, 8, 18, 17, 30), datetime(2026, 9, 30, 8, 0)
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("ALTER TABLE eventos_estado_recurso DROP CONSTRAINT ck_eventos_estado_recurso_codigo_canonico")
+            cursor.executemany(
+                "INSERT INTO eventos_estado_recurso (recurso, categoria, origem, data_inicio, data_fim)"
+                " VALUES (%s, %s, 'teste', %s, %s)",
+                [
+                    ("1303", "fora_turno", agosto, None),
+                    ("Laser Ensis 3015", "producao", agosto, agosto + timedelta(seconds=5)),
+                    ("Laser Ensis 3015", "producao", agosto + timedelta(days=2), None),
+                    ("LASER1", "fila", hoje, None),
+                ],
+            )
+            for statement in RESOURCE_STATE_CANONICAL_CODE_STATEMENTS + MIGRATIONS[53][1]:
+                cursor.execute(statement)
+            cursor.execute(
+                "SELECT recurso, data_inicio, data_fim FROM eventos_estado_recurso ORDER BY recurso, data_inicio"
+            )
+            rows = [(r["recurso"], r["data_inicio"], r["data_fim"]) for r in cursor.fetchall()]
+            cursor.execute(
+                "SELECT convalidated FROM pg_constraint WHERE conname = 'ck_eventos_estado_recurso_codigo_canonico'"
+                " AND conrelid = 'eventos_estado_recurso'::regclass"
+            )
+            validated = cursor.fetchone()["convalidated"]
+        self.assertEqual(rows, [
+            ("DOBRA3", agosto, agosto),
+            ("LASER1", agosto, agosto + timedelta(seconds=5)),
+            ("LASER1", agosto + timedelta(days=2), agosto + timedelta(days=2)),
+            ("LASER1", hoje, None),
+        ])
+        self.assertTrue(validated)

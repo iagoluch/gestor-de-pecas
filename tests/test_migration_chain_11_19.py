@@ -364,10 +364,10 @@ class MigrationChain11To19Tests(unittest.TestCase):
         self.connection.commit()
         # A migration 25 adiciona ``NOT VALID`` de propósito: o histórico foi
         # produzido pela regra anterior (saldo por peças boas) e não pode ser
-        # reescrito, mas toda escrita nova passa a ser recusada. A migration 51
-        # segue a mesma lógica para o estado físico gravado com nome de posto.
-        # São as únicas exceções autorizadas; qualquer outra constraint não
-        # validada indica migration interrompida no meio.
+        # reescrito, mas toda escrita nova passa a ser recusada. É a única
+        # exceção autorizada (a 51 também nasceu NOT VALID, mas a 53 converte o
+        # histórico e a valida); qualquer outra constraint não validada indica
+        # migration interrompida no meio.
         self.assertEqual(
             self._rows(
                 """
@@ -381,7 +381,6 @@ class MigrationChain11To19Tests(unittest.TestCase):
             ),
             [
                 {"conname": "ck_apontamentos_quantidade_atendida_planejada"},
-                {"conname": "ck_eventos_estado_recurso_codigo_canonico"},
             ],
         )
         self.assertEqual(

@@ -2359,6 +2359,37 @@ PERIOD_OVERLAP_INDEX_STATEMENTS = (
     " WHERE evento_apontamento_id IS NOT NULL",
 )
 
+# A 51 travou gravações novas, mas o histórico de bancos que não passaram pela
+# limpeza manual do TEST (28/09) — o REAL e cópias dele — seguia com o posto
+# legado ("1303", "Laser Ensis 3015") como recurso, e o card duplicava. Esta
+# migration converte esse histórico e valida a trava para o banco inteiro.
+# Linha legada ainda aberta vem de versão antiga que nunca a fechou (Laser
+# "em produção" há 40 dias): fecha com duração zero, porque o fim é
+# desconhecido e o índice de estado aberto único recusaria dois abertos por
+# recurso depois do rename. Mapa congelado; o teste confere contra
+# resolve_resource_identity.
+RESOURCE_STATE_LEGACY_TO_CANONICAL = {
+    "1303": "DOBRA3", "2204": "DOBRA2", "eurostec": "CNC-02", "fresadora ftv31": "FRESA1",
+    "gasparini": "DOBRA1", "inspeção final": "INSPE2", "laser": "LASER1",
+    "laser ensis 3015": "LASER1", "pintura": "PINT.L", "plasma terrablade 4": "PLASMA",
+    "preparação": "PREP", "romi d 1000": "CNC-01", "romi gl 350m": "TCNC-1",
+    "s4220": "SERRA1", "sfg-330": "SERRA3", "sfha-10": "SERRA2", "soldagem": "SOLDA4",
+    "torno mecânico": "TORNOC",
+}
+_LEGACY_VALUES = ", ".join(
+    f"('{legacy}', '{code}')" for legacy, code in RESOURCE_STATE_LEGACY_TO_CANONICAL.items()
+)
+RESOURCE_STATE_LEGACY_HISTORY_DESCRIPTION = "histórico de estado com nome de posto convertido para o código canônico"
+# Um UPDATE só: a CHECK NOT VALID revalida toda linha alterada, então fechar
+# antes de renomear falharia no nome legado.
+RESOURCE_STATE_LEGACY_HISTORY_STATEMENTS = (
+    "UPDATE eventos_estado_recurso e"
+    " SET recurso = m.codigo, data_fim = COALESCE(e.data_fim, e.data_inicio)"
+    f" FROM (VALUES {_LEGACY_VALUES}) AS m(legado, codigo)"
+    " WHERE LOWER(BTRIM(e.recurso)) = m.legado",
+    "ALTER TABLE eventos_estado_recurso VALIDATE CONSTRAINT ck_eventos_estado_recurso_codigo_canonico",
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2414,6 +2445,7 @@ MIGRATIONS = {
     50: (PARAMETROS_TURNO_VIGENCIA_DESCRIPTION, PARAMETROS_TURNO_VIGENCIA_STATEMENTS),
     51: (RESOURCE_STATE_CANONICAL_CODE_DESCRIPTION, RESOURCE_STATE_CANONICAL_CODE_STATEMENTS),
     52: (PERIOD_OVERLAP_INDEX_DESCRIPTION, PERIOD_OVERLAP_INDEX_STATEMENTS),
+    53: (RESOURCE_STATE_LEGACY_HISTORY_DESCRIPTION, RESOURCE_STATE_LEGACY_HISTORY_STATEMENTS),
 }
 
 
