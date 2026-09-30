@@ -2383,7 +2383,7 @@ RESOURCE_STATE_LEGACY_HISTORY_DESCRIPTION = "histórico de estado com nome de po
 # Um UPDATE só: a CHECK NOT VALID revalida toda linha alterada, então fechar
 # antes de renomear falharia no nome legado.
 RESOURCE_STATE_LEGACY_HISTORY_STATEMENTS = (
-    "UPDATE eventos_estado_recurso e"
+    "UPDATE eventos_estado_recurso e"  # nosec B608 -- VALUES vem só do mapa literal acima, nunca de input
     " SET recurso = m.codigo, data_fim = COALESCE(e.data_fim, e.data_inicio)"
     f" FROM (VALUES {_LEGACY_VALUES}) AS m(legado, codigo)"
     " WHERE LOWER(BTRIM(e.recurso)) = m.legado",
