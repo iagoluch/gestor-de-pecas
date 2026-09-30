@@ -85,7 +85,7 @@ IP fixo/reservado, DNS interno, NTP, HTTPS
 ## 5. Segurança
 
 - HTTPS com certificado corporativo; Windows Defender Firewall ativo, liberando só as portas da §4.
-- Conta de serviço dedicada (nunca a conta `Administrador`) rodando o serviço `gestor-pecas`.
+- Contas de serviço dedicadas (nunca a conta `Administrador` nem LocalSystem): `gestor-pecas`, `nginx` e o runner rodam cada um na sua conta virtual `NT SERVICE\<serviço>`, criada pelos scripts de `deploy/`.
 - PostgreSQL e Uvicorn não expostos à rede de usuários — só o nginx conversa com fora.
 - Credenciais fora do código-fonte, em `C:\gestor-pecas\.env` (lido pelo app no startup), com permissão de leitura restrita à conta de serviço.
 - Backup diário do PostgreSQL + cópia externa à VM. Snapshot da VM é complemento, nunca substituto.
@@ -128,7 +128,15 @@ O repositório já está automatizado e não depende de zip/pendrive/cópia manu
 - **[.github/workflows/deploy.yml](../.github/workflows/deploy.yml)** — builda o frontend e implanta na VM. **Dispara só por tag de release** (`git tag vX.Y.Z && git push --tags`), nunca em push comum — decisão deliberada para não implantar em produção algo ainda em teste na `master`. O primeiro job do deploy reexecuta o CI completo para o mesmo commit da tag; nenhum deploy acontece se essa validação não passar.
 - Todo commit local já sincroniza sozinho com o GitHub (hook `post-commit`).
 
-O job de deploy roda num **runner self-hosted do GitHub Actions instalado na própria VM Windows**, com a label `gestor-pecas-vm`. Ele usa `robocopy` (equivalente Windows do rsync) para levar o código até `C:\gestor-pecas`, sem tocar no `.venv` nem no arquivo de credenciais, e reinicia o serviço via PowerShell. Até a VM existir e o runner ser instalado, o workflow fica só esperando — não falha, não faz nada.
+O job de deploy roda num **runner self-hosted do GitHub Actions instalado na própria VM Windows**, com a label `gestor-pecas-vm`, numa conta virtual sem privilégio de administrador. O app e o nginx também rodam em contas virtuais, e as três contas ficam sem `SeImpersonatePrivilege` (`sc privs`), para que o runner, que reinicia os dois, não tenha caminho para SYSTEM. O job:
+
+- faz `pg_dump` antes de tudo;
+- espelha o código com `robocopy` sem tocar no `.env` nem nos dados de runtime;
+- reinicia o serviço;
+- volta o código sozinho se o `/ready` não responder;
+- propaga o `deploy/nginx.conf` quando ele muda.
+
+Instalação e roteiro completo em [deploy/LEIA-ME.md](../deploy/LEIA-ME.md) §6–7 (`deploy/instalar_runner.ps1`).
 
 ---
 
@@ -142,7 +150,7 @@ Ordem sugerida, do zero até o primeiro deploy automático funcionando:
 - [ ] **Criar o PostgreSQL de produção**: banco + usuário dedicado (nunca reaproveitar credencial de homologação).
 - [ ] **Criar estrutura da aplicação**: conta de serviço dedicada (não a conta Administrador), pasta `C:\gestor-pecas`, `.venv` próprio dentro dela, arquivo `C:\gestor-pecas\.env` com as credenciais reais (banco, TOTVS, Telegram, `GESTOR_WEB_SESSION_SECRET`, `GESTOR_DEVOBS_SESSION_SECRET`, `GESTOR_WEB_SERVE_STATIC=true`).
 - [ ] **Registrar o serviço `gestor-pecas` via NSSM** (referência em §7) e configurar o nginx para Windows com HTTPS (certificado corporativo) fazendo proxy para `127.0.0.1:8000`.
-- [ ] **Instalar o runner self-hosted do GitHub Actions na VM (versão Windows)**: Settings → Actions → Runners → *New self-hosted runner*, escolher Windows, label `gestor-pecas-vm`. A conta que roda o runner precisa conseguir reiniciar o serviço `gestor-pecas` e escrever em `C:\gestor-pecas` sem prompt interativo.
+- [ ] **Instalar o runner self-hosted do GitHub Actions na VM (versão Windows)**: `deploy/instalar_runner.ps1` (label `gestor-pecas-vm`, conta virtual com permissões mínimas). Roteiro em [deploy/LEIA-ME.md](../deploy/LEIA-ME.md) §6. Ensaiado na VM VirtualBox em 30/09/2026.
 - [ ] **Primeiro deploy manual** (antes de confiar no pipeline): validar o checklist do [WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md) na própria VM — health check, login/CSRF, posto real, virada de turno.
 - [ ] **Disparar a primeira tag**: `git tag v1.0.0 && git push --tags` — confirma que o pipeline builda e implanta sozinho.
 - [ ] **Configurar backup do PostgreSQL** (diário + cópia externa) e os alertas de monitoramento da §6.

@@ -21,6 +21,9 @@ $ErrorActionPreference = "Stop"
 # Dados de runtime nunca entram no espelho nem no snapshot.
 $RuntimeDirs = @("dados", "dev_reports", "backups")
 $SourceOnlyDirs = @(".venv", ".git", "node_modules", "web\node_modules")
+# Material de desenvolvimento que o servidor não executa (docs/ sozinho tem ~60 MB).
+# Mesma lista no robocopy do deploy/instalar_vm.ps1.
+$DevOnlyDirs = @("docs", "tests", ".ai", ".agents", ".claude", ".codex", ".freebuff", ".github", ".impeccable", ".opencode")
 $Snapshot = "$AppDir.previous"
 
 function Invoke-Mirror {
@@ -56,7 +59,7 @@ Write-Host "Backup pré-deploy do banco: $backup"
 
 try {
     & $StopService
-    Invoke-Mirror -From $Source -To $AppDir -ExcludeDirs ($SourceOnlyDirs + $RuntimeDirs)
+    Invoke-Mirror -From $Source -To $AppDir -ExcludeDirs ($SourceOnlyDirs + $RuntimeDirs + $DevOnlyDirs)
     & $InstallDependencies
     & $StartService
     if (-not (Wait-Healthy)) { throw "O serviço não ficou pronto em $HealthTimeoutSeconds segundos ($HealthUrl)." }

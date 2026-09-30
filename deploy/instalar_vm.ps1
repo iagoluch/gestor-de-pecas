@@ -35,8 +35,8 @@ function Hex-Aleatorio([int]$bytes) {
 }
 
 function Restringir([string]$pasta) {
-    # Só Administradores e SYSTEM (conta do serviço), herdado por tudo abaixo: .env,
-    # backups do REAL, chave TLS e a .venv (que executa como SYSTEM).
+    # Só Administradores e SYSTEM, herdado por tudo abaixo: .env, backups do REAL e
+    # chave TLS. As contas do app e do runner ganham acesso explícito depois.
     Executar icacls @($pasta, "/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "/Q")
 }
 
@@ -79,56 +79,73 @@ $env:Path = "$env:Path;$PgBin"
 # --- Código -------------------------------------------------------------------
 Passo "Copiando o código para $AppDir"
 # /E e não /MIR: dados de runtime, .env e .venv de uma instalação anterior ficam.
-robocopy "$Pacote\app" $AppDir /E /NFL /NDL /NJH /NJS | Out-Null
+# /XD: material de desenvolvimento (mesma lista do scripts/deploy_release.ps1).
+robocopy "$Pacote\app" $AppDir /E /NFL /NDL /NJH /NJS `
+    /XD docs tests .ai .agents .claude .codex .freebuff .github .impeccable .opencode | Out-Null
 Exigir ($LASTEXITCODE -lt 8) "robocopy falhou (código $LASTEXITCODE)."
 $Logs = "$AppDir\dados\logs"  # dentro de dados: o /MIR do deploy preserva essa pasta
-New-Item -ItemType Directory -Force -Path $Logs, "$AppDir\backups" | Out-Null
+New-Item -ItemType Directory -Force -Path $Logs, "$AppDir\backups", "$AppDir\dev_reports" | Out-Null
 Restringir $AppDir
 
 # --- Banco --------------------------------------------------------------------
 Passo "Banco $Database"
 $envPath = "$AppDir\.env"
-$senhaArq = "$Pacote\postgres-senha.txt"  # gerado pelo instalar_prerequisitos.ps1
-if (Test-Path $senhaArq) {
-    $env:PGPASSWORD = (Get-Content $senhaArq -TotalCount 1).Trim()
-} else {
-    $senhaPostgres = Read-Host "Senha do superusuário postgres (definida na instalação do PostgreSQL)" -AsSecureString
-    $env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($senhaPostgres))
+# .env de uma instalação anterior: a senha do app vem dele. Só no formato que este script
+# gera (48 hex): o runner escreve no .env e a senha entra no SQL que roda como postgres.
+$urlAntiga = if (Test-Path $envPath) {
+    Select-String -Path $envPath -Pattern '^DATABASE_URL=postgresql://[^:]+:([0-9a-f]{48})@' | Select-Object -First 1
 }
-try {
-    $existe = & psql -h 127.0.0.1 -U postgres -d postgres -tAc "select 1 from pg_database where datname = '$Database'"
-    Exigir ($LASTEXITCODE -eq 0) "Não conectou no PostgreSQL como postgres."
-    if ($existe -eq "1") {
-        Write-Host "Banco já existe: restore pulado (nada é sobrescrito)."
-        Exigir (Test-Path $envPath) (
-            "Banco existe mas $envPath não. Para reinstalar do zero: DROP DATABASE $Database (como postgres) e execute de novo.")
+# Reexecução: o próprio usuário do app confere o banco, sem pedir a senha do superusuário.
+$bancoPronto = $false
+if ($urlAntiga) {
+    $env:PGPASSWORD = $urlAntiga.Matches[0].Groups[1].Value
+    try { $bancoPronto = (& psql -h 127.0.0.1 -U $DbUser -d $Database -tAc "select 1" 2>$null) -eq "1" } catch { }
+    Remove-Item Env:PGPASSWORD
+}
+if ($bancoPronto) {
+    Write-Host "Banco já existe e o .env conecta nele: restore pulado (nada é sobrescrito)."
+} else {
+    $senhaArq = "$Pacote\postgres-senha.txt"  # gerado pelo instalar_prerequisitos.ps1
+    if (Test-Path $senhaArq) {
+        $env:PGPASSWORD = (Get-Content $senhaArq -TotalCount 1).Trim()
     } else {
-        # .env de uma instalação anterior (banco apagado para restaurar um dump novo): mantém a senha dele.
-        $urlAntiga = if (Test-Path $envPath) {
-            Select-String -Path $envPath -Pattern '^DATABASE_URL=postgresql://[^:]+:([^@]+)@' | Select-Object -First 1
-        }
-        $senhaApp = if ($urlAntiga) { $urlAntiga.Matches[0].Groups[1].Value } else { Hex-Aleatorio 24 }
-        $temRole = & psql -h 127.0.0.1 -U postgres -d postgres -tAc "select 1 from pg_roles where rolname = '$DbUser'"
-        $verbo = if ($temRole -eq "1") { "ALTER" } else { "CREATE" }
-        # Pelo stdin: a senha não aparece na linha de comando do processo.
-        "$verbo ROLE $DbUser LOGIN PASSWORD '$senhaApp';`nCREATE DATABASE $Database OWNER $DbUser ENCODING 'UTF8' TEMPLATE template0;" |
-            & psql -h 127.0.0.1 -U postgres -d postgres -q -v ON_ERROR_STOP=1
-        Exigir ($LASTEXITCODE -eq 0) "Falha ao criar o role $DbUser ou o banco $Database."
-        $env:PGPASSWORD = $senhaApp
-        try {
-            Executar pg_restore @("-h", "127.0.0.1", "-U", $DbUser, "-d", $Database,
-                "--no-owner", "--no-acl", "--exit-on-error", "$Pacote\gestor_pecas.dump")
-        } catch {
-            # Banco pela metade bloquearia a reexecução: o dono o apaga e o erro segue.
-            & psql -h 127.0.0.1 -U $DbUser -d postgres -c "DROP DATABASE $Database" | Out-Null
-            throw
-        }
-        $versao = & psql -h 127.0.0.1 -U $DbUser -d $Database -tAc "select max(version) from schema_migrations"
-        Write-Host "Restore concluído: schema $versao."
+        $senhaPostgres = Read-Host "Senha do superusuário postgres (definida na instalação do PostgreSQL)" -AsSecureString
+        $env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($senhaPostgres))
     }
-} finally {
-    Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    try {
+        $existe = & psql -h 127.0.0.1 -U postgres -d postgres -tAc "select 1 from pg_database where datname = '$Database'"
+        Exigir ($LASTEXITCODE -eq 0) "Não conectou no PostgreSQL como postgres."
+        if ($existe -eq "1") {
+            Write-Host "Banco já existe: restore pulado (nada é sobrescrito)."
+            Exigir (Test-Path $envPath) (
+                "Banco existe mas $envPath não. Para reinstalar do zero: DROP DATABASE $Database (como postgres) e execute de novo.")
+        } else {
+            # .env anterior (banco apagado para restaurar um dump novo): mantém a senha dele.
+            Exigir ($urlAntiga -or -not (Test-Path $envPath)) (
+                "DATABASE_URL de $envPath fora do formato gerado (senha de 48 hex): confira o arquivo.")
+            $senhaApp = if ($urlAntiga) { $urlAntiga.Matches[0].Groups[1].Value } else { Hex-Aleatorio 24 }
+            $temRole = & psql -h 127.0.0.1 -U postgres -d postgres -tAc "select 1 from pg_roles where rolname = '$DbUser'"
+            $verbo = if ($temRole -eq "1") { "ALTER" } else { "CREATE" }
+            # Pelo stdin: a senha não aparece na linha de comando do processo.
+            "$verbo ROLE $DbUser LOGIN PASSWORD '$senhaApp';`nCREATE DATABASE $Database OWNER $DbUser ENCODING 'UTF8' TEMPLATE template0;" |
+                & psql -h 127.0.0.1 -U postgres -d postgres -q -v ON_ERROR_STOP=1
+            Exigir ($LASTEXITCODE -eq 0) "Falha ao criar o role $DbUser ou o banco $Database."
+            $env:PGPASSWORD = $senhaApp
+            try {
+                Executar pg_restore @("-h", "127.0.0.1", "-U", $DbUser, "-d", $Database,
+                    "--no-owner", "--no-acl", "--exit-on-error", "$Pacote\gestor_pecas.dump")
+            } catch {
+                # Banco pela metade bloquearia a reexecução: o dono o apaga e o erro segue.
+                & psql -h 127.0.0.1 -U $DbUser -d postgres -c "DROP DATABASE $Database" | Out-Null
+                throw
+            }
+            $versao = & psql -h 127.0.0.1 -U $DbUser -d $Database -tAc "select max(version) from schema_migrations"
+            Write-Host "Restore concluído: schema $versao."
+        }
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
 }
 
 # --- .env ---------------------------------------------------------------------
@@ -170,16 +187,19 @@ GESTOR_OPERATOR_DRAWING_ROOTS=
 Passo "Ambiente Python"
 # Serviço parado antes do pip: numa reexecução, os .pyd em uso não podem ser sobrescritos.
 if (Get-Service $Servico -ErrorAction SilentlyContinue) { Stop-Service $Servico }
-if (-not (Test-Path "$AppDir\.venv\Scripts\python.exe")) { Executar py @("-3.14", "-m", "venv", "$AppDir\.venv") }
+# Nada de $AppDir roda como Administrador: o runner escreve lá. A .venv é recriada e o
+# lock vem do pacote.
+if (Test-Path "$AppDir\.venv") { Remove-Item "$AppDir\.venv" -Recurse -Force }
+Executar py @("-3.14", "-m", "venv", "$AppDir\.venv")
 Executar "$AppDir\.venv\Scripts\python.exe" @("-m", "pip", "install", "--disable-pip-version-check",
-    "--require-hashes", "-r", "$AppDir\requirements.lock")
+    "--require-hashes", "-r", "$Pacote\app\requirements.lock")
 
 # --- nginx --------------------------------------------------------------------
 Passo "nginx (HTTPS)"
 New-Item -ItemType Directory -Force -Path "$NginxDir\conf\certs" | Out-Null
 Copy-Item "$Pacote\certs\*" "$NginxDir\conf\certs\" -Force
 Restringir "$NginxDir\conf\certs"
-Copy-Item "$AppDir\deploy\nginx.conf" "$NginxDir\conf\nginx.conf" -Force
+Copy-Item "$Pacote\app\deploy\nginx.conf" "$NginxDir\conf\nginx.conf" -Force
 Push-Location $NginxDir
 try { Executar "$NginxDir\nginx.exe" @("-t", "-p", "$NginxDir\") } finally { Pop-Location }
 
@@ -204,7 +224,34 @@ Executar nssm @("set", $Servico, "AppStderr", "$Logs\gestor-pecas.log")
 Executar nssm @("set", $Servico, "AppRotateFiles", "1")
 Executar nssm @("set", $Servico, "AppRotateBytes", "10485760")
 Executar nssm @("set", $Servico, "AppRotateOnline", "1")  # sem isto, só rotaciona ao reiniciar
+# Conta virtual do Windows (sem senha) no lugar de LocalSystem: o app lê o código e o
+# .env e só escreve em dados\ e dev_reports\ (backend/api/config.py). Banco e SigmaNEST
+# autenticam por usuário/senha.
+# Toda conta de serviço herda SeImpersonatePrivilege (grupo SERVICE), que leva a SYSTEM
+# por exploits "potato"; o sc privs deixa no token só estes dois, a partir do próximo start.
+$Privilegios = "SeChangeNotifyPrivilege/SeCreateGlobalPrivilege"
+Executar sc.exe @("config", $Servico, "obj=", "NT SERVICE\$Servico")
+Executar sc.exe @("privs", $Servico, $Privilegios)
+Executar icacls @($AppDir, "/grant", "NT SERVICE\${Servico}:(OI)(CI)RX", "/Q")
+foreach ($pasta in "$AppDir\dados", "$AppDir\dev_reports") {
+    Executar icacls @($pasta, "/grant", "NT SERVICE\${Servico}:(OI)(CI)M", "/Q")
+}
 Registrar-Servico "nginx" "$NginxDir\nginx.exe" "" $NginxDir
+# nginx também em conta virtual: o runner regrava o nginx.conf e o reinicia, e como
+# LocalSystem um conf adulterado leria ou escreveria qualquer arquivo da VM.
+Executar sc.exe @("config", "nginx", "obj=", "NT SERVICE\nginx")
+Executar sc.exe @("privs", "nginx", $Privilegios)
+Restringir $NginxDir  # sem a herança de C:\, onde Users criam arquivos (DLL plantada)
+Executar icacls @($NginxDir, "/grant", "NT SERVICE\nginx:(OI)(CI)RX", "/Q")
+Executar icacls @("$NginxDir\conf\certs", "/grant", "NT SERVICE\nginx:(OI)(CI)R", "/Q")
+foreach ($pasta in "$NginxDir\logs", "$NginxDir\temp") {
+    New-Item -ItemType Directory -Force -Path $pasta | Out-Null
+    Executar icacls @($pasta, "/grant", "NT SERVICE\nginx:(OI)(CI)M", "/Q")
+}
+# nssm.exe é o executável dos dois serviços: mesma proteção, leitura para usuários e serviços.
+$nssmDir = Split-Path (Get-Command nssm).Source
+Restringir $nssmDir
+Executar icacls @($nssmDir, "/grant", "*S-1-5-11:(OI)(CI)RX", "*S-1-5-6:(OI)(CI)RX", "/Q")
 
 # --- Firewall -----------------------------------------------------------------
 Passo "Firewall (80/443 de entrada)"

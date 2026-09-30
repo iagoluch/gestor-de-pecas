@@ -49,13 +49,12 @@ jobs:
     # infraestrutura). Um runner self-hosted puxa o job de dentro para
     # fora, sem precisar abrir porta de entrada nenhuma.
     #
-    # Pré-requisito (ainda pendente — VM não provisionada): instalar o
-    # runner do GitHub Actions para Windows na VM com a label
-    # "gestor-pecas-vm" (Settings > Actions > Runners > New self-hosted
-    # runner no repositório, escolhendo Windows).
+    # O runner (label "gestor-pecas-vm") e a conta dele são instalados por
+    # deploy/instalar_runner.ps1; roteiro completo em deploy/LEIA-ME.md.
     runs-on: [self-hosted, Windows, gestor-pecas-vm]
     env:
       APP_DIR: C:\gestor-pecas
+      NGINX_DIR: C:\nginx
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -97,3 +96,24 @@ jobs:
             } `
             -StopService { Stop-Service -Name gestor-pecas } `
             -StartService { Start-Service -Name gestor-pecas }
+
+      # deploy/nginx.conf só chega ao nginx por aqui. Regrava o arquivo no lugar
+      # (preserva a permissão dele), reinicia e confere /ready pelo HTTPS. Se
+      # qualquer passo falhar, devolve o conf anterior e falha o job.
+      - name: Atualizar nginx.conf se mudou
+        shell: pwsh
+        run: |
+          $destino = "$env:NGINX_DIR\conf\nginx.conf"
+          $novo = [IO.File]::ReadAllBytes("$PWD\deploy\nginx.conf")
+          $atual = [IO.File]::ReadAllBytes($destino)
+          if ([Convert]::ToBase64String($novo) -eq [Convert]::ToBase64String($atual)) { "nginx.conf sem mudança."; exit 0 }
+          function Responde { & curl.exe -k -s -o NUL -w "%{http_code}" --retry 5 --retry-all-errors --retry-delay 1 https://localhost/api/v1/system/ready }
+          try {
+            [IO.File]::WriteAllBytes($destino, $novo)
+            Restart-Service -Name nginx
+            $codigo = Responde
+          } catch { $codigo = "erro: $_" }
+          if ($codigo -eq "200") { "nginx.conf atualizado."; exit 0 }
+          [IO.File]::WriteAllBytes($destino, $atual)
+          Restart-Service -Name nginx
+          throw "nginx.conf novo não subiu (HTTP $codigo): anterior restaurado (HTTP $(Responde))."
