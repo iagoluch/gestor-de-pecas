@@ -97,10 +97,9 @@ def _default_database_factory(*, now_func=None, environment="development"):
     from app.database import Database
     from app.database.config import load_postgres_config
 
-    # ``Database()`` sem argumentos é travado para bancos de teste (guarda de
-    # segurança em app/database/database.py). O piloto/produção real só é
-    # alcançado explicitamente aqui, e só quando o ambiente Web declarado por
-    # GESTOR_WEB_ENV é produção — nunca por padrão silencioso.
+    # ``Database()`` sem argumentos usa TEST_DATABASE_URL, conferido contra
+    # GESTOR_EXPECTED_DATABASE. O REAL (DATABASE_URL) só é alcançado aqui, e só
+    # quando GESTOR_WEB_ENV declara produção — nunca por padrão silencioso.
     if str(environment).strip().casefold() in {"production", "producao", "produção"}:
         config = load_postgres_config(testing=False)
         return Database(config=config, now_func=now_func)

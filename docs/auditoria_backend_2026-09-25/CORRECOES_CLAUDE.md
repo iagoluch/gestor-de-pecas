@@ -748,3 +748,26 @@ Com pool 10 e 10 operadores, o p95 foi pior (1165 ms) que com pool 4. Mais conex
 4. **Continua `NOT VALID` de propósito:** `ck_eventos_estado_recurso_codigo_canonico` (migration 51 não reescreve histórico). Não foi pedido.
 
 **BK-17: FECHADO.** Observação: o app segue recusando qualquer banco sem `test` no nome (`app/database/database.py:229`). Essa é a trava da fase só-TEST, independente do schema, e sai só por decisão explícita na hora de ligar o REAL.
+
+---
+
+## Trava do nome `test` removida — 30/09/2026
+
+A pedido do usuário, `Database.__init__` (`app/database/database.py`) não recusa mais bancos sem `test` no nome. O app passa a poder abrir o REAL.
+
+O que continua protegendo o REAL:
+
+1. **`Database()` sem argumentos** usa `TEST_DATABASE_URL`, exige `GESTOR_EXPECTED_DATABASE` e recusa o mesmo banco de `DATABASE_URL`.
+2. **O REAL só é aberto por `_default_database_factory`** (`backend/api/main.py`) quando `GESTOR_WEB_ENV=production`.
+3. **`GESTOR_EXPECTED_DATABASE` também é conferido no modo produção.** Para ligar o REAL, é preciso trocar no `.env`:
+   - `GESTOR_WEB_ENV=production`;
+   - `GESTOR_EXPECTED_DATABASE=gestor_pecas`.
+4. **Ficam as guardas de `test` no nome dos scripts de seed e limpeza** e a guarda do `simulation_mode` (`backend/api/dependencies/facade.py`). Essas escrevem dados fictícios e não devem tocar o REAL.
+
+Removido `test_facade_padrao_recusa_dsn_operacional_explicita`, que testava a trava retirada.
+
+Validação:
+- `test_postgres_config`, `test_spa_static`, `test_web_api` e `test_totvs_integration`: 118 passed.
+- `Database(config=load_postgres_config(testing=False))`, com `GESTOR_EXPECTED_DATABASE=gestor_pecas`, abriu o REAL em transação `READ ONLY`: `gestor_pecas`, schema 52 = app 52.
+
+Não alterado: `active_data_source = "postgresql_test_only"` (`backend/api/routers/system.py:88`). O rótulo é contrato do preflight da simulação (`simulacao/preflight.py:227`) e de `test_web_api`.

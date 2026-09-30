@@ -1,7 +1,6 @@
 import unittest
 
 from app.database.config import load_postgres_config
-from app.database.database import Database
 from app.database.errors import DatabaseConfigurationError
 
 
@@ -47,13 +46,6 @@ class PostgresConfigTests(unittest.TestCase):
             load_postgres_config(testing=True, environ={
                 "TEST_DATABASE_URL": "postgresql://app:pw@db/gestor_pecas",
             })
-
-    def test_facade_padrao_recusa_dsn_operacional_explicita(self):
-        with self.assertRaises(DatabaseConfigurationError):
-            Database(
-                dsn="postgresql://app:pw@db/gestor_pecas",
-                auto_migrate=False,
-            )
 
     def test_execucao_isolada_recusa_banco_diferente_do_esperado(self):
         with self.assertRaises(DatabaseConfigurationError):

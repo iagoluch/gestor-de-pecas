@@ -35,7 +35,7 @@ from app.database.totvs_op_sync_repository import TotvsOpSyncRepositoryMixin
 from app.database.welding_repository import WeldingRepositoryMixin
 from app.database.connection import PostgresPoolManager
 from app.database.diagnostics import run_database_diagnostic
-from app.database.errors import DatabaseConfigurationError, DatabaseIntegrityError
+from app.database.errors import DatabaseIntegrityError
 from app.database.migrations import apply_migrations
 from app.database.schema import SCHEMA_VERSION
 from mes.integrations.totvs.outbound_enqueue import (
@@ -225,12 +225,6 @@ class Database(
         if pool_manager is None:
             if config is None:
                 config = PostgresConfig(str(dsn)) if dsn else load_postgres_config(testing=True)
-            target_name = str(config.safe_target.get("dbname") or "").strip()
-            if "test" not in target_name.casefold():
-                raise DatabaseConfigurationError(
-                    "O Gestor de Peças está bloqueado para bancos de teste; "
-                    "o nome do banco deve conter 'test'."
-                )
             pool_manager = PostgresPoolManager(config)
         self._pool = pool_manager
         self._now = lambda: (now_func() if now_func is not None else agora_db()).replace(
