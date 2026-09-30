@@ -739,3 +739,12 @@ Com pool 10 e 10 operadores, o p95 foi pior (1165 ms) que com pool 4. Mais conex
 
 - **BK-09, BK-15 (TLS) e BK-08 (VM):** infraestrutura externa, sem mudança.
 - **REAL em schema 11:** precisa de decisão sobre quando/como promover o REAL para a versão 52 (fora do escopo desta auditoria).
+
+### Promoção do REAL 11 → 52 — 30/09/2026 (aprovada pelo usuário: o REAL ainda não está em operação)
+
+1. **Backup:** `pg_dump -Fc` do `gestor_pecas` v11 em `dev_reports/backup_real/gestor_pecas_v11_20260930.dump` (295 KB, 30 tabelas com dados; `dev_reports/` fica fora do git). Rollback = `pg_restore` desse arquivo num banco recriado.
+2. **Ensaio:** o dump foi restaurado em um banco descartável, e a mesma `apply_migrations` rodou 11 → 52 (transação única). As 30 tabelas existentes mantiveram as contagens; 32 tabelas novas; 0 violações da BK-17; `VALIDATE` OK. O app subiu sobre a cópia com `/api/v1/system/ready` = 200 e `schema_version 52`. O banco de ensaio foi removido.
+3. **REAL:** sem conexões abertas; resultado idêntico ao do ensaio: versão **52**, contagens preservadas, **BK-17 validada** (`convalidated = true`).
+4. **Continua `NOT VALID` de propósito:** `ck_eventos_estado_recurso_codigo_canonico` (migration 51 não reescreve histórico). Não foi pedido.
+
+**BK-17: FECHADO.** Observação: o app segue recusando qualquer banco sem `test` no nome (`app/database/database.py:229`). Essa é a trava da fase só-TEST, independente do schema, e sai só por decisão explícita na hora de ligar o REAL.
