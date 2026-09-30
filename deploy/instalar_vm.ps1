@@ -34,6 +34,12 @@ function Hex-Aleatorio([int]$bytes) {
     return -join ($buffer | ForEach-Object { $_.ToString("x2") })
 }
 
+function Restringir([string]$pasta) {
+    # Só Administradores e SYSTEM (conta do serviço), herdado por tudo abaixo: .env,
+    # backups do REAL, chave TLS e a .venv (que executa como SYSTEM).
+    Executar icacls @($pasta, "/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "/Q")
+}
+
 function Gravar-Utf8SemBom([string]$caminho, [string]$texto) {
     # python-dotenv lê o BOM como parte da primeira chave.
     [System.IO.File]::WriteAllText($caminho, $texto, (New-Object System.Text.UTF8Encoding $false))
@@ -52,8 +58,11 @@ Exigir (Test-Path "$PgBin\pg_restore.exe") "PostgreSQL 17 não encontrado em $Pg
 Exigir (Test-Path "$NginxDir\nginx.exe") "nginx não encontrado em $NginxDir."
 Exigir ([bool](Get-Command nssm -ErrorAction SilentlyContinue)) "nssm.exe não está no PATH."
 Exigir ([bool](Get-Command py -ErrorAction SilentlyContinue)) "Python 3.14 (launcher py) não encontrado."
-& py -3.14 --version
+$basePython = & py -3.14 -c "import sys; print(sys.base_prefix)"
 Exigir ($LASTEXITCODE -eq 0) "Python 3.14 não encontrado pelo launcher py."
+# A .venv aponta para o Python base: no perfil do admin, a conta de serviço e o runner não o leem.
+Exigir ($basePython -notlike "C:\Users\*") (
+    "Python 3.14 instalado só para o usuário ($basePython). Reinstale marcando 'Install for all users'.")
 Exigir ([bool](Get-OdbcDriver -Name "ODBC Driver 18 for SQL Server" -ErrorAction SilentlyContinue)) (
     "Driver ODBC 18 for SQL Server não instalado (necessário para o SigmaNEST).")
 if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
@@ -74,6 +83,7 @@ robocopy "$Pacote\app" $AppDir /E /NFL /NDL /NJH /NJS | Out-Null
 Exigir ($LASTEXITCODE -lt 8) "robocopy falhou (código $LASTEXITCODE)."
 $Logs = "$AppDir\dados\logs"  # dentro de dados: o /MIR do deploy preserva essa pasta
 New-Item -ItemType Directory -Force -Path $Logs, "$AppDir\backups" | Out-Null
+Restringir $AppDir
 
 # --- Banco --------------------------------------------------------------------
 Passo "Banco $Database"
@@ -86,18 +96,29 @@ try {
     Exigir ($LASTEXITCODE -eq 0) "Não conectou no PostgreSQL como postgres."
     if ($existe -eq "1") {
         Write-Host "Banco já existe: restore pulado (nada é sobrescrito)."
-        Exigir (Test-Path $envPath) "Banco existe mas $envPath não: a senha de $DbUser só está no .env original."
-        $senhaApp = $null
+        Exigir (Test-Path $envPath) (
+            "Banco existe mas $envPath não. Para reinstalar do zero: DROP DATABASE $Database (como postgres) e execute de novo.")
     } else {
-        $senhaApp = Hex-Aleatorio 24
+        # .env de uma instalação anterior (banco apagado para restaurar um dump novo): mantém a senha dele.
+        $urlAntiga = if (Test-Path $envPath) {
+            Select-String -Path $envPath -Pattern '^DATABASE_URL=postgresql://[^:]+:([^@]+)@' | Select-Object -First 1
+        }
+        $senhaApp = if ($urlAntiga) { $urlAntiga.Matches[0].Groups[1].Value } else { Hex-Aleatorio 24 }
         $temRole = & psql -h 127.0.0.1 -U postgres -d postgres -tAc "select 1 from pg_roles where rolname = '$DbUser'"
         $verbo = if ($temRole -eq "1") { "ALTER" } else { "CREATE" }
-        Executar psql @("-h", "127.0.0.1", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1",
-            "-c", "$verbo ROLE $DbUser LOGIN PASSWORD '$senhaApp'",
-            "-c", "CREATE DATABASE $Database OWNER $DbUser ENCODING 'UTF8' TEMPLATE template0")
+        # Pelo stdin: a senha não aparece na linha de comando do processo.
+        "$verbo ROLE $DbUser LOGIN PASSWORD '$senhaApp';`nCREATE DATABASE $Database OWNER $DbUser ENCODING 'UTF8' TEMPLATE template0;" |
+            & psql -h 127.0.0.1 -U postgres -d postgres -q -v ON_ERROR_STOP=1
+        Exigir ($LASTEXITCODE -eq 0) "Falha ao criar o role $DbUser ou o banco $Database."
         $env:PGPASSWORD = $senhaApp
-        Executar pg_restore @("-h", "127.0.0.1", "-U", $DbUser, "-d", $Database,
-            "--no-owner", "--no-acl", "--exit-on-error", "$Pacote\gestor_pecas.dump")
+        try {
+            Executar pg_restore @("-h", "127.0.0.1", "-U", $DbUser, "-d", $Database,
+                "--no-owner", "--no-acl", "--exit-on-error", "$Pacote\gestor_pecas.dump")
+        } catch {
+            # Banco pela metade bloquearia a reexecução: o dono o apaga e o erro segue.
+            & psql -h 127.0.0.1 -U $DbUser -d postgres -c "DROP DATABASE $Database" | Out-Null
+            throw
+        }
         $versao = & psql -h 127.0.0.1 -U $DbUser -d $Database -tAc "select max(version) from schema_migrations"
         Write-Host "Restore concluído: schema $versao."
     }
@@ -129,17 +150,21 @@ GESTOR_WEB_PUBLIC_HOST=$PublicHost
 GESTOR_WEB_ALLOWED_HOSTS=$($hosts -join ",")
 GESTOR_WEB_ALLOWED_ORIGINS=$origens
 GESTOR_DEV_OBSERVATORY_ENABLED=false
+# Mesmo bot do notebook: ligar (true) só com o app do notebook parado (LEIA-ME §2).
+TELEGRAM_ENABLED=false
+GESTOR_TELEGRAM_BOT_POLLING_ENABLED=false
+GESTOR_TELEGRAM_DIGEST_ENABLED=false
 # Pastas de rede com os desenhos das peças (separadas por ;). Vazio = posto sem desenho.
 GESTOR_OPERATOR_DRAWING_ROOTS=
 "@
     Gravar-Utf8SemBom $envPath ((Get-Content -Raw -Encoding UTF8 "$Pacote\gestor.env.base") + $maquina)
-    # Só Administradores e SYSTEM (conta do serviço) leem o .env.
-    & icacls $envPath /inheritance:r /grant:r "*S-1-5-32-544:F" "*S-1-5-18:F" | Out-Null
     Write-Host ".env gerado. Hosts aceitos: $($hosts -join ', ')"
 }
 
 # --- Python -------------------------------------------------------------------
 Passo "Ambiente Python"
+# Serviço parado antes do pip: numa reexecução, os .pyd em uso não podem ser sobrescritos.
+if (Get-Service $Servico -ErrorAction SilentlyContinue) { Stop-Service $Servico }
 if (-not (Test-Path "$AppDir\.venv\Scripts\python.exe")) { Executar py @("-3.14", "-m", "venv", "$AppDir\.venv") }
 Executar "$AppDir\.venv\Scripts\python.exe" @("-m", "pip", "install", "--disable-pip-version-check",
     "--require-hashes", "-r", "$AppDir\requirements.lock")
@@ -148,6 +173,7 @@ Executar "$AppDir\.venv\Scripts\python.exe" @("-m", "pip", "install", "--disable
 Passo "nginx (HTTPS)"
 New-Item -ItemType Directory -Force -Path "$NginxDir\conf\certs" | Out-Null
 Copy-Item "$Pacote\certs\*" "$NginxDir\conf\certs\" -Force
+Restringir "$NginxDir\conf\certs"
 Copy-Item "$AppDir\deploy\nginx.conf" "$NginxDir\conf\nginx.conf" -Force
 Push-Location $NginxDir
 try { Executar "$NginxDir\nginx.exe" @("-t", "-p", "$NginxDir\") } finally { Pop-Location }
@@ -172,6 +198,7 @@ Executar nssm @("set", $Servico, "AppStdout", "$Logs\gestor-pecas.log")
 Executar nssm @("set", $Servico, "AppStderr", "$Logs\gestor-pecas.log")
 Executar nssm @("set", $Servico, "AppRotateFiles", "1")
 Executar nssm @("set", $Servico, "AppRotateBytes", "10485760")
+Executar nssm @("set", $Servico, "AppRotateOnline", "1")  # sem isto, só rotaciona ao reiniciar
 Registrar-Servico "nginx" "$NginxDir\nginx.exe" "" $NginxDir
 
 # --- Firewall -----------------------------------------------------------------
@@ -192,7 +219,11 @@ do {
 } while (-not $pronto -and (Get-Date) -lt $prazo)
 Exigir $pronto "O app não ficou pronto em 120 s. Veja $Logs\gestor-pecas.log."
 Start-Service nginx
-$https = & curl.exe -k -s -o NUL -w "%{http_code}" "https://localhost/api/v1/system/ready"
+foreach ($tentativa in 1..10) {
+    $https = & curl.exe -k -s -o NUL -w "%{http_code}" "https://localhost/api/v1/system/ready"
+    if ($https -eq "200") { break }
+    Start-Sleep -Seconds 1
+}
 Exigir ($https -eq "200") "App responde em 127.0.0.1:8000, mas o nginx devolveu HTTP $https. Veja $NginxDir\logs\error.log."
 
 Write-Host "`nPronto: https://$PublicHost (e https://localhost na própria VM)." -ForegroundColor Green

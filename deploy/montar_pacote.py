@@ -32,6 +32,8 @@ CHAVES_FORA_DO_SERVIDOR = {
     "GESTOR_DEV_OBSERVATORY_ENABLED", "GESTOR_DEVOBS_REAL_DATABASE_URL",
     "GESTOR_DEVOBS_LOGIN_USERNAME", "GESTOR_DEVOBS_LOGIN_PASSWORD",
     "GESTOR_OPERATOR_DRAWING_ROOTS",
+    # Mesmo bot do notebook: ligar só depois de parar o notebook (LEIA-ME §2).
+    "TELEGRAM_ENABLED", "GESTOR_TELEGRAM_BOT_POLLING_ENABLED", "GESTOR_TELEGRAM_DIGEST_ENABLED",
 }
 
 
@@ -85,6 +87,7 @@ def main() -> None:
         zf.writestr(f"{PREFIXO}gestor.env.base", env_base((RAIZ / ".env").read_text(encoding="utf-8")))
         for arquivo in certs.iterdir():
             zf.write(arquivo, f"{PREFIXO}certs/{arquivo.name}")
+    dump.unlink()  # cópia solta do REAL no notebook: o zip é a única que fica
 
     print(f"Pacote: {PACOTE} ({PACOTE.stat().st_size / 1e6:.1f} MB)")
     print("ATENÇÃO: contém o dump do REAL e segredos do .env. Não versionar.")
