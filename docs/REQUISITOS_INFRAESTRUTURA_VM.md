@@ -56,6 +56,7 @@ Disco obrigatoriamente SSD/NVMe (nunca HD mecânico). Volume deve permitir expan
 | nginx para Windows | reverse proxy / HTTPS |
 | NSSM | expõe o processo Uvicorn como Serviço do Windows (início automático, reinício em falha) |
 | Driver ODBC 18 da Microsoft para SQL Server | integração de leitura com o banco do SigmaNEST — no Windows é só instalar o driver nativo, sem unixODBC (isso era exigência específica do Linux) |
+| PowerShell 7 (`pwsh`) | exigido pelo job de deploy (`shell: pwsh` no `deploy.yml`); o Windows Server traz só o 5.1 |
 | Node.js | **não é requisito de execução** — o frontend (`web/dist`) já vem construído pelo pipeline de deploy |
 
 Dependências Python: ver [requirements.txt](../requirements.txt) — FastAPI, Uvicorn, psycopg[binary]+psycopg_pool, pyodbc (sob demanda), openpyxl, httpx, python-dotenv, defusedxml, groq.
@@ -86,7 +87,7 @@ IP fixo/reservado, DNS interno, NTP, HTTPS
 - HTTPS com certificado corporativo; Windows Defender Firewall ativo, liberando só as portas da §4.
 - Conta de serviço dedicada (nunca a conta `Administrador`) rodando o serviço `gestor-pecas`.
 - PostgreSQL e Uvicorn não expostos à rede de usuários — só o nginx conversa com fora.
-- Credenciais fora do código-fonte, num arquivo de ambiente lido pelo NSSM (ex.: `C:\gestor-pecas\gestor.env`), com permissão de leitura restrita à conta de serviço.
+- Credenciais fora do código-fonte, em `C:\gestor-pecas\.env` (lido pelo app no startup), com permissão de leitura restrita à conta de serviço.
 - Backup diário do PostgreSQL + cópia externa à VM. Snapshot da VM é complemento, nunca substituto.
 
 ---
@@ -101,15 +102,17 @@ CPU, memória, disco, disponibilidade da VM, PostgreSQL, nginx, serviço `gestor
 
 Serviço do Windows registrado via **NSSM**, 1 processo Uvicorn (o projeto tem schedulers/tasks internos — outbox TOTVS com retry, digest de relatórios — que não são seguros para múltiplos workers sem coordenação adicional; não aumentar sem revisar isso antes).
 
+O registro é feito por [`deploy/instalar_vm.ps1`](../deploy/instalar_vm.ps1) (roteiro em [`deploy/LEIA-ME.md`](../deploy/LEIA-ME.md)). O essencial:
+
 ```powershell
-# Registro do serviço (referência, roda uma vez na preparação da VM)
-nssm install gestor-pecas "C:\gestor-pecas\.venv\Scripts\python.exe" `
-  "-m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000"
+nssm install gestor-pecas "C:\gestor-pecas\.venv\Scripts\python.exe"
+nssm set gestor-pecas AppParameters "-m uvicorn backend.api.main:app --host 127.0.0.1 --port 8000"
 nssm set gestor-pecas AppDirectory "C:\gestor-pecas"
-nssm set gestor-pecas AppEnvironmentExtra (Get-Content C:\gestor-pecas\gestor.env)
-nssm set gestor-pecas Start SERVICE_AUTO_START
-nssm set gestor-pecas AppExit Default Restart
+nssm set gestor-pecas AppEnvironmentExtra PYTHONUTF8=1
 ```
+
+- `127.0.0.1`: só o nginx fala com o Uvicorn. O nginx ([`deploy/nginx.conf`](../deploy/nginx.conf)) repassa `X-Forwarded-For`, que o Uvicorn usa como IP de origem na allowlist SOAP e no freio de login.
+- A configuração vem de `C:\gestor-pecas\.env`, que o app lê sozinho no startup. Não usar `AppEnvironmentExtra` para ela.
 
 Depois de registrado, o serviço aparece como qualquer outro Serviço do Windows (`services.msc` ou `Get-Service gestor-pecas`), e reiniciar/parar/consultar status usa os comandos nativos do PowerShell (`Restart-Service`, `Stop-Service`).
 
@@ -135,9 +138,9 @@ Ordem sugerida, do zero até o primeiro deploy automático funcionando:
 
 - [ ] **Confirmar com a infra** a versão exata do Windows Server (2025 ou outra da mesma linha) e as specs da §2 (recomendado: 8 vCPU / 16 GB / 200 GB SSD) e §4 (IP fixo, DNS interno, portas).
 - [ ] **Instalar o sistema base**: Windows Server atualizado (Windows Update em dia), NTP, Windows Defender Firewall liberando só 443/80 públicas e 3389 (RDP) restrita à rede administrativa.
-- [ ] **Instalar dependências de sistema**: Python 3.14, PostgreSQL 17, nginx para Windows, NSSM, driver ODBC 18 da Microsoft para SQL Server.
+- [ ] **Instalar dependências de sistema**: Python 3.14, PostgreSQL 17, nginx para Windows, NSSM, driver ODBC 18 da Microsoft para SQL Server, PowerShell 7.
 - [ ] **Criar o PostgreSQL de produção**: banco + usuário dedicado (nunca reaproveitar credencial de homologação).
-- [ ] **Criar estrutura da aplicação**: conta de serviço dedicada (não a conta Administrador), pasta `C:\gestor-pecas`, `.venv` próprio dentro dela, arquivo de ambiente (`gestor.env`) com as credenciais reais (banco, TOTVS, Telegram, `GESTOR_WEB_SESSION_SECRET`, `GESTOR_DEVOBS_SESSION_SECRET`, `GESTOR_WEB_SERVE_STATIC=true`).
+- [ ] **Criar estrutura da aplicação**: conta de serviço dedicada (não a conta Administrador), pasta `C:\gestor-pecas`, `.venv` próprio dentro dela, arquivo `C:\gestor-pecas\.env` com as credenciais reais (banco, TOTVS, Telegram, `GESTOR_WEB_SESSION_SECRET`, `GESTOR_DEVOBS_SESSION_SECRET`, `GESTOR_WEB_SERVE_STATIC=true`).
 - [ ] **Registrar o serviço `gestor-pecas` via NSSM** (referência em §7) e configurar o nginx para Windows com HTTPS (certificado corporativo) fazendo proxy para `127.0.0.1:8000`.
 - [ ] **Instalar o runner self-hosted do GitHub Actions na VM (versão Windows)**: Settings → Actions → Runners → *New self-hosted runner*, escolher Windows, label `gestor-pecas-vm`. A conta que roda o runner precisa conseguir reiniciar o serviço `gestor-pecas` e escrever em `C:\gestor-pecas` sem prompt interativo.
 - [ ] **Primeiro deploy manual** (antes de confiar no pipeline): validar o checklist do [WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md) na própria VM — health check, login/CSRF, posto real, virada de turno.
