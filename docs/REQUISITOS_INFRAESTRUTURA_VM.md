@@ -153,5 +153,5 @@ Ordem sugerida, do zero até o primeiro deploy automático funcionando:
 - [ ] **Instalar o runner self-hosted do GitHub Actions na VM (versão Windows)**: `deploy/instalar_runner.ps1` (label `gestor-pecas-vm`, conta virtual com permissões mínimas). Roteiro em [deploy/LEIA-ME.md](../deploy/LEIA-ME.md) §6. Ensaiado na VM VirtualBox em 30/09/2026.
 - [ ] **Primeiro deploy manual** (antes de confiar no pipeline): validar o checklist do [WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md) na própria VM — health check, login/CSRF, posto real, virada de turno.
 - [ ] **Disparar a primeira tag**: `git tag v1.0.0 && git push --tags` — confirma que o pipeline builda e implanta sozinho.
-- [ ] **Configurar backup do PostgreSQL** (diário + cópia externa) e os alertas de monitoramento da §6.
+- [ ] **Backup do PostgreSQL**: o `deploy/instalar.ps1` agenda o diário (retenção 14 dias + cópia externa, [LEIA-ME §4](../deploy/LEIA-ME.md)). Falta a pasta externa real e os alertas de monitoramento da §6.
 - [ ] **Confirmar rollback**: trocar a tag/versão do serviço, nunca limpar banco ou reescrever produção (regra já vale para o processo manual, continua valendo com o pipeline).

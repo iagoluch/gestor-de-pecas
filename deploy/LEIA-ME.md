@@ -2,7 +2,7 @@
 
 Roteiro do fluxo inteiro:
 
-1. instalação do zero (Windows Server + PostgreSQL 17 nativo + nginx + NSSM), §1–5;
+1. instalação do zero (Windows Server + PostgreSQL 17 nativo + nginx + NSSM), §1–5. O caminho curto é o `instalar.ps1` (§4), que faz tudo, inclusive o runner e o backup diário;
 2. runner do GitHub Actions, §6;
 3. deploys seguintes por tag `v*` (`.github/workflows/deploy.yml`), §7;
 4. o que ainda depende de informação externa, §8.
@@ -53,7 +53,7 @@ O `.env` vem do notebook, então a VM usa os **mesmos** Telegram, TOTVS e SigmaN
 1. Instale o Windows Server 2025. A [versão de avaliação](https://www.microsoft.com/evalcenter/evaluate-windows-server-2025) serve para o ensaio.
    - Recomendado: 8 vCPU, 16 GB, 200 GB.
    - Rede: uma que alcance a internet (Protheus cloud) e a rede da fábrica (SigmaNEST `192.168.0.218`).
-2. Ajuste o fuso para Brasília: `Set-TimeZone -Id 'E. South America Standard Time'`. O instalador para se o fuso estiver errado.
+2. Ajuste o fuso para Brasília: `Set-TimeZone -Id 'E. South America Standard Time'`. O `instalar.ps1` ajusta sozinho; o `instalar_vm.ps1` avulso para se o fuso estiver errado.
    - Confira também a **hora**: apontamento e OEE dependem dela. No ensaio, o relógio da VM atrasou ~8 min durante a instalação do PostgreSQL e só voltou quando o `VBoxService` ressincronizou. Em VM, deixe a sincronização do hipervisor ou o `w32time` ativos (`w32tm /query /status`) e compare com um relógio confiável antes de liberar para a fábrica.
 3. Instale os pré-requisitos. Caminho automático, depois de extrair o zip (seção 4), num PowerShell como Administrador:
 
@@ -76,6 +76,37 @@ O `.env` vem do notebook, então a VM usa os **mesmos** Telegram, TOTVS e SigmaN
 | PowerShell 7 | [Microsoft](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) | exigido pelo `deploy.yml` (`shell: pwsh`) |
 
 ## 4. Instalar
+
+### Caminho único: `instalar.ps1`
+
+Extraia o zip em `C:\instalacao`, gere o token do runner (§6, passo 1) e, num PowerShell **como Administrador**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\instalacao\gestor-pecas-deploy\app\deploy\instalar.ps1
+```
+
+As perguntas vêm todas no início; depois o script roda sozinho, e o PostgreSQL leva uns 20 min. Só é perguntado o que ainda falta:
+
+- **token do runner**, sem ecoar. Com Enter, o runner fica para depois;
+- **pasta externa do backup**, por exemplo `\\servidor\backups\gestor-pecas`. Com Enter, o backup fica só local. A tarefa roda como SYSTEM, que entra na rede como a conta do computador (`DOMINIO\VM$`), então o compartilhamento precisa dar escrita a ela.
+
+Em sequência, o script:
+
+1. confere se é Administrador, se o pacote está completo e se há 15 GB livres. Se o fuso não for o de Brasília, ajusta;
+2. roda `instalar_prerequisitos.ps1`, `instalar_vm.ps1` e `instalar_runner.ps1`, que são as §3, §4 e §6 abaixo. Não precisa abrir outro PowerShell: o PATH novo é relido entre eles;
+3. agenda o **backup diário** "Gestor de Pecas - backup diario", às 02:00, como SYSTEM:
+   - `pg_dump` em `C:\gestor-pecas\backups\diario-*.dump`, com cópia na pasta externa;
+   - retenção de 14 dias dos dois lados. Os `pre-deploy-*.dump` do pipeline não entram nessa retenção;
+   - o script da tarefa fica em `C:\gestor-backup`, fora de `C:\gestor-pecas`, porque o runner escreve lá. O log fica em `C:\gestor-backup\backup.log`;
+   - o script roda o primeiro backup na hora e para se ele falhar;
+4. move o `postgres-senha.txt` para `C:\gestor-backup` (só Administradores) e **apaga o pacote**, com o dump do REAL e a chave TLS, e a pasta `C:\instalacao`. Isso só acontece se o runner estiver registrado; para manter o pacote, use `-ManterPacote`;
+5. imprime um checklist `[OK]`/`[PENDENTE]`: serviços, `/ready` pelo HTTPS, runner, último backup, cópia externa, pacote apagado, senha do `postgres` ainda no disco, e as pendências externas da §8.
+
+Reexecutar é seguro: o que já existe é mantido e nada é perguntado de novo. Parâmetros: `-HoraBackup`, `-RetencaoDias`, `-ManterPacote`.
+
+Depois do checklist, guarde `C:\gestor-backup\postgres-senha.txt` num cofre e apague o arquivo.
+
+### Passo a passo (o que o `instalar.ps1` chama)
 
 Extraia o zip, por exemplo em `C:\instalacao`. Depois, num PowerShell **como Administrador**:
 
