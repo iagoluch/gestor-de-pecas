@@ -117,7 +117,11 @@ if ($ManterPacote -or -not $runnerOk) {
     Remove-Item $Pacote -Recurse -Force
     # Pasta de trabalho do LEIA-ME (zip baixado + pacote extraido): so ela, nunca outra pasta-mae.
     $mae = Split-Path -Parent $Pacote
-    if ((Split-Path -Leaf $mae) -eq "instalacao") { Remove-Item $mae -Recurse -Force }
+    if ((Split-Path -Leaf $mae) -eq "instalacao") {
+        # Falha se o console que chamou o script esta dentro dela; o que importa (pacote) ja saiu.
+        Remove-Item $mae -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path $mae) { Write-Warning "$mae em uso: apague-a depois de sair dela (cd \)." }
+    }
     Write-Host "Pacote apagado."
 }
 
