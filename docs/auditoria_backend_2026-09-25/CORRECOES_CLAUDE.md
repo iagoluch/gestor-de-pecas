@@ -721,3 +721,21 @@ Tudo rodou no HEAD `2e791ea`, no TEST (`gestor_pecas_test`, em schemas descartá
 - **ONDA 5:** se a `totvs_outbox` crescer sem expurgo, `canonical_event_id` é a próxima FK a indexar.
 - **ONDA 6:** o `AIUserRateLimiter` é por processo. Com vários workers, o limite efetivo se multiplica.
 - **GATE (novo, P3):** com `serve_static`, um caminho inexistente sob `/api/v1/*` (por exemplo `/api/v1/ready` sem `/system`) cai no fallback da SPA e devolve **200 com `index.html`**, e não 404. O gate de deploy usa o caminho certo (`deploy_release.ps1:5`), mas um erro de digitação nessa URL passaria como saudável.
+
+---
+
+## PÓS-GATE — 30/09/2026 (decisões do usuário)
+
+| Item | Decisão/ação | Resultado |
+|---|---|---|
+| **P3** (fallback da SPA) | Corrigir | `SpaStaticFiles._spa_fallback`: caminho sob `api/` não recebe mais o `index.html`, devolve 404. Rotas do React seguem no fallback. `tests/test_spa_static.py`: 2 testes, o de API **falha sem a correção** e passa com ela. `test_web_api` + `test_dev_observatory` + novo: 91 passed |
+| **BK-23** | `DROP SCHEMA … CASCADE` aprovado | Os 12 órfãos listados e conferidos antes (prefixos de teste + UUID, nenhuma outra sessão conectada), removidos por nome explícito. O TEST ficou só com `public`. **FECHADO** |
+| **BK-17** | Contagem somente leitura aprovada; `VALIDATE` se desse 0 | Transação `READ ONLY` no REAL (`gestor_pecas`): **a constraint não existe lá**. O REAL está em `schema_migrations` **versão 11** (aplicada em 19/08/2026, 2 apontamentos, 0 violariam a regra). O `VALIDATE` **não se aplica**: as migrations 12..52 nunca rodaram no REAL. Nada foi escrito. Quando o REAL for migrado, a constraint nasce `NOT VALID` e o `VALIDATE` pode seguir, já que hoje há 0 violações. Migrar o REAL é outra decisão, **não aprovada** |
+| **BK-01** | Critério de carga revisto: o usuário estima **< 5 operadores iniciando ao mesmo tempo**, e 10+ é improvável | Harness no TEST com `PGPOOL_MAX_SIZE=4` (o valor do `.env`/`.env.example`), 45 s, 5 gestores em paralelo. `acao_inicio` p95: **5 op. = 528 ms ✅**; 10 op. = 911 / 1053 ms (duas rodadas, na borda); 40 op. = 2,0–2,3 s (GATE). 0 respostas 5xx e todos os logins/finalizações em todas as rodadas. **FECHADO com o critério "p95 < 1 s até 5 inícios simultâneos"**. Multiprocesso não é necessário agora; ele volta à mesa se a operação passar de ~10 inícios simultâneos. Medido no notebook; a VM pode diferir |
+
+Com pool 10 e 10 operadores, o p95 foi pior (1165 ms) que com pool 4. Mais conexões não ajudam quando o gargalo é o processo único.
+
+### Pendências restantes
+
+- **BK-09, BK-15 (TLS) e BK-08 (VM):** infraestrutura externa, sem mudança.
+- **REAL em schema 11:** precisa de decisão sobre quando/como promover o REAL para a versão 52 (fora do escopo desta auditoria).

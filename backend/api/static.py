@@ -21,14 +21,19 @@ class SpaStaticFiles(StaticFiles):
         # por longo prazo. O index continua sempre revalidável.
         return bool(re.search(r"-[A-Za-z0-9_-]{7,}\.(?:js|css|png|jpg|jpeg|svg|webp|woff2?)$", path))
 
+    def _spa_fallback(self, path: str) -> bool:
+        # Rota de API inexistente é 404 de verdade: devolver o index com 200
+        # faria um health check com URL errada passar como saudável.
+        return self.index_file.is_file() and not path.replace("\\", "/").startswith("api/")
+
     async def get_response(self, path: str, scope):
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
-            if exc.status_code == 404 and self.index_file.is_file():
+            if exc.status_code == 404 and self._spa_fallback(path):
                 return FileResponse(self.index_file, headers={"Cache-Control": "no-cache"})
             raise
-        if response.status_code == 404 and self.index_file.is_file():
+        if response.status_code == 404 and self._spa_fallback(path):
             return FileResponse(self.index_file, headers={"Cache-Control": "no-cache"})
         if self._immutable_asset(path):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
