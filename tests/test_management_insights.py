@@ -233,7 +233,10 @@ class ManagementInsightsTests(unittest.TestCase):
         repository = _InsightsRepository(with_targets=True)
         self._facade(repository).insights(self.filters)
 
-        self.assertLessEqual(repository.calls["facts"], 2)
+        # 1 consulta do filtro + 1 larga do rateio de OPs simultâneas
+        # (IndustrialAnalyticsService._concurrent_production_seconds): custo
+        # constante, independente do número de recursos.
+        self.assertLessEqual(repository.calls["facts"], 3)
         self.assertLessEqual(repository.calls["states"], 2)
         self.assertLessEqual(repository.calls["quantities"], 2)
         self.assertLessEqual(repository.calls["rateios"], 2)
@@ -243,6 +246,11 @@ class ManagementInsightsTests(unittest.TestCase):
                 self.assertEqual(filters["recurso"], "1303")
                 continue
             self.assertEqual(filters.get("setor"), "Dobra")
+            # A consulta larga do rateio mantém o setor e descarta o recurso
+            # de propósito: o recurso é comparado por identidade canônica em
+            # Python (apelidos do posto não casam por texto no SQL).
+            if source == "facts" and filters.get("recurso") is None:
+                continue
             self.assertEqual(filters.get("recurso"), "1303")
 
     def test_endpoint_de_explicacao_rejeita_kpi_desconhecido_no_dominio(self):
