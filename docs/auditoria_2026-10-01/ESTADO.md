@@ -11,17 +11,17 @@ Nemotron 3 Ultra (Goose CLI, somente leitura). E2E humanizado com vídeo, galeri
 ## Matriz dos 11 pontos (HEAD 9d54e11 já os implementou; aqui está a prova por teste executado)
 | # | Ponto | Prova executada | Status |
 |---|---|---|---|
-| 1 | Tempo padrão do Protheus (0,01 = não configurado) | `tests/` (mapper/parser TOTVS) na suíte completa | PASS (suíte completa 1472 verdes) |
+| 1 | Tempo padrão do Protheus (0,01 = não configurado) | `test_totvs_integration.py::test_tempo_padrao_nao_configurado_no_protheus_vira_nulo` (0, -1, 0.01) | PASS |
 | 2 | Múltiplas ordens dividem o tempo | `test_concurrent_resource_production.py` (verde) + `_concurrent_production_seconds` | PASS |
 | 3 | Fila da Solda por estação (409 em outra estação) | `test_totvs_operator_queue.py` (verde) | PASS |
 | 4 | Parada após selecionar tarefa | `operator.test.tsx` "Destaque: Parada segue disponível…" (verde) | PASS |
 | 5 | Desselecionar recolhe | idem (clicar de novo desseleciona) | PASS |
 | 6 | Chamadas Iago Dev × Gestão | `management.test.tsx` (verde) | PASS |
 | 7 | Sem nomes brutos na UI | `display-names.test.tsx` (verde) | PASS |
-| 8 | IA sem dado bruto | `mes/services/ai_presentation.py` + testes de IA na suíte completa | PASS (suíte completa 1472 verdes) |
+| 8 | IA sem dado bruto | `test_ai.py` (`assert_without_leaks` sobre `sanitize_assistant_text`) | PASS |
 | 9 | Filtro de pausas | `pauses.test.tsx` (verde) | PASS |
 | 10 | Aba Metas oculta | `management.test.tsx` (verde) | PASS |
-| 11 | Telegram (fluxo/auditoria) | testes de Telegram na suíte completa | PASS (suíte completa 1472 verdes) |
+| 11 | Telegram (fluxo/auditoria) | `test_telegram_bot.py` (fluxo) + `test_internal_alert_dispatcher.py` (marca enviada, tentativa na falha, histórico de entrega, sem crachá/tipo cru) — 167 verdes nos 4 arquivos TOTVS/IA/Telegram/Chamadas | PASS |
 
 ## Achados e correções desta sessão
 1. **Guarda anti-N+1 do `insights` falhava (3 > 2 consultas de fatos)** — causa-raiz: o rateio de OPs simultâneas
@@ -52,3 +52,8 @@ Nota: a extensão `claude-sync:headroom` falha ao iniciar no Goose (incompatibil
 - E2E Playwright humanizado (apontamento completo, múltiplas ordens, pausa/retorno) com vídeo/trace + galeria HTML.
 - Passada de qualidade (código morto/duplicação) e auditoria linha-a-linha de backend/segurança além do que a suíte cobre.
 - Invariantes de concorrência em Postgres real (`TEST_DATABASE_URL`) e lint/bandit/pip-audit locais.
+
+## Rodada 2 (02/10)
+- bandit `-ll` (igual ao CI): **0** achados. pip-audit `requirements.lock`: **0** CVE. `npm audit`: 2 moderadas (`@vitest/mocker`, só dev), abaixo do corte `high` do CI.
+- **Varredura E2E de rotas** (`tests/e2e_sweep.py`, preview com `GESTOR_VISUAL_AUTOLOGIN=1`): 41/41 rotas sem erro de console, sem HTTP ≥ 400 e sem texto cru (`undefined`/`[object`/`NaN`/`null`). Galeria: `e2e/index.html` (PNGs + `results.json` versionados; `video/` e `trace.zip` ficam só locais, ~38 MB). Prova visual dos pontos 6 e 10 (abas da Visão Geral sem Metas e sem Chamadas Dev).
+- **Lacuna da varredura:** `/operador` caiu na home do gestor (autologin é gestor, `operator_access=False`) — o fluxo de operador (apontar, múltiplas ordens, pausa/retorno) **não** foi exercitado no navegador.

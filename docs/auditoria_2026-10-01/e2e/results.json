@@ -1,0 +1,330 @@
+[
+ {
+  "route": "/inicio/visao-geral",
+  "shot": "inicio__visao-geral.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/setores",
+  "shot": "inicio__setores.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/alertas",
+  "shot": "inicio__alertas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/metas",
+  "shot": "inicio__metas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/pausas",
+  "shot": "inicio__pausas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/crachas",
+  "shot": "inicio__crachas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/chamadas",
+  "shot": "inicio__chamadas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/chamadas-dev",
+  "shot": "inicio__chamadas-dev.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/turnos",
+  "shot": "inicio__turnos.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/sistema",
+  "shot": "inicio__sistema.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/cadastro",
+  "shot": "inicio__cadastro.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/inicio/ia",
+  "shot": "inicio__ia.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/consulta-operacional/visao-geral",
+  "shot": "consulta-operacional__visao-geral.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/consulta-operacional/recursos",
+  "shot": "consulta-operacional__recursos.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/consulta-operacional/ops-em-andamento",
+  "shot": "consulta-operacional__ops-em-andamento.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/consulta-operacional/tempo-mes",
+  "shot": "consulta-operacional__tempo-mes.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/producao/ordens",
+  "shot": "producao__ordens.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/producao/realizada",
+  "shot": "producao__realizada.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/producao/planejado-realizado",
+  "shot": "producao__planejado-realizado.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/oee",
+  "shot": "analises__oee.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/horas-utilizacao",
+  "shot": "analises__horas-utilizacao.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/paradas",
+  "shot": "analises__paradas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/qualidade",
+  "shot": "analises__qualidade.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/tempo-padrao-real",
+  "shot": "analises__tempo-padrao-real.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/cronoanalise",
+  "shot": "analises__cronoanalise.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/capacidade-gargalos",
+  "shot": "analises__capacidade-gargalos.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/analises/confiabilidade",
+  "shot": "analises__confiabilidade.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/auditoria/apontamentos",
+  "shot": "auditoria__apontamentos.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/auditoria/inconsistencias",
+  "shot": "auditoria__inconsistencias.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/auditoria/confiabilidade",
+  "shot": "auditoria__confiabilidade.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/relatorios/gerencial",
+  "shot": "relatorios__gerencial.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/relatorios/producao",
+  "shot": "relatorios__producao.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/relatorios/perdas",
+  "shot": "relatorios__perdas.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/relatorios/indicadores",
+  "shot": "relatorios__indicadores.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/relatorios/dados-analiticos",
+  "shot": "relatorios__dados-analiticos.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/rastreabilidade/op-produto",
+  "shot": "rastreabilidade__op-produto.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/rastreabilidade/linha-do-tempo",
+  "shot": "rastreabilidade__linha-do-tempo.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/rastreabilidade/lote-material-nesting",
+  "shot": "rastreabilidade__lote-material-nesting.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/andon",
+  "shot": "andon.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/welding-management",
+  "shot": "welding-management.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ },
+ {
+  "route": "/operador",
+  "shot": "operador.png",
+  "console": [],
+  "http": [],
+  "raw": [],
+  "ok": true
+ }
+]
