@@ -49,11 +49,15 @@ Nota: a extensão `claude-sync:headroom` falha ao iniciar no Goose (incompatibil
 - Lint: não há script `lint` no `web/package.json`; Python usa bandit/pip-audit só no CI (não rodados aqui).
 
 ## Pendências reais (não feitas por limite de orçamento, não por bloqueio técnico)
-- E2E Playwright humanizado (apontamento completo, múltiplas ordens, pausa/retorno) com vídeo/trace + galeria HTML.
+- E2E humanizado: Solda por estação (409 em outra estação, ponto 3), Corte e fluxo de Qualidade; galeria única juntando as 3 pastas.
 - Passada de qualidade (código morto/duplicação) e auditoria linha-a-linha de backend/segurança além do que a suíte cobre.
 - Invariantes de concorrência em Postgres real (`TEST_DATABASE_URL`) e lint/bandit/pip-audit locais.
 
 ## Rodada 2 (02/10)
 - bandit `-ll` (igual ao CI): **0** achados. pip-audit `requirements.lock`: **0** CVE. `npm audit`: 2 moderadas (`@vitest/mocker`, só dev), abaixo do corte `high` do CI.
 - **Varredura E2E de rotas** (`tests/e2e_sweep.py`, preview com `GESTOR_VISUAL_AUTOLOGIN=1`): 41/41 rotas sem erro de console, sem HTTP ≥ 400 e sem texto cru (`undefined`/`[object`/`NaN`/`null`). Galeria: `e2e/index.html` (PNGs + `results.json` versionados; `video/` e `trace.zip` ficam só locais, ~38 MB). Prova visual dos pontos 6 e 10 (abas da Visão Geral sem Metas e sem Chamadas Dev).
-- **Lacuna da varredura:** `/operador` caiu na home do gestor (autologin é gestor, `operator_access=False`) — o fluxo de operador (apontar, múltiplas ordens, pausa/retorno) **não** foi exercitado no navegador.
+- **Fluxos de operador no navegador** (preview com `GESTOR_VISUAL_AUTOLOGIN=operador|destaque`; vídeo/trace locais, PNGs por passo em `e2e/operador/` e `e2e/destaque/`):
+  - `tests/e2e_operator_flow.py` (Dobra 1303), 9/9 PASS: carregar roteiro, Iniciar, 2 OPs simultâneas em produção (ponto 2 na UI), Parada com motivos oficiais, confirmar, "Retomar produção" e Parada de novo disponível.
+  - `tests/e2e_destaque_flow.py`, 5/5 PASS: selecionar tarefa → Parada segue disponível → clicar de novo recolhe (pontos 4 e 5 no navegador).
+  - Armadilha achada: `inner_text` devolve caixa alta por CSS (`text-transform`); asserção de "não contém" com texto em maiúsculas passava sempre. Usar regex `re.I`.
+  - Fora do E2E: divisão do tempo entre OPs (ponto 2) é provada só por teste unitário/rateio; o preview usa banco fake, não Postgres.

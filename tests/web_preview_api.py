@@ -445,14 +445,17 @@ if settings.ai_enabled and settings.ai_configured:
     database.criar_conversa_ia(visual_manager_id, "Como está a fábrica agora?")
     if os.getenv("GESTOR_VISUAL_AI_COOLDOWN") == "1":
         app.state.ai_rate_limit.activate({"retry_after": "90"})
-if os.getenv("GESTOR_VISUAL_AUTOLOGIN") == "1":
+_autologin = os.getenv("GESTOR_VISUAL_AUTOLOGIN")
+if _autologin in ("1", "operador", "destaque"):
+    # "operador" = Dobra, "destaque" = Destaque; "1" = gestor com Andon.
+    _as_operator = _autologin != "1"
     visual_manager = SessionUser(
         id=visual_manager_id,
-        name="Gestor Visual",
-        role="gestor",
-        management_access=True,
-        andon_access=True,
-        operator_access=False,
+        name={"operador": "Operador Dobra Visual", "destaque": "Operador Destaque Visual"}.get(_autologin, "Gestor Visual"),
+        role={"operador": "operador_dobra", "destaque": "operador_destaque"}.get(_autologin, "gestor"),
+        management_access=not _as_operator,
+        andon_access=not _as_operator,
+        operator_access=_as_operator,
     )
     app.dependency_overrides[get_current_user] = lambda: visual_manager
     app.dependency_overrides[require_csrf] = lambda: None
