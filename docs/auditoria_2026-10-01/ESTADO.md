@@ -35,7 +35,7 @@ Nemotron 3 Ultra (Goose CLI, somente leitura). E2E humanizado com vídeo, galeri
 
 ## Evidências
 Logs brutos: `_py_targeted.log`, `_py_full.log`, `_web_build.log`, `_vitest_targeted.log`, `_vitest_full.log`.
-Nemotron 3 Ultra (Goose CLI `C:\Program Files (x86)\dist-windowsesourcesin\goose.exe run -i -`) foi acionado para o inventário de dívida
+Nemotron 3 Ultra (Goose CLI: `dist-windows/resources/bin/goose.exe run -i -`, em `C:/Program Files (x86)`) foi acionado para o inventário de dívida
 técnica e caiu com `Stream decode error` (rede) antes de gravar; o inventário foi refeito via ripgrep: **0** TODO/FIXME/HACK,
 **0** `except:` nu, **0** `except Exception: pass`, **0** `any` em produção, 2 `print` só em CLIs (bootstrap_admin, seed_dev).
 Nota: a extensão `claude-sync:headroom` falha ao iniciar no Goose (incompatibilidade de handshake MCP `server/discover`) — não bloqueia.
@@ -51,4 +51,4 @@ Nota: a extensão `claude-sync:headroom` falha ao iniciar no Goose (incompatibil
 ## Pendências reais (não feitas por limite de orçamento, não por bloqueio técnico)
 - E2E Playwright humanizado (apontamento completo, múltiplas ordens, pausa/retorno) com vídeo/trace + galeria HTML.
 - Passada de qualidade (código morto/duplicação) e auditoria linha-a-linha de backend/segurança além do que a suíte cobre.
-- Smoke E2E existente (`tests/test_e2e_smoke.py`) não foi executado nesta sessão (precisa chromium + preview).
+- Invariantes de concorrência em Postgres real (`TEST_DATABASE_URL`) e lint/bandit/pip-audit locais.
