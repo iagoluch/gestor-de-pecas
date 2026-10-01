@@ -2390,6 +2390,27 @@ RESOURCE_STATE_LEGACY_HISTORY_STATEMENTS = (
     "ALTER TABLE eventos_estado_recurso VALIDATE CONSTRAINT ck_eventos_estado_recurso_codigo_canonico",
 )
 
+# Achado do pentest Strix: nada impedia duas pausas do mesmo setor com a
+# mesma `ordem` — a UNIQUE existente é em (tipo_setor, nome, hora_inicio), que
+# não cobre isso. A rodada de teste chegou a criar pausas com `ordem` 50
+# duplicado no banco gestor_pecas_test, então a deduplicação roda ANTES do
+# índice único, renumerando por (tipo_setor, id) qualquer empate.
+PAUSA_SETOR_ORDEM_UNICA_DESCRIPTION = "ordem única por setor em pausas_automaticas_setor"
+PAUSA_SETOR_ORDEM_UNICA_STATEMENTS = (
+    """
+    UPDATE pausas_automaticas_setor p
+    SET ordem = renumerada.nova_ordem
+    FROM (
+        SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY UPPER(tipo_setor) ORDER BY ordem, id
+        ) AS nova_ordem
+        FROM pausas_automaticas_setor
+    ) AS renumerada
+    WHERE p.id = renumerada.id AND p.ordem <> renumerada.nova_ordem
+    """,
+    "CREATE UNIQUE INDEX uq_pausa_setor_ordem ON pausas_automaticas_setor (UPPER(tipo_setor), ordem)",
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2446,6 +2467,7 @@ MIGRATIONS = {
     51: (RESOURCE_STATE_CANONICAL_CODE_DESCRIPTION, RESOURCE_STATE_CANONICAL_CODE_STATEMENTS),
     52: (PERIOD_OVERLAP_INDEX_DESCRIPTION, PERIOD_OVERLAP_INDEX_STATEMENTS),
     53: (RESOURCE_STATE_LEGACY_HISTORY_DESCRIPTION, RESOURCE_STATE_LEGACY_HISTORY_STATEMENTS),
+    54: (PAUSA_SETOR_ORDEM_UNICA_DESCRIPTION, PAUSA_SETOR_ORDEM_UNICA_STATEMENTS),
 }
 
 

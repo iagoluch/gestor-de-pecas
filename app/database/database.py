@@ -35,7 +35,7 @@ from app.database.totvs_op_sync_repository import TotvsOpSyncRepositoryMixin
 from app.database.welding_repository import WeldingRepositoryMixin
 from app.database.connection import PostgresPoolManager
 from app.database.diagnostics import run_database_diagnostic
-from app.database.errors import DatabaseIntegrityError
+from app.database.errors import DatabaseIntegrityError, PauseOrderConflictError
 from app.database.migrations import apply_migrations
 from app.database.schema import SCHEMA_VERSION
 from mes.integrations.totvs.outbound_enqueue import (
@@ -2936,40 +2936,47 @@ class Database(
             raise ValueError("Setor e nome da pausa são obrigatórios.")
         if hora_inicio == hora_fim:
             raise ValueError("A pausa precisa de horário inicial e final distintos.")
-        with self.connection() as connection, connection.cursor() as cursor:
-            if pausa_id is not None:
-                cursor.execute(
-                    """
-                    UPDATE pausas_automaticas_setor
-                    SET tipo_setor = %s, nome = %s, hora_inicio = %s, hora_fim = %s,
-                        ativo = %s, ordem = %s, atualizado_por = %s,
-                        atualizado_em = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                    RETURNING *
-                    """,
-                    (setor, rotulo, hora_inicio, hora_fim, bool(ativo), int(ordem),
-                     operador, int(pausa_id)),
-                )
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO pausas_automaticas_setor (
-                        tipo_setor, nome, hora_inicio, hora_fim, ativo, ordem,
-                        atualizado_por
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (UPPER(tipo_setor), nome, hora_inicio) DO UPDATE SET
-                        hora_fim = EXCLUDED.hora_fim,
-                        ativo = EXCLUDED.ativo,
-                        ordem = EXCLUDED.ordem,
-                        atualizado_por = EXCLUDED.atualizado_por,
-                        atualizado_em = CURRENT_TIMESTAMP
-                    RETURNING *
-                    """,
-                    (setor, rotulo, hora_inicio, hora_fim, bool(ativo), int(ordem),
-                     operador),
-                )
-            row = cursor.fetchone()
-            return dict(row) if row else None
+        try:
+            with self.connection() as connection, connection.cursor() as cursor:
+                if pausa_id is not None:
+                    cursor.execute(
+                        """
+                        UPDATE pausas_automaticas_setor
+                        SET tipo_setor = %s, nome = %s, hora_inicio = %s, hora_fim = %s,
+                            ativo = %s, ordem = %s, atualizado_por = %s,
+                            atualizado_em = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                        RETURNING *
+                        """,
+                        (setor, rotulo, hora_inicio, hora_fim, bool(ativo), int(ordem),
+                         operador, int(pausa_id)),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO pausas_automaticas_setor (
+                            tipo_setor, nome, hora_inicio, hora_fim, ativo, ordem,
+                            atualizado_por
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (UPPER(tipo_setor), nome, hora_inicio) DO UPDATE SET
+                            hora_fim = EXCLUDED.hora_fim,
+                            ativo = EXCLUDED.ativo,
+                            ordem = EXCLUDED.ordem,
+                            atualizado_por = EXCLUDED.atualizado_por,
+                            atualizado_em = CURRENT_TIMESTAMP
+                        RETURNING *
+                        """,
+                        (setor, rotulo, hora_inicio, hora_fim, bool(ativo), int(ordem),
+                         operador),
+                    )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except UniqueViolation as exc:
+            if exc.diag.constraint_name == "uq_pausa_setor_ordem":
+                raise PauseOrderConflictError(
+                    f"Já existe uma pausa do setor '{setor}' com a ordem {int(ordem)}."
+                ) from exc
+            raise
 
     def remover_pausa_automatica(self, pausa_id):
         with self.connection() as connection, connection.cursor() as cursor:

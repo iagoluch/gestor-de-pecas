@@ -21,6 +21,10 @@ class DuplicateActiveAppointmentError(DatabaseError):
     """Raised when an OP already has an active appointment in the sector."""
 
 
+class PauseOrderConflictError(DatabaseError):
+    """Raised when two automatic pauses of the same sector share ``ordem``."""
+
+
 
 class DatabaseIntegrityError(DatabaseError):
     """Raised when a fact cannot be persisted together with its obligations.

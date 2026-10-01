@@ -11,6 +11,7 @@ from app.database.errors import (
     DatabaseMigrationError,
     DatabaseUnavailableError,
     DuplicateActiveAppointmentError,
+    PauseOrderConflictError,
 )
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "DatabaseMigrationError",
     "DatabaseUnavailableError",
     "DuplicateActiveAppointmentError",
+    "PauseOrderConflictError",
 ]
 
 

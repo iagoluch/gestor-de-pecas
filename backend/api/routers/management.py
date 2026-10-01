@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from app.core.permissions import USER_LEVELS
+from app.database.errors import PauseOrderConflictError
 from backend.api.database import get_database
 from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.auth import (
@@ -141,6 +142,8 @@ def save_pause(
             pausa_id=payload.id,
             operador=user.name,
         )
+    except PauseOrderConflictError as exc:
+        raise AppError("pause_order_taken", str(exc), status_code=409) from exc
     except ValueError as exc:
         raise AppError("invalid_pause_window", str(exc)) from exc
     if row is None:
