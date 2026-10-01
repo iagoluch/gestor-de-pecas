@@ -545,6 +545,56 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         for setor in ("Usinagem", "Serra", "Dobra", "Pintura", "Solda Aço", "Montagem"):
             self.assertEqual(self.db.listar_proximas_operacoes_roteiro(setor), [])
 
+    def _tempos_por_operacao(self, codigo_op="A9716901001"):
+        return {
+            row["numero_operacao"]: row["tempo_medio_segundos"]
+            for row in self._rows(
+                "SELECT numero_operacao, tempo_medio_segundos "
+                "FROM catalogo_operacoes_op WHERE codigo_op = %s",
+                (codigo_op,),
+            )
+        }
+
+    @classmethod
+    def _payload_usinagem_com_tempo(cls, time_resource: str, generated_minute: int) -> str:
+        """Versão posterior da OP real (GeneratedOn maior) com novo TimeResource."""
+
+        raw = cls._real_payload().replace(
+            "<GeneratedOn>2026-08-27T12:02:32</GeneratedOn>",
+            f"<GeneratedOn>2026-08-27T12:{generated_minute:02d}:32</GeneratedOn>",
+        )
+        start = raw.index("<ActivityID>160893</ActivityID>")
+        end = raw.index("</ActivityOrder>", start)
+        block = re.sub(
+            r"<TimeResource>[^<]*</TimeResource>",
+            f"<TimeResource>{time_resource}</TimeResource>",
+            raw[start:end],
+        )
+        return raw[:start] + block + raw[end:]
+
+    def test_tempo_padrao_do_protheus_e_gravado_e_reimportacao_nao_zera(self):
+        # OP real: USINAGEM 0.01 = não configurado; CORTE fica sem tempo TOTVS.
+        self.service.ingest(self._real_payload())
+        self.assertEqual(self._tempos_por_operacao(), {
+            "10": None, "20": None, "30": None, "99": None,
+        })
+
+        # Protheus passa a trazer 0,05 h/peça na USINAGEM → 180 s.
+        self.service.ingest(self._payload_usinagem_com_tempo("0.05", 10))
+        tempos = self._tempos_por_operacao()
+        self.assertEqual(float(tempos["20"]), 180.0)
+        self.assertIsNone(tempos["10"])
+
+        # Reimportação com 0,01 (não configurado) não apaga o valor existente.
+        self.service.ingest(self._payload_usinagem_com_tempo("0.01", 20))
+        self.assertEqual(float(self._tempos_por_operacao()["20"]), 180.0)
+
+    def test_reimportacao_sem_tempo_preserva_tempo_sintetico(self):
+        self.service.ingest(self._real_payload())
+        self.db.definir_tempo_padrao_operacao("A9716901001", 42, origem="SIMULAÇÃO")
+        self.service.ingest(self._payload_usinagem_com_tempo("0", 10))
+        self.assertEqual(float(self._tempos_por_operacao()["20"]), 42.0)
+
     def test_marco_terminal_e_persistido_mas_invisivel_para_o_operador(self):
         """O 99/ALMOX4 existe no roteiro para o outbound e nunca vira posto."""
 
@@ -762,6 +812,110 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
                 fila = self.flow.listar_cartoes("Solda Aço", estacao)["queue"]
                 self.assertEqual(len(fila), 1)
                 self.assertEqual(fila[0]["codigo_recurso"], "MT NT")
+
+    def _solda_com_op_em_todas_as_estacoes(self, codigo_op="SOLDA-FILA-1"):
+        self._seed_execucao()
+        self._seed_rota_manual(
+            codigo_op,
+            [
+                {
+                    "numero_operacao": "10",
+                    "descricao_operacao": "SOLDA",
+                    "tipo_setor": "Solda Aço",
+                    "codigo_recurso": "MT NT",
+                    "ordem": 1,
+                }
+            ],
+        )
+        operacao = self.db.listar_operacoes_para_op(codigo_op)[0]
+        return operacao, lambda estacao: dict(
+            op=codigo_op, setor="Solda Aço", recurso=estacao, operacao=operacao
+        )
+
+    def test_solda_op_apontada_por_uma_estacao_some_da_fila_das_outras(self):
+        """Decisão 01/10/2026: aparece em todas; apontada, sai de todas."""
+
+        operacao, ctx = self._solda_com_op_em_todas_as_estacoes()
+        for estacao in ("Estação 1", "Estação 2"):
+            self.assertEqual(len(self.flow.listar_cartoes("Solda Aço", estacao)["queue"]), 1)
+
+        self.assertTrue(self.flow.executar("Início", **ctx("Estação 1")).ok)
+        for estacao in ("Estação 1", "Estação 2", "Estação 3"):
+            with self.subTest(estacao=estacao):
+                self.assertEqual(self._fila("Solda Aço", estacao), [])
+
+        # O roteiro da estação 2 não oferece mais a operação e o backend recusa.
+        roteiro = self.flow.listar_operacoes("SOLDA-FILA-1", "Solda Aço", "Estação 2")
+        self.assertFalse(roteiro[0]["selectable"])
+        self.assertEqual(roteiro[0]["apontada_em_estacao"], "Estação 1")
+        recusa = self.flow.executar("Início", **ctx("Estação 2"))
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "operacao_ja_apontada_em_outra_estacao")
+        self.assertEqual(recusa.data["estacao_apontada"], "Estação 1")
+        self.assertEqual(
+            self._scalar(
+                "SELECT COUNT(*) FROM apontamentos_operacionais WHERE op = %s",
+                ("SOLDA-FILA-1",),
+            ),
+            1,
+        )
+
+        # A própria estação segue operando a mesma linha.
+        self.assertTrue(self.flow.executar("Parada", motivo_codigo="0201", **ctx("Estação 1")).ok)
+        self.assertTrue(self.flow.executar("Retomar", **ctx("Estação 1")).ok)
+
+    def test_solda_recusa_tambem_entre_setores_diferentes_da_solda(self):
+        # B4: Aço x Alumínio, mesmo quando a operação nem consta no roteiro do
+        # outro setor (selected_route None).
+        operacao, ctx = self._solda_com_op_em_todas_as_estacoes("SOLDA-FILA-3")
+        self.assertTrue(self.flow.executar("Início", **ctx("Estação 1")).ok)
+
+        recusa = self.flow.executar(
+            "Início", op="SOLDA-FILA-3", setor="Solda Alumínio",
+            recurso="Estação 5", operacao=operacao,
+        )
+
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "operacao_ja_apontada_em_outra_estacao")
+        self.assertEqual(recusa.data["estacao_apontada"], "Estação 1")
+
+    def test_recurso_em_uso_informa_ocupantes_e_se_aceita_producao_simultanea(self):
+        operacao, ctx = self._solda_com_op_em_todas_as_estacoes("SOLDA-FILA-4")
+        self.assertIsNone(self.flow.recurso_em_uso("Solda Aço", "Estação 1"))
+        self.assertTrue(self.flow.executar("Início", **ctx("Estação 1")).ok)
+
+        uso = self.flow.recurso_em_uso("Solda Aço", "Estação 1")
+
+        self.assertEqual(uso["ocupantes_total"], 1)
+        self.assertEqual(uso["ocupantes"][0]["op"], "SOLDA-FILA-4")
+        self.assertEqual(uso["ocupantes"][0]["status"], "Em processo")
+        self.assertTrue(uso["aceita_producao_simultanea"])
+
+    def test_solda_parcial_continua_so_na_estacao_dona_e_total_remove_de_todas(self):
+        operacao, ctx = self._solda_com_op_em_todas_as_estacoes("SOLDA-FILA-2")
+        self.assertTrue(self.flow.executar("Início", **ctx("Estação 1")).ok)
+        parcial = self.flow.executar(
+            "Finalizado", pecas_boas=4, operadores_cracha=["9001"], **ctx("Estação 1")
+        )
+        self.assertEqual(parcial.code, "finalizacao_parcial")
+        # Continuação da mesma linha: só a estação dona a enxerga.
+        self.assertEqual(len(self._fila("Solda Aço", "Estação 1")), 1)
+        self.assertEqual(self._fila("Solda Aço", "Estação 2"), [])
+        outra = self.flow.executar("Início", **ctx("Estação 2"))
+        self.assertEqual(outra.code, "operacao_ja_apontada_em_outra_estacao")
+
+        self.assertTrue(self.flow.executar("Início", **ctx("Estação 1")).ok)
+        final = self.flow.executar(
+            "Finalizado",
+            pecas_boas=self._quantidade_da_op("SOLDA-FILA-2") - 4,
+            operadores_cracha=["9001"],
+            **ctx("Estação 1"),
+        )
+        self.assertTrue(final.ok, final.message)
+        for estacao in ("Estação 1", "Estação 2"):
+            self.assertEqual(self._fila("Solda Aço", estacao), [])
+        reaberta = self.flow.executar("Início", **ctx("Estação 2"))
+        self.assertEqual(reaberta.code, "operacao_finalizada")
 
     def test_recurso_de_outro_setor_nao_vaza_para_pintura_ou_solda(self):
         self._seed_rota_manual(

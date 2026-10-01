@@ -9,7 +9,7 @@ function tone(value: string) {
   if (matchesAny(normalized, ["concluído", "concluido", "normal", "ok", "ativa", "produção", "producao", "finalizado"])) return "success";
   if (matchesAny(normalized, ["crítico", "critico", "atrasado", "erro", "parada"])) return "danger";
   if (matchesAny(normalized, ["atenção", "atencao", "setup", "alerta"])) return "warning";
-  if (matchesAny(normalized, ["processo", "destaque", "executando"])) return "info";
+  if (matchesAny(normalized, ["processo", "destaque", "executando", "informação", "informacao"])) return "info";
   return "neutral";
 }
 

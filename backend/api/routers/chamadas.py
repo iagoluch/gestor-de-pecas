@@ -19,7 +19,10 @@ from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import ChamadaContatoRequest, ChamadaRequest
 from app.core.operator_sectors import OPERATOR_SECTORS
 from app.core.permissions import operator_sector_for_user_level
-from mes.integrations.notifications.telegram import format_chamada_message
+from mes.integrations.notifications.telegram import (
+    format_chamada_message,
+    telegram_outbound_allowed,
+)
 from mes.services.telegram_alerts import deliver_chamada, station_context
 
 
@@ -51,6 +54,26 @@ def _contexto_do_posto(user: SessionUser, database, recurso) -> dict:
     if setor is None or recurso not in setor.resources:
         return {}
     return station_context(database, setor=setor.name, recurso=recurso)
+
+
+def telegram_status(chamada: dict) -> str:
+    """Desfecho do aviso, derivado das colunas existentes (sem coluna nova).
+
+    ``enviado``: o Telegram confirmou. ``falhou``: não saiu (``telegram_erro``
+    traz o motivo). ``pendente``: gravada, envio ainda em andamento.
+    """
+
+    if chamada.get("telegram_enviado"):
+        return "enviado"
+    return "falhou" if str(chamada.get("telegram_erro") or "").strip() else "pendente"
+
+
+def _publica(chamada: dict) -> dict:
+    """Linha da chamada sem o chat id do contato e com ``telegram_status``."""
+
+    item = {k: v for k, v in chamada.items() if k != "contato_telegram_chat_id"}
+    item["telegram_status"] = telegram_status(item)
+    return item
 
 
 @router.get("/motivos")
@@ -179,13 +202,16 @@ def criar_chamada(
     chat_id = str(chamada.get("contato_telegram_chat_id") or "").strip() or str(
         getattr(settings, "chamada_telegram_chat_id", "") or ""
     ).strip()
-    if not bot_token or not chat_id:
+    motivo_sem_envio = None
+    if not telegram_outbound_allowed(settings):
+        motivo_sem_envio = "Telegram desligado neste ambiente (TELEGRAM_ENABLED=false)."
+    elif not bot_token or not chat_id:
+        motivo_sem_envio = "Telegram não configurado para o botão de chamada."
+    if motivo_sem_envio:
         chamada = database.marcar_chamada_telegram(
-            chamada["id"],
-            enviado=False,
-            erro="Telegram não configurado para o botão de chamada.",
-        ) or chamada
-        return {"ok": True, "item": chamada, "telegram_agendado": False}
+            chamada["id"], enviado=False, erro=motivo_sem_envio
+        ) or {**chamada, "telegram_erro": motivo_sem_envio}
+        return {"ok": True, "item": _publica(chamada), "telegram_agendado": False}
 
     # A mensagem é montada agora, ainda dentro do request: máquina/OP/peça são
     # o retrato do posto no instante da chamada, não o de quando a tarefa rodar.
@@ -201,7 +227,7 @@ def criar_chamada(
         chat_id=chat_id,
         texto=mensagem,
     )
-    return {"ok": True, "item": chamada, "telegram_agendado": True}
+    return {"ok": True, "item": _publica(chamada), "telegram_agendado": True}
 
 
 # ---------------------------------------------------------------------------
@@ -275,5 +301,5 @@ def historico_chamadas(
     _user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
 ):
-    items = database.listar_chamadas(limite=200)
+    items = [_publica(item) for item in database.listar_chamadas(limite=200)]
     return {"items": items, "count": len(items)}

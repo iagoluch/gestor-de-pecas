@@ -25,6 +25,7 @@ from backend.api.database import get_database
 from backend.api.main import create_app
 from backend.api.routers.chamadas import MOTIVOS
 from backend.api.schemas.auth import SessionUser
+from mes.integrations.notifications.telegram import TelegramSendResult
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
@@ -408,6 +409,13 @@ class ChamadaApiTests(unittest.TestCase):
                 self.assertEqual(motivos.json()["items"], list(MOTIVOS))
 
     def test_criar_chamada_sem_telegram_configurado_registra_mas_nao_envia(self):
+        # Canal ligado, mas sem token/chat: distinto de "desligado" (flag).
+        self.app = create_app(
+            settings=_settings(telegram_enabled=True), database_factory=lambda: self.db
+        )
+        self.app.dependency_overrides[get_database] = lambda: self.db
+        self.app.dependency_overrides[require_csrf] = lambda: None
+        self.client = TestClient(self.app)
         self._as(_operator_user())
         resposta = self.client.post(
             "/api/v1/chamadas",
@@ -490,7 +498,9 @@ class ChamadaApiTests(unittest.TestCase):
     def test_criar_chamada_com_telegram_configurado_envia_e_persiste(self):
         self.app = create_app(
             settings=_settings(
-                telegram_bot_token="token-teste", chamada_telegram_chat_id="-100999"
+                telegram_enabled=True,
+                telegram_bot_token="token-teste",
+                chamada_telegram_chat_id="-100999",
             ),
             database_factory=lambda: self.db,
         )
@@ -499,7 +509,8 @@ class ChamadaApiTests(unittest.TestCase):
         self.client = TestClient(self.app)
         self._as(_operator_user())
         with patch(
-            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
         ) as mocked:
             resposta = self.client.post(
                 "/api/v1/chamadas",
@@ -514,13 +525,90 @@ class ChamadaApiTests(unittest.TestCase):
         # O envio sai fora do request; o desfecho real fica na linha da chamada.
         self.assertTrue(self.db.chamadas[0]["telegram_enviado"])
         self.assertEqual(mocked.call_args.kwargs["chat_id"], "-100999")
-        self.assertIn("Maria Operadora (operador_corte) — crachá 0042", mocked.call_args.kwargs["text"])
+        self.assertIn("Solicitado por: Maria Operadora (Operador de Corte)", mocked.call_args.kwargs["text"])
+        self.assertNotIn("0042", mocked.call_args.kwargs["text"])
+        self.assertNotIn("operador_corte", mocked.call_args.kwargs["text"])
+
+    def test_flag_desligada_com_token_e_chat_nao_envia_e_registra_o_motivo(self):
+        self.app = create_app(
+            settings=_settings(
+                telegram_enabled=False,
+                telegram_bot_token="token-teste",
+                chamada_telegram_chat_id="-100999",
+            ),
+            database_factory=lambda: self.db,
+        )
+        self.app.dependency_overrides[get_database] = lambda: self.db
+        self.app.dependency_overrides[require_csrf] = lambda: None
+        self.client = TestClient(self.app)
+        self._as(_operator_user())
+        with patch("mes.services.telegram_alerts.send_telegram_message_checked") as mocked, patch(
+            "mes.integrations.notifications.telegram.httpx.post"
+        ) as post:
+            resposta = self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Qualidade", "comentario": "x",
+                    "solicitante_cracha": "0042",
+                },
+            )
+        self.assertEqual(resposta.status_code, 200)
+        corpo = resposta.json()
+        self.assertFalse(corpo["telegram_agendado"])
+        mocked.assert_not_called()
+        post.assert_not_called()
+        self.assertFalse(self.db.chamadas[0]["telegram_enviado"])
+        self.assertIn("TELEGRAM_ENABLED=false", self.db.chamadas[0]["telegram_erro"])
+        self.assertEqual(corpo["item"]["telegram_status"], "falhou")
+
+    def test_falha_no_envio_fica_registrada_e_o_historico_reflete_a_verdade(self):
+        self._cliente_com_telegram()
+        self._as(_management_user())
+        falha = TelegramSendResult(ok=False, error="HTTP 400: chat not found", attempts=1)
+        with patch(
+            "mes.services.telegram_alerts.send_telegram_message_checked", return_value=falha
+        ):
+            resposta = self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Qualidade", "comentario": "x",
+                    "solicitante_nome_manual": "Gestor Y", "solicitante_email": "y@x.com",
+                },
+            )
+        # A resposta sai antes do envio: ainda pendente para quem chamou.
+        self.assertTrue(resposta.json()["telegram_agendado"])
+        self.assertEqual(resposta.json()["item"]["telegram_status"], "pendente")
+
+        self.assertFalse(self.db.chamadas[0]["telegram_enviado"])
+        self.assertIn("chat not found", self.db.chamadas[0]["telegram_erro"])
+        historico = self.client.get("/api/v1/chamadas/admin/historico").json()["items"]
+        self.assertEqual(historico[0]["telegram_status"], "falhou")
+
+    def test_resposta_nao_devolve_o_chat_id_do_contato(self):
+        self.db.contatos[1]["telegram_chat_id"] = "555111222"
+        self._cliente_com_telegram()
+        self._as(_operator_user())
+        with patch(
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
+        ):
+            resposta = self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Qualidade", "comentario": "x",
+                    "solicitante_cracha": "0042",
+                },
+            )
+        self.assertNotIn("contato_telegram_chat_id", resposta.json()["item"])
+        self.assertNotIn("555111222", resposta.text)
 
     def test_contato_com_telegram_proprio_e_avisado_direto_nao_no_chat_geral(self):
         self.db.contatos[1]["telegram_chat_id"] = "555111222"
         self.app = create_app(
             settings=_settings(
-                telegram_bot_token="token-teste", chamada_telegram_chat_id="-100999"
+                telegram_enabled=True,
+                telegram_bot_token="token-teste",
+                chamada_telegram_chat_id="-100999",
             ),
             database_factory=lambda: self.db,
         )
@@ -529,7 +617,8 @@ class ChamadaApiTests(unittest.TestCase):
         self.client = TestClient(self.app)
         self._as(_operator_user())
         with patch(
-            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
         ) as mocked:
             resposta = self.client.post(
                 "/api/v1/chamadas",
@@ -545,7 +634,9 @@ class ChamadaApiTests(unittest.TestCase):
     def _cliente_com_telegram(self):
         self.app = create_app(
             settings=_settings(
-                telegram_bot_token="token-teste", chamada_telegram_chat_id="-100999"
+                telegram_enabled=True,
+                telegram_bot_token="token-teste",
+                chamada_telegram_chat_id="-100999",
             ),
             database_factory=lambda: self.db,
         )
@@ -564,7 +655,8 @@ class ChamadaApiTests(unittest.TestCase):
         self._cliente_com_telegram()
         self._as(_operator_user())
         with patch(
-            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
         ) as mocked:
             resposta = self.client.post(
                 "/api/v1/chamadas",
@@ -593,7 +685,8 @@ class ChamadaApiTests(unittest.TestCase):
         self._cliente_com_telegram()
         self._as(_operator_user())
         with patch(
-            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
         ) as mocked:
             self.client.post(
                 "/api/v1/chamadas",
@@ -609,7 +702,8 @@ class ChamadaApiTests(unittest.TestCase):
         self._cliente_com_telegram()
         self._as(_management_user())
         with patch(
-            "mes.services.telegram_alerts.send_telegram_message", return_value=True
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
         ) as mocked:
             self.client.post(
                 "/api/v1/chamadas",
@@ -622,7 +716,8 @@ class ChamadaApiTests(unittest.TestCase):
 
         texto = mocked.call_args.kwargs["text"]
         self.assertNotIn("Máquina:", texto)
-        self.assertIn("Solicitado por: Gestor (supervisor) — g@empresa.com", texto)
+        self.assertIn("Solicitado por: Gestor (Supervisor)", texto)
+        self.assertNotIn("g@empresa.com", texto)
 
     def test_motivo_fora_da_lista_e_recusado(self):
         self._as(_operator_user())

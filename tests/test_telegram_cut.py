@@ -1,10 +1,13 @@
 from datetime import datetime
+import threading
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from mes.services.telegram_cut import (
     TelegramCutPlanNotifier,
     build_cut_plan_notifier,
+    notify_cut_plan_in_background,
 )
 from mes.services.telegram_presenter import TelegramPresenter
 from tests.fakes import FakeDatabase
@@ -133,6 +136,73 @@ class TelegramCutNotifierTests(unittest.TestCase):
         self.assertEqual(self.edited[0]["message_id"], 101)
         self.assertIn("Nesting: <b>8</b>", self.edited[0]["text"])
 
+    def test_avisos_simultaneos_do_mesmo_plano_nao_duplicam_a_mensagem(self):
+        # I2: ler message_id -> enviar -> gravar é uma sequência. Sem
+        # serialização, o segundo aviso não vê a mensagem ainda não gravada e
+        # envia outra.
+        dentro_do_envio = threading.Event()
+        liberar_envio = threading.Event()
+
+        def sender_lento(**payload):
+            self.sent.append(payload)
+            dentro_do_envio.set()
+            self.assertTrue(liberar_envio.wait(timeout=5))
+            return 100 + len(self.sent)
+
+        self.notifier.sender = sender_lento
+        resultados = {}
+
+        def chamar(nome, evento):
+            resultados[nome] = self.notifier.notify(_cut_item(), event=evento)
+
+        primeiro = threading.Thread(target=chamar, args=("inicio", "corte_iniciado"))
+        segundo = threading.Thread(target=chamar, args=("fim", "corte_finalizado"))
+        primeiro.start()
+        self.assertTrue(dentro_do_envio.wait(timeout=5))
+        segundo.start()
+        segundo.join(timeout=0.3)
+        self.assertTrue(segundo.is_alive(), "o segundo aviso deveria esperar o primeiro")
+        liberar_envio.set()
+        primeiro.join(timeout=5)
+        segundo.join(timeout=5)
+
+        self.assertEqual(resultados, {"inicio": True, "fim": True})
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(len(self.edited), 1)
+        self.assertEqual(self.edited[0]["message_id"], 101)
+
+    def test_avisos_de_planos_diferentes_nao_se_bloqueiam(self):
+        bloqueado = threading.Event()
+        liberar = threading.Event()
+
+        def sender_lento(**payload):
+            if payload["text"].find("T&lt;3500&gt;") == -1:
+                return 2  # plano diferente: responde na hora
+            bloqueado.set()
+            self.assertTrue(liberar.wait(timeout=5))
+            return 1
+
+        self.notifier.sender = sender_lento
+        primeiro = threading.Thread(
+            target=lambda: self.notifier.notify(_cut_item(), event="corte_iniciado")
+        )
+        primeiro.start()
+        self.assertTrue(bloqueado.wait(timeout=5))
+        outro = {}
+        segundo = threading.Thread(
+            target=lambda: outro.setdefault(
+                "ok", self.notifier.notify(_cut_item(codigo_tarefa="T9"), event="corte_iniciado")
+            )
+        )
+        segundo.start()
+        segundo.join(timeout=2)
+        try:
+            self.assertFalse(segundo.is_alive(), "chave diferente não deve esperar")
+        finally:
+            liberar.set()
+            primeiro.join(timeout=5)
+            segundo.join(timeout=5)
+
     def test_falha_na_edicao_envia_nova_e_substitui_correlacao(self):
         self.notifier.notify(_cut_item(), event="corte_iniciado")
         self.notifier.editor = lambda **_payload: False
@@ -155,6 +225,39 @@ class TelegramCutNotifierTests(unittest.TestCase):
         self.assertEqual(self.sent, [])
         self.assertEqual(self.edited, [])
         self.assertEqual(self.db.telegram_cut_messages, [])
+
+    def test_flag_desligada_nao_cria_notifier_com_token_e_chat(self):
+        settings = SimpleNamespace(
+            telegram_enabled=False,
+            telegram_bot_token="token",
+            telegram_sector_chat_ids={"corte": "-100-corte"},
+        )
+
+        self.assertIsNone(build_cut_plan_notifier(self.db, settings))
+
+    def test_aviso_em_background_envia_e_nunca_propaga_falha(self):
+        settings = SimpleNamespace(
+            telegram_enabled=True,
+            telegram_bot_token="token",
+            telegram_sector_chat_ids={"corte": "-100-corte"},
+        )
+        item = {
+            "codigo_tarefa": "T-1", "programa": "P-1", "maquina": "Laser 1",
+            "status": "Em processo",
+        }
+        with patch(
+            "mes.services.telegram_cut.send_telegram_message_with_id", return_value=None
+        ):
+            self.assertFalse(
+                notify_cut_plan_in_background(self.db, settings, item, event="corte_iniciado")
+            )
+
+        with patch.object(
+            TelegramCutPlanNotifier, "notify", side_effect=RuntimeError("telegram caiu")
+        ):
+            self.assertFalse(
+                notify_cut_plan_in_background(self.db, settings, item, event="corte_iniciado")
+            )
 
     def test_factory_usa_destino_canonico_de_corte(self):
         settings = SimpleNamespace(

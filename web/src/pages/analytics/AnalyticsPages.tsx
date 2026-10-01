@@ -19,6 +19,7 @@ import type {
 } from "../../types/management";
 import {
   availabilityLabel,
+  displayName,
   formatDateTime,
   formatAveragePerResource,
   formatDuration,
@@ -461,11 +462,11 @@ function SegmentPage() {
       <div className="metric-grid metric-grid--four">
         <MetricCard label={`Tempo total de ${isStop ? "parada" : "setup"}`} value={formatHours(data?.total_seconds)} detail={formatAveragePerResource(data?.total_seconds, data?.by_resource?.length ?? 0)} accent={isStop ? "danger" : "teal"} />
         <MetricCard label="Ocorrências" value={formatNumber(data?.count)} detail={data?.count ? `Média de ${formatDuration((data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
-        <MetricCard label={isStop ? "Recurso mais parado" : "Recurso com mais setup"} value={topResource?.label ?? "Não determinado"} detail={topResource ? formatHours(topResource.value) : undefined} availability={topResource ? "disponivel" : "sem_registros"} accent="warning" />
+        <MetricCard label={isStop ? "Recurso mais parado" : "Recurso com mais setup"} value={topResource ? displayName(topResource.label) : "Não determinado"} detail={topResource ? formatHours(topResource.value) : undefined} availability={topResource ? "disponivel" : "sem_registros"} accent="warning" />
         <MetricCard
           label={isStop ? "Maior parada" : "Setup mais longo"}
           value={biggest ? formatHours(biggest.value) : "Nenhuma"}
-          detail={biggest?.label}
+          detail={biggest ? displayName(biggest.label) : undefined}
           availability={biggest ? "disponivel" : "sem_registros"}
           accent={isStop ? "danger" : "teal"}
         />
@@ -477,9 +478,9 @@ function SegmentPage() {
             rows={data?.items ?? []}
             rowKey={(row, index) => row.estado_recurso_id ?? row.evento_id ?? `${row.inicio}-${index}`}
             columns={[
-              { key: "resource", label: "Recurso", render: (row) => row.recurso ?? "Não disponível" },
-              { key: "sector", label: "Setor", render: (row) => row.setor ?? "Não disponível" },
-              { key: "reason", label: "Motivo", render: (row) => row.motivo ?? "Não disponível" },
+              { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
+              { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
+              { key: "reason", label: "Motivo", render: (row) => displayName(row.motivo) },
               { key: "classification", label: "Classificação", render: (row) => <StatusBadge value={isStop ? (row.programada ? "Programada" : "Não programada") : (row.tipo_setup ?? "Setup")} /> },
               { key: "start", label: "Início", render: (row) => formatDateTime(row.inicio) },
               { key: "time", label: "Tempo", render: (row) => formatDuration(row.segundos) },
@@ -521,7 +522,7 @@ export function AnalyticsQualityPage() {
             rows={data?.by_sector ?? []}
             rowKey={(row) => row.setor}
             columns={[
-              { key: "sector", label: "Setor", render: (row) => row.setor },
+              { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
               { key: "good", label: "Boas", render: (row) => formatNumber(row.boa) },
               { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
               { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
@@ -559,7 +560,7 @@ function FirstPieceHistorySection() {
               { key: "inspecao", label: "Inspecionada em", render: (row) => formatDateTime(row.inspecionada_em) },
               { key: "op", label: "OP", render: (row) => row.codigo_op },
               { key: "operacao", label: "Operação", render: (row) => row.numero_operacao ?? "—" },
-              { key: "setor", label: "Setor", render: (row) => row.tipo_setor ?? "—" },
+              { key: "setor", label: "Setor", render: (row) => displayName(row.tipo_setor, "—") },
               { key: "produto", label: "Produto", render: (row) => row.produto_codigo ?? "—" },
               { key: "setup", label: "Setup", render: (row) => (row.setup_registrado_em ? formatDateTime(row.setup_registrado_em) : row.setup_obrigatorio ? "Pendente" : "Não se aplica") },
               { key: "status", label: "Resultado", render: (row) => <StatusBadge value={row.bloqueio_ativo ? "Bloqueada" : row.status} /> },
@@ -627,9 +628,9 @@ export function AnalyticsStandardPage() {
           rowKey={(row, index) => row.apontamento_id ?? `${row.op}-${index}`}
           columns={[
             { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
-            { key: "operation", label: "Operação", render: (row) => row.operacao ?? "Não disponível" },
+            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
             { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
-            { key: "resource", label: "Recurso real", render: (row) => row.recurso_real ?? "Não disponível" },
+            { key: "resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
             { key: "good", label: "Peças boas", render: (row) => formatNumber(row.quantidade_boa) },
             { key: "standard", label: "Padrão estimado", render: (row) => formatDuration(row.tempo_padrao_estimado_segundos) },
             { key: "real", label: "Tempo real", render: (row) => formatDuration(row.tempo_producao_real_segundos) },
@@ -651,7 +652,7 @@ export function AnalyticsChronoPage() {
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const groups = query.data?.groups ?? [];
-  const bars = groups.slice(0, 10).map((row) => ({ label: `${row.produto} • ${row.operacao}`, value: row.media_segundos_por_peca, detail: formatDuration(row.media_segundos_por_peca) }));
+  const bars = groups.slice(0, 10).map((row) => ({ label: `${row.produto} • ${displayName(row.operacao)}`, value: row.media_segundos_por_peca, detail: formatDuration(row.media_segundos_por_peca) }));
   const samples = groups.reduce((total, row) => total + row.amostras, 0);
   const chrono = {
     samples,
@@ -664,8 +665,8 @@ export function AnalyticsChronoPage() {
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Grupos analisados" value={formatNumber(groups.length)} detail={groups.length ? `${formatNumber(chrono.samples)} execuções medidas` : undefined} />
         <MetricCard label="Ciclo médio por peça" value={groups.length ? formatDuration(chrono.average) : "Dados insuficientes"} availability={groups.length ? "disponivel" : "dados_insuficientes"} accent="success" />
-        <MetricCard label="Maior variação" value={chrono.mostVariable ? formatDuration(chrono.mostVariable.desvio_padrao_segundos_por_peca) : "Dados insuficientes"} detail={chrono.mostVariable ? `${chrono.mostVariable.produto} • ${chrono.mostVariable.operacao}` : undefined} availability={chrono.mostVariable ? "disponivel" : "dados_insuficientes"} accent="warning" />
-        <MetricCard label="Ciclo mais lento" value={chrono.slowest ? formatDuration(chrono.slowest.media_segundos_por_peca) : "Dados insuficientes"} detail={chrono.slowest ? `${chrono.slowest.produto} • ${chrono.slowest.recurso}` : undefined} availability={chrono.slowest ? "disponivel" : "dados_insuficientes"} accent="purple" />
+        <MetricCard label="Maior variação" value={chrono.mostVariable ? formatDuration(chrono.mostVariable.desvio_padrao_segundos_por_peca) : "Dados insuficientes"} detail={chrono.mostVariable ? `${chrono.mostVariable.produto} • ${displayName(chrono.mostVariable.operacao)}` : undefined} availability={chrono.mostVariable ? "disponivel" : "dados_insuficientes"} accent="warning" />
+        <MetricCard label="Ciclo mais lento" value={chrono.slowest ? formatDuration(chrono.slowest.media_segundos_por_peca) : "Dados insuficientes"} detail={chrono.slowest ? `${chrono.slowest.produto} • ${displayName(chrono.slowest.recurso)}` : undefined} availability={chrono.slowest ? "disponivel" : "dados_insuficientes"} accent="purple" />
       </div>
       <div className="analytics-split content-section">
         <SectionCard title="Média real por peça">{bars.length ? <BarList data={bars} /> : <EmptyState title="Dados insuficientes" />}</SectionCard>
@@ -675,8 +676,8 @@ export function AnalyticsChronoPage() {
             rowKey={(row) => `${row.produto}-${row.operacao}-${row.recurso}`}
             columns={[
               { key: "product", label: "Produto", render: (row) => row.produto },
-              { key: "operation", label: "Operação", render: (row) => row.operacao },
-              { key: "resource", label: "Recurso", render: (row) => row.recurso },
+              { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
+              { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
               { key: "sample", label: "Amostra", render: (row) => formatNumber(row.amostras) },
               { key: "average", label: "Média", render: (row) => formatDuration(row.media_segundos_por_peca) },
               { key: "median", label: "Mediana", render: (row) => formatDuration(row.mediana_segundos_por_peca) },
@@ -744,8 +745,8 @@ export function AnalyticsCapacityPage() {
           rowKey={(row, index) => row.codigo ?? row.recurso ?? index}
           emptyTitle="Nenhum recurso no filtro"
           columns={[
-            { key: "resource", label: "Recurso", render: (row) => row.nome ?? row.codigo ?? row.recurso ?? "Não disponível" },
-            { key: "sector", label: "Setor", render: (row) => row.tipo_setor ?? row.setor ?? "Não disponível" },
+            { key: "resource", label: "Recurso", render: (row) => displayName(row.nome ?? row.codigo ?? row.recurso) },
+            { key: "sector", label: "Setor", render: (row) => displayName(row.tipo_setor ?? row.setor) },
             { key: "capacity", label: "Tempo disponível", render: (row) => row.capacidade_segundos == null ? "Não configurado" : formatHours(row.capacidade_segundos) },
             { key: "load", label: "Tempo ocupado", render: (row) => formatHours(row.carga_segundos) },
             { key: "remaining", label: "Livre", render: (row) => row.capacidade_restante_segundos == null ? "Não configurado" : formatHours(row.capacidade_restante_segundos) },
@@ -806,7 +807,7 @@ export function AnalyticsReliabilityPage() {
               rows={data.por_recurso}
               rowKey={(row) => row.recurso}
               columns={[
-                { key: "resource", label: "Recurso", render: (row) => row.recurso },
+                { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
                 { key: "failures", label: "Quebras", render: (row) => formatNumber(row.falhas) },
                 { key: "downtime", label: "Tempo parado", render: (row) => formatHours(row.tempo_reparo_segundos) },
                 { key: "mttr", label: "MTTR", render: (row) => row.mttr_segundos == null ? "Não disponível" : formatDuration(row.mttr_segundos) },

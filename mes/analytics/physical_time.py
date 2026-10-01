@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable, Mapping
 
+from app.core.resource_mapping import resolve_resource_identity
 from mes.analytics.intervals import merge_intervals
 from mes.domain import EventCategory, StopClassification
 
@@ -76,7 +77,11 @@ def consolidate_physical_time(
         raw_attributed += segment.seconds
         # Sem código de recurso não podemos assumir que dois fatos são da mesma
         # máquina. Usa uma chave isolada para não colapsar recursos desconhecidos.
-        resource_key = segment.resource.strip().casefold()
+        # Identidade canônica: alias ("Laser Ensis 3015") e código ("LASER1")
+        # são o mesmo recurso físico e não podem virar dois grupos.
+        resource_key = (
+            str(resolve_resource_identity(segment.resource) or "").strip().casefold()
+        )
         if not resource_key or resource_key == "não informado".casefold():
             resource_key = f"__recurso_desconhecido__:{segment.source_ref!s}:{index}"
         by_group[resource_key].append(segment)
@@ -214,6 +219,16 @@ def _sweep_resource(group):
             categories = {segment.category for segment in active_segments}
             sectors = {segment.sector for segment in active_segments}
 
+            # Produção prevalece sobre parada (decisão do usuário, 01/10/2026):
+            # com uma OP produzindo, o recurso está produzindo, mesmo que outra
+            # OP dele esteja parada. Só é parada quando todas as fontes param.
+            classified = active_segments
+            if categories == {EventCategory.PRODUCTION, EventCategory.DOWNTIME}:
+                categories = {EventCategory.PRODUCTION}
+                classified = [
+                    segment for segment in active_segments
+                    if segment.category is EventCategory.PRODUCTION
+                ]
             state_conflict = len(categories) > 1
             sector_conflict = len(sectors) > 1
             category = next(iter(categories)) if not state_conflict else EventCategory.UNKNOWN
@@ -221,7 +236,7 @@ def _sweep_resource(group):
             resource = _display_resource(active_segments)
             classification = (
                 None if state_conflict
-                else _resolve_stop_classification(active_segments)
+                else _resolve_stop_classification(classified)
             )
 
             result.append(PhysicalConsolidatedSegment(

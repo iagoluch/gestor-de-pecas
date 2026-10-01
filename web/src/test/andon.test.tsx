@@ -225,7 +225,9 @@ describe("Andon Geral Web", () => {
     const navRow = container.querySelector(".andon-nav-row");
     expect(navRow).toBeInTheDocument();
     expect(within(navRow as HTMLElement).getByRole("link", { name: "Andon" })).toHaveClass("page-tab--active");
-    for (const label of ["Metas", "Pausas"]) {
+    // Metas saiu da navegação temporariamente (01/10/2026).
+    expect(within(navRow as HTMLElement).queryByRole("link", { name: "Metas" })).not.toBeInTheDocument();
+    for (const label of ["Pausas"]) {
       expect(within(navRow as HTMLElement).getByRole("link", { name: label })).toBeInTheDocument();
     }
     expect(within(navRow as HTMLElement).queryByRole("link", { name: "Solda" })).not.toBeInTheDocument();
@@ -233,9 +235,9 @@ describe("Andon Geral Web", () => {
     expect(navRow?.compareDocumentPosition(container.querySelector(".andon-content") as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
     fireEvent.click(screen.getByRole("button", { name: "Minimizar abas dos Painéis Operacionais" }));
-    expect(screen.queryByRole("link", { name: "Metas" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Pausas" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mostrar abas dos Painéis Operacionais" }));
-    expect(screen.getByRole("link", { name: "Metas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pausas" })).toBeInTheDocument();
   });
 
   it("redireciona a entrada gerencial para a visão geral dedicada", async () => {
@@ -453,6 +455,31 @@ describe("Andon Geral Web", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Indicadores de Máquina DOBRA-01" })).not.toBeInTheDocument();
+  });
+
+  it("lista no drawer as OPs simultâneas do recurso e mantém só a contagem no card", async () => {
+    const shared = resource("DOBRA-01", "Dobra", "producao");
+    shared.active_operations = 2;
+    (shared as { ops_ativas?: unknown }).ops_ativas = [
+      { op: "OP-154872", status: "Em processo", operador: "Maria Souza" },
+      { op: "OP-154999", status: "Parada", operador: "João Lima" },
+    ];
+    const simultaneous = snapshot([shared]);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/auth/session")) return authResponse();
+      return new Response(JSON.stringify(simultaneous), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    renderAndon(fetchMock);
+
+    expect(await screen.findByText("+ 1 OP(s) simultânea(s)")).toBeInTheDocument();
+    expect(screen.queryByText("OP-154999")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Ver indicadores de Máquina DOBRA-01" }));
+    const list = within(screen.getByRole("dialog", { name: "Indicadores de Máquina DOBRA-01" }))
+      .getByRole("list", { name: "OPs simultâneas no recurso" });
+    expect(within(list).getByText("OP-154872")).toBeInTheDocument();
+    expect(within(list).getByText("OP-154999")).toBeInTheDocument();
+    expect(within(list).getByText("Em processo • Maria Souza")).toBeInTheDocument();
+    expect(within(list).getByText("Parada • João Lima")).toBeInTheDocument();
   });
 
   it("usa uma única conexão realtime e refaz o snapshot após invalidação", async () => {

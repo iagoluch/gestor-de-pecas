@@ -112,9 +112,17 @@ class InvariantesDeConcorrenciaTests(unittest.TestCase):
             )
             return cursor.fetchall()
 
-    def test_dois_inicios_simultaneos_deixam_um_apontamento_e_um_conflito(self):
-        # BK-03: a checagem de ocupação do fluxo roda antes e fora da
-        # transação do INSERT; os dois Inícios passavam e a fila ficava com dois.
+    def _estados_abertos(self):
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT recurso, categoria FROM eventos_estado_recurso WHERE data_fim IS NULL"
+            )
+            return cursor.fetchall()
+
+    def test_dois_inicios_simultaneos_sao_permitidos_sem_dobrar_o_estado_fisico(self):
+        # Decisão do usuário (01/10/2026): 2+ OPs produzindo no mesmo recurso.
+        # A checagem continua dentro da transação (BK-03), mas produção com
+        # produção não é conflito. O recurso segue com UM estado físico aberto.
         for _ in range(5):
             self.tearDown()
             self.setUp()
@@ -123,14 +131,178 @@ class InvariantesDeConcorrenciaTests(unittest.TestCase):
                 self._inicio("OP-A", primeira, ALIAS),
                 self._inicio("OP-B", segunda, CANONICO),
             )
-            self.assertEqual(sorted(resultados), ["conflito", "iniciado"])
+            self.assertEqual(resultados, ["iniciado", "iniciado"])
             ativos = self._ativos()
-            self.assertEqual(len(ativos), 1, ativos)
-            self.assertEqual(ativos[0]["status"], "Em processo")
+            self.assertEqual(sorted(a["status"] for a in ativos), ["Em processo", "Em processo"])
+            self.assertEqual(
+                [(e["recurso"], e["categoria"]) for e in self._estados_abertos()],
+                [(CANONICO, "producao")],
+            )
 
-    def test_revalidacao_no_insert_ve_o_recurso_ocupado_pelo_alias(self):
+    def _enfileirar_solda(self, tarefa, setor, estacao):
+        def enfileirar():
+            fila = self.db.enfileirar_apontamento_operacional(
+                "OP-SOLDA", "Peça", tarefa, setor, estacao, "OPERADOR", 1,
+                operacao={"numero_operacao": "10"},
+            )
+            if fila is None:
+                return "unique"
+            return "estacao_ocupada" if fila.get("apontada_em_outra_estacao") else "enfileirada"
+        return enfileirar
+
+    def test_solda_duas_estacoes_na_mesma_operacao_deixam_um_vencedor(self):
+        # B1: estações diferentes tomam travas de recurso diferentes; a trava
+        # por (OP, operação) dentro da transação elege uma só, também entre
+        # setores diferentes da Solda (onde nem o índice único protege).
+        casos = (
+            ("Solda Aço", "Estação 1", "Solda Aço", "Estação 2"),
+            ("Solda Aço", "Estação 1", "Solda Alumínio", "Estação 7"),
+        )
+        for setor_a, estacao_a, setor_b, estacao_b in casos:
+            for _ in range(5):
+                self.tearDown()
+                self.setUp()
+                tarefa = self._op("OP-SOLDA")
+                resultados = _em_paralelo(
+                    self._enfileirar_solda(tarefa, setor_a, estacao_a),
+                    self._enfileirar_solda(tarefa, setor_b, estacao_b),
+                )
+                self.assertEqual(
+                    sorted(resultados), ["enfileirada", "estacao_ocupada"],
+                    (setor_b, resultados),
+                )
+                self.assertEqual(len(self._ativos()), 1)
+
+    def _catalogar_operacao(self, codigo_op, numero):
+        """Operação do catálogo (id) para a OP; devolve o id gerado."""
+
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO catalogo_pcp_ops (codigo_op, produto_codigo, produto_descricao,"
+                " quantidade, data_emissao, sincronizado_em)"
+                " VALUES (%s, 'P1', 'Peça', 1, CURRENT_DATE, NOW()) ON CONFLICT DO NOTHING",
+                (codigo_op,),
+            )
+            cursor.execute(
+                "INSERT INTO catalogo_operacoes_op (codigo_op, produto_codigo, produto_descricao,"
+                " numero_operacao, codigo_recurso, descricao_operacao, tipo_setor, ordem,"
+                " sincronizado_em) VALUES (%s, 'P1', 'Peça', %s, 'SOLDA', 'Soldar', 'Solda Aço',"
+                " 1, NOW()) RETURNING id",
+                (codigo_op, numero),
+            )
+            return cursor.fetchone()["id"]
+
+    def _enfileirar_solda_com(self, tarefa, setor, estacao, operacao):
+        fila = self.db.enfileirar_apontamento_operacional(
+            "OP-SOLDA", "Peça", tarefa, setor, estacao, "OPERADOR", 1, operacao=operacao,
+        )
+        if fila is None:
+            return "unique"
+        return "estacao_ocupada" if fila.get("apontada_em_outra_estacao") else "enfileirada"
+
+    def test_solda_sem_catalogo_duas_estacoes_na_mesma_op_deixam_um_vencedor(self):
+        # M1: sem id nem número de operação a identidade é a própria OP; antes
+        # `mesma` era sempre falso e as duas estações apontavam a mesma OP.
+        for setor_b, estacao_b in (("Solda Aço", "Estação 2"), ("Solda Alumínio", "Estação 7")):
+            self.tearDown()
+            self.setUp()
+            tarefa = self._op("OP-SOLDA")
+            resultados = _em_paralelo(
+                lambda: self._enfileirar_solda_com(tarefa, "Solda Aço", "Estação 1", {}),
+                lambda: self._enfileirar_solda_com(tarefa, setor_b, estacao_b, {}),
+            )
+            self.assertEqual(sorted(resultados), ["enfileirada", "estacao_ocupada"], resultados)
+            self.assertEqual(len(self._ativos()), 1)
+
+    def test_solda_id_e_numero_da_mesma_operacao_sao_a_mesma_identidade(self):
+        # M1: um chamador informa só o id do catálogo e outro só o número.
+        tarefa = self._op("OP-SOLDA")
+        operacao_id = self._catalogar_operacao("OP-SOLDA", "10")
+        self.assertEqual(
+            self._enfileirar_solda_com(tarefa, "Solda Aço", "Estação 1", {"id": operacao_id}),
+            "enfileirada",
+        )
+        self.assertEqual(
+            self._enfileirar_solda_com(
+                tarefa, "Solda Alumínio", "Estação 7", {"numero_operacao": "10"}
+            ),
+            "estacao_ocupada",
+        )
+
+    def test_producao_prevalece_sobre_parada_no_estado_fisico_do_recurso(self):
+        # A1: com A parada e B produzindo, o recurso segue "producao" (nunca
+        # "desconhecido"); só vira "parada" quando TODAS as OPs ativas param.
+        # O relógio é o real: dentro da janela do intervalo (almoço) a parada
+        # apontada mantém a pausa automática do recurso por desenho. Aqui o
+        # alvo é a regra produção x parada, então o intervalo é neutralizado
+        # para o resultado não depender do horário em que a suíte roda.
+        self.db._intervalo_vigente = lambda *args, **kwargs: None
+        primeira, segunda = self._op("OP-A"), self._op("OP-B")
+        self.assertEqual(self._inicio("OP-A", primeira, CANONICO)(), "iniciado")
+        self.assertEqual(self._inicio("OP-B", segunda, CANONICO)(), "iniciado")
+        ids = self._ativos_ids()
+
+        def parar(op):
+            self.db.transicionar_apontamento_operador(
+                ids[op], OperatorState.STOPPED.value, "OPERADOR",
+                motivo="Parada",
+            )
+
+        parar("OP-A")
+        self.assertEqual(
+            sorted(a["status"] for a in self._ativos()), ["Em processo", "Parada"]
+        )
+        self.assertEqual(
+            [(e["recurso"], e["categoria"]) for e in self._estados_abertos()],
+            [(CANONICO, "producao")],
+        )
+
+        parar("OP-B")
+        self.assertEqual(
+            [(e["recurso"], e["categoria"]) for e in self._estados_abertos()],
+            [(CANONICO, "parada")],
+        )
+
+    def test_solda_mesma_estacao_pelo_apelido_continua_permitida(self):
+        tarefa = self._op("OP-SOLDA")
+        self.assertEqual(self._enfileirar_solda(tarefa, "Solda Aço", "Estação 1")(), "enfileirada")
+        # Outra estação é recusada; a mesma (índice único) não vira conflito de estação.
+        self.assertEqual(self._enfileirar_solda(tarefa, "Solda Aço", "Estação 2")(), "estacao_ocupada")
+        self.assertEqual(self._enfileirar_solda(tarefa, "Solda Aço", "Estação 1")(), "unique")
+
+    def test_setup_e_inicio_simultaneos_deixam_um_vencedor(self):
+        # Setup é exclusivo: com A produzindo, "A entra em Setup" e "B inicia"
+        # disputam o recurso; a trava dentro da transação elege um só.
+        for _ in range(5):
+            self.tearDown()
+            self.setUp()
+            primeira, segunda = self._op("OP-A"), self._op("OP-B")
+            self.assertEqual(self._inicio("OP-A", primeira, ALIAS)(), "iniciado")
+            id_a = self._ativos_ids()["OP-A"]
+
+            def setup_a():
+                linha = self.db.transicionar_apontamento_operador(
+                    id_a, OperatorState.SETUP.value, "OPERADOR", recurso_exclusivo=True,
+                )
+                return "conflito" if linha.get("exclusive_resource_conflict") else "setup"
+
+            resultados = _em_paralelo(setup_a, self._inicio("OP-B", segunda, CANONICO))
+            self.assertIn(sorted(resultados), (["conflito", "iniciado"], ["conflito", "setup"]))
+            ativos = {a["op"]: a["status"] for a in self._ativos()}
+            self.assertNotEqual(sorted(ativos.values()), ["Em processo", "Setup"], ativos)
+
+    def _ativos_ids(self):
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT id, op FROM apontamentos_operacionais")
+            return {row["op"]: row["id"] for row in cursor.fetchall()}
+
+    def test_revalidacao_no_insert_ve_o_recurso_em_setup_pelo_alias(self):
         primeira, segunda = self._op("OP-A"), self._op("OP-B")
         self.assertEqual(self._inicio("OP-A", primeira, ALIAS)(), "iniciado")
+        self.db.transicionar_apontamento_operador(
+            self._ativos_ids()["OP-A"], OperatorState.SETUP.value, "OPERADOR",
+            recurso_exclusivo=True,
+        )
 
         conflito = self.db.enfileirar_apontamento_operacional(
             "OP-B", "Peça", segunda, "Corte", CANONICO, "OPERADOR", 1,

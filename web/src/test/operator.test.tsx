@@ -65,6 +65,11 @@ describe("fluxo Web do operador", () => {
       if (path.includes("/operator/stop-reasons")) return json({ items: [{ codigo: "0029", nome: "Quebra de ferramenta" }, { codigo: "0030", nome: "Falta de material" }] });
       if (path.includes("/operator/history")) return json({ sector: "Dobra", resource: "1303", page: 1, page_size: 100, has_more: false, items: [{ id: 90, op: "OP-090", status: "Finalizado", operation: "10 - DOBRA", product: "PEÇA-90", qty: 2, good: 2, scrap: 0 }] });
       if (path.includes("/operator/workbench")) return json({ sector: "Dobra", resource: "1303", queue: [], production: [{ id: 91, op: "OP-091", status: "Parada", operation: "20 - DOBRA", product: "PEÇA-91", qty: 4, good: 0, scrap: 0, motivo_parada: "0029 - Quebra de ferramenta", stopped_since: "2026-08-20T10:00:00", status_elapsed: "00:03:21" }] });
+      if (path.includes("/operator/stations")) return json({ sector: "Dobra", items: [
+        { resource: "1303", status: "Ocupada", operator: "Outro", ocupantes: [{ op: "OP-091", status: "Parada", operador: "Outro", numero_operacao: "20" }], ocupantes_total: 1, aceita_producao_simultanea: true },
+        { resource: "2204", status: "Livre", operator: null, ocupantes: [], ocupantes_total: 0, aceita_producao_simultanea: true },
+        { resource: "Gasparini", status: "Ocupada", operator: "Outro", ocupantes: [{ op: "OP-050", status: "Setup", operador: "Outro", numero_operacao: "10" }], ocupantes_total: 1, aceita_producao_simultanea: false },
+      ] });
       if (path.includes("/operator/operations/OP-101")) return json({ items: [{ id: 101, numero_operacao: "20", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true }] });
       if (path.includes("/operator/actions") && init?.method === "POST") return json({ ok: true, message: "Início registrado com sucesso.", data: { status: "Em processo" } });
       return json({ code: "not_found", message: "Não encontrado" }, 404);
@@ -88,12 +93,92 @@ describe("fluxo Web do operador", () => {
     // o caminho é Retomar: registrar uma segunda parada é recusado pelo
     // backend (`recurso_ja_parado`) e a tela não oferece a ação.
     expect(screen.getByRole("button", { name: "Parada" })).toBeDisabled();
-    // OP-03: a OP-091 ainda ocupa o recurso (Parada). Iniciar a OP-101 seria
-    // recusado pelo backend (`operator_resource_occupied`), então a tela trava
-    // o botão e diz por quê — em vez de deixar o operador tentar e errar.
-    expect(screen.getByRole("button", { name: "Iniciar" })).toBeDisabled();
-    expect(screen.getByText(/Recurso em uso pela OP OP-091 \(Parada\)/)).toBeInTheDocument();
+    // Produção simultânea (decisão de 01/10/2026): a OP-091 em Parada não
+    // impede iniciar a OP-101 no mesmo recurso. Quem decide é o backend
+    // (`aceita_producao_simultanea`), e a tela não mostra aviso de bloqueio.
+    expect(screen.getByRole("button", { name: "Iniciar" })).toBeEnabled();
+    expect(screen.queryByText(/setup ou retrabalho em andamento/i)).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST")).toBe(false);
+  });
+
+  it("lista postos com produção simultânea como selecionáveis e mantém o posto com Setup selecionável, com aviso", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 2, name: "Operador Teste", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303", "2204", "Gasparini"] });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303", "2204", "Gasparini"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stations")) return json({ sector: "Dobra", items: [
+        { resource: "1303", status: "Ocupada", operator: "Maria", ocupantes: [
+          { op: "OP-1", status: "Em processo", operador: "Maria", numero_operacao: "10" },
+          { op: "OP-2", status: "Em processo", operador: "João", numero_operacao: "20" },
+        ], ocupantes_total: 2, aceita_producao_simultanea: true },
+        { resource: "2204", status: "Livre", operator: null, ocupantes: [], ocupantes_total: 0, aceita_producao_simultanea: true },
+        { resource: "Gasparini", status: "Ocupada", operator: "Maria", ocupantes: [{ op: "OP-3", status: "Setup", operador: "Maria", numero_operacao: "10" }], ocupantes_total: 1, aceita_producao_simultanea: false },
+      ] });
+      return json({ items: [], queue: [], production: [], has_more: false });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Selecione o recurso" });
+    const shared = await screen.findByRole("button", { name: /1303/ });
+    expect(shared).toBeEnabled();
+    expect(within(shared).getByText("Em uso por 2 OP(s)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /2204/ })).toBeEnabled();
+    const exclusive = screen.getByRole("button", { name: /Gasparini/ });
+    expect(exclusive).toBeEnabled();
+    expect(within(exclusive).getByText(/setup ou retrabalho em andamento/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Ocupada/)).not.toBeInTheDocument();
+    fireEvent.click(shared);
+    await screen.findByRole("heading", { name: "Histórico" });
+  });
+
+  it("trava o Iniciar e explica o motivo quando outra OP está em Setup no posto", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 2, name: "Operador", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303"] });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators") || path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/stations")) return json({ sector: "Dobra", items: [{ resource: "1303", status: "Ocupada", operator: "Outro", ocupantes: [{ op: "OP-050", status: "Setup", operador: "Outro", numero_operacao: "10" }], ocupantes_total: 1, aceita_producao_simultanea: false }] });
+      if (path.includes("/operator/workbench")) return json({ queue: [], production: [{ id: 50, op: "OP-050", status: "Setup", operation: "10 - DOBRA", product: "PEÇA-50", qty: 4, good: 0, scrap: 0 }] });
+      if (path.includes("/operator/operations/OP-101")) return json({ items: [{ id: 101, numero_operacao: "20", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true }] });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-101" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+    expect(await screen.findByText(/Há setup ou retrabalho em andamento neste posto/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Iniciar" })).toBeDisabled();
+  });
+
+  it("explica o 409 de posto exclusivo e o de OP apontada em outra estação sem termos técnicos", async () => {
+    let actionError: Record<string, unknown> = {};
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 2, name: "Operador", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303"] });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators") || path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/workbench")) return json({ queue: [], production: [] });
+      if (path.includes("/operator/operations/OP-409")) return json({ items: [{ id: 7, numero_operacao: "20", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true, actionable: true, selectable: true }] });
+      if (path.includes("/operator/actions") && init?.method === "POST") return json(actionError, 409);
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-409" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+
+    actionError = { code: "operator_resource_occupied", message: "Este recurso já possui um apontamento ativo.", details: { aceita_producao_simultanea: false, ocupantes_total: 1, ocupantes: [{ op: "OP-3", status: "Setup", operador: "Maria", numero_operacao: "10" }] } };
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
+    expect(await screen.findByText(/Há setup ou retrabalho em andamento neste posto/)).toBeInTheDocument();
+
+    actionError = { code: "operacao_ja_apontada_em_outra_estacao", message: "Esta OP já foi apontada em 2204 e não pode ser selecionada em outra estação.", details: { estacao_apontada: "2204" } };
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
+    expect(await screen.findByText("Esta OP já foi apontada em outra estação.")).toBeInTheDocument();
+    expect(screen.queryByText(/operator_resource_occupied|operacao_ja_apontada/)).not.toBeInTheDocument();
   });
 
   it("limpa a OP carregada e o aviso do gate ao apagar o código", async () => {
@@ -984,6 +1069,54 @@ describe("fluxo Web do operador", () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST")).toBe(true));
     const fim = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/highlight/actions") && init?.method === "POST" && JSON.parse(String(init.body)).action === "Fim");
     expect(JSON.parse(String(fim?.[1]?.body))).toMatchObject({ action: "Fim", task_code: "T-100", plan_hash: "hash-a" });
+  });
+
+  it("Destaque: Parada segue disponível com a tarefa selecionada e clicar de novo desseleciona", async () => {
+    const payloadDestaque = () => ({
+      task: { id: 7, codigo_tarefa: "T-100", material: "A36", espessura: 6.35 },
+      operations: [],
+      state: { estado: "aguardando" },
+      timing: { availability: "ok", execution_seconds: 0, stopped_seconds: 0 },
+      plans: [
+        { plano_hash: "hash-a", programa: "8501", nome_chapa: "CHAPA 3000 x 1500", sequencia: 1, repeticao: 1, maquina: "Laser Ensis 3015", quantidade_processo: 4, status_corte: "Finalizado", estado_destaque: "aguardando" },
+      ],
+      progress: { situacao: "COMPLETA", chapas_total: 1, chapas_cortadas: 1, chapas_destacadas: 0, chapas_disponiveis: 1, progresso_corte: "1 de 1 planos cortados" },
+      history: [],
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 9, name: "Destacador", role: "operador_destaque", management_access: false, operator_access: true, operator_sector: "Destaque" });
+      if (path.includes("/operator/context")) return json({ sector: "Destaque", route: "Destaque", resources: [], automatic_queue: false, workflow: "highlight" });
+      if (path.includes("/operator/stop-reasons")) return json({ items: [{ codigo: "0029", descricao: "Quebra de ferramenta", requer_comentario: false }] });
+      if (path.includes("/highlight/queue")) return json({
+        items: [{ tarefa_id: 7, codigo_tarefa: "T-100", material: "A36", espessura: 6.35, situacao: "COMPLETA", chapas_total: 1, chapas_cortadas: 1, chapas_destacadas: 0, chapas_disponiveis: 1, planos: [{ plano_hash: "hash-a", programa: "8501", status_corte: "Finalizado" }] }],
+        count: 1,
+        planos_disponiveis: 1,
+      });
+      if (path.includes("/highlight/tasks/T-100")) return json(payloadDestaque());
+      if (path.includes("/highlight/actions") && init?.method === "POST") return json({ ok: true, message: "Parada registrada.", code: "parada_recurso" });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    const tarefa = await screen.findByRole("button", { name: /Tarefa T-100/i });
+    // Sem tarefa selecionada o posto já pode registrar parada.
+    expect(screen.getByRole("button", { name: "Parada" })).toBeEnabled();
+
+    fireEvent.click(tarefa);
+    await screen.findByRole("heading", { name: "Escolha o plano para apontar" });
+    // Plano liberado e ainda não iniciado: a parada continua sendo do posto.
+    expect(screen.getByRole("button", { name: "Parada" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Parada" }));
+    expect(await screen.findByRole("dialog", { name: /Parar Destaque/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    // Clicar de novo na tarefa selecionada desseleciona e recolhe o detalhe.
+    fireEvent.click(screen.getByRole("button", { name: /Tarefa T-100/i }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Escolha o plano para apontar" })).not.toBeInTheDocument());
+    expect(screen.queryByText("Tarefa selecionada")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tarefa T-100/i })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("mostra a tarefa nova do Corte sozinha, sem pesquisa nem refresh de página", async () => {

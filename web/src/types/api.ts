@@ -37,6 +37,25 @@ export interface OperatorContext {
   workflow: "workbench" | "cutting" | "highlight";
 }
 
+/** Quem usa um posto agora. Mesmo formato em `/operator/stations` e no 409 `operator_resource_occupied`. */
+export interface OperatorStationOccupant {
+  op: string | null;
+  status: string | null;
+  operador: string | null;
+  numero_operacao: string | null;
+}
+
+export interface OperatorStation {
+  resource: string;
+  /** Histórico: "Livre" | "Selecionada" | "Ocupada". A tela decide pelos campos abaixo. */
+  status: string;
+  operator: string | null;
+  ocupantes?: OperatorStationOccupant[];
+  ocupantes_total?: number;
+  /** false SÓ quando há Setup ou Retrabalho no posto. */
+  aceita_producao_simultanea?: boolean;
+}
+
 export interface OperatorOperation extends Record<string, unknown> {
   id?: number;
   catalogo_operacao_id?: number;

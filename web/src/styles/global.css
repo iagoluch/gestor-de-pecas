@@ -757,6 +757,9 @@ th[aria-sort="ascending"] .data-table__sort-icon, th[aria-sort="descending"] .da
 .andon-detail__operation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0; }
 .andon-detail__operation > div { min-width: 0; display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--divider); background: var(--surface-alt); }
 .andon-detail__operation dd { margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; }
+.andon-detail__ops { display: grid; gap: 6px; margin: 9px 0 0; padding: 0; list-style: none; }
+.andon-detail__ops li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 8px 12px; border: 1px solid var(--divider); background: var(--surface-alt); font-size: 12px; }
+.andon-detail__ops span { color: var(--muted); }
 @media (max-width: 580px) {
   .andon-detail__state, .andon-detail__metrics, .andon-detail__operation { grid-template-columns: 1fr; }
   .andon-detail__state > p { grid-column: auto; }
@@ -826,6 +829,11 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-resource-card img { width: min(295px, 76%); height: clamp(115px, 21vh, 225px); object-fit: contain; }
 .operator-resource-card strong { font-size: clamp(21px, 1.65vw, 32px); }
 .operator-resource-card span { color: var(--muted); font-size: var(--text-md); }
+.operator-resource-card .operator-resource-card__usage { font-weight: 700; }
+.operator-resource-card--em-uso { border-color: var(--warning); }
+.operator-resource-card__reason { max-width: 32ch; color: var(--muted); font-size: var(--text-md); text-align: center; }
+.operator-resource-card:disabled { cursor: not-allowed; opacity: .75; }
+.operator-resource-card:disabled:hover { border-color: var(--border); background: var(--surface); box-shadow: var(--shadow-1); }
 .operator-resource-grid > .operator-resource-card:last-child:nth-child(odd) { grid-column: 1 / -1; width: min(520px, calc(50% - 18px)); justify-self: center; }
 .operator-selection--welding .operator-resource-grid { width: 100%; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: clamp(18px, 1.8vw, 34px); }
 .operator-selection--welding .operator-resource-card { min-height: clamp(210px, 24.3vh, 262px); gap: 8px; padding: 18px; }

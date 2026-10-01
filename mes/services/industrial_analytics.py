@@ -5,15 +5,18 @@ não está fechada continuam fora daqui ou retornam disponibilidade explícita.
 """
 
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime
 from statistics import mean, median, pstdev
 
 from mes.analytics.physical_time import PhysicalInputSegment, consolidate_physical_time
 from mes.analytics.resource_state import build_physical_state_inputs
+from mes.analytics.rateio import canonical_resource_key, split_concurrent_production
 from mes.analytics.timeline import build_operator_timeline
 from mes.contracts import AnalyticsFilter
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
 from mes.services.calendar import CalendarService
+from mes.services.display_labels import CLASSIFICATION_CONFLICT_REASON
 from mes.services.management import ManagementService
 from mes.services.shift_parameters import load_manufacturing_rules
 
@@ -237,6 +240,7 @@ class IndustrialAnalyticsService:
             return self._cache[cache_key]
         rows = []
         rateio = self._rateio_allocation_map(filters)
+        concurrent = self._concurrent_production_seconds(filters)
         for fact in self._facts(filters):
             timeline = self._timeline(fact, filters)
             if timeline is None:
@@ -253,6 +257,12 @@ class IndustrialAnalyticsService:
             elif timeline.has_event_data:
                 production_seconds = timeline.seconds(EventCategory.PRODUCTION)
                 time_source = "timeline_op"
+                # OPs simultâneas no mesmo recurso dividem o tempo (igualitário):
+                # a soma por OP não pode passar do tempo físico do recurso.
+                divided = concurrent.get(fact.get("id"))
+                if divided is not None and divided < production_seconds - 0.5:
+                    production_seconds = divided
+                    time_source = "timeline_op_rateio_igualitario"
             else:
                 production_seconds = None
                 time_source = "dados_insuficientes"
@@ -839,6 +849,40 @@ class IndustrialAnalyticsService:
         self._cache[cache_key] = payload
         return payload
 
+    def _concurrent_production_seconds(self, filters):
+        """Tempo de produção por apontamento já dividido entre OPs simultâneas.
+
+        Deriva dos próprios apontamentos, sem tabela de rateio. As OPs que
+        dividem o recurso podem estar fora do filtro (ex.: consulta de uma só
+        OP), então a divisão olha todo o recorte de setor/recurso/período.
+
+        O filtro de recurso é comparado pela identidade canônica, não pela
+        string: o consumidor filtra por ``LASER1`` mas apontamentos gravados
+        com o apelido do posto ("Laser Ensis 3015") dividem o mesmo recurso
+        físico. Filtrar por texto no SQL os deixaria de fora e a soma por OP
+        passaria do tempo físico.
+        """
+
+        cache_key = ("concurrent_production", filters)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+        wide = replace(
+            filters, op=None, operacao=None, produto=None, operador=None, recurso=None
+        )
+        wanted = canonical_resource_key(filters.recurso) if filters.recurso else None
+        items = []
+        for fact in self._facts(wide):
+            resource = canonical_resource_key(fact.get("maquina"))
+            if wanted is not None and resource != wanted:
+                continue
+            timeline = self._timeline(fact, wide)
+            if timeline is None or not timeline.has_event_data:
+                continue
+            items.append((fact.get("id"), resource, timeline))
+        payload = split_concurrent_production(items)
+        self._cache[cache_key] = payload
+        return payload
+
     def _rateio_allocation_map(self, filters):
         cache_key = ("rateio", filters)
         if cache_key in self._cache:
@@ -949,7 +993,7 @@ def _consolidate_labeled_rows(rows):
                 if len(reasons) == 1:
                     reason = next(iter(reasons))
                 else:
-                    reason = "Conflito de classificação"
+                    reason = CLASSIFICATION_CONFLICT_REASON
                     conflict_total += seconds
                 physical_total += seconds
                 by_resource[resource] += seconds

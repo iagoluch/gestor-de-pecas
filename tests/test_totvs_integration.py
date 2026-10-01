@@ -1,7 +1,9 @@
 from datetime import datetime
 from dataclasses import replace
+from decimal import Decimal
 import hashlib
 from pathlib import Path
+import re
 import unittest
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
@@ -277,6 +279,55 @@ class TotvsParserContractTests(unittest.TestCase):
             self.assertIn(f"ActivityCode={activity_code}", warning)
             self.assertIn(f"MachineCode={machine_code}", warning)
             self.assertIn("XML/inbox", warning)
+
+    def _map_real_op_with_usinagem(self, **tags):
+        """OP real com campos de tempo da USINAGEM (160893) substituídos."""
+
+        raw = REAL_OP.read_text(encoding="utf-8")
+        start = raw.index("<ActivityID>160893</ActivityID>")
+        end = raw.index("</ActivityOrder>", start)
+        block = raw[start:end]
+        for tag, value in tags.items():
+            block, count = re.subn(
+                rf"<{tag}>[^<]*</{tag}>|<{tag} />", f"<{tag}>{value}</{tag}>", block
+            )
+            self.assertEqual(count, 1, f"fixture real perdeu a tag {tag}")
+        payload = raw[:start] + block + raw[end:]
+        result = TotvsProductionOrderMapper().map(self.parser.parse(payload.encode("utf-8")))
+        return {item.numero_operacao: item.tempo_medio_segundos for item in result.operations}
+
+    def test_tempo_padrao_nao_configurado_no_protheus_vira_nulo(self):
+        # Na OP real a USINAGEM tem TimeResource 0.01 (sentinela "não
+        # configurado") e o CORTE tem 0.05, mas o previsto do Corte vem do
+        # SigmaNEST: nenhuma operação recebe tempo do roteiro TOTVS.
+        result = TotvsProductionOrderMapper().map(self.parser.parse(REAL_OP.read_bytes()))
+        self.assertEqual(
+            {item.numero_operacao: item.tempo_medio_segundos for item in result.operations},
+            {"10": None, "20": None, "30": None, "99": None},
+        )
+        for value in ("0", "-1", "0.01"):
+            with self.subTest(time_resource=value):
+                self.assertIsNone(
+                    self._map_real_op_with_usinagem(TimeResource=value)["20"]
+                )
+
+    def test_tempo_padrao_configurado_vira_segundos_por_peca(self):
+        times = self._map_real_op_with_usinagem(TimeResource="0.05")
+        # 0,05 h centesimal por peça (UnitItemNumber=1) = 180 s.
+        self.assertEqual(times["20"], Decimal("180"))
+        self.assertIsNone(times["10"])
+
+        # TimeResource vale para o lote padrão G2_LOTEPAD (UnitItemNumber).
+        times = self._map_real_op_with_usinagem(TimeResource="0.5", UnitItemNumber="4")
+        self.assertEqual(times["20"], Decimal("450"))
+
+        # Lote 0 é tratado como 1, igual ao MATI650.getTimeG2.
+        times = self._map_real_op_with_usinagem(TimeResource="0.05", UnitItemNumber="0")
+        self.assertEqual(times["20"], Decimal("180"))
+
+    def test_tempo_padrao_em_unidade_diferente_de_horas_nao_e_convertido(self):
+        times = self._map_real_op_with_usinagem(TimeResource="0.05", UnitTimeType="2")
+        self.assertIsNone(times["20"])
 
     def test_etapas_especiais_nao_sao_liberadas_como_operacao_manual(self):
         result = TotvsProductionOrderMapper().map(

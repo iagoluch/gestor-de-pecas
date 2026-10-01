@@ -26,6 +26,7 @@ from backend.ai import GroqProvider
 from backend.ai.rate_limit_state import AIRateLimitState, AIUserRateLimiter
 from backend.api.database import DatabaseManager
 from app.database.leadership import (
+    INTERNAL_ALERT_DISPATCH_LEADER_LOCK_ID,
     REPORT_SCHEDULER_LEADER_LOCK_ID,
     TELEGRAM_BOT_LEADER_LOCK_ID,
     TELEGRAM_DIGEST_LEADER_LOCK_ID,
@@ -69,20 +70,25 @@ from backend.integrations.sigmanest_sqlserver import SigmaNestSqlServerGateway
 from backend.integrations.totvs_wspcp import TotvsWspcpClient
 from mes.integrations.notifications.telegram import (
     answer_telegram_callback_query,
+    TelegramPollingRejected,
     build_outbox_error_notifier,
+    configure_message_prefix,
     deliver_telegram_message,
     fetch_telegram_updates,
+    send_telegram_message_checked,
+    telegram_outbound_allowed,
 )
 from mes.integrations.totvs.on_demand_gateway import build_order_provisioning_service
 from mes.integrations.totvs.service import build_totvs_ingestion_service
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.industrial_reports import IndustrialReportService
+from mes.services.internal_alert_dispatcher import InternalAlertTelegramDispatcher
 from mes.services.report_messaging import ReportMessagingService
 from mes.services.report_scheduler import ReportScheduler
 from mes.services.shift_boundary import ShiftBoundaryService
 from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.sigmanest_refresh import SigmaNestRefreshCoordinator
-from mes.services.telegram_bot import TelegramFactoryBotService
+from mes.services.telegram_bot import FACTORY_BOT_CURSOR_KEY, TelegramFactoryBotService
 from mes.services.telegram_digest import (
     TelegramFactoryDigestScheduler,
     build_digest_destinations,
@@ -199,6 +205,7 @@ def _build_totvs_outbox_worker(application: FastAPI) -> TotvsOutboxWorker:
         error_notifier=build_outbox_error_notifier(
             bot_token=settings.telegram_bot_token,
             chat_id=settings.totvs_outbox_telegram_chat_id,
+            enabled=telegram_outbound_allowed(settings),
         ),
     )
 
@@ -228,6 +235,44 @@ async def _totvs_outbox_worker_loop(application: FastAPI) -> None:
         await asyncio.sleep(interval)
 
 
+_TELEGRAM_POLL_MIN_BACKOFF_SECONDS = 60
+_TELEGRAM_POLL_MAX_BACKOFF_SECONDS = 300
+INTERNAL_ALERT_DISPATCH_INTERVAL_SECONDS = 30
+
+
+async def _internal_alert_dispatch_loop(application: FastAPI) -> None:
+    """Entrega os alertas internos PENDENTES ao Telegram, só no processo líder.
+
+    Sem chat configurado ou com o envio desligado, o despachante não envia e
+    não descarta: o alerta continua PENDENTE.
+    """
+
+    settings = application.state.settings
+    lease = LeaderLease(INTERNAL_ALERT_DISPATCH_LEADER_LOCK_ID)
+    try:
+        while True:
+            try:
+                if await _leader_cycle(application, lease):
+                    dispatcher = InternalAlertTelegramDispatcher(
+                        application.state.database_manager.get(),
+                        bot_token=settings.telegram_bot_token,
+                        factory_chat_id=settings.telegram_factory_chat_id,
+                        sector_chat_ids=settings.telegram_sector_chat_ids,
+                        outbound_allowed=telegram_outbound_allowed(settings),
+                        sender=send_telegram_message_checked,
+                    )
+                    cycle = await asyncio.to_thread(dispatcher.run_once)
+                    if cycle.sent or cycle.discarded or cycle.failed:
+                        logging.info("Ciclo de alertas internos no Telegram: %s", cycle)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.exception("Falha controlada no ciclo de alertas internos no Telegram.")
+            await asyncio.sleep(INTERNAL_ALERT_DISPATCH_INTERVAL_SECONDS)
+    finally:
+        lease.release()
+
+
 async def _telegram_bot_loop(application: FastAPI) -> None:
     """Long polling do bot de fábrica: comandos privados, nunca o grupo.
 
@@ -240,8 +285,9 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
     settings = application.state.settings
     interval = settings.telegram_bot_poll_interval_seconds
     token = settings.telegram_bot_token
-    cursor_key = "factory_bot"
+    cursor_key = FACTORY_BOT_CURSOR_KEY
     offset = None
+    rejections = 0
     lease = LeaderLease(TELEGRAM_BOT_LEADER_LOCK_ID)
     try:
         while True:
@@ -259,6 +305,9 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
                 updates = await asyncio.to_thread(
                     fetch_telegram_updates, bot_token=token, offset=offset
                 )
+                if rejections:
+                    logging.info("getUpdates do Telegram voltou a responder.")
+                    rejections = 0
                 for update in updates:
                     # ``handle_update`` consulta o PostgreSQL de forma síncrona;
                     # fora do laço de eventos ele não congela as demais requisições.
@@ -285,6 +334,23 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
                         offset = await asyncio.to_thread(save_cursor, cursor_key, offset)
             except asyncio.CancelledError:
                 raise
+            except TelegramPollingRejected as exc:
+                # 401 (token inválido) e 409 (outro consumidor do mesmo bot, ex.:
+                # TEST e REAL com o mesmo token) não se resolvem a cada 3s: ERROR
+                # com contador e recuo de 60s até 5min, sem inundar o log.
+                rejections += 1
+                pause = min(_TELEGRAM_POLL_MAX_BACKOFF_SECONDS, _TELEGRAM_POLL_MIN_BACKOFF_SECONDS * 2 ** (rejections - 1))
+                logging.error(
+                    "Polling do Telegram recusado (HTTP %s, %s ciclo(s) seguidos); "
+                    "nova tentativa em %ss. %s",
+                    exc.status_code,
+                    rejections,
+                    pause,
+                    "Token inválido ou revogado." if exc.status_code == 401
+                    else "Outro processo lê o mesmo bot: use bots/tokens diferentes em TEST e REAL.",
+                )
+                await asyncio.sleep(pause)
+                continue
             except Exception:
                 logging.exception("Falha controlada no ciclo do bot de fábrica no Telegram.")
             await asyncio.sleep(interval)
@@ -292,32 +358,59 @@ async def _telegram_bot_loop(application: FastAPI) -> None:
         lease.release()
 
 
-async def _telegram_digest_loop(application: FastAPI) -> None:
-    """Resumo diário/quinzenal/mensal por destino, um por período fechado."""
+def prepare_telegram_digest_config(settings) -> tuple | None:
+    """Valida a configuração do resumo no startup: ``(fuso, horário, destinos)``.
 
-    settings = application.state.settings
+    Configuração inválida (fuso, horário ``HH:MM`` ou destinos de chat) NÃO
+    derruba o app nem deixa a task morrer em silêncio: registra ERROR claro e
+    devolve ``None``, e o resumo fica desabilitado de forma explícita.
+    """
+
     try:
         fuso = ZoneInfo(settings.telegram_digest_timezone)
     except Exception:
-        logging.exception(
-            "Fuso horário inválido para o resumo do Telegram (%s); usando UTC.",
+        logging.error(
+            "Resumo do Telegram DESABILITADO: fuso horário inválido (%r) em "
+            "GESTOR_TELEGRAM_DIGEST_TIMEZONE.",
             settings.telegram_digest_timezone,
         )
-        fuso = ZoneInfo("UTC")
+        return None
     try:
         hora, minuto = (int(part) for part in settings.telegram_digest_daily_time.split(":"))
         horario_execucao = day_time(hour=hora, minute=minuto)
     except Exception:
-        logging.exception(
-            "Horário inválido para o resumo do Telegram (%s); usando 18:00.",
+        logging.error(
+            "Resumo do Telegram DESABILITADO: horário inválido (%r) em "
+            "GESTOR_TELEGRAM_DIGEST_DAILY_TIME; use HH:MM.",
             settings.telegram_digest_daily_time,
         )
-        horario_execucao = day_time(hour=18, minute=0)
+        return None
+    try:
+        destinations = build_digest_destinations(
+            factory_chat_id=settings.telegram_factory_chat_id,
+            sector_chat_ids=settings.telegram_sector_chat_ids,
+        )
+    except Exception as exc:
+        logging.error(
+            "Resumo do Telegram DESABILITADO: destinos inválidos em "
+            "GESTOR_TELEGRAM_FACTORY_CHAT_ID/GESTOR_TELEGRAM_SECTOR_CHAT_IDS (%s).",
+            exc,
+        )
+        return None
+    if not destinations:
+        logging.error(
+            "Resumo do Telegram DESABILITADO: nenhum chat de destino configurado."
+        )
+        return None
+    return fuso, horario_execucao, destinations
+
+
+async def _telegram_digest_loop(application: FastAPI, config: tuple) -> None:
+    """Resumo diário/quinzenal/mensal por destino, um por período fechado."""
+
+    settings = application.state.settings
+    fuso, horario_execucao, destinations = config
     interval = 300
-    destinations = build_digest_destinations(
-        factory_chat_id=settings.telegram_factory_chat_id,
-        sector_chat_ids=settings.telegram_sector_chat_ids,
-    )
     lease = LeaderLease(TELEGRAM_DIGEST_LEADER_LOCK_ID)
     try:
         while True:
@@ -518,6 +611,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         observatory_task = None
         telegram_bot_task = None
         telegram_digest_task = None
+        alert_dispatch_task = None
         if resolved_settings.dev_observatory_enabled:
             observatory_task = asyncio.create_task(
                 _dev_observatory_loop(_app),
@@ -548,6 +642,8 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 _telegram_bot_loop(_app),
                 name="gestor-telegram-bot",
             )
+        if resolved_settings.telegram_configured:
+            configure_message_prefix(resolved_settings.environment)
         if (
             resolved_settings.telegram_configured
             and resolved_settings.telegram_digest_enabled
@@ -556,9 +652,16 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 or resolved_settings.telegram_sector_chat_ids
             )
         ):
-            telegram_digest_task = asyncio.create_task(
-                _telegram_digest_loop(_app),
-                name="gestor-telegram-digest",
+            digest_config = prepare_telegram_digest_config(resolved_settings)
+            if digest_config is not None:
+                telegram_digest_task = asyncio.create_task(
+                    _telegram_digest_loop(_app, digest_config),
+                    name="gestor-telegram-digest",
+                )
+        if resolved_settings.telegram_configured:
+            alert_dispatch_task = asyncio.create_task(
+                _internal_alert_dispatch_loop(_app),
+                name="gestor-internal-alert-dispatch",
             )
         try:
             yield
@@ -587,6 +690,11 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 telegram_digest_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await telegram_digest_task
+            if alert_dispatch_task is not None:
+                alert_dispatch_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await alert_dispatch_task
+            configure_message_prefix(None)
             if scheduler_task is not None:
                 scheduler_task.cancel()
                 with suppress(asyncio.CancelledError):

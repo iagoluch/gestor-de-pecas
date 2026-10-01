@@ -13,6 +13,18 @@ interface ChamadaResult {
   ok: boolean;
   /** O aviso foi aceito para envio. A entrega em si sai depois da resposta. */
   telegram_agendado: boolean;
+  /** Estado do aviso. Ausente em respostas de backends antigos: aí vale `telegram_agendado`. */
+  telegram_status?: "enviado" | "falhou" | "pendente";
+  /** Motivo da falha, já em texto simples. */
+  telegram_erro?: string | null;
+}
+
+type Aviso = "enviando" | "enviado" | "falhou";
+
+function avisoDaResposta(resultado: ChamadaResult): Aviso {
+  if (resultado.telegram_status === "falhou" || !resultado.telegram_agendado) return "falhou";
+  if (resultado.telegram_status === "enviado") return "enviado";
+  return "enviando";
 }
 
 type Passo = "form" | "enviando" | "sucesso" | "erro";
@@ -67,7 +79,8 @@ export function ChamadaButton({
   const [cracha, setCracha] = useState("");
   const [nomeSolicitante, setNomeSolicitante] = useState("");
   const [emailSolicitante, setEmailSolicitante] = useState("");
-  const [avisoAgendado, setAvisoAgendado] = useState(false);
+  const [aviso, setAviso] = useState<Aviso>("enviando");
+  const [avisoErro, setAvisoErro] = useState("");
   const [erro, setErro] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -145,7 +158,8 @@ export function ChamadaButton({
           ? { solicitante_nome_manual: nomeSolicitante.trim(), solicitante_email: emailSolicitante.trim() }
           : { solicitante_cracha: cracha.trim() }),
       });
-      setAvisoAgendado(resultado.telegram_agendado);
+      setAviso(avisoDaResposta(resultado));
+      setAvisoErro(resultado.telegram_erro?.trim() ?? "");
       setPasso("sucesso");
     } catch (reason) {
       setErro(reason instanceof ApiError ? reason.message : "Não foi possível registrar a chamada.");
@@ -176,11 +190,14 @@ export function ChamadaButton({
           {passo === "sucesso" ? (
             <div className="chamada-feedback chamada-feedback--ok">
               <strong>Chamada registrada.</strong>
-              <p>
-                {avisoAgendado
-                  ? "O aviso está sendo enviado pelo Telegram."
-                  : "O aviso pelo Telegram não pôde ser enviado agora, mas a chamada ficou registrada — avise pessoalmente se for urgente."}
-              </p>
+              {aviso === "falhou" ? (
+                <Notice tone="error">
+                  O aviso pelo Telegram NÃO foi enviado{avisoErro ? `: ${avisoErro}` : ""}. A chamada ficou
+                  registrada — avise a pessoa pessoalmente se for urgente.
+                </Notice>
+              ) : (
+                <p>{aviso === "enviado" ? "O aviso foi enviado pelo Telegram." : "Enviando aviso…"}</p>
+              )}
               <div className="operator-dialog__actions">
                 <button type="button" className="button button--primary" onClick={fechar}>Fechar</button>
               </div>

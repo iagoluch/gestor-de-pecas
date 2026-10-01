@@ -146,9 +146,6 @@ export function HighlightPage() {
   const [dialog, setDialog] = useState<"stop" | "finish" | "history" | "ops" | "activityStart" | "activityFinish" | null>(null);
   const [opsPlano, setOpsPlano] = useState<HighlightPlan | null>(null);
   const [busy, setBusy] = useState(false);
-  // Só apresentação: clicar de novo na tarefa já carregada minimiza os
-  // planos, sem precisar recarregar nada do backend.
-  const [plansCollapsed, setPlansCollapsed] = useState(false);
   const task = useApiQuery<HighlightPayload>(loadedTask ? `/api/v1/highlight/tasks/${encodeURIComponent(loadedTask)}` : null);
   const reasons = useApiQuery<{ items: StopReason[] }>("/api/v1/operator/stop-reasons");
   // A tela do Destaque não tem fila numerada de máquina: ela mostra as
@@ -273,7 +270,9 @@ export function HighlightPage() {
           <OperatorActionIcon name="start" />
           <span>{stoppedWithoutTask || selectedPaused ? "Retomar produção" : startsActivity ? "Iniciar atividade" : "Iniciar"}</span>
         </button>
-        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || selectedPaused || (selectedPlan ? !selectedRunning : false)} onClick={() => setDialog("stop")}><OperatorActionIcon name="stop" /><span>Parada</span></button>
+        {/* Parada é do posto: segue disponível com a tarefa selecionada e o plano
+            ainda não iniciado (o backend a registra como parada do recurso). */}
+        <button type="button" className="operator-action operator-action--stop" disabled={busy || stoppedWithoutTask || selectedPaused} onClick={() => setDialog("stop")}><OperatorActionIcon name="stop" /><span>Parada</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={busy || (!activityInProgress && (!selectedPlan || !selectedRunning))} onClick={() => setDialog(activityInProgress ? "activityFinish" : "finish")}><OperatorActionIcon name="finish" /><span>{activityInProgress ? "Finalizar atividade" : "Finalizar"}</span></button>
       </div>
       <Notice>{message}</Notice>
@@ -284,16 +283,12 @@ export function HighlightPage() {
               type="button"
               key={item.tarefa_id}
               aria-pressed={loadedTask === item.codigo_tarefa}
-              aria-expanded={loadedTask === item.codigo_tarefa ? !plansCollapsed : undefined}
               className={`highlight-queue__task highlight-queue__task--${(item.situacao ?? "PARCIAL").toLowerCase()}${loadedTask === item.codigo_tarefa ? " is-selected" : ""}`}
               onClick={() => {
-                if (loadedTask === item.codigo_tarefa) {
-                  setPlansCollapsed((current) => !current);
-                  return;
-                }
-                setLoadedTask(item.codigo_tarefa);
+                // Clicar de novo na tarefa carregada a desseleciona: o detalhe
+                // recolhe e as ações voltam a ser do posto, não da tarefa.
+                setLoadedTask(loadedTask === item.codigo_tarefa ? "" : item.codigo_tarefa);
                 setPlanoSelecionado(null);
-                setPlansCollapsed(false);
               }}
             >
               <header>
@@ -317,7 +312,6 @@ export function HighlightPage() {
           <header><div><small>Tarefa selecionada</small><h2>{task.data.task.codigo_tarefa}</h2></div><span className="operator-state">{plans.length} plano(s) liberado(s)</span></header>
           <dl className="highlight-metrics"><div><dt>Material</dt><dd>{task.data.task.material ?? "Não informado"}</dd></div><div><dt>Espessura</dt><dd>{task.data.task.espessura ?? "Não informada"}</dd></div><div><dt>Tempo em destaque</dt><dd>{formatDuration(task.data.timing.execution_seconds)}</dd></div></dl>
 
-          {plansCollapsed ? null : (
           <section className="highlight-block">
             <header>
               <h3>Escolha o plano para apontar</h3>
@@ -369,7 +363,6 @@ export function HighlightPage() {
               </div>
             ) : <EmptyState title="Nenhum plano liberado" detail="Somente planos concluídos no Laser Ensis aparecem para apontamento." />}
           </section>
-          )}
 
           <section className="highlight-block operator-card-section--history">
             <header><h3>Histórico</h3><div className="operator-card-heading-actions"><span>{history.length}</span><button type="button" onClick={() => setDialog("history")}>Ver mais</button></div></header>

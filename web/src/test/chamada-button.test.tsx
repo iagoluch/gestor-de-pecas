@@ -89,22 +89,43 @@ describe("botão de chamada — variante operador (padrão)", () => {
     fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
     fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
     await screen.findByText("Chamada registrada.");
-    expect(screen.getByText("O aviso está sendo enviado pelo Telegram.")).toBeInTheDocument();
+    expect(screen.getByText("Enviando aviso…")).toBeInTheDocument();
 
     const chamada = fetchMock.mock.calls.find(([path]) => String(path).endsWith("/chamadas"));
     const body = JSON.parse(String(chamada?.[1]?.body));
     expect(body.solicitante_cracha).toBe("0042");
   });
 
-  it("avisa quando a chamada foi registrada mas o Telegram não pôde ser enviado", async () => {
-    stubFetch({ callResponse: { ok: true, telegram_agendado: false, item: {} } });
+  async function chamarCom(callResponse: Record<string, unknown>) {
+    stubFetch({ callResponse });
     render(<ChamadaButton />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await selecionarFulanoEMotivo("Qualidade");
     fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
     fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
     await screen.findByText("Chamada registrada.");
-    expect(screen.getByText(/não pôde ser enviado agora/)).toBeInTheDocument();
+  }
+
+  it("avisa com clareza, sem motivo, quando o Telegram não foi agendado (resposta antiga)", async () => {
+    await chamarCom({ ok: true, telegram_agendado: false, item: {} });
+    expect(screen.getByRole("alert")).toHaveTextContent(/NÃO foi enviado/);
+  });
+
+  it("mostra o motivo da falha quando telegram_status é falhou", async () => {
+    await chamarCom({ ok: true, telegram_agendado: true, telegram_status: "falhou", telegram_erro: "Contato sem Telegram cadastrado", item: {} });
+    expect(screen.getByRole("alert")).toHaveTextContent("NÃO foi enviado: Contato sem Telegram cadastrado");
+  });
+
+  it("pendente aparece como Enviando aviso, sem alarme", async () => {
+    await chamarCom({ ok: true, telegram_agendado: true, telegram_status: "pendente", telegram_erro: null, item: {} });
+    expect(screen.getByText("Enviando aviso…")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("enviado confirma o aviso, sem alarme", async () => {
+    await chamarCom({ ok: true, telegram_agendado: true, telegram_status: "enviado", telegram_erro: null, item: {} });
+    expect(screen.getByText("O aviso foi enviado pelo Telegram.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("permite uma chamada contextual ao responsável, filtrada pelo setor e sem dispensar o crachá", async () => {

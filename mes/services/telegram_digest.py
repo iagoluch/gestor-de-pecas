@@ -9,7 +9,7 @@ só formatado como texto curto para celular em vez de planilha.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from collections import defaultdict
 import logging
 
@@ -17,9 +17,14 @@ from app.core.operator_sectors import OPERATOR_SECTORS
 from mes.contracts import AnalyticsFilter
 from mes.integrations.notifications.telegram import send_telegram_message
 from mes.services.andon import ANDON_PANEL_BY_SECTOR
+from mes.services.display_labels import (
+    CLASSIFICATION_CONFLICT_REASON,
+    strip_status_code_prefix,
+)
 from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.report_scheduler import closed_report_period
 from mes.services.telegram_presenter import (
+    fit_telegram_text,
     format_duration,
     format_number,
     format_percent,
@@ -111,6 +116,19 @@ def _formatar_duracao(segundos) -> str:
     return format_duration(segundos)
 
 
+def _rotulo_periodo(frequency: str, start: datetime, end: datetime) -> str:
+    """Rótulo do período fechado; ``end`` é exclusivo (meia-noite seguinte).
+
+    O resumo diário cobre o dia anterior completo, e o rótulo diz isso.
+    """
+
+    last_day = (end - timedelta(days=1)).date()
+    if start.date() == last_day:
+        prefix = "Dia anterior" if frequency == "diario" else "Dia"
+        return f"📅 {prefix}: <b>{start:%d/%m}</b>"
+    return f"📅 Período: <b>{start:%d/%m} a {last_day:%d/%m}</b>"
+
+
 def _formatar_resumo(
     *,
     label: str,
@@ -130,7 +148,7 @@ def _formatar_resumo(
         "🏭 <b>GESTOR DE PEÇAS</b>",
         f"📊 <b>{html(label)} · {html(titulo)}</b>",
         "",
-        f"📅 Período: <b>{start:%d/%m} a {end:%d/%m}</b>",
+        _rotulo_periodo(frequency, start, end),
         f"📈 Peças boas: <b>{format_number(good)}</b>",
         f"📦 Refugo: <b>{format_number(scrap)}</b>",
         f"📦 Retrabalho: <b>{format_number(rework)}</b>",
@@ -148,13 +166,12 @@ def _formatar_resumo(
         )
     if top_stops:
         principal = top_stops[0]
-        motivo = principal.get("motivo") or "Não informado"
+        motivo = strip_status_code_prefix(principal.get("motivo") or "Não informado")
         linhas.append(
             f"🔴 Principal parada: {html(motivo)} · "
             f"<b>{_formatar_duracao(principal.get('segundos'))}</b>"
         )
-    linhas.extend(["", f"🕐 <b>Dados consolidados até {end:%H:%M}</b>"])
-    return "\n".join(linhas)
+    return fit_telegram_text("\n".join(linhas))
 
 
 def build_digest_text(
@@ -185,9 +202,11 @@ def build_digest_text(
         productive_seconds += float(hours.get("productive_seconds") or 0)
         downtime_seconds += float(hours.get("downtime_seconds") or 0)
         for item in paradas.get("by_reason") or ():
-            stops[str(item.get("motivo") or "Não informado")] += float(
-                item.get("segundos") or 0
-            )
+            reason = str(item.get("motivo") or "Não informado")
+            # Conflito de classificação é artefato da consolidação, não causa.
+            if reason == CLASSIFICATION_CONFLICT_REASON:
+                continue
+            stops[strip_status_code_prefix(reason)] += float(item.get("segundos") or 0)
         if sector is None or len(sectors) == 1:
             global_kpis = overview.get("kpis") or {}
 

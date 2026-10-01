@@ -57,6 +57,7 @@ from .operator_state_machine import (
     operator_state_from_status,
     operator_status_for_state,
     resolve_operator_action,
+    resource_concurrency_conflict,
     return_state_for_transition,
     validate_transition,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "InvalidTransition",
     "explain_invalid_transition",
     "resolve_operator_action",
+    "resource_concurrency_conflict",
     "return_state_for_transition",
     "validate_transition",
     "ManufacturingRules",

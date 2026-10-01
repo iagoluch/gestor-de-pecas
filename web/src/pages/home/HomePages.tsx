@@ -9,7 +9,7 @@ import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { SectorSummary } from "../../types/api";
 import type { IssueRow } from "../../types/management";
-import { formatHours, formatNumber, humanize } from "../../utils/format";
+import { displayName, displayText, formatHours, formatNumber, humanize } from "../../utils/format";
 
 interface SectorResponse {
   items: SectorSummary[];
@@ -76,7 +76,7 @@ export function HomeSectorsPage() {
             key={highlight.key}
             label={highlight.label}
             value={highlight.unit === "s" ? formatHours(highlight.value) : `${formatNumber(highlight.value)} peças`}
-            detail={highlight.sector}
+            detail={displayName(highlight.sector, "")}
             accent={(["success", "warning", "primary", "teal"] as const)[index % 4]}
           />
         ))}
@@ -87,7 +87,7 @@ export function HomeSectorsPage() {
           rowKey={(row) => row.setor}
           emptyTitle="Sem registros para o filtro selecionado"
           columns={[
-            { key: "sector", label: "Setor", render: (row) => <Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(row.setor)}`}>{row.setor}</Link> },
+            { key: "sector", label: "Setor", render: (row) => <Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(row.setor)}`}>{displayName(row.setor)}</Link> },
             { key: "good", label: "Produção boa", render: (row) => formatNumber(row.producao_boa) },
             { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
             { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
@@ -126,9 +126,9 @@ export function HomeAlertsPage() {
           rowKey={(row, index) => row.id ?? `${row.type}-${index}`}
           columns={[
             { key: "type", label: "Tipo", render: (row) => humanize(row.type ?? row.tipo) },
-            { key: "message", label: "Ocorrência / motivo", render: (row) => row.message ?? row.mensagem ?? "Não informado" },
-            { key: "sector", label: "Setor", render: (row) => row.sector ?? "Não disponível" },
-            { key: "resource", label: "Recurso / máquina", render: (row) => row.resource ?? "Não disponível" },
+            { key: "message", label: "Ocorrência / motivo", render: (row) => displayText(row.message ?? row.mensagem, "Não informado") },
+            { key: "sector", label: "Setor", render: (row) => displayName(row.sector) },
+            { key: "resource", label: "Recurso / máquina", render: (row) => displayName(row.resource) },
             { key: "duration", label: "Duração / impacto", render: (row) => typeof row.seconds === "number" ? formatHours(row.seconds) : "Não mensurado" },
             { key: "situation", label: "Situação", render: (row) => <StatusBadge value={row.severity ?? row.severidade} /> },
           ]}
@@ -145,11 +145,11 @@ export function HomeAlertsPage() {
             columns={[
               { key: "tipo", label: "Tipo", render: (row) => humanize(row.tipo) },
               { key: "op", label: "OP", render: (row) => row.codigo_op ?? "—" },
-              { key: "setor", label: "Setor", render: (row) => row.tipo_setor ?? "—" },
+              { key: "setor", label: "Setor", render: (row) => displayName(row.tipo_setor, "—") },
               { key: "recurso", label: "Recurso", render: (row) => row.codigo_recurso ?? "—" },
               { key: "quantidade", label: "Qtd.", render: (row) => (row.quantidade == null ? "—" : formatNumber(row.quantidade)) },
               { key: "destinatario", label: "Destinatário", render: (row) => humanize(row.destinatario) },
-              { key: "mensagem", label: "Ocorrência", render: (row) => row.titulo },
+              { key: "mensagem", label: "Ocorrência", render: (row) => displayText(row.titulo) },
               { key: "situacao", label: "Notificação", render: (row) => <StatusBadge value={row.status_notificacao} /> },
             ]}
           />

@@ -499,7 +499,7 @@ class TotvsRepositoryMixin:
                 ) VALUES (
                     %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s, NULL,
+                    %s, %s, %s, %s, %s,
                     %s, 'totvs_production_order_v1', %s, %s, %s,
                     %s,
                     %s, %s, %s
@@ -516,6 +516,12 @@ class TotvsRepositoryMixin:
                     filial = EXCLUDED.filial,
                     tipo = EXCLUDED.tipo,
                     roteiro = EXCLUDED.roteiro,
+                    -- Protheus sem tempo configurado chega NULL e não apaga o
+                    -- tempo já existente (manual/sintético/importação anterior).
+                    tempo_medio_segundos = COALESCE(
+                        EXCLUDED.tempo_medio_segundos,
+                        catalogo_operacoes_op.tempo_medio_segundos
+                    ),
                     ordem = EXCLUDED.ordem,
                     fonte = EXCLUDED.fonte,
                     -- Marco terminal e inspeção da Qualidade continuam
@@ -539,6 +545,7 @@ class TotvsRepositoryMixin:
                     operation.filial,
                     operation.tipo,
                     operation.roteiro,
+                    operation.tempo_medio_segundos,
                     operation.ordem,
                     not (operation.marco_terminal or operation.inspecao_qualidade),
                     operation.marco_terminal,

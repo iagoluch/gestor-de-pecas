@@ -12,7 +12,7 @@ import type { FilterField } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { PagedNestings, TraceabilityResponse } from "../../types/management";
-import { formatDateTime, formatDuration, formatNumber, formatPercent, formatSignedDuration, humanize } from "../../utils/format";
+import { displayName, displayText, formatDateTime, formatDuration, formatNumber, formatPercent, formatSignedDuration, humanize } from "../../utils/format";
 
 function useOrderSelection() {
   const [params, setParams] = useSearchParams();
@@ -73,11 +73,11 @@ export function TraceabilityOrderPage() {
               rows={query.data?.operations ?? []}
               rowKey={(row, index) => row.apontamento_id ?? index}
               columns={[
-                { key: "operation", label: "Operação", render: (row) => row.operacao ?? "Não disponível" },
-                { key: "description", label: "Descrição", render: (row) => row.descricao_operacao ?? "Não disponível" },
+                { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
+                { key: "description", label: "Descrição", render: (row) => displayText(row.descricao_operacao) },
                 { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
-                { key: "sector", label: "Setor", render: (row) => row.setor ?? "Não disponível" },
-                { key: "resource", label: "Recurso real", render: (row) => row.recurso_real ?? "Não disponível" },
+                { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
+                { key: "resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
                 { key: "operator", label: "Operador", render: () => "Ver linha do tempo" },
                 { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
                 { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
@@ -111,14 +111,14 @@ export function TraceabilityTimelinePage() {
             rowKey={(row, index) => `${row.source}-${row.record_id ?? index}-${row.type}`}
             columns={[
               { key: "timestamp", label: "Data e hora", render: (row) => formatDateTime(row.timestamp) },
-              { key: "resource", label: "Máquina / recurso", render: (row) => row.resource ?? "Não disponível" },
+              { key: "resource", label: "Máquina / recurso", render: (row) => displayName(row.resource) },
               { key: "op", label: "OP", render: () => op },
-              { key: "operation", label: "Operação", render: (row) => row.operation ?? "Não disponível" },
+              { key: "operation", label: "Operação", render: (row) => displayName(row.operation) },
               { key: "event", label: "Evento", render: (row) => humanize(row.type) },
               { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status ?? row.type} /> },
               { key: "operator", label: "Operador", render: (row) => row.operator ?? "Não disponível" },
               { key: "quantity", label: "Quantidade", render: (row) => formatNumber(row.quantity) },
-              { key: "reason", label: "Motivo / detalhe", render: (row) => row.reason ?? "Não disponível" },
+              { key: "reason", label: "Motivo / detalhe", render: (row) => displayName(row.reason) },
               { key: "origin", label: "Registro original", render: (row) => `${row.source ?? "Fonte não disponível"} #${row.record_id ?? "—"}` },
             ]}
           />

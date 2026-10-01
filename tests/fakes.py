@@ -15,6 +15,7 @@ from mes.domain import (
     can_transition,
     operator_state_from_status,
     operator_status_for_state,
+    resource_concurrency_conflict,
     return_state_for_transition,
 )
 
@@ -1990,16 +1991,19 @@ class FakeDatabase:
             OperatorState.REWORK,
         }:
             resource = resolve_resource_identity(row.get("maquina"))
-            occupied = next(
-                (
-                    item for item in self.appointments
-                    if item["id"] != apontamento_id
-                    and resolve_resource_identity(item.get("maquina")) == resource
-                    and item.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"}
-                ),
-                None,
-            )
-            if occupied:
+            occupied_rows = [
+                item for item in self.appointments
+                if item["id"] != apontamento_id
+                and resolve_resource_identity(item.get("maquina")) == resource
+                and item.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"}
+            ]
+            if resource_concurrency_conflict(
+                source, destination, [item["status"] for item in occupied_rows]
+            ):
+                occupied = next(
+                    (i for i in occupied_rows if i["status"] in {"Setup", "Retrabalho"}),
+                    occupied_rows[0],
+                )
                 return {
                     "exclusive_resource_conflict": True,
                     "resource": resource,

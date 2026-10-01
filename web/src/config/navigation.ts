@@ -40,6 +40,9 @@ export const managementSections: ManagementSection[] = [
       { label: "Setores", path: "/inicio/setores", screen: "home-sectors" },
       { label: "Alertas", path: "/inicio/alertas", screen: "home-alerts" },
       { label: "IA", path: "/inicio/ia", screen: "home-ai" },
+      // Histórico de chamadas visto pela gestão (e pelo sininho). Separado da
+      // aba do IagoDev, que cuida só do cadastro de contatos (admin).
+      { label: "Chamadas da Gestão", path: "/inicio/chamadas", screen: "home-chamadas" },
     ],
   },
   {
@@ -51,7 +54,10 @@ export const managementSections: ManagementSection[] = [
       { label: "Andon", path: "/inicio/andon", screen: "panels-andon" },
       // Solda: aba oculta a pedido do usuário (21/09/2026). A tela e a rota
       // seguem existindo (`/welding-management`) — nada foi excluído.
-      { label: "Metas", path: "/inicio/metas", screen: "panels-goals" },
+      // Metas: aba oculta temporariamente a pedido do usuário (01/10/2026).
+      // Página e rota seguem existindo (`/inicio/metas`) — para voltar, basta
+      // descomentar a linha abaixo.
+      // { label: "Metas", path: "/inicio/metas", screen: "panels-goals" },
       { label: "Pausas", path: "/inicio/pausas", screen: "panels-pauses" },
     ],
   },
@@ -139,14 +145,14 @@ export const managementSections: ManagementSection[] = [
     // existem; novas telas de configuração (ex.: parâmetros de integração,
     // feature flags) entram aqui conforme forem criadas — decisão do
     // usuário, 15/09/2026.
-    // "Chamadas" é a exceção: toda conta de gestão chega nela pelo sininho
-    // de notificações pessoal, então não pode ficar marcada como admin-only
-    // (senão o PageFrame mostraria as abas admin da seção para quem não é
-    // admin) — decisão do usuário, 17/09/2026.
+    // O histórico de chamadas da gestão (sininho) saiu daqui e vive na Tela
+    // inicial ("Chamadas da Gestão"): esta seção é toda admin-only, então a
+    // gestão comum nunca mais entra no IagoDev para ver chamadas
+    // (decisão do usuário, 01/10/2026).
     tabs: [
       { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges", adminOnly: true },
       { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users", adminOnly: true },
-      { label: "Chamadas", path: "/inicio/chamadas", screen: "dev-chamadas" },
+      { label: "Chamadas do IagoDev", path: "/inicio/chamadas-dev", screen: "dev-chamadas", adminOnly: true },
       { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos", adminOnly: true },
       { label: "Sistema", path: "/inicio/sistema", screen: "dev-sistema", adminOnly: true },
     ],

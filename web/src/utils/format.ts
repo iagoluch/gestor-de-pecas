@@ -1,10 +1,10 @@
-import { internalTermLabel, systemStateLabelOrNull } from "./systemState";
+import { humanizeSlug, humanizeSystemStateIn, internalTermLabel, roleLabelOrNull, systemStateLabelOrNull } from "./systemState";
 
 /**
  * Os rótulos de estado vivem na camada central `utils/systemState`. Este módulo
  * apenas reexporta para as telas que já consumiam `availabilityLabel`.
  */
-export { availabilityLabel, humanizeSystemState, systemStateSentence } from "./systemState";
+export { availabilityLabel, humanizeSystemState, roleLabelOrNull, systemStateSentence } from "./systemState";
 
 export function formatNumber(value: number | null | undefined, digits = 0) {
   if (value === null || value === undefined || Number.isNaN(value)) return "Não disponível";
@@ -72,16 +72,38 @@ export function formatDateTime(value: string | null | undefined) {
 }
 
 /**
- * Texto legível para um valor vindo do backend. Estado técnico e identificador
- * interno conhecidos passam pela camada central; o resto é apenas formatado.
+ * Texto legível para um valor vindo do backend. Estado técnico, nível de acesso
+ * e identificador interno conhecidos passam pela camada central; o resto é
+ * apenas formatado (snake_case vira texto com acento e capitalização).
  */
 export function humanize(value: string | null | undefined) {
   if (!value) return "Não disponível";
-  const central = systemStateLabelOrNull(value) ?? internalTermLabel(value);
-  if (central) return central;
-  return value
-    .replaceAll("_", " ")
-    .replace(/(^|[\s/-])(\p{L})/gu, (_match, prefix: string, letter: string) => `${prefix}${letter.toLocaleUpperCase("pt-BR")}`);
+  return systemStateLabelOrNull(value) ?? internalTermLabel(value) ?? roleLabelOrNull(value) ?? humanizeSlug(value);
+}
+
+const TECHNICAL_NAME = /^[\p{L}\d]+(?:_[\p{L}\d]+)+$/u;
+
+/** `true` para identificador técnico em snake_case (`em_andamento`, `CORTE_LASER`). */
+export function isTechnicalName(value: string | null | undefined) {
+  return TECHNICAL_NAME.test(String(value ?? "").trim());
+}
+
+/**
+ * Para campo de nome livre (setor, recurso, motivo, origem): preserva o nome
+ * cadastrado e só trata o que é identificador técnico ou estado conhecido.
+ */
+export function displayName(value: string | number | null | undefined, fallback = "Não disponível") {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  const known = systemStateLabelOrNull(text) ?? internalTermLabel(text) ?? roleLabelOrNull(text);
+  if (known) return known;
+  return isTechnicalName(text) ? humanizeSlug(text) : text;
+}
+
+/** Texto livre vindo do backend (motivo, mensagem): troca só os identificadores técnicos embutidos. */
+export function displayText(value: string | null | undefined, fallback = "Não disponível") {
+  const text = String(value ?? "").trim();
+  return text ? displayName(humanizeSystemStateIn(text)) : fallback;
 }
 
 /** Nome líquido do recurso, sem alterar o código/cadastro original. */

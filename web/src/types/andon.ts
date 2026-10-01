@@ -31,6 +31,12 @@ export interface AndonOperation {
   started_at?: string | null;
 }
 
+export interface AndonActiveOp {
+  op: string;
+  status?: string | null;
+  operador?: string | null;
+}
+
 export interface AndonResource {
   code: string;
   name: string;
@@ -57,6 +63,8 @@ export interface AndonResource {
   group?: string | null;
   operation?: AndonOperation | null;
   active_operations: number;
+  /** OPs simultâneas no recurso (lista curta, já humanizada; a contagem total é `active_operations`). */
+  ops_ativas?: AndonActiveOp[];
   metrics: {
     oee: MetricValue;
     availability: MetricValue;

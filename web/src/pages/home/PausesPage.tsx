@@ -15,6 +15,7 @@ import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useDraft } from "../../hooks/useDraft";
+import { displayName } from "../../utils/format";
 
 interface AutomaticPause {
   id: number;
@@ -41,7 +42,7 @@ const SETORES = [
   "Pintura", "Montagem", "Destaque",
 ];
 
-const FILTROS_INICIAIS = { setor: "", tipo: "", busca: "" };
+const FILTROS_INICIAIS = { setor: "", tipo: "", situacao: "", busca: "" };
 
 /**
  * Tipos de pausa reconhecidos pela tela. É classificação de apresentação sobre
@@ -114,11 +115,20 @@ export function ManagementPausesPage() {
     return [...agrupados.values()].sort((left, right) => left.label.localeCompare(right.label, "pt-BR"));
   }, [items]);
 
+  const situacoes = useMemo(() => {
+    const ativas = items.filter((item) => item.ativo).length;
+    return [
+      { value: "ativa", label: "Ativa", count: ativas },
+      { value: "inativa", label: "Inativa", count: items.length - ativas },
+    ];
+  }, [items]);
+
   const filtradas = useMemo(() => {
     const busca = filtros.values.busca.trim().toLocaleLowerCase("pt-BR");
     return items
       .filter((item) => !filtros.values.setor || item.tipo_setor === filtros.values.setor)
       .filter((item) => !filtros.values.tipo || tipoDaPausa(item.nome).key === filtros.values.tipo)
+      .filter((item) => !filtros.values.situacao || (filtros.values.situacao === "ativa" ? item.ativo : !item.ativo))
       .filter((item) => !busca || `${item.tipo_setor} ${item.nome} ${hora(item.hora_inicio)}`
         .toLocaleLowerCase("pt-BR").includes(busca))
       .sort((left, right) => left.tipo_setor.localeCompare(right.tipo_setor, "pt-BR")
@@ -209,6 +219,14 @@ export function ManagementPausesPage() {
             options: tipos,
             onChange: (value) => filtros.set("tipo", value),
           },
+          {
+            id: "pausas-situacao",
+            label: "Situação",
+            allLabel: "Todas as situações",
+            value: filtros.values.situacao,
+            options: situacoes,
+            onChange: (value) => filtros.set("situacao", value),
+          },
         ]}
         search={{
           value: filtros.values.busca,
@@ -230,7 +248,7 @@ export function ManagementPausesPage() {
             rows={filtradas}
             rowKey={(row) => row.id}
             columns={[
-              { key: "setor", label: "Setor", render: (row) => row.tipo_setor },
+              { key: "setor", label: "Setor", render: (row) => displayName(row.tipo_setor) },
               { key: "nome", label: "Pausa", render: (row) => row.nome },
               ...(mostrarTipo ? [{ key: "tipo", label: "Tipo", render: (row: AutomaticPause) => tipoDaPausa(row.nome).label }] : []),
               { key: "inicio", label: "Início", render: (row) => hora(row.hora_inicio) },
@@ -257,7 +275,7 @@ export function ManagementPausesPage() {
         ) : items.length ? (
           <EmptyState
             title="Nenhuma pausa no filtro atual"
-            detail="Ajuste o setor, o tipo de pausa ou a busca para ver as pausas cadastradas."
+            detail="Ajuste o setor, o tipo de pausa, a situação ou a busca para ver as pausas cadastradas."
           />
         ) : (
           <EmptyState title="Nenhuma pausa configurada" detail="Sem configuração, o sistema não interrompe automaticamente o apontamento." />

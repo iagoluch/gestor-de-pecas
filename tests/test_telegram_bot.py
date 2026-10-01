@@ -1,11 +1,19 @@
 """Roteamento de comandos do bot de fábrica e formatação pura."""
 
 from datetime import datetime, time
+import os
 import unittest
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.core.operator_sectors import WELDING_SECTOR_NAMES
 from backend.api.config import WebSettings
+import psycopg
+from psycopg import sql
+from psycopg.conninfo import make_conninfo
+
+from app.database.config import load_postgres_config
+from app.database.database import Database
 
 from mes.services.telegram_bot import (
     TelegramBotReply,
@@ -74,6 +82,9 @@ class FormattingTests(unittest.TestCase):
         self.assertNotIn("Operador", text)
 
 
+CODIGO_VALIDO = "ABCD2345"
+
+
 class _FakeDb:
     """Só os métodos que os handlers testados aqui realmente chamam."""
 
@@ -82,16 +93,19 @@ class _FakeDb:
         self.vinculos = {}
         self.participacoes = {}
         self.chats_descobertos = {}
+        self.codigos = {CODIGO_VALIDO: "1"}
 
     def registrar_chat_telegram_descoberto(self, chat_id, tipo, titulo):
         self.chats_descobertos[str(chat_id)] = {"tipo": tipo, "titulo": titulo}
 
-    def vincular_telegram_operador(self, cracha, chat_id):
-        operador = self.operadores.get(str(cracha))
-        if operador is None:
-            return None
-        self.vinculos[chat_id] = operador["cracha"]
-        return operador
+    def vincular_telegram_por_codigo(self, codigo, chat_id):
+        # A regra real (hash, validade, uso único, freio) é coberta contra o
+        # PostgreSQL em TelegramLinkCodeDatabaseTests; aqui só o roteamento.
+        cracha = self.codigos.pop(str(codigo).strip().upper(), None)
+        if cracha is None:
+            return {"status": "invalido"}
+        self.vinculos[chat_id] = cracha
+        return {"status": "ok", "operador": self.operadores[cracha]}
 
     def buscar_operador_por_telegram(self, chat_id):
         cracha = self.vinculos.get(chat_id)
@@ -214,27 +228,34 @@ class CommandRoutingTests(unittest.TestCase):
         self.assertIsInstance(reply, TelegramBotReply)
         self.assertIn("/vincular", reply.text)
 
-    def test_vincular_sem_cracha_pede_uso_correto(self):
+    def test_vincular_sem_codigo_pede_codigo_da_gestao(self):
         service = _fake_service()
         reply = service.handle_update(_update("/vincular"))
-        self.assertIn("/vincular SEU_CRACHÁ", reply.text)
+        self.assertIn("/vincular CÓDIGO", reply.text)
+        self.assertIn("gestão", reply.text)
 
-    def test_vincular_cracha_inexistente_avisa_sem_vincular(self):
+    def test_vincular_codigo_invalido_avisa_sem_vincular(self):
         service = _fake_service()
-        reply = service.handle_update(_update("/vincular 999"))
-        self.assertIn("não encontrado", reply.text)
+        reply = service.handle_update(_update("/vincular ZZZZ9999"))
+        self.assertIn("inválido", reply.text)
+        self.assertIsNone(service.db.buscar_operador_por_telegram("42"))
+
+    def test_cracha_puro_nao_vincula(self):
+        service = _fake_service()
+        reply = service.handle_update(_update("/vincular 1"))
+        self.assertNotIn("Pronto", reply.text)
         self.assertIsNone(service.db.buscar_operador_por_telegram("42"))
 
     def test_vincular_e_meustatus_sem_operacao_aberta(self):
         service = _fake_service()
-        vinculo = service.handle_update(_update("/vincular 1"))
+        vinculo = service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         self.assertIn("Iago", vinculo.text)
         status = service.handle_update(_update("/meustatus"))
         self.assertIn("Nenhuma operação em aberto", status.text)
 
     def test_meustatus_lista_participacao_ativa(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         service.db.participacoes["1"] = [
             {
                 "op": "00601315003",
@@ -248,18 +269,22 @@ class CommandRoutingTests(unittest.TestCase):
         self.assertIn("LASER1", status.text)
         self.assertIn("30min", status.text)
 
-    def test_start_e_menu_abrem_menu_estavel_para_usuario_sem_vinculo(self):
+    def test_start_e_menu_sem_vinculo_so_ensinam_a_vincular(self):
         service = _fake_service()
+        service._snapshot = lambda: self.fail("chat não vinculado não pode consultar a fábrica")
         for command in ("/start", "/menu"):
             reply = service.handle_update(_update(command))
-            self.assertIn("<b>Menu principal</b>", reply.text)
-            buttons = [button for row in reply.reply_markup["inline_keyboard"] for button in row]
-            self.assertIn("gp:link", {button["callback_data"] for button in buttons})
+            self.assertIn("Vincular ao Gestor de Peças", reply.text)
+            self.assertIn("/vincular CÓDIGO", reply.text)
+            self.assertNotIn("Menu principal", reply.text)
+            self.assertNotIn("1248", reply.text)
             self.assertEqual(reply.parse_mode, "HTML")
+        for data in ("gp:home", "gp:factory", "gp:production", "gp:stops"):
+            self.assertIn("Vincular ao Gestor de Peças", service.handle_update(_callback(data)).text)
 
     def test_menu_vinculado_exibe_nome_e_meu_status(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         reply = service.handle_update(_update("/menu"))
         self.assertIn("Olá, Iago", reply.text)
         callbacks = {button["callback_data"] for row in reply.reply_markup["inline_keyboard"] for button in row}
@@ -267,6 +292,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_callbacks_principais_editam_mesma_mensagem_e_sao_respondidos(self):
         service = _fake_service()
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         for data in ("gp:home", "gp:factory", "gp:production", "gp:stops", "gp:fronts", "gp:help"):
             reply = service.handle_update(_callback(data))
             self.assertEqual(reply.message_id, 77)
@@ -275,7 +301,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_quatro_frentes_atualizar_voltar_e_menu(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         for front in ("corte", "solda", "pintura", "caldeiraria"):
             reply = service.handle_update(_callback(f"gp:front:{front}"))
             callbacks = {button["callback_data"] for row in reply.reply_markup["inline_keyboard"] for button in row}
@@ -288,7 +314,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_botao_recursos_lista_recursos_do_setor(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         reply = service.handle_update(_callback("gp:res:corte"))
         self.assertIn("Recursos · Corte", reply.text)
         self.assertIn("LASER &lt;01&gt;", reply.text)
@@ -298,7 +324,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_frente_conta_e_colore_recursos_pela_categoria_canonica_do_andon(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         snapshot = _BotFacade.andon(None)
         self.assertEqual(
             service._front_summary(snapshot, "corte"),
@@ -310,7 +336,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_comando_recursos_aceita_frente_por_texto_e_pede_frente_quando_ausente(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         reply = service.handle_update(_update("/recursos solda"))
         self.assertIn("Recursos · Solda", reply.text)
         self.assertIn("Solda 01", reply.text)
@@ -320,7 +346,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_html_dinamico_e_escapado(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         reply = service.handle_update(_update("/fabrica"))
         self.assertIn("LASER &lt;01&gt;", reply.text)
         self.assertIn("Manutenção &amp; ajuste", reply.text)
@@ -328,7 +354,7 @@ class CommandRoutingTests(unittest.TestCase):
 
     def test_linguagem_natural_e_intent_desconhecida(self):
         service = _fake_service()
-        service.handle_update(_update("/vincular 1"))
+        service.handle_update(_update(f"/vincular {CODIGO_VALIDO}"))
         cases = {
             "como tá a fábrica?": "Status da fábrica",
             "tem parada no corte?": "Paradas · Corte",
@@ -343,64 +369,152 @@ class CommandRoutingTests(unittest.TestCase):
             self.assertIn(expected, service.handle_update(_update(text)).text)
 
 
-class LinkRateLimitTests(unittest.TestCase):
-    """`/vincular` tem freio de 5 tentativas falhas por 10 min por chat
-    (`_link_rate_limited`/`_register_link_failure`/`_clear_link_failures`,
-    mes/services/telegram_bot.py). O estado é um dict a nível de módulo
-    compartilhado entre testes no mesmo processo — cada teste usa um
-    chat_id próprio para não herdar contagem de outro teste."""
+class _PollingDb(_FakeDb):
+    def __init__(self, cursor=None):
+        super().__init__()
+        self.cursor = cursor
+
+    def obter_cursor_telegram_bot(self, bot_key):
+        return self.cursor
+
+
+def _dated(update, sent_at):
+    next(iter(update.values()))["date"] = sent_at
+    return update
+
+
+def _raise(*_args, **_kwargs):
+    raise RuntimeError("banco fora")
+
+
+class PollingRobustnessTests(unittest.TestCase):
+    NOW = 1_790_000_000.0
+
+    def _service(self, db):
+        service = TelegramFactoryBotService(
+            db, now_func=lambda: datetime(2026, 9, 16, 15, 0, 0), epoch_func=lambda: self.NOW
+        )
+        service.facade = _BotFacade()
+        return service
+
+    def test_update_envenenado_e_descartado_com_log_error_sem_levantar(self):
+        # O laço de polling só avança o cursor depois de handle_update; se ele
+        # levantar, o mesmo update volta para sempre.
+        db = _FakeDb()
+        db.registrar_chat_telegram_descoberto = _raise
+        service = self._service(db)
+        venenos = (
+            _update("oi", chat_type="group", chat_id="-1"),
+            {"update_id": 9, "callback_query": {"message": "não é dict"}},
+            {"update_id": 10, "message": 7},
+        )
+        for update in venenos:
+            with self.assertLogs("mes.services.telegram_bot", level="ERROR"):
+                self.assertIsNone(service.handle_update(update))
+
+    def test_backlog_antigo_ignorado_na_primeira_rodada_sem_cursor(self):
+        service = self._service(_PollingDb(cursor=None))
+        self.assertIsNone(service.handle_update(_dated(_update("/ajuda"), self.NOW - 3600)))
+        recente = service.handle_update(_dated(_update("/ajuda"), self.NOW - 30))
+        self.assertIn("Ajuda", recente.text)
+
+    def test_com_cursor_gravado_processa_mensagem_atrasada(self):
+        service = self._service(_PollingDb(cursor=42))
+        reply = service.handle_update(_dated(_update("/ajuda"), self.NOW - 3600))
+        self.assertIn("Ajuda", reply.text)
+
+
+@unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
+class TelegramLinkCodeDatabaseTests(unittest.TestCase):
+    """Código de uso único, freio persistido e desvínculo contra o PostgreSQL
+    de TESTE, num schema descartável (padrão de test_database_professionalization)."""
 
     def setUp(self):
-        import mes.services.telegram_bot as telegram_bot_module
-
-        self._module = telegram_bot_module
-        self._chat_id = f"rate-limit-{id(self)}"
+        base = load_postgres_config(testing=True)
+        self.schema = "gestor_test_" + uuid4().hex
+        with psycopg.connect(base.dsn, autocommit=True) as connection:
+            connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(self.schema)))
+        self.admin_dsn = base.dsn
+        self.dsn = make_conninfo(base.dsn, options=f"-c search_path={self.schema}")
+        self.db = Database(self.dsn)
+        self.db.cadastrar_operador_apontamento("501", "Ana", ativo=True, fonte="teste")
+        self.db.cadastrar_operador_apontamento("502", "Bruno", ativo=True, fonte="teste")
+        ids = {row["cracha"]: row["id"] for row in self.db.listar_operadores_apontamento()}
+        self.ana, self.bruno = ids["501"], ids["502"]
+        self.service = TelegramFactoryBotService(self.db, now_func=lambda: datetime(2026, 10, 1, 9, 0))
+        self.service.facade = _BotFacade()
 
     def tearDown(self):
-        self._module._link_failures.pop(self._chat_id, None)
+        self.db.close()
+        with psycopg.connect(self.admin_dsn, autocommit=True) as connection:
+            connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema)))
 
-    def test_quinta_tentativa_com_cracha_errado_ainda_passa_sexta_e_bloqueada(self):
-        service = _fake_service()
+    def _code(self, operador_id):
+        result = self.db.gerar_codigo_vinculo_telegram(operador_id, criado_por="admin")
+        self.assertEqual(result["status"], "ok")
+        return result["codigo"]
+
+    def test_codigo_valido_vincula_e_so_o_hash_fica_no_banco(self):
+        code = self._code(self.ana)
+        reply = self.service.handle_update(_update(f"/vincular {code.lower()}", chat_id="900"))
+        self.assertIn("Pronto, Ana", reply.text)
+        self.assertEqual(self.db.buscar_operador_por_telegram("900")["cracha"], "501")
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT codigo_hash FROM telegram_codigos_vinculo")
+            stored = [row["codigo_hash"] for row in cursor.fetchall()]
+        self.assertNotIn(code, stored)
+        self.assertEqual(len(stored[0]), 64)
+
+    def test_codigo_reutilizado_e_recusado(self):
+        code = self._code(self.ana)
+        self.assertEqual(self.db.vincular_telegram_por_codigo(code, "900")["status"], "ok")
+        self.assertEqual(self.db.vincular_telegram_por_codigo(code, "901")["status"], "invalido")
+        self.assertIsNone(self.db.buscar_operador_por_telegram("901"))
+
+    def test_codigo_expirado_e_recusado(self):
+        code = self._code(self.ana)
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE telegram_codigos_vinculo SET expira_em = LOCALTIMESTAMP - INTERVAL '1 second'"
+            )
+        self.assertEqual(self.db.vincular_telegram_por_codigo(code, "900")["status"], "invalido")
+        self.assertIsNone(self.db.buscar_operador_por_telegram("900"))
+
+    def test_cracha_puro_nao_vincula(self):
+        self._code(self.ana)
+        reply = self.service.handle_update(_update("/vincular 501", chat_id="900"))
+        self.assertIn("inválido", reply.text)
+        self.assertIsNone(self.db.buscar_operador_por_telegram("900"))
+
+    def test_revincular_bloqueado_ate_a_gestao_desvincular(self):
+        self.assertEqual(self.db.vincular_telegram_por_codigo(self._code(self.ana), "900")["status"], "ok")
+        self.assertEqual(self.db.gerar_codigo_vinculo_telegram(self.ana)["status"], "ja_vinculado")
+        # Chat já ligado à Ana não troca para o Bruno em silêncio.
+        code_bruno = self._code(self.bruno)
+        self.assertEqual(
+            self.db.vincular_telegram_por_codigo(code_bruno, "900")["status"], "chat_ja_vinculado"
+        )
+        self.assertEqual(self.db.buscar_operador_por_telegram("900")["cracha"], "501")
+
+        self.assertEqual(self.db.desvincular_telegram_operador(self.ana), {"chat_anterior": "900"})
+        self.assertIsNone(self.db.buscar_operador_por_telegram("900"))
+        self.assertEqual(self.db.vincular_telegram_por_codigo(self._code(self.ana), "901")["status"], "ok")
+
+    def test_freio_persistido_vale_para_outro_processo_e_recusa_codigo_certo(self):
         for _ in range(5):
-            reply = service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
-            self.assertIn("não encontrado", reply.text)
-
-        bloqueado = service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
-        self.assertIn("Muitas tentativas de vínculo", bloqueado.text)
-
-    def test_bloqueio_tambem_recusa_cracha_correto(self):
-        service = _fake_service()
-        for _ in range(5):
-            service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
-
-        reply = service.handle_update(_update("/vincular 1", chat_id=self._chat_id))
-        self.assertIn("Muitas tentativas de vínculo", reply.text)
-        self.assertIsNone(service.db.buscar_operador_por_telegram(self._chat_id))
-
-    def test_vinculo_bem_sucedido_limpa_o_historico_de_falhas(self):
-        service = _fake_service()
-        for _ in range(4):
-            service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
-
-        sucesso = service.handle_update(_update("/vincular 1", chat_id=self._chat_id))
-        self.assertIn("Pronto", sucesso.text)
-
-        # Falhas seguintes recomeçam a contagem do zero, não herdam as 4 antigas.
-        for _ in range(4):
-            reply = service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
-            self.assertIn("não encontrado", reply.text)
-
-    def test_contagem_de_falhas_e_isolada_por_chat(self):
-        service = _fake_service()
-        outro_chat = f"{self._chat_id}-outro"
+            self.assertEqual(self.db.vincular_telegram_por_codigo("ZZZZ9999", "900")["status"], "invalido")
+        code = self._code(self.ana)
+        other_process = Database(self.dsn)
         try:
-            for _ in range(5):
-                service.handle_update(_update("/vincular 999", chat_id=self._chat_id))
-
-            reply = service.handle_update(_update("/vincular 1", chat_id=outro_chat))
-            self.assertIn("Pronto", reply.text)
+            self.assertEqual(other_process.vincular_telegram_por_codigo(code, "900")["status"], "limite")
+            self.assertEqual(other_process.vincular_telegram_por_codigo(code, "901")["status"], "ok")
         finally:
-            self._module._link_failures.pop(outro_chat, None)
+            other_process.close()
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE telegram_vinculo_tentativas SET janela_inicio = LOCALTIMESTAMP - INTERVAL '11 minutes'"
+            )
+        self.assertEqual(self.db.vincular_telegram_por_codigo("ZZZZ9999", "900")["status"], "invalido")
 
 
 class IntentParserTests(unittest.TestCase):
@@ -461,7 +575,8 @@ class DigestTextTests(unittest.TestCase):
         self.assertIn("Peças boas: <b>10</b>", texto)
         self.assertIn("OEE: <b>42%</b>", texto)
         self.assertIn("Manutenção · <b>1h</b>", texto)
-        self.assertIn("Dados consolidados até", texto)
+        self.assertIn("Dia anterior: <b>15/09</b>", texto)
+        self.assertNotIn("consolidados", texto)
 
 
 class DigestDestinationTests(unittest.TestCase):

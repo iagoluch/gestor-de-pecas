@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import re
+import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
@@ -44,6 +46,136 @@ def install_telegram_log_redaction() -> None:
 install_telegram_log_redaction()
 
 
+def telegram_outbound_allowed(settings) -> bool:
+    """Único predicado de saída: ``TELEGRAM_ENABLED`` liga/desliga todo envio.
+
+    Vale para chamada do operador, parada/alertas, aviso do Corte e outbox
+    TOTVS. Falha fechada: ``settings`` sem o atributo conta como desligado.
+    Token e chat configurados continuam sendo checados por quem envia; esta
+    função só responde se o canal de saída pode ser usado.
+    """
+
+    return bool(getattr(settings, "telegram_enabled", False))
+
+
+TEST_MESSAGE_PREFIX = "[TESTE] "
+_message_prefix = ""
+
+
+def configure_message_prefix(environment) -> str:
+    """Marca TODA mensagem enviada fora de produção com ``[TESTE] ``.
+
+    Ponto único: um chat compartilhado entre TEST e REAL nunca mistura aviso
+    de teste com aviso real. Chamada no startup com ``settings.environment``;
+    ``None`` ou produção limpam o prefixo. Devolve o prefixo ativo.
+    """
+
+    global _message_prefix
+    production = str(environment or "").strip().casefold() in {"production", "producao", "produção"}
+    _message_prefix = "" if environment is None or production else TEST_MESSAGE_PREFIX
+    return _message_prefix
+
+
+def _prepare_outgoing_payload(method: str, payload: dict) -> dict:
+    """Prefixo de ambiente e limite de 4096 caracteres, em um lugar só."""
+
+    if method not in ("sendMessage", "editMessageText") or "text" not in payload:
+        return payload
+    from mes.services.telegram_presenter import fit_telegram_text
+
+    text = str(payload["text"] or "")
+    if _message_prefix and not text.startswith(_message_prefix):
+        text = _message_prefix + text
+    return {**payload, "text": fit_telegram_text(text)}
+
+
+class TelegramPollingRejected(RuntimeError):
+    """``getUpdates`` recusado de forma que insistir a cada ciclo não resolve.
+
+    401: token inválido/revogado. 409: outro consumidor (outro processo, ou o
+    mesmo bot em TEST e REAL) está lendo as atualizações — por isso TEST e REAL
+    devem usar bots/tokens diferentes.
+    """
+
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        super().__init__(f"getUpdates recusado (HTTP {status_code})")
+
+
+@dataclass(frozen=True)
+class _Attempt:
+    """Desfecho de UMA chamada à Bot API (nunca carrega o token)."""
+
+    result: object | None = None
+    error: str | None = None
+    retryable: bool = False
+    retry_after: float | None = None
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    try:
+        value = (response.json().get("parameters") or {}).get("retry_after")
+    except (ValueError, AttributeError):
+        value = None
+    if value is None:
+        value = response.headers.get("Retry-After")
+    try:
+        return max(float(value), 0.0) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _telegram_attempt(
+    *,
+    bot_token: str,
+    method: str,
+    payload: dict,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> _Attempt:
+    """Executa um método da Bot API e só aceita o ACK JSON ``ok=true``."""
+
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+    payload = _prepare_outgoing_payload(method, payload)
+    try:
+        response = httpx.post(url, json=payload, timeout=timeout)
+        if response.status_code >= 400:
+            # Atualizar sem mudança visível já atingiu o estado desejado; não
+            # envie uma segunda mensagem e não polua o chat nesse caso.
+            if method == "editMessageText" and "message is not modified" in response.text.casefold():
+                return _Attempt(result={})
+            logging.warning(
+                "%s do Telegram recusado (HTTP %s): %s",
+                method,
+                response.status_code,
+                response.text[:300],
+            )
+            return _Attempt(
+                error=f"HTTP {response.status_code}: {response.text[:160].strip()}",
+                # 429 e 5xx são transitórios; os demais 4xx (chat inexistente,
+                # bot bloqueado, HTML inválido) não melhoram com nova tentativa.
+                retryable=response.status_code == 429 or response.status_code >= 500,
+                retry_after=_retry_after_seconds(response) if response.status_code == 429 else None,
+            )
+        try:
+            data = response.json()
+        except ValueError:
+            logging.warning("%s do Telegram sem ACK JSON válido.", method)
+            return _Attempt(error="resposta sem ACK JSON válido")
+        if data.get("ok") is not True:
+            logging.warning("%s do Telegram sem ACK da Bot API: %s", method, str(data)[:300])
+            return _Attempt(error="Bot API sem ACK ok=true")
+        return _Attempt(result=data.get("result", True))
+    except httpx.HTTPError as exc:
+        logging.exception("Falha no método %s do Telegram.", method)
+        # Só repete quando a requisição comprovadamente não chegou ao Telegram.
+        # Timeout de leitura é ambíguo (a mensagem pode ter saído) e repetir
+        # duplicaria o aviso.
+        return _Attempt(
+            error=f"falha de rede ({type(exc).__name__})",
+            retryable=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
+        )
+
+
 def _telegram_request_result(
     *,
     bot_token: str,
@@ -51,35 +183,9 @@ def _telegram_request_result(
     payload: dict,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> object | None:
-    """Executa um método da Bot API e só aceita o ACK JSON ``ok=true``."""
-
-    url = f"https://api.telegram.org/bot{bot_token}/{method}"
-    try:
-        response = httpx.post(url, json=payload, timeout=timeout)
-        if response.status_code >= 400:
-            # Atualizar sem mudança visível já atingiu o estado desejado; não
-            # envie uma segunda mensagem e não polua o chat nesse caso.
-            if method == "editMessageText" and "message is not modified" in response.text.casefold():
-                return {}
-            logging.warning(
-                "%s do Telegram recusado (HTTP %s): %s",
-                method,
-                response.status_code,
-                response.text[:300],
-            )
-            return None
-        try:
-            data = response.json()
-        except ValueError:
-            logging.warning("%s do Telegram sem ACK JSON válido.", method)
-            return None
-        if data.get("ok") is not True:
-            logging.warning("%s do Telegram sem ACK da Bot API: %s", method, str(data)[:300])
-            return None
-        return data.get("result", True)
-    except httpx.HTTPError:
-        logging.exception("Falha no método %s do Telegram.", method)
-        return None
+    return _telegram_attempt(
+        bot_token=bot_token, method=method, payload=payload, timeout=timeout
+    ).result
 
 
 def _telegram_request(
@@ -142,6 +248,66 @@ def send_telegram_message_with_id(
     if not isinstance(result, dict) or result.get("message_id") is None:
         return None
     return int(result["message_id"])
+
+
+@dataclass(frozen=True)
+class TelegramSendResult:
+    """Desfecho final de um envio com retry: ``ok`` ou o motivo da falha."""
+
+    ok: bool
+    error: str | None = None
+    attempts: int = 1
+
+
+# Espera máxima honrada de ``retry_after``: o envio roda em background e não
+# deve segurar a thread por minutos. Acima disso, falha e registra o motivo.
+MAX_RETRY_AFTER_SECONDS = 15.0
+DEFAULT_SEND_ATTEMPTS = 3
+_BACKOFF_SECONDS = (1.0, 2.0)
+
+
+def send_telegram_message_checked(
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    parse_mode: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    attempts: int = DEFAULT_SEND_ATTEMPTS,
+    sleep: Callable[[float], None] = time.sleep,
+) -> TelegramSendResult:
+    """Envia com retry curto e devolve o desfecho final, com o motivo da falha.
+
+    Repete só em falha transitória (conexão que não chegou ao Telegram, 5xx e
+    429 respeitando ``retry_after``). Erro permanente (chat inexistente, bot
+    bloqueado, HTML inválido) falha na hora. Nunca levanta e o motivo devolvido
+    nunca contém o token.
+    """
+
+    payload = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    attempts = max(int(attempts), 1)
+    last_error = "falha desconhecida"
+    number = 0
+    for number in range(1, attempts + 1):
+        outcome = _telegram_attempt(
+            bot_token=bot_token, method="sendMessage", payload=payload, timeout=timeout
+        )
+        if outcome.result is not None:
+            return TelegramSendResult(ok=True, attempts=number)
+        last_error = outcome.error or last_error
+        if not outcome.retryable or number == attempts:
+            break
+        if outcome.retry_after is not None:
+            if outcome.retry_after > MAX_RETRY_AFTER_SECONDS:
+                last_error = f"{last_error} (retry_after={outcome.retry_after:g}s acima do limite)"
+                break
+            delay = outcome.retry_after
+        else:
+            delay = _BACKOFF_SECONDS[min(number - 1, len(_BACKOFF_SECONDS) - 1)]
+        sleep(delay)
+    return TelegramSendResult(ok=False, error=last_error[:300], attempts=number)
 
 
 def edit_telegram_message(
@@ -228,6 +394,8 @@ def fetch_telegram_updates(
         params["offset"] = int(offset)
     try:
         response = httpx.get(url, params=params, timeout=timeout)
+        if response.status_code in (401, 409):
+            raise TelegramPollingRejected(response.status_code)
         if response.status_code >= 400:
             logging.warning(
                 "getUpdates do Telegram recusado (HTTP %s): %s",
@@ -263,14 +431,17 @@ def format_chamada_message(chamada: dict, *, now: datetime | None = None) -> str
 
 
 def build_outbox_error_notifier(
-    *, bot_token: str | None, chat_id: str | None
+    *, bot_token: str | None, chat_id: str | None, enabled: bool
 ) -> Callable[[dict], None] | None:
     """Fábrica usada pelo worker; ``None`` quando o Telegram não está configurado.
 
-    Sem token/chat_id configurados, o comportamento é exatamente o de antes
+    Sem token/chat_id configurados, ou com ``enabled`` falso (resultado de
+    ``telegram_outbound_allowed``), o comportamento é exatamente o de antes
     desta pendência: item fica em ERROR, visível só via outbox/observability.
     """
 
+    if not enabled:
+        return None
     token = str(bot_token or "").strip()
     chat = str(chat_id or "").strip()
     if not token or not chat:
@@ -290,10 +461,15 @@ def build_outbox_error_notifier(
 __all__ = [
     "build_outbox_error_notifier",
     "answer_telegram_callback_query",
+    "configure_message_prefix",
     "deliver_telegram_message",
     "edit_telegram_message",
     "fetch_telegram_updates",
     "format_chamada_message",
     "send_telegram_message",
+    "send_telegram_message_checked",
     "send_telegram_message_with_id",
+    "telegram_outbound_allowed",
+    "TelegramPollingRejected",
+    "TelegramSendResult",
 ]

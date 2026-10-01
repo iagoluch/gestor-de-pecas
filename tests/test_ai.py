@@ -27,6 +27,11 @@ from mes.contracts.ai import (
     AIToolCall,
     AIToolError,
 )
+from mes.services.ai_presentation import (
+    AssistantTextStream,
+    present_tool_result,
+    sanitize_assistant_text,
+)
 from mes.services.ai_service import AIService
 from mes.services.ai_tools import AIToolRegistry, TOOL_REGISTRY
 from scripts.run_simulacao_residencia import configure_environment
@@ -266,6 +271,162 @@ class AIToolRegistryTests(unittest.TestCase):
         self.assertEqual(json.loads(serialized)["data"]["returned"], data["returned"])
 
 
+class AIPresentationTests(unittest.TestCase):
+    """O usuário recebe dado tratado, nunca a estrutura interna (sem LLM real)."""
+
+    RAW_ANSWER = (
+        "A fábrica está com availability = dados_insuficientes. O posto "
+        "`operador_solda_estacao_3` está parado há 7320 segundos "
+        "(source: eventos_estado_recurso), segundo get_factory_status. "
+        "OEE de 37.25% gerado em 2026-08-25T10:00:00; produziu 1.234 peças na OP PCMIXQ01001 "
+        "do recurso DOBRA-01.\n"
+        "```json\n{\"state\": \"parada\", \"duration_seconds\": 7320}\n```\n"
+        "Resumo: {\"oee\": {\"value\": 37.25, \"unit\": \"%\"}} sem outras exceções. "
+        "Observação: reason: Aguardando manutenção."
+    )
+    LEAKS = (
+        "availability", "dados_insuficientes", "operador_solda_estacao_3", "source",
+        "eventos_estado_recurso", "get_factory_status", "duration_seconds", "```",
+        "{", "}", "7320", "2026-08-25T", "37.25", "reason",
+    )
+
+    def assert_without_leaks(self, text):
+        for leak in self.LEAKS:
+            with self.subTest(leak=leak):
+                self.assertNotIn(leak, text)
+
+    def test_texto_final_remove_estrutura_interna_e_formata_padrao_brasileiro(self):
+        clean = sanitize_assistant_text(self.RAW_ANSWER)
+        self.assert_without_leaks(clean)
+        self.assertIn("Dados insuficientes", clean)
+        self.assertIn("operador solda estação 3", clean)
+        self.assertIn("2h 2min", clean)
+        self.assertIn("origem: estado físico do recurso", clean)
+        self.assertIn("consulta do sistema", clean)
+        self.assertIn("37,3%", clean)
+        self.assertIn("25/08/2026 10:00", clean)
+        self.assertIn("Justificativa: Aguardando manutenção", clean)
+        # Códigos de negócio, milhar brasileiro e pontuação natural ficam intactos.
+        self.assertIn("PCMIXQ01001", clean)
+        self.assertIn("DOBRA-01", clean)
+        self.assertIn("1.234 peças", clean)
+        self.assertIn("Observação:", clean)
+        self.assertEqual(sanitize_assistant_text(clean), clean)
+
+    def test_texto_ja_legivel_nao_eh_alterado(self):
+        text = (
+            "A Dobra concentra a principal atenção: DOBRA-01 está parada há 2h 15min "
+            "por troca de ferramenta. Fonte: apontamento do operador. OEE em 87,3% "
+            "às 10:30 de 25/08/2026. Dados do ambiente de teste."
+        )
+        self.assertEqual(sanitize_assistant_text(text), text)
+
+    def test_streaming_sanitiza_deltas_quebrados_no_meio_do_token(self):
+        stream = AssistantTextStream()
+        emitted = []
+        for start in range(0, len(self.RAW_ANSWER), 5):
+            emitted.append(stream.feed(self.RAW_ANSWER[start:start + 5]))
+        emitted.append(stream.flush())
+        streamed = "".join(emitted)
+        self.assert_without_leaks(streamed)
+        self.assertIn("operador solda estação 3", streamed)
+
+    def test_resultado_da_tool_vira_leitura_legivel_sem_metadados(self):
+        result = {
+            "tool": "get_factory_status",
+            "data": {
+                "context": {"generated_at": "2026-08-25T10:00:00", "simulation_only": False},
+                "summary": {"total_resources": 48, "production": 42, "downtime": 6},
+                "indicators": {
+                    "oee": {"value": 37.25, "availability": "disponivel", "unit": "%"},
+                    "availability": {
+                        "value": None,
+                        "availability": "dados_insuficientes",
+                        "reason": "sem_calendario",
+                    },
+                },
+                "attention_resources": {
+                    "items": [{
+                        "sector": "Dobra",
+                        "resource": "DOBRA-01",
+                        "state": "parada",
+                        "duration_seconds": 7320,
+                        "op": "PCMIXQ01001",
+                        "estado_recurso_id": 991,
+                        "downtime_reason": "Aguardando manutenção",
+                        "source": "eventos_estado_recurso",
+                    }],
+                    "total": 6,
+                    "returned": 1,
+                    "truncated": True,
+                },
+            },
+            "limits": {"truncated": True, "truncated_paths": ["data.resources"], "raw_chars": 9_000},
+            "period": {"inicio": "2026-08-24T00:00:00", "fim": "2026-08-24T12:00:00"},
+        }
+        presented = present_tool_result(result)
+        serialized = json.dumps(presented, ensure_ascii=False)
+        for leak in (
+            "get_factory_status", "duration_seconds", "estado_recurso_id", "991",
+            "truncated", "raw_chars", "dados_insuficientes", "eventos_estado_recurso",
+            "attention_resources", "2026-08-24T", "37.25", "\"parada\"",
+        ):
+            with self.subTest(leak=leak):
+                self.assertNotIn(leak, serialized)
+        data = presented["Dados"]
+        resource = data["Recursos em atenção"]["Itens"][0]
+        self.assertEqual(resource["Estado"], "Parada")
+        self.assertEqual(resource["Duração"], "2h 2min")
+        self.assertEqual(resource["OP"], "PCMIXQ01001")
+        self.assertEqual(resource["Origem"], "estado físico do recurso")
+        self.assertEqual(
+            data["Recursos em atenção"]["Observação"],
+            "Lista parcial: exibidos 1 de 6 itens.",
+        )
+        self.assertEqual(data["Indicadores"]["OEE"], "37,3%")
+        self.assertIn("Dados insuficientes", data["Indicadores"]["Disponibilidade"])
+        self.assertEqual(data["Resumo"]["Total de recursos"], 48)
+        self.assertEqual(presented["Período consultado"]["Início"], "24/08/2026 00:00")
+        self.assertIn("Observação", presented)
+
+    def test_servico_entrega_tool_legivel_ao_modelo_e_resposta_sanitizada_ao_usuario(self):
+        db = FakeDatabase()
+        user_id = db.criar_usuario("Gestor Apresentação", "senha", "gestor")
+        provider = FakeProvider(
+            plans=[tool_response("get_quality")],
+            chunks=[self.RAW_ANSWER[:40], self.RAW_ANSWER[40:]],
+        )
+        service = AIService(
+            db,
+            provider,
+            AIToolRegistry(FacadeSpy(), now_func=lambda: datetime(2026, 8, 24, 12, 0)),
+            AIServiceConfig(
+                enabled=True,
+                configured=True,
+                model="openai/gpt-oss-120b",
+                max_tool_rounds=1,
+                max_history_messages=20,
+            ),
+        )
+        context = AIRequestContext(user_id=user_id, management_access=True, request_id="req-p")
+        conversation = service.create_conversation(user_id)
+        events = asyncio.run(AIServiceTests.collect(service.stream_message(
+            conversation["id"], "Como está a qualidade?", context
+        )))
+        tool_message = provider.stream_messages[0][0][-2]
+        self.assertEqual(tool_message["role"], "tool")
+        for leak in ("dados_insuficientes", "\"limits\"", "\"tool\"", "truncated", "get_quality"):
+            with self.subTest(leak=leak):
+                self.assertNotIn(leak, tool_message["content"])
+        self.assertIn("Dados insuficientes", tool_message["content"])
+
+        streamed = "".join(event.data["content"] for event in events if event.event == "delta")
+        persisted = service.get_conversation(conversation["id"], user_id)["messages"][-1]["content"]
+        done = events[-1].data["message"]["content"]
+        for text in (streamed, persisted, done):
+            self.assert_without_leaks(text)
+        self.assertEqual(persisted, sanitize_assistant_text(self.RAW_ANSWER))
+
 class AIContextBudgetTests(unittest.TestCase):
     def test_budget_nunca_mantem_resposta_sem_a_pergunta_do_mesmo_turno(self):
         history = []
@@ -497,9 +658,10 @@ class AIServiceTests(unittest.TestCase):
         tool_message = provider.complete_messages[1][0][-1]
         self.assertEqual(tool_message["role"], "tool")
         self.assertEqual(
-            json.loads(tool_message["content"])["error"]["code"],
-            "ai_tool_invalid_arguments",
+            json.loads(tool_message["content"]),
+            {"Consulta não concluída": "A IA produziu argumentos de consulta inválidos."},
         )
+        self.assertNotIn("ai_tool_invalid_arguments", tool_message["content"])
 
     def test_tool_valida_mas_fora_do_subconjunto_selecionado_eh_bloqueada(self):
         provider = FakeProvider(plans=[
@@ -514,9 +676,10 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(self.facade.calls, [])
         tool_message = provider.complete_messages[1][0][-1]
         self.assertEqual(
-            json.loads(tool_message["content"])["error"]["code"],
-            "ai_tool_not_selected",
+            json.loads(tool_message["content"]),
+            {"Consulta não concluída": "A IA tentou usar uma consulta que não foi disponibilizada."},
         )
+        self.assertNotIn("ai_tool_not_selected", tool_message["content"])
 
     def test_falha_ou_cancelamento_nao_persiste_assistant_concluido(self):
         provider = FakeProvider(

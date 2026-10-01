@@ -12,6 +12,7 @@ import { ManagementGoalsPage } from "./pages/home/GoalsPage";
 import { ManagementPausesPage } from "./pages/home/PausesPage";
 import { ManagementBadgesPage } from "./pages/home/BadgesPage";
 import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
+import { DevChamadasContatosPage } from "./pages/home/ChamadasContatosPage";
 import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
 import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="inicio/pausas" element={<ManagementPausesPage />} />
         <Route path="inicio/crachas" element={<RequireAdmin><ManagementBadgesPage /></RequireAdmin>} />
         <Route path="inicio/chamadas" element={<ManagementChamadasPage />} />
+        <Route path="inicio/chamadas-dev" element={<RequireAdmin><DevChamadasContatosPage /></RequireAdmin>} />
         <Route path="inicio/turnos" element={<RequireAdmin><ManagementShiftsPage /></RequireAdmin>} />
         <Route path="inicio/sistema" element={<RequireAdmin><ManagementSystemPage /></RequireAdmin>} />
         <Route path="inicio/cadastro" element={<RequireAdmin><ManagementUsersPage /></RequireAdmin>} />

@@ -13,7 +13,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { assets } from "../config/assets";
 import type { MetricValue } from "../types/api";
 import type { AndonResource, AndonSnapshot } from "../types/andon";
-import { formatDuration } from "../utils/format";
+import { displayText, formatDuration } from "../utils/format";
 
 // Cada coluna administra a própria distribuição vertical: o painel de topo usa
 // a altura exigida pelo conteúdo e o painel seguinte assume o restante. Isso
@@ -135,11 +135,11 @@ function ResourceCard({ resource, elapsed, transition, onOpen }: { resource: And
   const oeeStyle = {
     "--andon-oee": `${Math.min(100, Math.max(0, oeeValue ?? 0))}%`,
   } as CSSProperties;
-  const operationalLabel = resource.state.category === "parada"
+  const operationalLabel = displayText(resource.state.category === "parada"
     ? resource.state.display_label ?? resource.state.reason ?? "Motivo não informado"
-    : resource.state.display_label ?? resource.state.label;
+    : resource.state.display_label ?? resource.state.label);
   const hasOperation = Boolean(operation?.op || operation?.product || operation?.product_description);
-  const activityDescription = resource.state.activity_description;
+  const activityDescription = resource.state.activity_description ? displayText(resource.state.activity_description) : resource.state.activity_description;
   return (
     <article className={`andon-card andon-card--${resource.state.category}`} data-state={resource.state.category} data-stop-classification={resource.state.stop_classification ?? undefined} data-sector={resource.panel ?? resource.sector} data-group={resource.group ?? undefined} data-active="true" data-transition={transition}>
       <header className="andon-card__header">

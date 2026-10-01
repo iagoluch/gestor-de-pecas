@@ -182,6 +182,42 @@ class AndonActiveResourcesTests(unittest.TestCase):
         self.assertEqual(destaque["operation"]["op"], "10901")
         self.assertIsNone(destaque["metrics"]["oee"]["value"])
 
+    def test_ops_ativas_lista_as_ops_simultaneas_sem_ids_tecnicos(self):
+        ops = [
+            {"op": "1001", "status": "Em processo", "operador_inicio": "Maria",
+             "apontamento_id": 77, "catalogo_operacao_id": 5},
+            {"op": "1002", "status": "Parada", "operador_inicio": "João", "apontamento_id": 78},
+            {"op": "1001", "status": "Em processo", "operador_inicio": "Maria"},
+        ]
+        states = [{
+            "recurso": "LASER1", "setor": "Corte", "categoria": "producao",
+            "inicio": self.now, "ops_ativas": ops, "quantidade_ops_ativas": 2,
+        }]
+
+        laser = self.resources(self.snapshot(states))["LASER1"]
+
+        self.assertEqual(laser["active_operations"], 2)
+        self.assertEqual(laser["ops_ativas"], [
+            {"op": "1001", "status": "Em processo", "operador": "Maria"},
+            {"op": "1002", "status": "Parada", "operador": "João"},
+        ])
+
+    def test_ops_ativas_e_curta_e_vazia_sem_op(self):
+        many = [{"op": str(n), "status": "Em processo"} for n in range(1, 12)]
+        states = [
+            {"recurso": "LASER1", "setor": "Corte", "categoria": "producao",
+             "inicio": self.now, "ops_ativas": many, "quantidade_ops_ativas": 11},
+            {"recurso": "DOBRA1", "setor": "Dobra", "categoria": "parada",
+             "motivo": "Falta de material", "inicio": self.now},
+        ]
+
+        resources = self.resources(self.snapshot(states))
+
+        self.assertEqual(resources["LASER1"]["active_operations"], 11)
+        self.assertEqual(len(resources["LASER1"]["ops_ativas"]), 6)
+        self.assertIsNone(resources["LASER1"]["ops_ativas"][0]["operador"])
+        self.assertEqual(resources["DOBRA1"]["ops_ativas"], [])
+
     def test_destaque_sem_evento_ativo_nao_aparece(self):
         self.service.db.highlights = [{
             "tarefa_id": 91,

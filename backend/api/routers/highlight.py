@@ -30,6 +30,34 @@ def _require_highlight(user):
     return sector
 
 
+def _destaques_em_execucao(database, service):
+    """Destaques em execução no posto: ``(tarefa_id, codigo_tarefa, plano_hash)``.
+
+    Um por plano em execução; a tarefa iniciada inteira (sem plano) entra com
+    ``plano_hash`` nulo. Mesma projeção canônica da fila, sem consulta nova.
+    """
+
+    ativos = {"inicio", "retomada"}
+    encontrados = []
+    for grupo in database.listar_fila_destaque(limite=10000) or []:
+        tarefa_id, codigo = grupo.get("tarefa_id"), grupo.get("codigo_tarefa")
+        planos = [
+            plano.get("plano_hash") for plano in grupo.get("planos", [])
+            if plano.get("estado_destaque") in ativos
+        ]
+        if planos:
+            encontrados.extend((tarefa_id, codigo, plano) for plano in planos)
+        elif tarefa_id:
+            # Só vale a tarefa iniciada inteira, comprovada por evento próprio.
+            # Sem evento o estado vem do status da tarefa ("Destacando"), que o
+            # início de um plano também grava — contaria uma execução que não
+            # existe e a Parada cairia na tarefa errada.
+            estado = service.estado_destaque(tarefa_id) or {}
+            if estado.get("evento") and estado.get("estado") in ativos:
+                encontrados.append((tarefa_id, codigo, None))
+    return encontrados
+
+
 def _resource_response(request, result):
     """Resposta das ações do posto (sem tarefa), já publicada no tempo real."""
 
@@ -250,14 +278,31 @@ def action(
                 plano_hash=payload.plan_hash,
             )
         else:
-            result = OperatorFlowService(
-                database, user.name, now_func=request_now_func(request)
-            ).registrar_parada_recurso(
-                setor="Destaque",
-                recurso="Destaque",
-                motivo_codigo=payload.stop_reason_code,
-                comentario=payload.comment,
-            )
+            # A Parada é do posto e não depende da tarefa que a tela consulta.
+            # Se outra tarefa/plano está em execução, parar só o recurso deixaria
+            # o posto parado com o destaque ainda "em execução": para os dois.
+            em_execucao = _destaques_em_execucao(database, service)
+            if em_execucao:
+                result = None
+                for tarefa_id, codigo_tarefa, plano_hash in em_execucao:
+                    result = service.registrar_parada_destaque(
+                        tarefa_id,
+                        codigo_tarefa,
+                        motivo_codigo=payload.stop_reason_code,
+                        comentario=payload.comment,
+                        plano_hash=plano_hash,
+                    )
+                    if not result.ok:
+                        break
+            else:
+                result = OperatorFlowService(
+                    database, user.name, now_func=request_now_func(request)
+                ).registrar_parada_recurso(
+                    setor="Destaque",
+                    recurso="Destaque",
+                    motivo_codigo=payload.stop_reason_code,
+                    comentario=payload.comment,
+                )
     else:
         badge = str(payload.badge or "").strip()
         finder = getattr(database, "buscar_operadores_apontamento", None)

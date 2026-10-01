@@ -1,6 +1,7 @@
 """Chat mestre de alerta: parada de recurso e contexto do posto."""
 
 import asyncio
+import httpx
 from datetime import datetime
 from types import SimpleNamespace
 import unittest
@@ -8,6 +9,11 @@ from unittest.mock import patch
 
 from fastapi import BackgroundTasks
 
+from mes.integrations.notifications.telegram import (
+    TelegramSendResult,
+    send_telegram_message_checked,
+    telegram_outbound_allowed,
+)
 from mes.services import telegram_alerts
 from mes.services.telegram_alerts import (
     alert_resource_stop,
@@ -18,7 +24,11 @@ from mes.services.telegram_alerts import (
 
 
 def _settings(**overrides):
-    base = {"telegram_bot_token": "token-teste", "chamada_telegram_chat_id": "-100999"}
+    base = {
+        "telegram_enabled": True,
+        "telegram_bot_token": "token-teste",
+        "chamada_telegram_chat_id": "-100999",
+    }
     base.update(overrides)
     return SimpleNamespace(**base)
 
@@ -157,30 +167,144 @@ class ScheduleStopAlertTests(unittest.TestCase):
 class DeliverChamadaTests(unittest.TestCase):
     def test_envio_bem_sucedido_fica_gravado_na_chamada(self):
         db = _FakeChamadaRow()
-        with patch.object(telegram_alerts, "send_telegram_message", return_value=True):
+        with patch.object(
+            telegram_alerts, "send_telegram_message_checked", return_value=TelegramSendResult(ok=True)
+        ):
             self.assertTrue(
                 deliver_chamada(db, 7, bot_token="t", chat_id="-100999", texto="oi")
             )
 
         self.assertEqual(db.marcado, [(7, True, None)])
 
-    def test_falha_de_envio_vira_erro_persistido_e_nao_levanta(self):
+    def test_falha_de_envio_grava_o_motivo_real_e_nao_levanta(self):
         db = _FakeChamadaRow()
         with patch.object(
-            telegram_alerts, "send_telegram_message", side_effect=RuntimeError("boom")
+            telegram_alerts,
+            "send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=False, error="HTTP 400: chat not found", attempts=1),
         ):
             self.assertFalse(
                 deliver_chamada(db, 7, bot_token="t", chat_id="-100999", texto="oi")
             )
 
-        self.assertEqual(db.marcado, [(7, False, "Falha ao enviar o aviso pelo Telegram.")])
+        self.assertEqual(
+            db.marcado, [(7, False, "Falha ao enviar pelo Telegram: HTTP 400: chat not found")]
+        )
+
+    def test_excecao_inesperada_no_envio_vira_falha_registrada(self):
+        db = _FakeChamadaRow()
+        with patch.object(
+            telegram_alerts, "send_telegram_message_checked", side_effect=RuntimeError("boom")
+        ):
+            self.assertFalse(
+                deliver_chamada(db, 7, bot_token="t", chat_id="-100999", texto="oi")
+            )
+
+        self.assertFalse(db.marcado[0][1])
+        self.assertIn("erro inesperado", db.marcado[0][2])
 
     def test_falha_ao_persistir_o_desfecho_tambem_e_silenciosa(self):
         db = _FakeChamadaRow(falha=RuntimeError("banco fora"))
-        with patch.object(telegram_alerts, "send_telegram_message", return_value=True):
+        with patch.object(
+            telegram_alerts, "send_telegram_message_checked", return_value=TelegramSendResult(ok=True)
+        ):
             self.assertTrue(
                 deliver_chamada(db, 7, bot_token="t", chat_id="-100999", texto="oi")
             )
+
+
+class TelegramDesligadoTests(unittest.TestCase):
+    """``TELEGRAM_ENABLED=false`` desliga a saída mesmo com token e chat."""
+
+    def test_flag_desligada_nao_envia_parada_nem_agenda(self):
+        settings = _settings(telegram_enabled=False)
+        tarefas = BackgroundTasks()
+        with patch.object(telegram_alerts, "send_telegram_message") as enviar:
+            self.assertFalse(alert_resource_stop(settings, {"maquina": "Serra 01"}))
+            self.assertFalse(schedule_resource_stop_alert(tarefas, settings, {"maquina": "Serra 01"}))
+
+        enviar.assert_not_called()
+        self.assertEqual(tarefas.tasks, [])
+
+    def test_settings_sem_o_atributo_conta_como_desligado(self):
+        self.assertFalse(telegram_outbound_allowed(SimpleNamespace(telegram_bot_token="t")))
+        self.assertTrue(telegram_outbound_allowed(SimpleNamespace(telegram_enabled=True)))
+
+
+def _resposta(status, corpo=None):
+    return httpx.Response(status, json=corpo or {})
+
+
+class SendTelegramMessageCheckedTests(unittest.TestCase):
+    def _enviar(self, respostas):
+        esperas = []
+        with patch(
+            "mes.integrations.notifications.telegram.httpx.post", side_effect=respostas
+        ) as post:
+            resultado = send_telegram_message_checked(
+                bot_token="segredo", chat_id="-1", text="oi", sleep=esperas.append
+            )
+        return resultado, post, esperas
+
+    def test_429_respeita_retry_after_e_depois_entrega(self):
+        resultado, post, esperas = self._enviar([
+            _resposta(429, {"ok": False, "parameters": {"retry_after": 3}}),
+            _resposta(200, {"ok": True, "result": {"message_id": 1}}),
+        ])
+
+        self.assertTrue(resultado.ok)
+        self.assertEqual(resultado.attempts, 2)
+        self.assertEqual(esperas, [3.0])
+        self.assertEqual(post.call_count, 2)
+
+    def test_retry_after_acima_do_limite_falha_sem_dormir(self):
+        resultado, post, esperas = self._enviar([
+            _resposta(429, {"ok": False, "parameters": {"retry_after": 600}}),
+        ])
+
+        self.assertFalse(resultado.ok)
+        self.assertIn("retry_after=600", resultado.error)
+        self.assertEqual(esperas, [])
+        self.assertEqual(post.call_count, 1)
+
+    def test_5xx_repete_com_backoff_e_esgota_as_tentativas(self):
+        resultado, post, esperas = self._enviar([_resposta(502)] * 3)
+
+        self.assertFalse(resultado.ok)
+        self.assertEqual(resultado.attempts, 3)
+        self.assertEqual(post.call_count, 3)
+        self.assertEqual(len(esperas), 2)
+        self.assertIn("HTTP 502", resultado.error)
+
+    def test_erro_permanente_nao_repete_e_informa_o_motivo(self):
+        resultado, post, esperas = self._enviar([
+            _resposta(400, {"ok": False, "description": "Bad Request: chat not found"}),
+        ])
+
+        self.assertFalse(resultado.ok)
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(esperas, [])
+        self.assertIn("chat not found", resultado.error)
+
+    def test_falha_de_conexao_repete_mas_timeout_de_leitura_nao(self):
+        resultado, post, _ = self._enviar([
+            httpx.ConnectError("sem rede"),
+            _resposta(200, {"ok": True, "result": {}}),
+        ])
+        self.assertTrue(resultado.ok)
+        self.assertEqual(post.call_count, 2)
+
+        resultado, post, _ = self._enviar([httpx.ReadTimeout("lento")])
+        self.assertFalse(resultado.ok)
+        self.assertEqual(post.call_count, 1)
+
+    def test_motivo_da_falha_nunca_expoe_o_token(self):
+        resultado, _, _ = self._enviar(
+            [httpx.ConnectError("https://api.telegram.org/botsegredo/x")] * 3
+        )
+
+        self.assertFalse(resultado.ok)
+        self.assertNotIn("segredo", resultado.error)
 
 
 class StationContextTests(unittest.TestCase):

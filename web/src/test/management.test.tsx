@@ -103,11 +103,15 @@ describe("contrato gerencial Web", () => {
     // (`/welding-management`) continua existindo, só não é mais navegável.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "panels" }));
     expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Solda" }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Metas", path: "/inicio/metas", sectionId: "panels" }));
+    // Metas: aba oculta temporariamente (01/10/2026); a rota segue montada em
+    // App.tsx e a página existe, só saiu da navegação.
+    expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Metas" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "panels" }));
-    // Chamadas reúne configuração e histórico técnico, por isso fica no
-    // IagoDev, nunca no Dev Observatory (somente leitura).
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas", path: "/inicio/chamadas", sectionId: "dev" }));
+    // Chamadas foi dividida (01/10/2026): o cadastro de contatos fica no
+    // IagoDev (admin, nunca no Dev Observatory, que é somente leitura) e o
+    // histórico da gestão vive na Tela inicial, destino do sininho.
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas do IagoDev", path: "/inicio/chamadas-dev", sectionId: "dev", adminOnly: true }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas da Gestão", path: "/inicio/chamadas", sectionId: "home" }));
     // Wave 5: a designação do responsável pelo retrabalho da primeira peça é
     // configuração gerencial e vive no cadastro de crachás que já existia.
     // Reorganização 15/09/2026: Crachás e Cadastro viraram exclusivos da

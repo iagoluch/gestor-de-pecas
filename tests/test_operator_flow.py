@@ -88,7 +88,7 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.code, "quantidade_planejada_indisponivel")
 
-    def test_recurso_exclusivo_bloqueia_corrida_na_transacao(self):
+    def test_producao_simultanea_no_mesmo_recurso_e_permitida(self):
         db, service, first_operation = self._service()
         second_task = db.inserir_tarefa("T-OPERADOR-2")
         db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-2", "PECA-2", "Dobra", 1)
@@ -119,8 +119,43 @@ class OperatorFlowTests(unittest.TestCase):
         )
 
         self.assertTrue(first.ok)
-        self.assertFalse(second.ok)
-        self.assertEqual(second.code, "operator_resource_occupied")
+        self.assertTrue(second.ok, second.message)
+        ativos = db.listar_apontamentos_operacionais("Dobra", maquina="1303")
+        self.assertEqual(
+            sorted((row["op"], row["status"]) for row in ativos),
+            [("OP-OPERADOR", "Em processo"), ("OP-OPERADOR-2", "Em processo")],
+        )
+
+    def test_setup_continua_exclusivo_com_outra_op_ativa_no_recurso(self):
+        db, service, first_operation = self._service()
+        second_task = db.inserir_tarefa("T-OPERADOR-SETUP")
+        db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-SETUP", "PECA-2", "Dobra", 1)
+        second_operation = {
+            **first_operation, "id": 14, "codigo_op": "OP-OPERADOR-SETUP",
+            "produto_codigo": "PECA-2", "quantidade": 1,
+        }
+        db.catalog_operations.append(second_operation)
+        liberar_primeira_peca(
+            db, "OPERADOR TESTE", op="OP-OPERADOR-SETUP", setor="Dobra",
+            recurso="1303", operacao=second_operation,
+        )
+        first = service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=first_operation, recurso_exclusivo=True,
+        )
+        second = service.executar(
+            "Início", op="OP-OPERADOR-SETUP", setor="Dobra", recurso="1303",
+            operacao=second_operation, recurso_exclusivo=True,
+        )
+        setup = service.executar(
+            "Setup", op="OP-OPERADOR-SETUP", setor="Dobra", recurso="1303",
+            operacao=second_operation, tipo_setup="Troca", recurso_exclusivo=True,
+        )
+
+        self.assertTrue(first.ok)
+        self.assertTrue(second.ok, second.message)
+        self.assertFalse(setup.ok)
+        self.assertEqual(setup.code, "operator_resource_occupied")
 
     def test_recurso_exclusivo_nao_permite_contornar_por_parada_e_retomada(self):
         db, service, first_operation = self._service()
@@ -179,12 +214,17 @@ class OperatorFlowTests(unittest.TestCase):
         )
 
         with patch.object(service, "recurso_em_uso", return_value=None):
+            setup = service.executar(
+                "Setup", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+                operacao=first_operation, tipo_setup="Troca", recurso_exclusivo=True,
+            )
             second = service.executar(
                 "Início", op="OP-OPERADOR-DISPUTA", setor="Dobra", recurso="1303",
                 operacao=second_operation, recurso_exclusivo=True,
             )
 
         self.assertTrue(first.ok)
+        self.assertTrue(setup.ok, setup.message)
         self.assertEqual(second.code, "operator_resource_occupied")
         ativos = db.listar_apontamentos_operacionais("Dobra", maquina="1303")
         self.assertEqual([row["op"] for row in ativos], ["OP-OPERADOR"])
@@ -956,6 +996,47 @@ class OperatorCardEventFailureTests(unittest.TestCase):
             card = service._card({"id": 7, "status": "Parada", "op": "OP1"})
         self.assertIn("apontamento 7", logs.output[0])
         self.assertIsNotNone(card)
+
+
+class EstacaoCanonicaDaSoldaTests(unittest.TestCase):
+    OPERACAO = {"id": 10, "numero_operacao": "10"}
+
+    def test_apelido_e_codigo_da_mesma_estacao_nao_bloqueiam_a_continuacao(self):
+        linhas = [
+            {"status": "Parada", "maquina": "Laser Ensis 3015",
+             "catalogo_operacao_id": 10, "numero_operacao": "10"},
+        ]
+
+        self.assertIsNone(
+            OperatorFlowService._apontada_em_outra_estacao(
+                linhas, self.OPERACAO, "Solda Aço", "LASER1"
+            )
+        )
+
+    def test_estacao_realmente_diferente_continua_bloqueada(self):
+        linhas = [
+            {"status": "Em processo", "maquina": "Estação 1",
+             "catalogo_operacao_id": 10, "numero_operacao": "10"},
+        ]
+
+        self.assertIs(
+            OperatorFlowService._apontada_em_outra_estacao(
+                linhas, self.OPERACAO, "Solda Alumínio", "Estação 2"
+            ),
+            linhas[0],
+        )
+
+    def test_resumo_de_ocupacao_so_produzindo_aceita_mais_producao(self):
+        so_producao = OperatorFlowService._resumo_ocupacao(
+            [{"op": "A", "status": "Em processo"}, {"op": "B", "status": "Parada"}]
+        )
+        com_setup = OperatorFlowService._resumo_ocupacao(
+            [{"op": "A", "status": "Setup"}]
+        )
+
+        self.assertEqual(so_producao["ocupantes_total"], 2)
+        self.assertTrue(so_producao["aceita_producao_simultanea"])
+        self.assertFalse(com_setup["aceita_producao_simultanea"])
 
 
 if __name__ == "__main__":

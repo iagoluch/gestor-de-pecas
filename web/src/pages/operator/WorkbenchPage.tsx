@@ -12,13 +12,15 @@ import type {
   OperatorCard,
   OperatorDrawing,
   OperatorOperation,
+  OperatorStation,
   QualityDimension,
   StopReason,
 } from "../../types/api";
-import { formatDateTime } from "../../utils/format";
+import { displayName, displayText, formatDateTime } from "../../utils/format";
 import { Notice, type NoticeTone } from "../../components/Notice";
 import { AsyncButton } from "../../components/AsyncButton";
 import { StationStateBanner } from "../../components/StationStateBanner";
+import { operatorActionErrorMessage, STATION_EXCLUSIVE_REASON, stationIsBlocked } from "./stationOccupancy";
 import {
   type DraftDimension,
   formatDraftStandard,
@@ -106,7 +108,7 @@ function cardKey(item: OperatorCard) {
 function OperatorCardView({ item, onSelect, selected = false }: { item: OperatorCard; onSelect: (item: OperatorCard) => void; selected?: boolean }) {
   return (
     <button type="button" className={`operator-production-card ${selected ? "operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
-      <div><strong>{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replaceAll(" ", "-")}`}>{String(item.status ?? "Aguardando")}</span></div>
+      <div><strong>{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replaceAll(" ", "-")}`}>{displayName(item.status, "Aguardando")}</span></div>
       <dl>
         <div><dt>Operação</dt><dd>{String(item.operation ?? item.numero_operacao ?? "—")}</dd></div>
         <div><dt>Produto</dt><dd>{String(item.product ?? "—")}</dd></div>
@@ -117,7 +119,7 @@ function OperatorCardView({ item, onSelect, selected = false }: { item: Operator
       </dl>
       {item.elapsed ? <small>Tempo: {item.elapsed}</small> : null}
       {item.last_updated_at ? <small>Última atualização: {formatDateTime(item.last_updated_at)}</small> : null}
-      {item.motivo_parada ? <small className="operator-card-alert">Motivo: {item.motivo_parada}</small> : null}
+      {item.motivo_parada ? <small className="operator-card-alert">Motivo: {displayText(item.motivo_parada)}</small> : null}
       {item.stopped_since ? <small className="operator-card-alert">Desde: {formatDateTime(item.stopped_since)}</small> : null}
       {item.status_elapsed ? <small className="operator-card-alert">Tempo parado: {item.status_elapsed}</small> : null}
     </button>
@@ -149,6 +151,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const cards = useApiQuery<WorkbenchResponse>(`/api/v1/operator/workbench?resource=${encodeURIComponent(resource)}`);
   const historyQuery = useApiQuery<HistoryResponse>(`/api/v1/operator/history?resource=${encodeURIComponent(resource)}&page=1&page_size=100`);
   const reasons = useApiQuery<{ items: StopReason[] }>("/api/v1/operator/stop-reasons");
+  // Quem diz se o posto aceita outra OP é o backend; sem resposta, a tela não bloqueia.
+  const stations = useApiQuery<{ items: OperatorStation[] }>("/api/v1/operator/stations");
   const operators = useApiQuery<{ items: OperatorBadge[] }>("/api/v1/operator/operators");
   // Desenho da peça: o backend resolve o arquivo na rede e devolve só o
   // metadado. O operador nunca escolhe pasta e nunca vê caminho de rede.
@@ -309,12 +313,18 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       : startAction === "Início" ? "Iniciar"
         : startAction === "Retomar" || startAction === "Retornar" ? "Retomar produção"
           : startAction;
-  const activeCard = (cards.data?.production ?? []).find((item) =>
+  const activeCards = (cards.data?.production ?? []).filter((item) =>
     ["Em processo", "Parada", "Setup", "Retrabalho"].includes(String(item.status ?? "")),
   );
-  // Mesma regra do backend (`recurso_em_uso` → 409 operator_resource_occupied):
-  // com outro apontamento ativo no recurso, iniciar esta etapa seria recusado.
-  const occupiedBy = activeCard && activeCard !== selectedCard ? activeCard : undefined;
+  // Com 2+ OPs ativas no posto, a ação (ex.: Parada) vale para a OP selecionada.
+  const activeCard = (selectedCard && activeCards.includes(selectedCard) ? selectedCard : undefined) ?? activeCards[0];
+  // Produção simultânea é permitida; só Setup/Retrabalho de outra OP trava o
+  // Iniciar. A decisão é do backend (`aceita_producao_simultanea`); a tela só
+  // aponta qual OP está em Setup/Retrabalho para explicar o motivo.
+  const station = stations.data?.items.find((item) => item.resource === resource);
+  const occupiedBy = stationIsBlocked(station)
+    ? activeCards.find((item) => item !== selectedCard && ["Setup", "Retrabalho"].includes(String(item.status ?? "")))
+    : undefined;
   // Wave 5: quem decide se Finalizar pode ser oferecido é o backend. A tela
   // apenas lê `pode_finalizar` e explica o motivo com a frase que veio de lá.
   const firstPiece: FirstPieceGate | undefined = selected?.primeira_peca;
@@ -656,6 +666,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       setMessage("");
       setDialog(null);
       cards.reload();
+      stations.reload();
       historyQuery.reload();
       operations.reload();
       if (action === "Finalizado" && !response.data?.finalizacao_parcial) {
@@ -671,7 +682,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         // orientação ao operador — quem abre o checklist é o botão Setup.
         setMessage(reason.message, "error");
       } else {
-        setMessage(apiErrorMessage(reason), "error");
+        setMessage(operatorActionErrorMessage(reason), "error");
       }
     } finally {
       setSubmitting(false);
@@ -735,7 +746,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       </div>
       {canPoint && occupiedBy ? (
         <Notice>
-          Recurso em uso pela OP {String(occupiedBy.op ?? "")} ({String(occupiedBy.status ?? "")}). Selecione-a para continuar ou finalize antes de iniciar outra.
+          {STATION_EXCLUSIVE_REASON} OP {String(occupiedBy.op ?? "")} ({String(occupiedBy.status ?? "")}).
         </Notice>
       ) : null}
       {canPoint && gateRequired ? (

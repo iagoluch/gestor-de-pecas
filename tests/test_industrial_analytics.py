@@ -79,7 +79,10 @@ class PhysicalTimeConsolidationTests(unittest.TestCase):
         self.assertEqual(result["physical_seconds"], 7200)
         self.assertEqual(result["overlap_removed_seconds"], 0)
 
-    def test_estados_conflitantes_virao_desconhecido_sem_inflar_tempo(self):
+    def test_producao_prevalece_sobre_parada_de_outra_op_no_mesmo_recurso(self):
+        # Decisão do usuário (01/10/2026): OP1 produz 08:00-09:00 e OP2 fica
+        # parada 08:30-09:00 no mesmo recurso. O recurso está produzindo; o
+        # trecho não vira desconhecido nem tempo disponível-não-trabalhado.
         segments = [
             PhysicalInputSegment(
                 "DOBRA1", "Dobra", EventCategory.PRODUCTION,
@@ -92,9 +95,54 @@ class PhysicalTimeConsolidationTests(unittest.TestCase):
         ]
         result = consolidate_physical_time(segments)
         self.assertEqual(result["physical_seconds"], 3600)
+        self.assertEqual(result["conflicting_state_seconds"], 0)
+        self.assertEqual(result["totals"][EventCategory.PRODUCTION], 3600)
+        self.assertNotIn(EventCategory.UNKNOWN, result["totals"])
+        self.assertNotIn(EventCategory.DOWNTIME, result["totals"])
+
+    def test_todas_as_ops_paradas_continuam_parada(self):
+        segments = [
+            PhysicalInputSegment(
+                "DOBRA1", "Dobra", EventCategory.DOWNTIME,
+                datetime(2026, 8, 19, 8, 0), datetime(2026, 8, 19, 9, 0), "OP1",
+            ),
+            PhysicalInputSegment(
+                "DOBRA1", "Dobra", EventCategory.DOWNTIME,
+                datetime(2026, 8, 19, 8, 30), datetime(2026, 8, 19, 9, 0), "OP2",
+            ),
+        ]
+        result = consolidate_physical_time(segments)
+        self.assertEqual(result["totals"][EventCategory.DOWNTIME], 3600)
+
+    def test_estados_conflitantes_sem_producao_continuam_desconhecido(self):
+        segments = [
+            PhysicalInputSegment(
+                "DOBRA1", "Dobra", EventCategory.SETUP,
+                datetime(2026, 8, 19, 8, 0), datetime(2026, 8, 19, 9, 0), "OP1",
+            ),
+            PhysicalInputSegment(
+                "DOBRA1", "Dobra", EventCategory.DOWNTIME,
+                datetime(2026, 8, 19, 8, 30), datetime(2026, 8, 19, 9, 0), "OP2",
+            ),
+        ]
+        result = consolidate_physical_time(segments)
+        self.assertEqual(result["physical_seconds"], 3600)
         self.assertEqual(result["conflicting_state_seconds"], 1800)
-        self.assertEqual(result["totals"][EventCategory.PRODUCTION], 1800)
         self.assertEqual(result["totals"][EventCategory.UNKNOWN], 1800)
+
+    def test_alias_e_codigo_do_mesmo_recurso_nao_dobram_o_tempo_fisico(self):
+        segments = [
+            PhysicalInputSegment(
+                "Laser Ensis 3015", "Corte", EventCategory.PRODUCTION,
+                datetime(2026, 8, 19, 8, 0), datetime(2026, 8, 19, 9, 0), "OP1",
+            ),
+            PhysicalInputSegment(
+                "LASER1", "Corte", EventCategory.PRODUCTION,
+                datetime(2026, 8, 19, 8, 0), datetime(2026, 8, 19, 9, 0), "OP2",
+            ),
+        ]
+        result = consolidate_physical_time(segments)
+        self.assertEqual(result["physical_seconds"], 3600)
 
 
 class RateioTests(unittest.TestCase):
@@ -163,7 +211,7 @@ class AuditTests(unittest.TestCase):
                 "data_inicio": datetime(2026, 8, 19, 8, 0),
                 "data_fim": datetime(2026, 8, 19, 9, 0),
                 "eventos": [
-                    {"id": 5, "estado": "producao", "data_hora": datetime(2026, 8, 19, 8, 0)},
+                    {"id": 5, "estado": "setup", "data_hora": datetime(2026, 8, 19, 8, 0)},
                     {"id": 6, "estado": "finalizado", "data_hora": datetime(2026, 8, 19, 9, 0)},
                 ],
             },
@@ -744,6 +792,40 @@ class ConcurrentManagementTests(unittest.TestCase):
         self.assertEqual(len(result["items"]), 2)
         self.assertTrue(all(row["tempo_producao_real_segundos"] == 1800 for row in result["items"]))
         self.assertTrue(all(row["fonte_tempo_producao"] == "rateio" for row in result["items"]))
+
+
+class _ApelidoRepo(_ConcurrentManagementRepo):
+    """Imita o filtro de texto do SQL: ``UPPER(maquina) = UPPER(recurso)``."""
+
+    def listar_fatos_operacionais_periodo(self, *_args, recurso=None, **_kwargs):
+        one, two = super().listar_fatos_operacionais_periodo()
+        one["maquina"] = "LASER1"
+        two["maquina"] = "Laser Ensis 3015"  # apelido do mesmo posto físico
+        rows = [one, two]
+        if recurso:
+            rows = [r for r in rows if r["maquina"].upper() == str(recurso).upper()]
+        return rows
+
+    def listar_rateios_tempo_periodo(self, *_args, **_kwargs):
+        return []
+
+
+class ConcurrentPorIdentidadeCanonicaTests(unittest.TestCase):
+    def test_filtro_por_codigo_inclui_op_gravada_com_apelido_no_rateio(self):
+        filters = AnalyticsFilter(
+            datetime(2026, 8, 19, 0, 0),
+            datetime(2026, 8, 19, 23, 59),
+            recurso="LASER1",
+        )
+        result = IndustrialAnalyticsService(_ApelidoRepo()).standard_vs_actual(filters)
+
+        # O filtro continua por texto (só a OP gravada como LASER1 é listada),
+        # mas ela divide o recurso físico com a OP do apelido: 3600 / 2.
+        self.assertEqual([row["op"] for row in result["items"]], ["OP1"])
+        self.assertEqual(result["items"][0]["tempo_producao_real_segundos"], 1800)
+        self.assertEqual(
+            result["items"][0]["fonte_tempo_producao"], "timeline_op_rateio_igualitario"
+        )
 
 
 class _ConcurrentDowntimeRepo(_ConcurrentManagementRepo):

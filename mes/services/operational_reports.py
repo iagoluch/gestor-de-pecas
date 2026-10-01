@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import logging
 
 from app.core.formatting import format_datetime_text, parse_datetime_text
+from mes.analytics.rateio import canonical_resource_key, split_concurrent_production
 from mes.analytics.timeline import build_operator_timeline
 from mes.domain import EventCategory
 
@@ -135,6 +136,30 @@ class OperationalReportService:
         dt = self.parse_data_operacional(valor)
         return bool(dt and inicio <= dt <= fim)
 
+    @staticmethod
+    def _arredondar_conservando_soma(valores, grupos):
+        """Arredonda segundos por OP sem perder a soma de cada recurso.
+
+        Maior resto: cada grupo (recurso) distribui o total arredondado, piso
+        para todas as OPs e +1 s para as de maior parte fracionária. ``int()``
+        truncava e fazia a soma por OP ficar abaixo do tempo físico.
+        """
+
+        por_grupo = {}
+        for chave, valor in valores.items():
+            por_grupo.setdefault(grupos.get(chave), []).append(chave)
+        resultado = {}
+        for chaves in por_grupo.values():
+            pisos = {chave: int(valores[chave]) for chave in chaves}
+            faltam = int(round(sum(valores[chave] for chave in chaves))) - sum(pisos.values())
+            por_resto = sorted(
+                chaves, key=lambda chave: valores[chave] - pisos[chave], reverse=True
+            )
+            for chave in por_resto[: max(0, faltam)]:
+                pisos[chave] += 1
+            resultado.update(pisos)
+        return resultado
+
     def calcular_relatorio_tempos_setor(self, inicio, fim, tipo_setor):
         """Calcula tempo real entre Início e Finalizar para um setor produtivo."""
 
@@ -143,6 +168,7 @@ class OperationalReportService:
             apontamentos = fact_loader(inicio, fim, setor=tipo_setor)
         else:
             apontamentos = self.db.listar_apontamentos_operacionais_periodo(tipo_setor, inicio, fim)
+        apontamentos = list(apontamentos)
         agora_periodo = min(self._now(), fim)
         rateio_map = {}
         rateio_loader = getattr(self.db, "listar_rateios_tempo_periodo", None)
@@ -156,6 +182,34 @@ class OperationalReportService:
                     rateio_map[key] = rateio_map.get(key, 0.0) + float(
                         allocation.get("segundos_atribuidos_periodo") or 0
                     )
+        timelines = {}
+        for item in apontamentos:
+            data_inicio = self.parse_data_operacional(item.get("data_inicio"))
+            if not data_inicio:
+                continue
+            data_fim = self.parse_data_operacional(item.get("data_fim"))
+            timelines[id(item)] = build_operator_timeline(
+                item.get("eventos") or (),
+                start=max(data_inicio, inicio),
+                end=min(data_fim or agora_periodo, fim),
+            )
+        producao_dividida = split_concurrent_production(
+            (
+                id(item),
+                canonical_resource_key(item.get("maquina")),
+                timeline,
+            )
+            for item in apontamentos
+            if (timeline := timelines.get(id(item))) is not None
+            and timeline.has_event_data
+        )
+        producao_dividida = self._arredondar_conservando_soma(
+            producao_dividida,
+            {
+                id(item): canonical_resource_key(item.get("maquina"))
+                for item in apontamentos
+            },
+        )
         etapas_stats = {}
         op_rows = []
         duracoes = []
@@ -171,11 +225,14 @@ class OperationalReportService:
             recorte_inicio = max(data_inicio, inicio)
             recorte_fim = min(data_fim or agora_periodo, fim)
             lead_seconds = max(0, int((recorte_fim - recorte_inicio).total_seconds()))
-            timeline = build_operator_timeline(
-                item.get("eventos") or (),
-                start=recorte_inicio,
-                end=recorte_fim,
-            )
+            timeline = timelines.get(id(item))
+            if timeline is None:
+                timeline = build_operator_timeline(
+                    item.get("eventos") or (),
+                    start=recorte_inicio,
+                    end=recorte_fim,
+                )
+            segundos_corridos = None
             key_rateio = (
                 str(item.get("op") or "").strip().casefold(),
                 str(item.get("numero_operacao") or "").strip(),
@@ -189,8 +246,15 @@ class OperationalReportService:
                 retrabalho_seg = int(timeline.seconds(EventCategory.REWORK)) if timeline.has_event_data else 0
             elif timeline.has_event_data:
                 segundos = int(timeline.seconds(EventCategory.PRODUCTION))
-                producao_seg = segundos
+                segundos_corridos = segundos
                 fonte_tempo = "timeline_op"
+                dividido = producao_dividida.get(id(item))
+                if dividido is not None and dividido < segundos:
+                    # OPs simultâneas no mesmo recurso dividem o tempo
+                    # (igualitário); a soma por OP não passa do tempo físico.
+                    segundos = dividido
+                    fonte_tempo = "timeline_op_rateio_igualitario"
+                producao_seg = segundos
                 parada_seg = int(timeline.seconds(EventCategory.DOWNTIME))
                 setup_seg = int(timeline.seconds(EventCategory.SETUP))
                 retrabalho_seg = int(timeline.seconds(EventCategory.REWORK))
@@ -201,6 +265,8 @@ class OperationalReportService:
                 producao_seg = 0
                 fonte_tempo = "dados_insuficientes"
                 parada_seg = setup_seg = retrabalho_seg = 0
+            if segundos_corridos is None:
+                segundos_corridos = segundos
             maquina = item.get("maquina") or tipo_setor
             aberto = item.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"} and data_fim is None
             if aberto:
@@ -236,9 +302,14 @@ class OperationalReportService:
                 "tempo_setup": self.formatar_segundos_operacional(setup_seg),
                 "tempo_retrabalho_seg": retrabalho_seg,
                 "tempo_retrabalho": self.formatar_segundos_operacional(retrabalho_seg),
-                "tempo_aberto_seg": segundos if aberto else None,
-                "tempo_aberto": self.formatar_segundos_operacional(segundos if aberto else None),
-                "status_tempo": self.status_tempo_operacional(segundos / 3600) if aberto else "Finalizado",
+                # O alarme de OP aberta usa o tempo corrido da própria OP: dividir
+                # o tempo entre OPs simultâneas não pode atenuá-lo.
+                "tempo_aberto_seg": segundos_corridos if aberto else None,
+                "tempo_aberto": self.formatar_segundos_operacional(segundos_corridos if aberto else None),
+                "status_tempo": (
+                    self.status_tempo_operacional(segundos_corridos / 3600)
+                    if aberto else "Finalizado"
+                ),
                 "status_processo": item.get("status") or "",
                 "inicio": self.formatar_data_operacional(item.get("data_inicio")),
                 "fim": self.formatar_data_operacional(item.get("data_fim")),

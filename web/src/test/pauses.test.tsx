@@ -91,6 +91,26 @@ describe("Pausas automáticas — organização e filtros", () => {
     expect(corpoDaTabela()).not.toContain("Almoço");
   });
 
+  it("filtra por situação (ativa ou inativa) e combina com o setor", async () => {
+    stubFetch();
+    renderPauses();
+    await waitFor(() => expect(linhas()).toBe(4));
+
+    fireEvent.change(screen.getByLabelText("Situação"), { target: { value: "inativa" } });
+    await waitFor(() => expect(linhas()).toBe(1));
+    expect(corpoDaTabela()).toContain("Dobra");
+    expect(screen.getByText("1 de 4 pausas no recorte atual")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Situação"), { target: { value: "ativa" } });
+    await waitFor(() => expect(linhas()).toBe(3));
+    fireEvent.change(screen.getByLabelText("Setor"), { target: { value: "Corte" } });
+    await waitFor(() => expect(linhas()).toBe(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+    await waitFor(() => expect(linhas()).toBe(4));
+    expect((screen.getByLabelText("Situação") as HTMLSelectElement).value).toBe("");
+  });
+
   it("combina setor, tipo e busca e limpa a seleção", async () => {
     stubFetch();
     renderPauses();

@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 import type { MetricValue } from "../types/api";
 import type { AndonResource } from "../types/andon";
-import { availabilityLabel, formatDateTime, formatDuration } from "../utils/format";
+import { availabilityLabel, displayName, displayText, formatDateTime, formatDuration } from "../utils/format";
 
 function metricText(metric: MetricValue) {
   if (metric.value === null || metric.value === undefined) return "Não disponível";
@@ -19,7 +19,7 @@ function DetailMetric({ label, metric, featured = false }: { label: string; metr
       <span>{label}</span>
       <strong>{metricText(metric)}</strong>
       <small>{availabilityLabel[metric.availability]}</small>
-      {metric.reason ? <p>{metric.reason}</p> : null}
+      {metric.reason ? <p>{displayText(metric.reason)}</p> : null}
     </div>
   );
 }
@@ -42,11 +42,12 @@ export function AndonResourceDrawer({
 
   if (!resource) return null;
   const operation = resource.operation;
+  const activeOps = resource.ops_ativas ?? [];
   const duration = resource.state.duration_seconds;
   const liveDuration = duration === null || duration === undefined ? null : duration + elapsed;
-  const stateLabel = resource.state.category === "parada"
+  const stateLabel = displayText(resource.state.category === "parada"
     ? resource.state.display_label ?? resource.state.reason ?? "Motivo não informado"
-    : resource.state.display_label ?? resource.state.label;
+    : resource.state.display_label ?? resource.state.label);
   const hasOperation = Boolean(operation?.op || operation?.product || operation?.product_description);
   const titleId = `andon-detail-${resource.sector}-${resource.code}`.replace(/[^a-zA-Z0-9_-]/g, "-");
 
@@ -57,7 +58,7 @@ export function AndonResourceDrawer({
       <aside ref={drawerRef} className="insight-drawer andon-detail-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <header>
           <div>
-            <small>Detalhes do recurso • {resource.sector}</small>
+            <small>Detalhes do recurso • {displayName(resource.sector)}</small>
             <h2 id={titleId}>Indicadores de {resource.name}</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="Fechar indicadores">×</button>
@@ -83,7 +84,7 @@ export function AndonResourceDrawer({
               <span>Início</span>
               <strong>{formatDateTime(resource.state.started_at)}</strong>
             </div>
-            {resource.state.category !== "parada" && resource.state.reason ? <p><strong>Informação:</strong> {resource.state.reason}</p> : null}
+            {resource.state.category !== "parada" && resource.state.reason ? <p><strong>Informação:</strong> {displayText(resource.state.reason)}</p> : null}
           </section>
 
           <section>
@@ -109,6 +110,16 @@ export function AndonResourceDrawer({
               <div><dt>Retrabalho</dt><dd>{quantityText(operation?.rework_quantity)}</dd></div>
               <div><dt>OPs ativas no recurso</dt><dd>{resource.active_operations.toLocaleString("pt-BR")}</dd></div>
             </dl>
+            {activeOps.length > 1 ? (
+              <ul className="andon-detail__ops" aria-label="OPs simultâneas no recurso">
+                {activeOps.map((item) => (
+                  <li key={item.op}>
+                    <strong>{item.op}</strong>
+                    <span>{[item.status, item.operador].filter(Boolean).map((part) => displayText(part as string)).join(" • ")}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section> : null}
         </div>
       </aside>

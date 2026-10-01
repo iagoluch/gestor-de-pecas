@@ -14,7 +14,7 @@ from psycopg.errors import UniqueViolation
 
 from app.core.constants import FMT_DB
 from app.core.normalization import limpa_codigo, normalizar_data_db
-from app.core.resource_mapping import resolve_resource_identity
+from app.core.resource_mapping import WELDING_SECTOR_KEYS, resolve_resource_identity
 from app.core.operator_sectors import (
     CAPACITY_TAB_STATION_OWNED_SECTORS,
     CAPACITY_TAB_WHITELIST_CODES,
@@ -37,6 +37,14 @@ from app.database.connection import PostgresPoolManager
 from app.database.diagnostics import run_database_diagnostic
 from app.database.errors import DatabaseIntegrityError, PauseOrderConflictError
 from app.database.migrations import apply_migrations
+from app.database.telegram_link_codes import (
+    TELEGRAM_LINK_ATTEMPT_LIMIT,
+    TELEGRAM_LINK_ATTEMPT_WINDOW_SECONDS,
+    TELEGRAM_LINK_CODE_TTL_SECONDS,
+    gerar_codigo_vinculo_telegram as _novo_codigo_vinculo_telegram,
+    hash_codigo_vinculo_telegram,
+    normalizar_codigo_vinculo_telegram,
+)
 from app.database.schema import SCHEMA_VERSION
 from mes.integrations.totvs.outbound_enqueue import (
     load_outbound_enqueue_config,
@@ -57,6 +65,7 @@ from mes.domain import (
     can_transition,
     operator_state_from_status,
     operator_status_for_state,
+    resource_concurrency_conflict,
     return_state_for_transition,
 )
 
@@ -2153,6 +2162,16 @@ class Database(
             raise ValueError("Quantidade planejada do apontamento deve ser maior que zero.")
         try:
             with self.connection() as connection, connection.cursor() as cursor:
+                if str(tipo_setor or "").strip().casefold() in WELDING_SECTOR_KEYS:
+                    # Estações diferentes tomam travas de recurso diferentes: só
+                    # esta trava, por (OP, operação), serializa quem disputa a
+                    # mesma operação da Solda. Sempre tomada ANTES da trava de
+                    # recurso (única ordem usada por este caminho).
+                    outra_estacao = self._operacao_em_outra_estacao_tx(
+                        cursor, op, operacao, maquina
+                    )
+                    if outra_estacao:
+                        return outra_estacao
                 if recurso_exclusivo:
                     # A leitura prévia do fluxo roda em outra transação: sem a
                     # trava, dois Inícios simultâneos passam por ela (BK-03).
@@ -2444,7 +2463,8 @@ class Database(
             ):
                 resource = self._travar_recurso_tx(cursor, atual.get("maquina"))
                 conflito = self._conflito_recurso_exclusivo_tx(
-                    cursor, resource, excluir_id=apontamento_id
+                    cursor, resource, excluir_id=apontamento_id,
+                    origem=origem_estado, destino=destino,
                 )
                 if conflito:
                     return conflito
@@ -4050,16 +4070,21 @@ class Database(
         }.get(str(status or "").strip())
 
     @staticmethod
-    def _conflito_recurso_exclusivo_tx(cursor, resource, excluir_id=None):
-        """Execução que ocupa fisicamente o recurso, já sob a trava dele.
+    def _conflito_recurso_exclusivo_tx(
+        cursor, resource, excluir_id=None, *,
+        origem=OperatorState.QUEUED, destino=OperatorState.PRODUCTION,
+    ):
+        """Regra de ocupação do recurso, já sob a trava dele.
 
         Chamado com `_travar_recurso_tx` tomado: é a checagem feita dentro da
-        transação que grava, não a leitura prévia do fluxo (BK-03).
+        transação que grava, não a leitura prévia do fluxo (BK-03). Produção
+        simultânea de várias OPs no mesmo recurso é permitida; Setup e
+        Retrabalho continuam exclusivos (`resource_concurrency_conflict`).
         """
 
         cursor.execute(
             """
-            SELECT a.id, a.operador_inicio, a.operador_fila
+            SELECT a.id, a.status, a.operador_inicio, a.operador_fila
             FROM apontamentos_operacionais a
             LEFT JOIN eventos_estado_recurso e
               ON e.apontamento_id = a.id
@@ -4071,21 +4096,104 @@ class Database(
                   OR UPPER(COALESCE(e.recurso, '')) = UPPER(%s)
               )
             ORDER BY a.id
-            LIMIT 1
             FOR UPDATE OF a
             """,
             (excluir_id, resource, resource),
         )
-        occupied = cursor.fetchone()
-        if not occupied:
+        ocupantes = cursor.fetchall()
+        if not resource_concurrency_conflict(
+            origem, destino, [row["status"] for row in ocupantes]
+        ):
             return None
+        # O ocupante citado é o que provoca a recusa (Setup/Retrabalho antes).
+        bloqueante = next(
+            (
+                row for row in ocupantes
+                if row["status"] in {"Setup", "Retrabalho"}
+            ),
+            ocupantes[0],
+        )
         return {
             "exclusive_resource_conflict": True,
             "resource": resource,
-            "operator": occupied.get("operador_inicio")
-            or occupied.get("operador_fila")
+            "operator": bloqueante.get("operador_inicio")
+            or bloqueante.get("operador_fila")
             or "outro operador",
         }
+
+    @staticmethod
+    def _identidade_operacao_solda_tx(cursor, operation_id, numero):
+        """Identidade canônica de uma operação da Solda, igual na trava e na comparação.
+
+        O número da operação é a identidade comum: quando só o ``id`` do
+        catálogo chega, o número é resolvido por ele, para que um chamador com
+        ``id`` e outro só com o número caiam na mesma chave. Sem número
+        resolvível usa-se o ``id``; sem nenhum dos dois (Solda sem catálogo) a
+        operação é a própria OP: ``"sem-operacao"``.
+        """
+
+        numero = str(numero or "").strip()
+        if not numero and operation_id is not None:
+            cursor.execute(
+                "SELECT numero_operacao FROM catalogo_operacoes_op WHERE id = %s",
+                (operation_id,),
+            )
+            achada = cursor.fetchone()
+            numero = str((achada or {}).get("numero_operacao") or "").strip()
+        if numero:
+            return f"numero:{numero.upper()}"
+        if operation_id is not None:
+            return f"id:{operation_id}"
+        return "sem-operacao"
+
+    @staticmethod
+    def _operacao_em_outra_estacao_tx(cursor, op, operacao, maquina):
+        """Solda: garante, sob trava, que a operação não está noutra estação.
+
+        Advisory lock por (OP, operação) e reverificação das linhas ativas da
+        mesma operação (qualquer setor da Solda) cuja estação canônica difere da
+        pedida. Devolve o conflito (``apontada_em_outra_estacao``) ou ``None``.
+        A continuação na própria estação não conflita. A identidade da operação
+        vem de ``_identidade_operacao_solda_tx`` na trava e na comparação.
+        """
+
+        codigo = limpa_codigo(op)
+        identidade = Database._identidade_operacao_solda_tx(
+            cursor,
+            operacao.get("id") or operacao.get("catalogo_operacao_id"),
+            operacao.get("numero_operacao") or operacao.get("codigo"),
+        )
+        chave = f"solda-op:{codigo}:{identidade}"
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (chave.upper(),))
+        estacao = str(resolve_resource_identity(maquina) or "").strip().casefold()
+        if not estacao:
+            return None
+        cursor.execute(
+            """
+            SELECT id, op, maquina, status, numero_operacao, catalogo_operacao_id
+            FROM apontamentos_operacionais
+            WHERE UPPER(op) = UPPER(%s)
+              AND status IN ('Aguardando', 'Em processo', 'Parada', 'Setup', 'Retrabalho')
+            ORDER BY id
+            """,
+            (codigo,),
+        )
+        for row in cursor.fetchall():
+            identidade_linha = Database._identidade_operacao_solda_tx(
+                cursor, row["catalogo_operacao_id"], row["numero_operacao"]
+            )
+            if identidade_linha != identidade:
+                continue
+            if str(resolve_resource_identity(row["maquina"]) or "").strip().casefold() == estacao:
+                continue
+            return {
+                "apontada_em_outra_estacao": True,
+                "op": codigo,
+                "maquina": row["maquina"],
+                "status": row["status"],
+                "numero_operacao": row["numero_operacao"],
+            }
+        return None
 
     @staticmethod
     def _travar_recurso_tx(cursor, recurso):
@@ -4442,9 +4550,10 @@ class Database(
     ):
         """Deriva um único estado físico a partir das OPs ativas do recurso.
 
-        Simultaneidade com o mesmo estado é válida. Estados distintos no mesmo
-        instante viram ``desconhecido``; escolher um vencedor corromperia a
-        verdade física e os indicadores.
+        Simultaneidade com o mesmo estado é válida. Produção prevalece sobre
+        parada (só vira parada quando todas as OPs ativas estão paradas). As
+        demais combinações distintas no mesmo instante viram ``desconhecido``;
+        escolher um vencedor corromperia a verdade física e os indicadores.
 
         Durante o intervalo automático, apontamento que inicia ou retoma
         trabalho (``inicia_trabalho``: produção, setup, retrabalho) tira o
@@ -4461,16 +4570,22 @@ class Database(
             """
             SELECT *
             FROM apontamentos_operacionais
-            WHERE UPPER(COALESCE(maquina, '')) = UPPER(%s)
-              AND status = ANY(%s)
+            WHERE status = ANY(%s)
               AND data_inicio IS NOT NULL
               AND data_inicio <= %s
               AND (data_fim IS NULL OR data_fim > %s)
             ORDER BY id
             """,
-            (resource, list(ACTIVE_OPERATIONAL_STATUSES), instante, instante),
+            (list(ACTIVE_OPERATIONAL_STATUSES), instante, instante),
         )
-        active = [dict(row) for row in cursor.fetchall()]
+        # O agrupamento é pela identidade canônica (alias e código do mesmo
+        # recurso são o mesmo recurso físico), igual ao rateio e à trava.
+        identity = str(resolve_resource_identity(resource) or resource).upper()
+        active = [
+            dict(row) for row in cursor.fetchall()
+            if str(resolve_resource_identity(row.get("maquina")) or row.get("maquina") or "").upper()
+            == identity
+        ]
         if not active:
             return self._entrar_sem_demanda_tx(
                 cursor,
@@ -4499,6 +4614,15 @@ class Database(
             str(row.get("codigo_status_recurso") or "").strip()
             for row in active if str(row.get("codigo_status_recurso") or "").strip()
         }
+
+        # Produção prevalece sobre parada (decisão do usuário, 01/10/2026): se
+        # ao menos uma OP segue produzindo, o recurso está produzindo. Ele só
+        # entra em parada quando TODAS as OPs ativas estão paradas. Setup e
+        # Retrabalho são exclusivos e não chegam a coexistir com produção.
+        if categories == {"producao", "parada"}:
+            categories = {"producao"}
+            reason_values = set()
+            status_codes = set()
 
         conflict = len(categories) != 1
         if categories == {"parada"} and (len(reason_values) > 1 or len(status_codes) > 1):
@@ -5437,10 +5561,11 @@ class Database(
     ):
         """Preenche o tempo padrão/ciclo de uma OP quando ele não existe.
 
-        O ``ProductionOrder`` do TOTVS chega sem tempo padrão confiável e a
-        ingestão grava ``NULL`` de propósito — estimar ali seria inventar dado
-        corporativo. Mas sem tempo padrão a Performance do OEE fica em zero, e
-        um turno simulado inteiro perde significado.
+        A ingestão do ``ProductionOrder`` grava o tempo padrão do roteiro
+        Protheus somente quando ele está configurado (``TimeResource`` 0,01 ou
+        <= 0 vira ``NULL``) — estimar ali seria inventar dado corporativo. Mas
+        sem tempo padrão a Performance do OEE fica em zero, e um turno simulado
+        inteiro perde significado. Uso restrito à simulação.
 
         Por isso esta função existe: ela preenche o tempo **somente** quando
         ele está ausente e registra a origem em ``eventos_sistema``, para que
@@ -5555,37 +5680,144 @@ class Database(
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def vincular_telegram_operador(self, cracha, chat_id):
-        """Liga um chat do Telegram a um crachá ativo, trocando vínculo anterior.
+    def gerar_codigo_vinculo_telegram(self, operador_id, criado_por=None):
+        """Gera o código de uso único que liga um chat do Telegram a um crachá.
 
-        Mesmo modelo de confiança do crachá em qualquer apontamento: quem
-        digita o número é quem autoriza. Um chat só aponta para um crachá por
-        vez (índice único); vincular de novo troca, nunca duplica.
+        O crachá sozinho não vincula: ele está impresso e aparece em avisos.
+        Só o hash é guardado; o texto do código é devolvido uma única vez.
+        Gerar de novo invalida o código anterior ainda não usado. Crachá que
+        já tem chat precisa ser desvinculado antes (``ja_vinculado``).
         """
 
-        codigo = str(cracha or "").strip()
-        chat = str(chat_id or "").strip()
-        if not codigo or not chat:
-            return None
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, nome FROM operadores_apontamento WHERE cracha = %s AND ativo = TRUE",
-                (codigo,),
+                "SELECT id, cracha, nome, ativo, telegram_chat_id FROM operadores_apontamento "
+                "WHERE id = %s FOR UPDATE",
+                (int(operador_id),),
             )
             operador = cursor.fetchone()
-            if operador is None:
+            if operador is None or not operador["ativo"]:
+                return {"status": "nao_encontrado"}
+            if operador["telegram_chat_id"]:
+                return {"status": "ja_vinculado"}
+            cursor.execute(
+                "DELETE FROM telegram_codigos_vinculo WHERE (operador_id = %s AND usado_em IS NULL) "
+                "OR expira_em < LOCALTIMESTAMP - INTERVAL '1 day'",
+                (operador["id"],),
+            )
+            for _ in range(5):
+                codigo = _novo_codigo_vinculo_telegram()
+                cursor.execute(
+                    """
+                    INSERT INTO telegram_codigos_vinculo (operador_id, codigo_hash, criado_por, expira_em)
+                    VALUES (%s, %s, %s, LOCALTIMESTAMP + make_interval(secs => %s))
+                    ON CONFLICT (codigo_hash) DO NOTHING
+                    RETURNING expira_em
+                    """,
+                    (
+                        operador["id"], hash_codigo_vinculo_telegram(codigo),
+                        str(criado_por or "").strip() or None, TELEGRAM_LINK_CODE_TTL_SECONDS,
+                    ),
+                )
+                row = cursor.fetchone()
+                if row is not None:
+                    return {
+                        "status": "ok", "codigo": codigo, "expira_em": row["expira_em"],
+                        "operador": {"id": operador["id"], "cracha": operador["cracha"], "nome": operador["nome"]},
+                    }
+            raise RuntimeError("Não foi possível gerar um código de vínculo único.")
+
+    def vincular_telegram_por_codigo(self, codigo, chat_id):
+        """Consome o código de uso único e liga o chat ao crachá dono dele.
+
+        Tudo numa transação: freio de tentativas (por chat, persistido, vale
+        entre processos), consumo atômico do código (``FOR UPDATE`` + filtro
+        de não usado/não expirado) e o vínculo. Nunca troca vínculo existente
+        em silêncio: crachá ou chat já ligado a outro devolve conflito.
+        """
+
+        chat = str(chat_id or "").strip()
+        normalizado = normalizar_codigo_vinculo_telegram(codigo)
+        if not chat or not normalizado:
+            return {"status": "invalido"}
+        janela = TELEGRAM_LINK_ATTEMPT_WINDOW_SECONDS
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT falhas FROM telegram_vinculo_tentativas WHERE chat_id = %s "
+                "AND janela_inicio > LOCALTIMESTAMP - make_interval(secs => %s) FOR UPDATE",
+                (chat, janela),
+            )
+            tentativa = cursor.fetchone()
+            if tentativa is not None and int(tentativa["falhas"]) >= TELEGRAM_LINK_ATTEMPT_LIMIT:
+                return {"status": "limite"}
+            cursor.execute(
+                """
+                SELECT codigo.id AS codigo_id, operador.id, operador.cracha, operador.nome,
+                       operador.ativo, operador.telegram_chat_id
+                FROM telegram_codigos_vinculo codigo
+                JOIN operadores_apontamento operador ON operador.id = codigo.operador_id
+                WHERE codigo.codigo_hash = %s AND codigo.usado_em IS NULL
+                  AND codigo.expira_em > LOCALTIMESTAMP
+                FOR UPDATE OF codigo, operador
+                """,
+                (hash_codigo_vinculo_telegram(normalizado),),
+            )
+            alvo = cursor.fetchone()
+            if alvo is None or not alvo["ativo"]:
+                cursor.execute(
+                    """
+                    INSERT INTO telegram_vinculo_tentativas AS t (chat_id, falhas, janela_inicio)
+                    VALUES (%s, 1, LOCALTIMESTAMP)
+                    ON CONFLICT (chat_id) DO UPDATE SET
+                        falhas = CASE WHEN t.janela_inicio <= LOCALTIMESTAMP - make_interval(secs => %s)
+                                      THEN 1 ELSE t.falhas + 1 END,
+                        janela_inicio = CASE WHEN t.janela_inicio <= LOCALTIMESTAMP - make_interval(secs => %s)
+                                             THEN LOCALTIMESTAMP ELSE t.janela_inicio END
+                    """,
+                    (chat, janela, janela),
+                )
+                return {"status": "invalido"}
+            operador = {"id": alvo["id"], "cracha": alvo["cracha"], "nome": alvo["nome"]}
+            if alvo["telegram_chat_id"] and alvo["telegram_chat_id"] != chat:
+                return {"status": "operador_ja_vinculado", "operador": operador}
+            cursor.execute(
+                "SELECT nome FROM operadores_apontamento WHERE telegram_chat_id = %s AND id <> %s",
+                (chat, alvo["id"]),
+            )
+            outro = cursor.fetchone()
+            if outro is not None:
+                return {"status": "chat_ja_vinculado", "operador": {"nome": outro["nome"]}}
+            cursor.execute(
+                "UPDATE telegram_codigos_vinculo SET usado_em = LOCALTIMESTAMP WHERE id = %s",
+                (alvo["codigo_id"],),
+            )
+            cursor.execute(
+                "UPDATE operadores_apontamento SET telegram_chat_id = %s WHERE id = %s",
+                (chat, alvo["id"]),
+            )
+            cursor.execute("DELETE FROM telegram_vinculo_tentativas WHERE chat_id = %s", (chat,))
+            return {"status": "ok", "operador": operador}
+
+    def desvincular_telegram_operador(self, operador_id):
+        """Remove o chat do crachá e devolve o chat anterior (para avisá-lo)."""
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT telegram_chat_id FROM operadores_apontamento WHERE id = %s FOR UPDATE",
+                (int(operador_id),),
+            )
+            row = cursor.fetchone()
+            if row is None:
                 return None
             cursor.execute(
-                "UPDATE operadores_apontamento SET telegram_chat_id = NULL "
-                "WHERE telegram_chat_id = %s AND id <> %s",
-                (chat, operador["id"]),
+                "UPDATE operadores_apontamento SET telegram_chat_id = NULL WHERE id = %s",
+                (int(operador_id),),
             )
             cursor.execute(
-                "UPDATE operadores_apontamento SET telegram_chat_id = %s WHERE id = %s "
-                "RETURNING id, cracha, nome",
-                (chat, operador["id"]),
+                "DELETE FROM telegram_codigos_vinculo WHERE operador_id = %s AND usado_em IS NULL",
+                (int(operador_id),),
             )
-            return dict(cursor.fetchone())
+            return {"chat_anterior": row["telegram_chat_id"]}
 
     def buscar_operador_por_telegram(self, chat_id):
         chat = str(chat_id or "").strip()

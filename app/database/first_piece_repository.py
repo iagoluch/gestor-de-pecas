@@ -48,6 +48,25 @@ def _detalhes(valor):
     return json.dumps(valor, ensure_ascii=False, sort_keys=True, default=str)
 
 
+def _mesclar_entrega_telegram(detalhes, *, agora, erro, contar):
+    """Acrescenta ``entrega_telegram`` ao JSON de ``detalhes`` sem perder o resto."""
+
+    try:
+        dados = json.loads(detalhes) if detalhes else {}
+    except ValueError:
+        dados = {"texto": detalhes}
+    if not isinstance(dados, dict):
+        dados = {"valor": dados}
+    entrega = dict(dados.get("entrega_telegram") or {})
+    if contar:
+        entrega["tentativas"] = int(entrega.get("tentativas") or 0) + 1
+    entrega["ultima_tentativa"] = agora.isoformat(timespec="seconds")
+    if erro:
+        entrega["ultimo_erro"] = str(erro)[:300]
+    dados["entrega_telegram"] = entrega
+    return json.dumps(dados, ensure_ascii=False, sort_keys=True, default=str)
+
+
 class FirstPieceRepositoryMixin:
     # ------------------------------------------------------------------
     # Primeira peça
@@ -537,6 +556,74 @@ class FirstPieceRepositoryMixin:
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
+
+    # ------------------------------------------------------------------
+    # Fila de entrega dos alertas internos (despachante do Telegram)
+    #
+    # O schema só tem PENDENTE/ENVIADA/DESCARTADA + notificado_em/resolvido_em,
+    # sem coluna de tentativas: o histórico de entrega fica em
+    # ``detalhes['entrega_telegram']`` (JSON), sem migration.
+    # ------------------------------------------------------------------
+    def listar_alertas_pendentes_telegram(self, *, limite=20):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM alertas_internos
+                WHERE status_notificacao = 'PENDENTE' AND canal_previsto = 'telegram'
+                ORDER BY criado_em, id
+                LIMIT %s
+                """,
+                (int(limite),),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def registrar_tentativa_alerta_interno(self, alerta_id, *, agora, erro):
+        """Falha transitória: segue PENDENTE, com a tentativa registrada."""
+
+        return self._atualizar_entrega_alerta(
+            alerta_id, agora=agora, novo_status=None, erro=erro
+        )
+
+    def marcar_alerta_enviado(self, alerta_id, *, agora):
+        return self._atualizar_entrega_alerta(
+            alerta_id, agora=agora, novo_status="ENVIADA", erro=None
+        )
+
+    def descartar_alerta_interno(self, alerta_id, *, agora, motivo):
+        """O alerta deixou de valer: DESCARTADA, com o motivo registrado."""
+
+        return self._atualizar_entrega_alerta(
+            alerta_id, agora=agora, novo_status="DESCARTADA", erro=motivo
+        )
+
+    def _atualizar_entrega_alerta(self, alerta_id, *, agora, novo_status, erro):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT detalhes FROM alertas_internos
+                WHERE id = %s AND status_notificacao = 'PENDENTE'
+                FOR UPDATE
+                """,
+                (int(alerta_id),),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return False
+            detalhes = _mesclar_entrega_telegram(
+                row["detalhes"], agora=agora, erro=erro, contar=novo_status != "DESCARTADA"
+            )
+            cursor.execute(
+                """
+                UPDATE alertas_internos
+                SET detalhes = %s,
+                    status_notificacao = COALESCE(%s::text, status_notificacao),
+                    notificado_em = CASE WHEN %s::text = 'ENVIADA' THEN %s::timestamp ELSE notificado_em END,
+                    resolvido_em = CASE WHEN %s::text = 'DESCARTADA' THEN %s::timestamp ELSE resolvido_em END
+                WHERE id = %s
+                """,
+                (detalhes, novo_status, novo_status, agora, novo_status, agora, int(alerta_id)),
+            )
+            return True
 
     def resumo_alertas_internos(self):
         with self.connection() as connection, connection.cursor() as cursor:

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ResourceRow } from "../types/management";
-import { formatDateTime, formatDuration, formatResourceName } from "../utils/format";
+import { displayName, displayText, formatDateTime, formatDuration, formatResourceName } from "../utils/format";
 import { StatusBadge } from "./StatusBadge";
 
 export function ResourceCard({ resource }: { resource: ResourceRow }) {
@@ -8,18 +8,18 @@ export function ResourceCard({ resource }: { resource: ResourceRow }) {
   return (
     <article className="resource-card">
       <header>
-        <div><strong>{formatResourceName(resource.recurso_nome ?? resource.recurso)}</strong><span>{resource.setor ?? "Setor não informado"}</span></div>
+        <div><strong>{formatResourceName(resource.recurso_nome ?? resource.recurso)}</strong><span>{displayName(resource.setor, "Setor não informado")}</span></div>
         <StatusBadge value={resource.categoria ?? resource.codigo_status} />
       </header>
       <dl>
         <div><dt>OP</dt><dd>{operation?.op ? <Link to={`/rastreabilidade/op-produto?op=${encodeURIComponent(operation.op)}`}>{operation.op}</Link> : "Não disponível"}</dd></div>
-        <div><dt>Operação</dt><dd>{operation?.operacao ?? "Não disponível"}</dd></div>
+        <div><dt>Operação</dt><dd>{displayName(operation?.operacao)}</dd></div>
         <div><dt>Produto</dt><dd>{operation?.produto ?? "Não disponível"}</dd></div>
         <div><dt>Operador</dt><dd>{operation?.operador_inicio ?? "Não disponível"}</dd></div>
         <div><dt>Início</dt><dd>{formatDateTime(resource.inicio ?? operation?.inicio)}</dd></div>
         <div><dt>Duração</dt><dd>{formatDuration(resource.duracao_segundos)}</dd></div>
       </dl>
-      {resource.motivo ? <p>{resource.motivo}</p> : null}
+      {resource.motivo ? <p>{displayText(resource.motivo)}</p> : null}
     </article>
   );
 }

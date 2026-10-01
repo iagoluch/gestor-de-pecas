@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time
+from html import escape
 import logging
-import threading
 import time as time_module
 
 from mes.contracts import AnalyticsFilter
@@ -24,14 +24,22 @@ from mes.services.telegram_presenter import (
 
 LOGGER = logging.getLogger(__name__)
 
-# Tentativas de /vincular sem crachá válido, por chat — sem este freio, o
-# comando permite sondar números de crachá até acertar um vínculo alheio
-# (achado B1 da auditoria de segurança de 2026-09-23, mesmo espírito do
-# atraso de login em backend/api/routers/auth.py).
-_LINK_ATTEMPT_LIMIT = 5
-_LINK_ATTEMPT_WINDOW_SECONDS = 600
-_link_failures: dict[str, list[float]] = {}
-_link_failures_lock = threading.Lock()
+# Mesmo ``bot_key`` que o laço de polling usa para gravar o cursor.
+FACTORY_BOT_CURSOR_KEY = "factory_bot"
+# Sem cursor gravado (primeira subida), o Telegram entrega até 24 h de
+# mensagens acumuladas; responder a elas agora só confunde quem perguntou.
+_BACKLOG_MAX_AGE_SECONDS = 120
+
+_LINK_MESSAGES = {
+    "invalido": "Código inválido, expirado ou já usado. Peça um novo código à gestão.",
+    "limite": "Muitas tentativas de vínculo. Tente novamente em alguns minutos.",
+    "operador_ja_vinculado": (
+        "Este crachá já está vinculado a outro chat. Peça à gestão para desvincular antes."
+    ),
+    "chat_ja_vinculado": (
+        "Este chat já está vinculado a outro crachá. Peça à gestão para desvincular antes."
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -47,9 +55,12 @@ class TelegramBotReply:
 class TelegramFactoryBotService:
     """Roteia comandos, callbacks e intenções privadas às consultas existentes."""
 
-    def __init__(self, db, *, now_func=None, simulation_mode=False):
+    def __init__(self, db, *, now_func=None, epoch_func=None, simulation_mode=False):
         self.db = db
         self._now = now_func or datetime.now
+        # ``date`` do Telegram é epoch UTC; ``_now`` é hora local ingênua.
+        self._epoch = epoch_func or time_module.time
+        self._has_cursor: bool | None = None
         self.facade = FrontendBackendFacade(
             db, now_func=self._now, simulation_mode=simulation_mode
         )
@@ -68,11 +79,27 @@ class TelegramFactoryBotService:
         }
 
     def handle_update(self, update: dict) -> TelegramBotReply | None:
+        """Nunca levanta: o laço de polling só avança o cursor depois desta
+        chamada, então uma exceção aqui repetiria o mesmo update para sempre."""
+
+        try:
+            return self._handle_update(update)
+        except Exception:
+            LOGGER.error(
+                "Update %s do bot de fábrica descartado por falha inesperada.",
+                (update or {}).get("update_id") if isinstance(update, dict) else None,
+                exc_info=True,
+            )
+            return None
+
+    def _handle_update(self, update: dict) -> TelegramBotReply | None:
         callback = update.get("callback_query")
         if callback:
             return self._handle_callback(callback)
 
         message = update.get("message") or update.get("channel_post") or {}
+        if self._is_stale_backlog(message):
+            return None
         chat = message.get("chat") or {}
         chat_type = str(chat.get("type") or "").strip().casefold()
         if chat_type != "private":
@@ -122,6 +149,22 @@ class TelegramFactoryBotService:
             message_id=int(message_id) if message_id is not None else None,
             callback_query_id=callback_id,
         )
+
+    def _is_stale_backlog(self, message: dict) -> bool:
+        """Mensagem antiga na primeira rodada sem cursor gravado é ignorada."""
+
+        if self._has_cursor is None:
+            load_cursor = getattr(self.db, "obter_cursor_telegram_bot", None)
+            self._has_cursor = (
+                not callable(load_cursor) or load_cursor(FACTORY_BOT_CURSOR_KEY) is not None
+            )
+        if self._has_cursor:
+            return False
+        try:
+            sent_at = float(message.get("date"))
+        except (TypeError, ValueError):
+            return False
+        return self._epoch() - sent_at > _BACKLOG_MAX_AGE_SECONDS
 
     @staticmethod
     def _reply(
@@ -271,10 +314,12 @@ class TelegramFactoryBotService:
 
     def _view_home(self, chat_id: str, _rest: str = "") -> TelegramView:
         operator = self._operator(chat_id)
+        if operator is None:
+            return self._link_instructions()
         snapshot = self._snapshot()
         production = self._production_data()
         return self.presenter.menu(
-            name=(operator or {}).get("nome"), linked=operator is not None,
+            name=operator.get("nome"), linked=True,
             summary=snapshot.get("summary") or {}, good=production.get("good"),
             now=self._now(),
         )
@@ -282,48 +327,34 @@ class TelegramFactoryBotService:
     def _view_help(self, _chat_id: str, _rest: str = "") -> TelegramView:
         return self.presenter.help()
 
+    @staticmethod
+    def _link_instructions(message: str | None = None) -> TelegramView:
+        """Única resposta a chat não vinculado: como vincular, nada da fábrica."""
+
+        lines = ["🔗 <b>Vincular ao Gestor de Peças</b>", ""]
+        if message:
+            lines.extend([escape(message), ""])
+        lines.extend([
+            "Peça à gestão um código de vínculo e envie aqui:", "",
+            "<code>/vincular CÓDIGO</code>", "",
+            "O código vale por 10 minutos e só pode ser usado uma vez.",
+        ])
+        return TelegramView("\n".join(lines), None)
+
     def _view_link(self, chat_id: str, rest: str = "") -> TelegramView:
-        badge = rest.strip()
-        if not badge:
-            return self.presenter.link_badge(now=self._now())
-        if self._link_rate_limited(chat_id):
-            return self.presenter.link_badge(
-                now=self._now(),
-                message="Muitas tentativas de vínculo. Tente novamente em alguns minutos.",
-            )
-        operator = self.db.vincular_telegram_operador(badge, chat_id)
-        if operator is None:
-            self._register_link_failure(chat_id)
-            return self.presenter.link_badge(
-                now=self._now(), message=f"Crachá {badge} não encontrado ou inativo."
-            )
-        self._clear_link_failures(chat_id)
+        code = rest.strip()
+        if not code:
+            return self._link_instructions()
+        result = self.db.vincular_telegram_por_codigo(code, chat_id) or {}
+        status = result.get("status")
+        if status != "ok":
+            return self._link_instructions(_LINK_MESSAGES.get(status, _LINK_MESSAGES["invalido"]))
+        operator = result.get("operador") or {}
         return self.presenter.link_badge(
             now=self._now(), success=True,
             message=(f"Pronto, {operator.get('nome')}! Este chat foi vinculado ao crachá "
                      f"{operator.get('cracha')}."),
         )
-
-    @staticmethod
-    def _link_rate_limited(chat_id: str) -> bool:
-        now = time_module.monotonic()
-        with _link_failures_lock:
-            attempts = [t for t in _link_failures.get(chat_id, ()) if now - t <= _LINK_ATTEMPT_WINDOW_SECONDS]
-            _link_failures[chat_id] = attempts
-            return len(attempts) >= _LINK_ATTEMPT_LIMIT
-
-    @staticmethod
-    def _register_link_failure(chat_id: str) -> None:
-        now = time_module.monotonic()
-        with _link_failures_lock:
-            attempts = [t for t in _link_failures.get(chat_id, ()) if now - t <= _LINK_ATTEMPT_WINDOW_SECONDS]
-            attempts.append(now)
-            _link_failures[chat_id] = attempts
-
-    @staticmethod
-    def _clear_link_failures(chat_id: str) -> None:
-        with _link_failures_lock:
-            _link_failures.pop(chat_id, None)
 
     def _view_me(self, chat_id: str, _rest: str = "") -> TelegramView:
         operator = self._operator(chat_id)
@@ -334,7 +365,7 @@ class TelegramFactoryBotService:
 
     def _view_factory(self, chat_id: str, _rest: str = "") -> TelegramView:
         if not self._operator(chat_id):
-            return self.presenter.link_badge(now=self._now())
+            return self._link_instructions()
         snapshot = self._snapshot()
         return self.presenter.factory(
             summary=snapshot.get("summary") or {}, stopped=self._stopped(snapshot),
@@ -343,14 +374,14 @@ class TelegramFactoryBotService:
 
     def _view_production(self, chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
         if not self._operator(chat_id):
-            return self.presenter.link_badge(now=self._now())
+            return self._link_instructions()
         return self.presenter.production(
             front=front, data=self._production_data(front), now=self._now()
         )
 
     def _view_stops(self, chat_id: str, _rest: str = "", *, front: str | None = None) -> TelegramView:
         if not self._operator(chat_id):
-            return self.presenter.link_badge(now=self._now())
+            return self._link_instructions()
         snapshot = self._snapshot()
         counts = {key: self._front_summary(snapshot, key)["downtime"] for key in FRONTS}
         counts["all"] = int((snapshot.get("summary") or {}).get("downtime") or 0)
@@ -364,7 +395,7 @@ class TelegramFactoryBotService:
 
     def _view_front(self, chat_id: str, *, front: str) -> TelegramView:
         if not self._operator(chat_id):
-            return self.presenter.link_badge(now=self._now())
+            return self._link_instructions()
         snapshot = self._snapshot()
         return self.presenter.front(
             front=front, summary=self._front_summary(snapshot, front),
@@ -373,7 +404,7 @@ class TelegramFactoryBotService:
 
     def _view_resources(self, chat_id: str, rest: str = "", *, front: str | None = None) -> TelegramView:
         if not self._operator(chat_id):
-            return self.presenter.link_badge(now=self._now())
+            return self._link_instructions()
         front = front or front_from_text(rest)
         if not front:
             return self._view_fronts(chat_id)

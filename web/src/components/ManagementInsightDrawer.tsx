@@ -2,11 +2,11 @@ import { useRef } from "react";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 import { Link } from "react-router-dom";
 import type { InsightEvidence, KpiExplanation, ManagementException } from "../types/api";
-import { availabilityLabel, formatDateTime, formatHours, formatNumber, humanize } from "../utils/format";
+import { availabilityLabel, displayText, formatDateTime, formatHours, formatNumber, humanize } from "../utils/format";
 
 function text(value: unknown, fallback = "Não disponível") {
   if (value === null || value === undefined || value === "") return fallback;
-  return String(value);
+  return displayText(String(value), fallback);
 }
 
 function impact(value: unknown, unit: unknown) {
@@ -25,9 +25,9 @@ function EvidenceList({ evidence }: { evidence: InsightEvidence[] }) {
         <li key={`${item.source}-${item.source_id ?? index}`}>
           <div>
             <strong>{humanize(item.kind)}</strong>
-            <span>{text(item.resource)}{item.op ? ` • OP ${item.op}` : ""}{item.operation ? ` / ${item.operation}` : ""}</span>
+            <span>{text(item.resource)}{item.op ? ` • OP ${item.op}` : ""}{item.operation ? ` / ${text(item.operation)}` : ""}</span>
             <small>
-              {item.reason ? `${item.reason} • ` : ""}
+              {item.reason ? `${text(item.reason)} • ` : ""}
               {item.occurred_at ? formatDateTime(item.occurred_at) : item.start ? formatDateTime(item.start) : "Horário não disponível"}
             </small>
           </div>
@@ -157,7 +157,7 @@ export function ManagementInsightDrawer({
   const open = Boolean(explanation || exception);
   useDialogFocus(drawerRef, open, onClose);
   if (!open) return null;
-  const title = explanation ? `Entenda o ${explanation.label}` : exception?.title ?? "Detalhes da exceção";
+  const title = explanation ? `Entenda o ${explanation.label}` : displayText(exception?.title, "Detalhes da exceção");
   return (
     <div className="insight-drawer-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();

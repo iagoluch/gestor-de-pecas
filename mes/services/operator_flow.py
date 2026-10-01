@@ -11,6 +11,8 @@ import logging
 
 from app.core.resource_mapping import (
     RESOURCE_CONFIRMATION_EXEMPT_SECTORS,
+    WELDING_SECTOR_KEYS,
+    resolve_resource_identity,
     resource_display_name,
     station_matches_route,
 )
@@ -27,6 +29,7 @@ from mes.domain import (
     explain_invalid_transition,
     operator_state_from_status,
     resolve_operator_action,
+    resource_concurrency_conflict,
     validate_transition,
 )
 from mes.domain.manufacturing_rules import LOW_PRIORITY_STOP_REASONS
@@ -53,6 +56,9 @@ _MENSAGEM_POR_ACAO = {
     "Retomar": "Produção retomada.",
     "Retornar": "Setup encerrado. Produção retomada.",
 }
+# Estados em que uma linha de apontamento ainda ocupa a operação (a
+# finalização total é tratada à parte: a etapa vira "concluída").
+_ESTADOS_ATIVOS = frozenset({"Aguardando", "Em processo", "Parada", "Setup", "Retrabalho"})
 _MENSAGEM_POR_ESTADO = {
     OperatorState.STOPPED: "Parada registrada.",
     OperatorState.SETUP: "Setup iniciado.",
@@ -326,6 +332,12 @@ class OperatorFlowService:
                     resource_sector=recurso_setor_efetivo,
                 )
             )
+            apontada_fora = self._apontada_em_outra_estacao(
+                progress, row, setor, recurso
+            )
+            row["apontada_em_estacao"] = (
+                str(apontada_fora.get("maquina") or "").strip() if apontada_fora else None
+            )
             row["pointable"] = pointable
             row["sector_compatible"] = sector_compatible
             row["resource_compatible"] = resource_compatible
@@ -355,6 +367,7 @@ class OperatorFlowService:
                 row["visual_status"] != "done"
                 and not row.get("marco_terminal")
                 and (normal_workbench or station_eligible)
+                and apontada_fora is None
             )
             # Etapa fora da atual reabre a regra canônica de exceção
             # (crachá autorizado) já existente no projeto; ela não é liberada
@@ -685,6 +698,70 @@ class OperatorFlowService:
         row_numero = str(row.get("numero_operacao") or "").strip()
         return bool(numero and row_numero and numero == row_numero)
 
+    @staticmethod
+    def _identidade_estacao(valor):
+        """Identidade canônica da estação (apelido e código são a mesma)."""
+
+        return str(resolve_resource_identity(valor) or "").strip().casefold()
+
+    def _ocupante_em_outra_estacao(self, codigo, operacao, setor, recurso):
+        """Leitura prévia entre TODOS os setores da Solda (Aço x Alumínio...).
+
+        Só recusa cedo, com a mensagem certa; quem garante sem janela de corrida
+        é ``Database.enfileirar_apontamento_operacional``, sob trava da
+        (OP, operação).
+        """
+
+        loader = getattr(self.db, "listar_apontamentos_por_op", None)
+        if not callable(loader):
+            return None
+        return self._apontada_em_outra_estacao(
+            loader(codigo) or (), operacao, setor, recurso
+        )
+
+    @classmethod
+    def _apontada_em_outra_estacao(cls, rows, operacao, setor, recurso):
+        """Solda: linha ativa da mesma operação apontada por OUTRA estação.
+
+        Decisão do usuário (01/10/2026): a OP aparece em todas as estações da
+        Solda, mas depois de apontada por uma delas some das demais e não pode
+        ser selecionada. A estação é o dado observado em ``maquina`` — nenhum
+        mapeamento máquina→estação é criado aqui. A continuação na PRÓPRIA
+        estação (parcial devolvida à fila) continua permitida.
+        """
+
+        if str(setor or "").strip().casefold() not in WELDING_SECTOR_KEYS:
+            return None
+        station = cls._identidade_estacao(recurso)
+        if not station:
+            return None
+        for row in rows or ():
+            if row.get("status") not in _ESTADOS_ATIVOS:
+                continue
+            if cls._identidade_estacao(row.get("maquina")) == station:
+                continue
+            if cls._corresponde_operacao(row, operacao):
+                return row
+        return None
+
+    @staticmethod
+    def _recusa_ja_apontada(row, op):
+        estacao = str(row.get("maquina") or "").strip() or "outra estação"
+        return OperatorFlowResult(
+            False,
+            (
+                f"Esta OP já foi apontada em {estacao} e não pode ser "
+                "selecionada em outra estação."
+            ),
+            "operacao_ja_apontada_em_outra_estacao",
+            {
+                "op": op,
+                "estacao_apontada": estacao,
+                "estado_atual": row.get("status"),
+                "numero_operacao": row.get("numero_operacao"),
+            },
+        )
+
     def _buscar_ativo(self, op, setor, recurso, operacao=None):
         codigo = limpa_codigo(op)
         for row in self.db.listar_apontamentos_operacionais(
@@ -798,23 +875,80 @@ class OperatorFlowService:
             return previous
         return None
 
-    def recurso_em_uso(self, setor, recurso):
-        """Retorna a execução que ocupa fisicamente um recurso, se houver."""
-
+    def _ocupantes_do_recurso(self, setor, recurso):
         rows = self.db.listar_apontamentos_operacionais(
             setor,
             maquina=recurso,
             somente_ativos=True,
         )
-        return next(
-            (
-                dict(row)
-                for row in rows
-                if row.get("status") in {
-                    "Em processo", "Parada", "Setup", "Retrabalho"
+        return [
+            dict(row)
+            for row in rows
+            if row.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"}
+        ]
+
+    @staticmethod
+    def _resumo_ocupacao(ocupantes):
+        """Campos aditivos de ocupação: lista, total e se aceita nova produção.
+
+        ``aceita_producao_simultanea`` usa a mesma regra de domínio da trava do
+        banco: só Setup/Retrabalho tornam o recurso exclusivo.
+        """
+
+        return {
+            "ocupantes": [
+                {
+                    "op": row.get("op"),
+                    "status": row.get("status"),
+                    "operador": row.get("operador_inicio") or row.get("operador_fila"),
+                    "numero_operacao": row.get("numero_operacao"),
                 }
+                for row in ocupantes
+            ],
+            "ocupantes_total": len(ocupantes),
+            "aceita_producao_simultanea": not resource_concurrency_conflict(
+                OperatorState.QUEUED,
+                OperatorState.PRODUCTION,
+                [row.get("status") for row in ocupantes],
             ),
-            None,
+        }
+
+    def recurso_em_uso(self, setor, recurso):
+        """Retorna a execução que ocupa fisicamente um recurso, se houver.
+
+        Contrato histórico: devolve a linha do primeiro ocupante. Os campos
+        aditivos ``ocupantes``, ``ocupantes_total`` e
+        ``aceita_producao_simultanea`` descrevem todos os ocupantes.
+        """
+
+        ocupantes = self._ocupantes_do_recurso(setor, recurso)
+        if not ocupantes:
+            return None
+        return {**ocupantes[0], **self._resumo_ocupacao(ocupantes)}
+
+    def _recurso_bloqueia(self, setor, recurso, requested_action):
+        """O recurso ocupado impede esta ação de uma OP que ainda não o ocupa?
+
+        Leitura prévia, só para recusar cedo e com a mensagem certa; quem decide
+        sem janela de corrida é a checagem dentro da transação
+        (`Database._conflito_recurso_exclusivo_tx`, BK-03). As duas usam a
+        mesma regra de domínio: produção simultânea é permitida, Setup e
+        Retrabalho continuam exclusivos.
+        """
+
+        destino = resolve_operator_action(requested_action, OperatorState.QUEUED)
+        if destino is None:
+            return True
+        rows = self.db.listar_apontamentos_operacionais(
+            setor, maquina=recurso, somente_ativos=True
+        )
+        return resource_concurrency_conflict(
+            OperatorState.QUEUED,
+            destino,
+            [
+                row.get("status") for row in rows
+                if row.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"}
+            ],
         )
 
     def executar(
@@ -884,6 +1018,12 @@ class OperatorFlowService:
             # confirmação canônica de exceção. A elegibilidade de
             # recurso/setor continua sendo um bloqueio absoluto.
             if selected_route is not None and not selected_route.get("selectable"):
+                if selected_route.get("apontada_em_estacao"):
+                    ocupante = self._ocupante_em_outra_estacao(
+                        codigo, operacao, setor, recurso
+                    )
+                    if ocupante is not None:
+                        return self._recusa_ja_apontada(ocupante, codigo)
                 current_name = etapa_atual_nome or "não identificada"
                 if selected_route.get("visual_status") == "done":
                     return OperatorFlowResult(
@@ -980,8 +1120,20 @@ class OperatorFlowService:
 
         atual = self._buscar_ativo(codigo, setor, recurso, operacao)
         enfileirado_agora = None
+        if atual is None:
+            # Independe de a operação constar no roteiro desta estação e vale
+            # entre setores diferentes da Solda (B4).
+            ocupante = self._ocupante_em_outra_estacao(
+                codigo, operacao, setor, recurso
+            )
+            if ocupante is not None:
+                return self._recusa_ja_apontada(ocupante, codigo)
         ocupacao = self.recurso_em_uso(setor, recurso)
-        if atual is None and ocupacao is not None:
+        if (
+            atual is None
+            and ocupacao is not None
+            and self._recurso_bloqueia(setor, recurso, requested_action)
+        ):
             return OperatorFlowResult(
                 False,
                 "Este recurso já possui um apontamento ativo. Finalize ou altere o estado atual antes de iniciar outro.",
@@ -1184,6 +1336,10 @@ class OperatorFlowService:
                 ),
                 recurso_exclusivo=bool(recurso_exclusivo),
             )
+            if atual is not None and atual.get("apontada_em_outra_estacao"):
+                # Corrida entre estações: a trava da (OP, operação) no banco
+                # elegeu outra estação, que já gravou a linha.
+                return self._recusa_ja_apontada(atual, codigo)
             if atual is not None and atual.get("exclusive_resource_conflict"):
                 return OperatorFlowResult(
                     False,

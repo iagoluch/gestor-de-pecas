@@ -13,7 +13,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
 import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
-import { formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
+import { displayName, formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
 
 interface ResourceSummary {
   resources: number;
@@ -135,14 +135,14 @@ export function OperationsResourcesPage() {
           rowKey={(row) => row.estado_recurso_id ?? `${row.setor}-${row.recurso}`}
           columns={[
             { key: "resource", label: "Recurso", render: (row) => <strong>{formatResourceName(row.recurso_nome ?? row.recurso)}</strong> },
-            { key: "sector", label: "Setor", render: (row) => row.setor ?? "Não disponível" },
+            { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
             { key: "state", label: "Estado", render: (row) => <StatusBadge value={row.categoria ?? row.codigo_status} /> },
             { key: "op", label: "OP", render: (row) => row.ops_ativas[0]?.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.ops_ativas[0].op!)}`}>{row.ops_ativas[0].op}</Link> : "Não disponível" },
             { key: "product", label: "Produto", render: (row) => row.ops_ativas[0]?.produto ?? "Não disponível" },
             { key: "operator", label: "Operador", render: (row) => row.ops_ativas[0]?.operador_inicio ?? "Não disponível" },
             { key: "start", label: "Início", render: (row) => formatDateTime(row.inicio) },
             { key: "duration", label: "Duração", render: (row) => formatDuration(row.duracao_segundos) },
-            { key: "reason", label: "Motivo", render: (row) => row.motivo ?? "Não disponível" },
+            { key: "reason", label: "Motivo", render: (row) => displayName(row.motivo) },
           ]}
         />
       </SectionCard>
@@ -189,8 +189,8 @@ function OrdersTable({ rows }: { rows: PagedOrders["items"] }) {
         columns={[
           { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
           { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
-          { key: "operation", label: "Operação", render: (row) => row.operacao_atual ?? "Não disponível" },
-          { key: "resource", label: "Recurso", render: (row) => row.recurso_real ?? "Não disponível" },
+          { key: "operation", label: "Operação", render: (row) => displayName(row.operacao_atual) },
+          { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_real) },
           { key: "planned", label: "Planejado", render: (row) => formatNumber(row.quantidade_planejada) },
           { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
           { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },

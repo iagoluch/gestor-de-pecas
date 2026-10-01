@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 
 from mes.domain.industrial import EventCategory
+from mes.services.display_labels import role_label
 
 
 FRONTS = {
@@ -25,6 +27,50 @@ class TelegramView:
 
 def html(value) -> str:
     return escape(str(value if value is not None else ""), quote=True)
+
+
+#: Limite da Bot API para o texto de uma mensagem.
+TELEGRAM_MAX_CHARS = 4096
+#: Detalhe técnico (retorno do TOTVS etc.) mostrado ao supervisor.
+TECHNICAL_DETAIL_MAX_CHARS = 300
+
+
+def truncate(value, limit: int) -> str:
+    """Corta em ``limit`` caracteres terminando em reticências."""
+
+    text = str(value if value is not None else "").strip()
+    return text if len(text) <= limit else text[: max(limit - 1, 0)].rstrip() + "…"
+
+
+def more_line(hidden: int) -> str | None:
+    """Linha ``+N`` para listas cortadas; ``None`` quando nada foi omitido."""
+
+    return f"… e mais <b>{hidden}</b>" if hidden > 0 else None
+
+
+def fit_telegram_text(text: str, limit: int = TELEGRAM_MAX_CHARS) -> str:
+    """Garante que o texto cabe na mensagem do Telegram (HTML).
+
+    Corta na última quebra de linha (cada linha do presenter fecha as próprias
+    tags) e fecha ``<b>``/``<code>`` que sobrarem abertos, para o Telegram não
+    recusar a mensagem por HTML inválido.
+    """
+
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 12]  # folga para "</code>" e "…"
+    newline = cut.rfind("\n")
+    if newline > limit // 2:
+        cut = cut[:newline]
+    # Nunca termina no meio de uma tag (<b) ou de uma entidade (&am).
+    if cut.rfind("<") > cut.rfind(">"):
+        cut = cut[: cut.rfind("<")]
+    if cut.rfind("&") > cut.rfind(";"):
+        cut = cut[: cut.rfind("&")]
+    for tag in ("b", "code"):
+        if cut.count(f"<{tag}>") > cut.count(f"</{tag}>"):
+            cut += f"</{tag}>"
+    return cut.rstrip() + "…"
 
 
 def format_duration(seconds) -> str:
@@ -138,18 +184,18 @@ def _timestamp_lines(now: datetime) -> list[str]:
 
 
 def _chamada_solicitante(item: dict) -> str:
-    """Quem apertou o botão: o login do posto é compartilhado, o crachá não."""
+    """Quem apertou o botão: nome e, quando houver tradução, o papel.
+
+    Aviso de grupo: sem crachá nem e-mail (identificadores pessoais ficam no
+    registro da chamada, não no chat). Papel sem tradução é omitido em vez de
+    mostrar o identificador técnico.
+    """
 
     nome = _first(item, "solicitante_nome") or "Não identificado"
-    nivel = _first(item, "solicitante_nivel")
-    partes = [f"{nome} ({nivel})" if nivel else nome]
-    cracha = _first(item, "solicitante_cracha")
-    if cracha:
-        partes.append(f"crachá {cracha}")
-    email = _first(item, "solicitante_email")
-    if email:
-        partes.append(email)
-    return " — ".join(partes)
+    papel = role_label(_first(item, "solicitante_nivel"))
+    if papel and papel.casefold() != nome.casefold():
+        return f"{nome} ({papel})"
+    return nome
 
 
 def _home_button() -> dict:
@@ -273,6 +319,8 @@ class TelegramPresenter:
                 duration = format_duration(item.get("duration_seconds"))
                 lines.append(f"{label} • <b>{duration}</b>")
                 lines.append("")
+            if hidden := more_line(len(stopped) - 12):
+                lines.extend([hidden, ""])
         elif summary.get("downtime") == 0:
             lines.extend(["", "🟢 <b>Nenhuma parada ativa.</b>", ""])
         lines.append(_footer("Atualizado às", now))
@@ -318,6 +366,8 @@ class TelegramPresenter:
                 lines.append(f"🔧 {html(item.get('reason') or 'Motivo não informado')}")
                 lines.append(f"⏱️ <b>{format_duration(item.get('duration_seconds'))}</b>")
                 lines.append("")
+            if hidden := more_line(len(active) - 12):
+                lines.extend([hidden, ""])
         lines.append(_footer("Atualizado às", now))
 
         def stop_button(front_key: str | None, text: str) -> dict:
@@ -376,6 +426,8 @@ class TelegramPresenter:
             if operation.get("operator"):
                 lines.append(f"👤 {html(operation['operator'])}")
             lines.append("")
+        if hidden := more_line(len(items) - 20):
+            lines.extend([hidden, ""])
         lines.append(_footer("Atualizado às", now))
         return TelegramView("\n".join(lines), keyboard(
             [button("🔄 Atualizar", f"gp:res:{front}", "primary")],
@@ -487,30 +539,70 @@ class TelegramPresenter:
             "production_order": item.get("production_order"),
             "resource": item.get("resource") or item.get("resource_code") or context.get("resource_code"),
         }
-        reason = html(
-            str(item.get("error_message") or item.get("last_error_message") or "").strip()
-            or "Retorno não informado."
+        raw_detail = str(
+            item.get("error_message") or item.get("last_error_message") or ""
+        ).strip()
+        # Frase curta para o supervisor primeiro; o retorno cru do TOTVS vai
+        # abaixo, truncado, só como apoio técnico.
+        detail = (
+            [
+                "", "<b>Detalhe técnico</b>",
+                html(truncate(raw_detail, TECHNICAL_DETAIL_MAX_CHARS)),
+            ]
+            if raw_detail
+            else []
         )
         if functional:
             lines = _header("⚠️", "Apontamento rejeitado pelo TOTVS")
             lines.extend([
                 *_op_lines(op_context), "",
-                "🔴 <b>Rejeição funcional</b>", "",
-                "O TOTVS recebeu a solicitação, mas não aceitou o apontamento.", "",
-                "<b>Retorno</b>", reason, "", _footer("Ocorrido às", now),
+                "🔴 <b>O TOTVS recebeu o apontamento, mas não o aceitou.</b>",
+                "Confira a OP e a operação no Protheus; o apontamento fica registrado no Gestor.",
+                *detail, "", _footer("Ocorrido às", now),
             ])
         else:
             lines = _header("🔴", "TOTVS indisponível")
             lines.extend([
                 *_op_lines(op_context), "",
-                "🔗 Não foi possível concluir a comunicação com o Protheus.",
-                "🟡 As tentativas automáticas se esgotaram; o evento permanece registrado para tratamento.",
-                "", _footer("Última tentativa às", now),
+                "🔗 <b>Não foi possível enviar o apontamento ao Protheus.</b>",
+                "As tentativas automáticas se esgotaram; o apontamento permanece registrado no Gestor para reenvio.",
+                *detail, "", _footer("Última tentativa às", now),
             ])
-        return "\n".join(lines)
+        return fit_telegram_text("\n".join(lines))
+
+    _ALERT_ICONS = {"CRITICO": "🔴", "ATENCAO": "🟡", "INFO": "ℹ️"}
+    _ALERT_RECIPIENTS = {
+        "PCP": "PCP",
+        "SUPERVISAO": "Supervisão",
+        "RESPONSAVEL_RETRABALHO": "Responsável pelo retrabalho",
+    }
+    # O texto gravado do alerta cita o crachá de quem liberou; no chat fica só o nome.
+    _BADGE_MENTION = re.compile(r"\s*\(crachá [^)]*\)")
+
+    def internal_alert(self, item: dict, *, now: datetime) -> str:
+        """Alerta interno de qualidade/PCP, em frase humana e sem códigos de sistema."""
+
+        icon = self._ALERT_ICONS.get(str(item.get("severidade") or "").upper(), "ℹ️")
+        lines = _header(icon, str(item.get("titulo") or "Alerta do Gestor"))
+        message = self._BADGE_MENTION.sub("", str(item.get("mensagem") or "")).strip()
+        if message:
+            lines.extend([html(message), ""])
+        station = _station_lines({
+            "recurso": item.get("codigo_recurso"),
+            "setor": item.get("tipo_setor"),
+            "produto_codigo": item.get("produto_codigo"),
+        })
+        if station:
+            lines.extend([*station, ""])
+        recipient = self._ALERT_RECIPIENTS.get(str(item.get("destinatario") or "").upper())
+        if recipient:
+            lines.append(f"Para: <b>{html(recipient)}</b>")
+        lines.extend(_timestamp_lines(now))
+        return fit_telegram_text("\n".join(lines))
 
 
 __all__ = [
-    "FRONTS", "TelegramPresenter", "TelegramView", "button", "format_duration",
-    "format_number", "format_percent", "html", "keyboard",
+    "FRONTS", "TELEGRAM_MAX_CHARS", "TelegramPresenter", "TelegramView", "button",
+    "fit_telegram_text", "format_duration", "format_number", "format_percent", "html",
+    "keyboard", "more_line", "truncate",
 ]

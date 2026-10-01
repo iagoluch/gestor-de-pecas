@@ -8,7 +8,7 @@ import { SectionCard } from "../components/SectionCard";
 import { useManagementFilters } from "../filters/FilterContext";
 import { useApiQuery } from "../hooks/useApiQuery";
 import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue } from "../types/api";
-import { formatHours } from "../utils/format";
+import { displayName, displayText, formatHours } from "../utils/format";
 import { humanizeSystemState } from "../utils/systemState";
 
 function metricText(metric: MetricValue) {
@@ -46,7 +46,8 @@ export function ManagementOverviewPage() {
       return () => navigateTo("/analises/tempo-padrao-real", scopedFilters);
     }
     if (exception.type === "configured_kpi_target") {
-      return () => navigateTo("/inicio/metas");
+      // Aba Metas oculta temporariamente (01/10/2026): leva ao OEE, onde os KPIs ficam.
+      return () => navigateTo("/analises/oee", scopedFilters);
     }
     return () => navigateTo("/analises/paradas", scopedFilters);
   };
@@ -104,12 +105,12 @@ export function ManagementOverviewPage() {
                     <button
                       type="button"
                       onClick={exceptionDestination(exception)}
-                      aria-label={`Ver análise relacionada a ${exception.title}`}
+                      aria-label={`Ver análise relacionada a ${displayText(exception.title)}`}
                     >
                       <i data-severity={exception.severity} />
                       <span>
-                        <strong>{exception.title}</strong>
-                        <small>{exception.summary}</small>
+                        <strong>{displayText(exception.title)}</strong>
+                        <small>{displayText(exception.summary)}</small>
                       </span>
                       <span className="management-exception-list__impact">
                         <strong>{exception.impact_unit === "s" ? formatHours(exception.impact_value) : `${(exception.impact_value ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ${exception.impact_unit ?? ""}`}</strong>
@@ -130,7 +131,7 @@ export function ManagementOverviewPage() {
                 {insights.losses.slice(0, 4).map((item) => (
                   <li key={`${item.rank}-${item.cause}`}>
                     <button type="button" onClick={() => navigateTo("/analises/paradas")} aria-label={`Ver paradas por ${item.cause ?? "motivo não informado"}`}>
-                      <span><b>{item.rank}</b><span>{item.cause ?? "Não informado"}</span></span>
+                      <span><b>{item.rank}</b><span>{displayName(item.cause, "Não informado")}</span></span>
                       <strong>{item.impact_unit === "s" ? formatHours(item.impact_value) : `${item.impact_value.toLocaleString("pt-BR")} ${item.impact_unit}`}</strong>
                     </button>
                   </li>
@@ -151,7 +152,7 @@ export function ManagementOverviewPage() {
                       onClick={() => navigateTo("/analises/paradas", { resource: item.resource ?? "" })}
                       aria-label={`Ver paradas do recurso ${item.resource ?? "não informado"}`}
                     >
-                      <span><b>{item.rank}</b><span>{item.resource ?? "Não informado"}</span></span>
+                      <span><b>{item.rank}</b><span>{displayName(item.resource, "Não informado")}</span></span>
                       <strong>{item.impact_unit === "s" ? formatHours(item.impact_value) : `${item.impact_value.toLocaleString("pt-BR")} ${item.impact_unit}`}</strong>
                     </button>
                   </li>
@@ -222,7 +223,7 @@ export function ManagementOverviewPage() {
                   <tbody>
                     {data.sectors.map((sector) => (
                       <tr key={sector.setor}>
-                        <th>{sector.setor}</th>
+                        <th>{displayName(sector.setor)}</th>
                         <td>{quantityText(sector.producao_boa)}</td>
                         <td>{quantityText(sector.refugo)}</td>
                         <td>{quantityText(sector.retrabalho)}</td>

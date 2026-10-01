@@ -135,7 +135,17 @@ def stations(
         status = "Livre"
         if active:
             status = "Selecionada" if owner.casefold() == user.name.casefold() else "Ocupada"
-        items.append({"resource": resource, "status": status, "operator": owner or None})
+        items.append({
+            "resource": resource,
+            "status": status,
+            "operator": owner or None,
+            # Aditivos: "Ocupada" por produção simultânea não bloqueia o posto.
+            "ocupantes": (active or {}).get("ocupantes", []),
+            "ocupantes_total": (active or {}).get("ocupantes_total", 0),
+            "aceita_producao_simultanea": (active or {}).get(
+                "aceita_producao_simultanea", True
+            ),
+        })
     return {"sector": sector.name, "items": items}
 
 
@@ -310,7 +320,14 @@ def operators(
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
-    return {"items": _service(database, user).listar_operadores()}
+    # O chat do Telegram é dado de contato de cada pessoa: o terminal do chão
+    # de fábrica não precisa dele (nem a gestão vê o número — só "vinculado").
+    return {
+        "items": [
+            {key: value for key, value in row.items() if key != "telegram_chat_id"}
+            for row in _service(database, user).listar_operadores()
+        ]
+    }
 
 
 # ---------------------------------------------------------------------------

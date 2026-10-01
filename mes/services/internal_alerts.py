@@ -1,8 +1,10 @@
 """Alertas internos com destinatário e notificação pendente.
 
-A Wave 5 pediu explicitamente para **não** implementar Telegram agora e, ao
-mesmo tempo, para não deixar o fato industrial morrer no log. Este serviço é
-exatamente essa fronteira: ele grava a obrigação de avisar alguém.
+A Wave 5 pediu para não deixar o fato industrial morrer no log. Este serviço é
+essa fronteira: ele grava a obrigação de avisar alguém. A entrega no Telegram é
+feita por ``mes/services/internal_alert_dispatcher.py``, que consome as linhas
+``PENDENTE`` (chat do setor ou da fábrica); este módulo continua sem conhecer
+canal nem provedor.
 
 Regras que valem aqui:
 

@@ -25,6 +25,13 @@ interface OperatorBadge {
   fonte?: string | null;
   autorizador_retrabalho?: boolean;
   criado_em?: string | null;
+  telegram_vinculado?: boolean;
+}
+
+interface TelegramLinkCode {
+  code: string;
+  valid_minutes: number;
+  operator: { cracha: string; nome: string };
 }
 
 interface BadgesResponse {
@@ -80,6 +87,7 @@ export function ManagementBadgesPage() {
   const query = useApiQuery<BadgesResponse>("/api/v1/management/badges");
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [codigoTelegram, setCodigoTelegram] = useState<TelegramLinkCode | null>(null);
   const [confirm, confirmDialog] = useConfirm();
   const [editando, setEditando, abrirEdicao, fecharEdicao] = useDraft<OperatorBadge>(confirm);
   const filtros = usePersistentFilters("gestor.filtros.crachas", FILTROS_INICIAIS);
@@ -126,6 +134,40 @@ export function ManagementBadgesPage() {
       query.reload();
     } catch {
       setMensagem("Não foi possível salvar o crachá. Confira o código e o nome.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  /** O crachá sozinho não vincula o Telegram: a gestão entrega este código em mãos. */
+  async function gerarCodigoTelegram(badge: OperatorBadge) {
+    setSalvando(true);
+    setMensagem("");
+    try {
+      setCodigoTelegram(await api.post<TelegramLinkCode>(`/api/v1/management/badges/${badge.id}/telegram-link-code`, {}));
+    } catch {
+      setMensagem("Não foi possível gerar o código. Se o crachá já tem Telegram vinculado, desvincule antes.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function desvincularTelegram(badge: OperatorBadge) {
+    const ok = await confirm({
+      title: "Desvincular Telegram",
+      message: `O chat de ${badge.nome} deixa de consultar a fábrica pelo bot e recebe um aviso.`,
+      confirmLabel: "Desvincular",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setSalvando(true);
+    setMensagem("");
+    try {
+      await api.delete(`/api/v1/management/badges/${badge.id}/telegram-link`);
+      setMensagem(`Telegram de ${badge.nome} desvinculado.`);
+      query.reload();
+    } catch {
+      setMensagem("Não foi possível desvincular o Telegram.");
     } finally {
       setSalvando(false);
     }
@@ -233,6 +275,7 @@ export function ManagementBadgesPage() {
                 render: (row) => (row.autorizador_retrabalho ? "Responsável por retrabalho" : "Operador"),
               },
               { key: "fonte", label: "Origem", render: (row) => humanize(origemDoCracha(row)) },
+              { key: "telegram", label: "Telegram", render: (row) => (row.telegram_vinculado ? "Vinculado" : "Não vinculado") },
               {
                 key: "acoes",
                 label: "Ações",
@@ -243,6 +286,9 @@ export function ManagementBadgesPage() {
                     primary={{ label: "Editar", onClick: () => abrirEdicao(row) }}
                     actions={[
                       { label: row.autorizador_retrabalho ? "Remover responsável" : "Tornar responsável", onClick: async () => { if (!row.autorizador_retrabalho || await confirm({ title: "Remover responsável por retrabalho", message: `${row.nome} deixa de poder autorizar retrabalho no terminal.`, confirmLabel: "Remover responsável", tone: "danger" })) void salvar({ ...row, autorizador_retrabalho: !row.autorizador_retrabalho }); } },
+                      row.telegram_vinculado
+                        ? { label: "Desvincular Telegram", danger: true, onClick: () => void desvincularTelegram(row) }
+                        : { label: "Gerar código do Telegram", disabled: !row.ativo, onClick: () => void gerarCodigoTelegram(row) },
                       { label: row.ativo ? "Desativar" : "Ativar", danger: row.ativo, onClick: async () => { if (!row.ativo || await confirm({ title: "Desativar crachá", message: `O crachá ${row.cracha} (${row.nome}) deixa de ser aceito nos terminais até ser ativado de novo.`, confirmLabel: "Desativar crachá", tone: "danger" })) void salvar({ ...row, ativo: !row.ativo }); } },
                     ]}
                   />
@@ -315,6 +361,16 @@ export function ManagementBadgesPage() {
               </button>
             </div>
           </ValidatedForm>
+        </OperatorDialog>
+      ) : null}
+      {codigoTelegram ? (
+        <OperatorDialog title="Código de vínculo do Telegram" onCancel={() => setCodigoTelegram(null)}>
+          <p>
+            Entregue este código a {codigoTelegram.operator.nome} (crachá {codigoTelegram.operator.cracha}).
+            No Telegram, envie ao bot da fábrica:
+          </p>
+          <p><strong className="telegram-link-code">/vincular {codigoTelegram.code}</strong></p>
+          <p>Vale por {codigoTelegram.valid_minutes} minutos e só pode ser usado uma vez. Ele não aparece de novo depois de fechar.</p>
         </OperatorDialog>
       ) : null}
       {confirmDialog}

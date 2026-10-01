@@ -1,7 +1,10 @@
+import logging
+
 from fastapi import APIRouter, Depends, Request
 
 from app.core.permissions import USER_LEVELS
 from app.database.errors import PauseOrderConflictError
+from app.database.telegram_link_codes import TELEGRAM_LINK_CODE_TTL_SECONDS
 from backend.api.database import get_database
 from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.auth import (
@@ -23,6 +26,7 @@ from backend.api.schemas.common import (
     UserAccountRequest,
 )
 from mes.contracts import AnalyticsFilter
+from mes.integrations.notifications.telegram import deliver_telegram_message, telegram_outbound_allowed
 from mes.services.internal_alerts import InternalAlertService
 
 
@@ -307,7 +311,14 @@ def list_badges(
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
-    rows = list(database.listar_operadores_apontamento(somente_ativos=False) or [])
+    # O chat_id é dado pessoal de contato: a tela só precisa saber se há vínculo.
+    rows = [
+        {
+            **{key: value for key, value in row.items() if key != "telegram_chat_id"},
+            "telegram_vinculado": bool(row.get("telegram_chat_id")),
+        }
+        for row in database.listar_operadores_apontamento(somente_ativos=False) or []
+    ]
     autorizados = [row for row in rows if row.get("autorizador_retrabalho") and row.get("ativo")]
     return {
         "items": rows,
@@ -336,7 +347,77 @@ def save_badge(
     except ValueError as exc:
         raise AppError("invalid_badge", str(exc)) from exc
     request.app.state.realtime.publish("operator_badges")
-    return {"ok": True, "item": row}
+    item = {key: value for key, value in (row or {}).items() if key != "telegram_chat_id"}
+    item["telegram_vinculado"] = bool((row or {}).get("telegram_chat_id"))
+    return {"ok": True, "item": item}
+
+
+# Vínculo do bot do Telegram (auditoria de segurança 2026-10-01): o crachá
+# sozinho não vincula mais. A gestão gera um código de uso único, entregue em
+# mãos ao dono do crachá, e só a gestão desfaz o vínculo.
+TELEGRAM_UNLINK_NOTICE = (
+    "🔗 Este chat foi desvinculado do Gestor de Peças pela gestão. "
+    "Para voltar a consultar a fábrica, peça um novo código de vínculo."
+)
+
+
+@router.post("/badges/{operator_id}/telegram-link-code", dependencies=[Depends(require_csrf)])
+def create_telegram_link_code(
+    operator_id: int,
+    user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    result = database.gerar_codigo_vinculo_telegram(operator_id, criado_por=user.username)
+    status = result.get("status")
+    if status == "nao_encontrado":
+        raise AppError("badge_not_found", "Crachá não encontrado ou inativo.", status_code=404)
+    if status == "ja_vinculado":
+        raise AppError(
+            "telegram_already_linked",
+            "Este crachá já está vinculado a um chat. Desvincule antes de gerar um novo código.",
+            status_code=409,
+        )
+    return {
+        "ok": True,
+        "code": result["codigo"],
+        "expires_at": result["expira_em"],
+        "valid_minutes": TELEGRAM_LINK_CODE_TTL_SECONDS // 60,
+        "operator": result["operador"],
+    }
+
+
+@router.delete("/badges/{operator_id}/telegram-link", dependencies=[Depends(require_csrf)])
+def remove_telegram_link(
+    operator_id: int,
+    request: Request,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    result = database.desvincular_telegram_operador(operator_id)
+    if result is None:
+        raise AppError("badge_not_found", "Crachá não encontrado.", status_code=404)
+    previous_chat = result.get("chat_anterior")
+    notified = bool(previous_chat) and _notify_telegram_chat(request, previous_chat, TELEGRAM_UNLINK_NOTICE)
+    request.app.state.realtime.publish("operator_badges")
+    return {"ok": True, "was_linked": bool(previous_chat), "previous_chat_notified": notified}
+
+
+def _notify_telegram_chat(request: Request, chat_id: str, text: str) -> bool:
+    """Aviso best-effort: falha de entrega não desfaz a desvinculação."""
+
+    settings = request.app.state.settings
+    if not getattr(settings, "telegram_configured", False):
+        return False
+    # Mesmo predicado único de saída do resto do Telegram (interruptor geral).
+    if not telegram_outbound_allowed(settings):
+        return False
+    try:
+        return bool(deliver_telegram_message(
+            bot_token=settings.telegram_bot_token, chat_id=chat_id, text=text,
+        ))
+    except Exception:
+        logging.getLogger(__name__).exception("Falha ao avisar o chat desvinculado no Telegram.")
+        return False
 
 
 # ---------------------------------------------------------------------------

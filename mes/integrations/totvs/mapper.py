@@ -30,6 +30,40 @@ def _optional_int(value: str | None, field: str) -> int | None:
     return int(parsed)
 
 
+# Tempo padrão do roteiro (MATI650.prw → <TimeResource> = SG2.G2_TEMPAD).
+# O Protheus usa 0,01 como valor de preenchimento quando o roteiro não tem
+# tempo cadastrado; decisão do usuário: 0,01 e valores <= 0 = "não configurado".
+_TIME_RESOURCE_NOT_CONFIGURED = Decimal("0.01")
+# UnitTimeType "1" = horas (MATI650.gUnitTime); ausente segue o padrão do adapter.
+_UNIT_TIME_TYPE_HOURS = "1"
+_SECONDS_PER_HOUR = Decimal(3600)
+_STANDARD_SECONDS_QUANTUM = Decimal("0.001")
+# O previsto do Corte vem do SigmaNEST (nesting), nunca do roteiro TOTVS.
+_SECTOR_WITHOUT_TOTVS_STANDARD = "corte"
+
+
+def _standard_seconds_per_piece(activity) -> Decimal | None:
+    """Converte o tempo padrão do roteiro Protheus em segundos por peça.
+
+    ``TimeResource`` é ``G2_TEMPAD`` cru: horas centesimais para o lote padrão
+    ``UnitItemNumber`` (``G2_LOTEPAD``). O lote 0/ausente vale 1, exatamente
+    como ``MATI650.getTimeG2``. Sem valor configurado, nada é inventado.
+    """
+
+    time_resource = activity.time_resource
+    if time_resource is None or time_resource <= 0:
+        return None
+    if time_resource == _TIME_RESOURCE_NOT_CONFIGURED:
+        return None
+    unit_time_type = str(activity.unit_time_type or "").strip()
+    if unit_time_type and unit_time_type != _UNIT_TIME_TYPE_HOURS:
+        return None
+    lot = activity.unit_item_number
+    if lot is None or lot <= 0:
+        lot = Decimal(1)
+    return (time_resource * _SECONDS_PER_HOUR / lot).quantize(_STANDARD_SECONDS_QUANTUM)
+
+
 def _activity_value(value: str | None) -> str:
     return str(value or "").strip() or "<vazio>"
 
@@ -239,6 +273,11 @@ class TotvsProductionOrderMapper:
                     totvs_activity_id=activity_id,
                     totvs_work_center_code=activity.work_center_code,
                     totvs_machine_code=activity.machine_code,
+                    tempo_medio_segundos=(
+                        None
+                        if sector.strip().casefold() == _SECTOR_WITHOUT_TOTVS_STANDARD
+                        else _standard_seconds_per_piece(activity)
+                    ),
                 )
             )
             treatments.append(

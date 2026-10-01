@@ -21,6 +21,11 @@ from mes.contracts.ai import (
     MAX_AI_CONVERSATION_TITLE_CHARS,
     MAX_AI_MESSAGE_CHARS,
 )
+from mes.services.ai_presentation import (
+    AssistantTextStream,
+    present_tool_result,
+    sanitize_assistant_text,
+)
 
 
 class AIService:
@@ -196,6 +201,9 @@ class AIService:
             schema["function"]["name"] for schema in selected_tools
         }
         chunks: list[str] = []
+        # O texto do modelo só chega ao usuário depois da sanitização
+        # determinística; o prompt sozinho não garante ausência de estrutura.
+        stream_text = AssistantTextStream()
         try:
             if selected_tools:
                 while rounds < self.config.max_tool_rounds:
@@ -223,7 +231,9 @@ class AIService:
                     if not planning.tool_calls:
                         if planning.content:
                             chunks.append(planning.content)
-                            yield AIStreamEvent("delta", {"content": planning.content})
+                            visible = stream_text.feed(planning.content) + stream_text.flush()
+                            if visible:
+                                yield AIStreamEvent("delta", {"content": visible})
                         break
                     rounds += 1
                     # A mensagem assistant contém os tool_calls e deve preceder
@@ -278,7 +288,13 @@ class AIService:
                                 "role": "tool",
                                 "tool_call_id": call.id,
                                 "name": call.name,
-                                "content": json.dumps(result, ensure_ascii=False, separators=(",", ":")),
+                                # O modelo lê a apresentação legível, não o
+                                # contrato técnico: o que ele vê é o que ele repete.
+                                "content": json.dumps(
+                                    present_tool_result(result),
+                                    ensure_ascii=False,
+                                    separators=(",", ":"),
+                                ),
                             }
                         )
                 else:
@@ -323,8 +339,13 @@ class AIService:
                     if not delta:
                         continue
                     chunks.append(delta)
-                    yield AIStreamEvent("delta", {"content": delta})
-            answer = "".join(chunks).strip()
+                    visible = stream_text.feed(delta)
+                    if visible:
+                        yield AIStreamEvent("delta", {"content": visible})
+                tail = stream_text.flush()
+                if tail:
+                    yield AIStreamEvent("delta", {"content": tail})
+            answer = sanitize_assistant_text("".join(chunks))
             if not answer:
                 raise AIServiceError(
                     "ai_empty_response",

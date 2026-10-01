@@ -701,13 +701,17 @@ class WebApiTests(unittest.TestCase):
             json={"action": "Retomada", "resource": "Laser Ensis 3015"},
         )
         self.assertEqual(resumed.status_code, 200, resumed.text)
-        finished = self.client.post(
-            "/api/v1/cutting/actions",
-            headers=self.csrf(),
-            json={"action": "Finalizado", "resource": "Laser Ensis 3015", "appointment_id": appointment_id},
-        )
+        with patch("backend.api.routers.cutting.notify_cut_plan_in_background") as aviso:
+            finished = self.client.post(
+                "/api/v1/cutting/actions",
+                headers=self.csrf(),
+                json={"action": "Finalizado", "resource": "Laser Ensis 3015", "appointment_id": appointment_id},
+            )
         self.assertEqual(finished.status_code, 200, finished.text)
         self.assertEqual(self.db.cut_appointments[0]["status"], "Finalizado")
+        # O aviso do Telegram sai como tarefa de background, não dentro do request.
+        aviso.assert_called_once()
+        self.assertIn(aviso.call_args.kwargs["event"], {"corte_finalizado", "corte_nesting_concluido"})
 
     def test_fluxo_web_destaque_exige_cracha_no_fim(self):
         # O Destaque só é liberado por plano de Laser concluído no Corte: sem
@@ -778,7 +782,75 @@ class WebApiTests(unittest.TestCase):
             "fila",
         )
 
-    def test_solda_bloqueia_estacao_ocupada_tambem_no_servidor(self):
+    def test_destaque_parada_do_posto_nao_depende_da_tarefa_selecionada(self):
+        """O botão Parada é do posto: aceita com tarefa só consultada (plano não
+        iniciado) e com a tarefa desselecionada, sem tocar o estado da tarefa."""
+
+        self._concluir_plano_laser_da_tarefa("T-WEB")
+        self.login_operator("Operador Destaque Web", "senha-destaque")
+
+        # Tarefa carregada na tela, plano NÃO iniciado: o frontend manda
+        # task_code e plan_hash nulo.
+        com_tarefa = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Parada", "task_code": "T-WEB", "plan_hash": None, "stop_reason_code": "0029"},
+        )
+        self.assertEqual(com_tarefa.status_code, 200, com_tarefa.text)
+        self.assertEqual(com_tarefa.json()["code"], "parada_recurso_sem_op")
+        queue = self.client.get("/api/v1/highlight/queue").json()
+        self.assertEqual(queue["resource_state"]["categoria"], "parada")
+        # A tarefa continua aguardando: nada virou "parada de tarefa".
+        self.assertEqual(
+            self.client.get("/api/v1/highlight/tasks/T-WEB").json()["state"]["estado"],
+            "aguardando",
+        )
+
+        # Parada repetida é recusada com mensagem clara, sem duplicar o estado.
+        repetida = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Parada", "stop_reason_code": "0029"},
+        )
+        self.assertEqual(repetida.status_code, 409, repetida.text)
+        self.assertEqual(repetida.json()["code"], "recurso_ja_parado")
+
+    def test_destaque_parada_sem_tarefa_com_tarefa_em_execucao_para_a_tarefa(self):
+        """Tarefa em execução e tela sem tarefa selecionada: a Parada não pode
+        deixar o posto parado com a tarefa ainda 'em execução'."""
+
+        self._concluir_plano_laser_da_tarefa("T-WEB")
+        self.login_operator("Operador Destaque Web", "senha-destaque")
+        iniciado = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Início", "task_code": "T-WEB"},
+        )
+        self.assertEqual(iniciado.status_code, 200, iniciado.text)
+
+        parada = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Parada", "stop_reason_code": "0029"},
+        )
+        self.assertEqual(parada.status_code, 200, parada.text)
+        # Mesmo caminho da parada com a tarefa selecionada: a parada é da
+        # tarefa em execução (não do recurso avulso) e ela fica parada.
+        self.assertNotEqual(parada.json().get("code"), "parada_recurso_sem_op")
+        tarefa = self.client.get("/api/v1/highlight/tasks/T-WEB").json()["state"]["estado"]
+        self.assertEqual(tarefa, "parada")
+        # Retomada pelo Início do destaque, como sempre.
+        retomada = self.client.post(
+            "/api/v1/highlight/actions",
+            headers=self.csrf(),
+            json={"action": "Início", "task_code": "T-WEB"},
+        )
+        self.assertEqual(retomada.status_code, 200, retomada.text)
+
+    def test_solda_estacao_em_producao_aceita_outra_op_e_informa_ocupantes(self):
+        # Decisão do usuário (01/10/2026): produção simultânea no mesmo recurso.
+        # O status histórico "Ocupada" continua; os campos aditivos dizem que o
+        # posto ainda aceita produção e quem o ocupa.
         self.login_operator("Soldador Web A", "senha-solda-a")
         started = self.client.post(
             "/api/v1/operator/actions",
@@ -792,13 +864,18 @@ class WebApiTests(unittest.TestCase):
         station = next(item for item in stations.json()["items"] if item["resource"] == "Estação 1")
         self.assertEqual(station["status"], "Ocupada")
         self.assertEqual(station["operator"], "Soldador Web A")
-        denied = self.client.post(
+        self.assertEqual(station["ocupantes_total"], 1)
+        self.assertEqual(station["ocupantes"][0]["op"], "OP-SOLDA-A")
+        self.assertTrue(station["aceita_producao_simultanea"])
+        second = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
             json={"action": "Início", "resource": "Estação 1", "op": "OP-SOLDA-B", "operation_id": 202},
         )
-        self.assertEqual(denied.status_code, 409, denied.text)
-        self.assertEqual(denied.json()["code"], "operator_resource_occupied")
+        self.assertEqual(second.status_code, 200, second.text)
+        stations = self.client.get("/api/v1/operator/stations")
+        station = next(item for item in stations.json()["items"] if item["resource"] == "Estação 1")
+        self.assertEqual(station["ocupantes_total"], 2)
 
     def test_rotas_gerenciais_consumem_facade_e_preservam_ausencia_real_de_dados(self):
         self.login_manager()

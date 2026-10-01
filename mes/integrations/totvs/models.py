@@ -62,6 +62,9 @@ class TotvsActivityOrder:
     is_activity_end: bool | None
     time_mod: Decimal | None
     time_ind_mes: Decimal | None
+    # ``UnitItemNumber`` = SG2.G2_LOTEPAD: quantidade de peças a que o
+    # ``TimeResource`` (SG2.G2_TEMPAD) se refere (MATI650.prw).
+    unit_item_number: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -179,6 +182,10 @@ class MappedProductionOperation:
     # existir para que a aba Qualidade e o outbound canônico tenham a operação,
     # o recurso e o ``ActivityID`` reais do TOTVS.
     inspecao_qualidade: bool = False
+    # Tempo padrão de execução por peça, em segundos, vindo do roteiro do
+    # Protheus. ``None`` quando o Protheus não traz valor configurado; a
+    # persistência nunca apaga um valor já existente por causa disso.
+    tempo_medio_segundos: Decimal | None = None
 
 
 class TotvsActivityClassification(str, Enum):

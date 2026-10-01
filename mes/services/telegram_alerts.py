@@ -22,7 +22,11 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 
-from mes.integrations.notifications.telegram import send_telegram_message
+from mes.integrations.notifications.telegram import (
+    send_telegram_message,
+    send_telegram_message_checked,
+    telegram_outbound_allowed,
+)
 from mes.services.telegram_presenter import TelegramPresenter
 
 
@@ -30,8 +34,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 def master_chat(settings) -> tuple[str, str]:
-    """``(bot_token, chat_id)`` do chat mestre; strings vazias quando faltar."""
+    """``(bot_token, chat_id)`` do chat mestre; strings vazias quando faltar.
 
+    Com ``TELEGRAM_ENABLED`` desligado devolve vazio: o chat mestre não existe
+    para nenhum envio de saída.
+    """
+
+    if not telegram_outbound_allowed(settings):
+        return "", ""
     token = str(getattr(settings, "telegram_bot_token", "") or "").strip()
     chat_id = str(getattr(settings, "chamada_telegram_chat_id", "") or "").strip()
     return token, chat_id
@@ -124,26 +134,25 @@ def schedule_resource_stop_alert(background, settings, dados: dict, *, ocorrido_
 
 
 def deliver_chamada(database, chamada_id, *, bot_token: str, chat_id: str, texto: str) -> bool:
-    """Entrega a chamada e registra o desfecho na própria linha da chamada.
+    """Entrega a chamada e registra o desfecho final na própria linha.
 
-    Roda fora do request: quem chamou já recebeu a confirmação. O resultado
-    real do envio fica em ``chamadas.telegram_enviado``/``telegram_erro``, que
-    é o que a tela de histórico mostra.
+    Roda fora do request: quem chamou já recebeu a confirmação. O envio tem
+    retry curto (conexão, 5xx e 429 com ``retry_after``); o resultado real fica
+    em ``chamadas.telegram_enviado``/``telegram_erro`` — o que a tela de
+    histórico mostra. Falha nunca fica em silêncio: o motivo é gravado.
     """
 
-    enviado = False
     try:
-        enviado = send_telegram_message(
+        resultado = send_telegram_message_checked(
             bot_token=bot_token, chat_id=chat_id, text=texto, parse_mode="HTML"
         )
+        enviado = resultado.ok
+        erro = None if enviado else f"Falha ao enviar pelo Telegram: {resultado.error}"
     except Exception:  # pragma: no cover - canal indisponível não é erro do posto
         LOGGER.exception("Falha ao enviar a chamada %s no Telegram.", chamada_id)
+        enviado, erro = False, "Falha ao enviar pelo Telegram: erro inesperado no envio."
     try:
-        database.marcar_chamada_telegram(
-            chamada_id,
-            enviado=enviado,
-            erro=None if enviado else "Falha ao enviar o aviso pelo Telegram.",
-        )
+        database.marcar_chamada_telegram(chamada_id, enviado=enviado, erro=erro)
     except Exception:  # pragma: no cover - a chamada já está registrada
         LOGGER.exception("Falha ao registrar o desfecho do Telegram da chamada %s.", chamada_id)
     return enviado

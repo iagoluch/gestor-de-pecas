@@ -137,12 +137,17 @@ class TelegramTokenLogRedactionTests(unittest.TestCase):
 
 class BuildOutboxErrorNotifierTests(unittest.TestCase):
     def test_sem_token_ou_chat_id_devolve_none(self):
-        self.assertIsNone(build_outbox_error_notifier(bot_token="", chat_id="-100"))
-        self.assertIsNone(build_outbox_error_notifier(bot_token="abc", chat_id=""))
-        self.assertIsNone(build_outbox_error_notifier(bot_token=None, chat_id=None))
+        self.assertIsNone(build_outbox_error_notifier(bot_token="", chat_id="-100", enabled=True))
+        self.assertIsNone(build_outbox_error_notifier(bot_token="abc", chat_id="", enabled=True))
+        self.assertIsNone(build_outbox_error_notifier(bot_token=None, chat_id=None, enabled=True))
+
+    def test_flag_desligada_nao_cria_notifier_mesmo_com_token_e_chat(self):
+        self.assertIsNone(
+            build_outbox_error_notifier(bot_token="abc123", chat_id="-1009999", enabled=False)
+        )
 
     def test_configurado_envia_mensagem_formatada_ao_chat_certo(self):
-        notify = build_outbox_error_notifier(bot_token="abc123", chat_id="-1009999")
+        notify = build_outbox_error_notifier(bot_token="abc123", chat_id="-1009999", enabled=True)
         self.assertIsNotNone(notify)
         with patch(
             "mes.integrations.notifications.telegram.httpx.post"
@@ -164,7 +169,7 @@ class BuildOutboxErrorNotifierTests(unittest.TestCase):
         self.assertIn("A9716901001", kwargs["json"]["text"])
         self.assertIn("A680OPTOT", kwargs["json"]["text"])
         self.assertEqual(kwargs["json"]["parse_mode"], "HTML")
-        self.assertIn("Rejeição funcional", kwargs["json"]["text"])
+        self.assertIn("não o aceitou", kwargs["json"]["text"])
 
     def test_falha_tecnica_tem_apresentacao_distinta_e_escapada(self):
         text = TelegramPresenter().totvs_outbox_error({

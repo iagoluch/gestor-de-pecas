@@ -8,7 +8,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { AuditResponse, PagedOrders } from "../../types/management";
-import { formatDateTime, formatNumber, humanize } from "../../utils/format";
+import { displayName, displayText, formatDateTime, formatNumber, humanize } from "../../utils/format";
 
 interface ReliabilityResponse {
   periodo: Record<string, string | null>;
@@ -55,9 +55,9 @@ export function AuditAppointmentsPage() {
           columns={[
             { key: "id", label: "ID", render: (row) => row.apontamento_id ?? "Não disponível" },
             { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
-            { key: "operation", label: "Operação", render: (row) => row.operacao_atual ?? "Não disponível" },
-            { key: "sector", label: "Setor", render: (row) => row.setor ?? "Não disponível" },
-            { key: "resource", label: "Recurso", render: (row) => row.recurso_real ?? "Não disponível" },
+            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao_atual) },
+            { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
+            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_real) },
             { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "Não disponível" },
             { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status} /> },
             { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
@@ -95,12 +95,12 @@ export function AuditIssuesPage() {
           columns={[
             { key: "severity", label: "Severidade", render: (row) => <StatusBadge value={row.severity ?? row.severidade} /> },
             { key: "type", label: "Tipo", render: (row) => humanize(row.type ?? row.tipo) },
-            { key: "message", label: "Descrição", render: (row) => row.message ?? row.mensagem ?? "Não disponível" },
-            { key: "sector", label: "Setor", render: (row) => row.sector ?? "Não disponível" },
-            { key: "resource", label: "Recurso", render: (row) => row.resource ?? "Não disponível" },
+            { key: "message", label: "Descrição", render: (row) => displayText(row.message ?? row.mensagem) },
+            { key: "sector", label: "Setor", render: (row) => displayName(row.sector) },
+            { key: "resource", label: "Recurso", render: (row) => displayName(row.resource) },
             { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
             { key: "start", label: "Início", render: (row) => formatDateTime(row.start) },
-            { key: "source", label: "Fonte", render: (row) => row.source ?? "Não disponível" },
+            { key: "source", label: "Fonte", render: (row) => displayName(row.source) },
           ]}
         />
       </SectionCard>

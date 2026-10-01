@@ -177,6 +177,37 @@ describe("Crachás — organização e filtros", () => {
     });
   });
 
+  it("gera código de vínculo do Telegram e desvincula quem já tem chat", async () => {
+    const items = [{ ...CRACHAS[0], telegram_vinculado: false }, { ...CRACHAS[1], telegram_vinculado: true }];
+    const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (path.includes("/telegram-link-code") && method === "POST") {
+        return json({ ok: true, code: "ABCD2345", valid_minutes: 10, operator: { cracha: "1001", nome: "Ana Souza" } });
+      }
+      if (path.includes("/telegram-link") && method === "DELETE") return new Response(null, { status: 204 });
+      if (path.includes("/management/badges") && method === "GET") return json(payload(items));
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", mock);
+    renderBadges();
+    await waitFor(() => expect(linhas()).toBe(2));
+    expect(corpoDaTabela()).toContain("Não vinculado");
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Gerar código do Telegram", hidden: true }));
+    const dialogo = await screen.findByRole("dialog", { name: "Código de vínculo do Telegram" });
+    expect(dialogo).toHaveTextContent("/vincular ABCD2345");
+    expect(dialogo).toHaveTextContent("Vale por 10 minutos");
+    expect(document.body.textContent).not.toMatch(/telegram_vinculado|valid_minutes/);
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Desvincular Telegram", hidden: true }));
+    fireEvent.click(await screen.findByRole("button", { name: "Desvincular" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Telegram de Bruno Lima desvinculado"));
+    expect(mock.mock.calls.some(([path, init]) => String(path).includes("/badges/2/telegram-link")
+      && (init as RequestInit)?.method === "DELETE")).toBe(true);
+  });
+
   it("mantém a designação de responsável por crachá, sem autenticação nova", async () => {
     const mock = stubFetch();
     renderBadges();

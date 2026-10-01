@@ -111,12 +111,89 @@ const INTERNAL_TERMS: Record<string, string> = {
   ai_conversations: "Histórico de conversas",
   ai_messages: "Mensagens da conversa",
   backend_only: "Calculado pelo sistema",
+  // Severidade e situação que o backend expõe em inglês.
+  critical: "Crítico",
+  error: "Erro",
+  warning: "Atenção",
+  info: "Informação",
+  high: "Alta",
+  medium: "Média",
+  low: "Baixa",
+  pending: "Pendente",
+  running: "Em andamento",
+  in_progress: "Em andamento",
+  paused: "Pausado",
+  stopped: "Parado",
+  idle: "Ocioso",
+  done: "Concluído",
+  completed: "Concluído",
+  cancelled: "Cancelado",
+  canceled: "Cancelado",
+  failed: "Falhou",
+  success: "Sucesso",
+  active: "Ativo",
+  inactive: "Inativo",
+  open: "Aberto",
+  closed: "Fechado",
   // Origem de um cadastro (coluna `fonte`).
   cadastro: "Cadastro",
   gestao: "Gestão",
   importacao: "Importação",
   integracao: "Integração",
 };
+
+/**
+ * Palavras de identificadores em snake_case que perdem o acento no código
+ * (`estacao`, `producao`…). Só entram aqui palavras que nunca são outra coisa.
+ */
+const SLUG_WORDS: Record<string, string> = {
+  acao: "ação", aco: "aço", aluminio: "alumínio", area: "área", cracha: "crachá",
+  codigo: "código", conferencia: "conferência", configuracao: "configuração",
+  descricao: "descrição", eletrica: "elétrica", estacao: "estação", funcao: "função",
+  ginastica: "ginástica", inspecao: "inspeção", integracao: "integração",
+  lider: "líder", manutencao: "manutenção", mecanica: "mecânica", mecanico: "mecânico",
+  nao: "não", ocorrencia: "ocorrência", operacao: "operação", operacoes: "operações",
+  peca: "peça", pecas: "peças", preparacao: "preparação", producao: "produção",
+  prototipo: "protótipo", reuniao: "reunião", refeicao: "refeição", robo: "robô",
+  servico: "serviço", situacao: "situação", tecnico: "técnico", usuario: "usuário",
+  calibracao: "calibração", informacao: "informação", ate: "até", disponivel: "disponível",
+  aplicavel: "aplicável", critico: "crítico",
+};
+
+/**
+ * Nível de acesso da conta (`usuarios.nivel`). Os níveis fixos têm nome próprio;
+ * os de operador seguem o padrão `operador_<setor>` e os de Solda por estação
+ * (`estacaoNaco`, `estacaoNalu`, `robo1`, `projetos`, `prototipo`) vêm do catálogo.
+ */
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Administrador",
+  lider: "Líder",
+  supervisor: "Supervisor",
+  manufatura: "Manufatura",
+  gestor: "Gestor",
+  diretoria: "Diretoria",
+  andon: "Painel Andon",
+  almoxarifado: "Almoxarifado",
+  comum: "Operador de Destaque",
+  robo1: "Operador Solda Robô 1",
+  projetos: "Operador Proj. Ferramentaria",
+  prototipo: "Operador Protótipo",
+};
+
+/** Texto de um identificador técnico em snake_case, com acento e capitalização. */
+export function humanizeSlug(value: string): string {
+  const raw = value.trim();
+  // `CORTE_LASER` e `CONFORME` (enum em caixa alta) viram texto normal; sigla curta (OEE, OP) fica.
+  const shouting = raw === raw.toLocaleUpperCase("pt-BR") && (raw.includes("_") || /^\p{Lu}{4,}$/u.test(raw));
+  const base = shouting ? raw.toLocaleLowerCase("pt-BR") : raw;
+  const isCode = base.includes("_") || base === base.toLocaleLowerCase("pt-BR");
+  return base
+    .replaceAll("_", " ")
+    .split(/(\s+)/)
+    .map((word) => (isCode ? SLUG_WORDS[word.toLocaleLowerCase("pt-BR")] ?? word : word))
+    .join("")
+    .replace(/(^|[\s/-])(\p{L})/gu, (_match, prefix: string, letter: string) => `${prefix}${letter.toLocaleUpperCase("pt-BR")}`);
+}
 
 function normalize(value: unknown): string {
   return String(value ?? "")
@@ -132,6 +209,21 @@ export function resolveSystemState(value: unknown): SystemStateKey | null {
   const normalized = normalize(value);
   if (!normalized) return null;
   return STATE_ALIASES[normalized] ?? null;
+}
+
+/** Nome humano do nível de acesso de uma conta; `null` quando não é um nível. */
+export function roleLabelOrNull(value: unknown): string | null {
+  const normalized = normalize(value);
+  if (!normalized) return null;
+  if (ROLE_LABELS[normalized]) return ROLE_LABELS[normalized];
+  const steel = /^estacao_?(\d+)_?aco$/.exec(normalized);
+  if (steel) return `Operador Solda Aço — Estação ${steel[1]}`;
+  const aluminum = /^estacao_?(\d+)_?alu$/.exec(normalized);
+  if (aluminum) return `Operador Solda Alumínio ${aluminum[1]}`;
+  const legacyStation = /^operador_solda_estacao_(\d+)$/.exec(normalized);
+  if (legacyStation) return `Operador Solda — Estação ${legacyStation[1]}`;
+  const sector = /^operador_([a-z0-9_]+)$/.exec(normalized);
+  return sector ? `Operador de ${humanizeSlug(sector[1])}` : null;
 }
 
 /** Nome humano de um identificador interno conhecido, quando houver. */

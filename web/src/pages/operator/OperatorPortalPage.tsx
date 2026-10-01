@@ -4,12 +4,19 @@ import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { OperatorShell } from "../../layouts/OperatorShell";
-import type { OperatorContext } from "../../types/api";
+import type { OperatorContext, OperatorStation } from "../../types/api";
 import { CuttingPage } from "./CuttingPage";
 import { HighlightPage } from "./HighlightPage";
+import { STATION_EXCLUSIVE_NOTICE, stationIsBlocked, stationUsageLabel } from "./stationOccupancy";
 import { WorkbenchPage } from "./WorkbenchPage";
 
 function ResourceSelection({ context, onSelect }: { context: OperatorContext; onSelect: (resource: string) => void }) {
+  // A ocupação é informativa: se a consulta falhar, o posto continua
+  // selecionável e o backend recusa o que realmente não puder ser feito.
+  const stations = useApiQuery<{ items: OperatorStation[] }>(
+    context.station_profile_required ? null : "/api/v1/operator/stations",
+  );
+  const stationByResource = new Map((stations.data?.items ?? []).map((item) => [item.resource, item]));
   // Quem decide que o posto vem do login, e não de uma escolha na tela, é o
   // backend (`station_profile_required`). A tela não repete a lista de setores.
   if (context.station_profile_required) {
@@ -31,15 +38,25 @@ function ResourceSelection({ context, onSelect }: { context: OperatorContext; on
             const resourceImage = assets.operator.resources[resource as keyof typeof assets.operator.resources]
               ?? assets.operator.sectors[context.sector as keyof typeof assets.operator.sectors]
               ?? assets.operator.navigation[context.sector as keyof typeof assets.operator.navigation];
+            const station = stationByResource.get(resource);
+            const usage = stationUsageLabel(station);
+            // O card nunca é desabilitado: o backend não restringe por operador e
+            // quem herda um Setup/Retrabalho (ex.: troca de turno) precisa entrar
+            // para retomá-lo ou finalizá-lo. O Iniciar de outra OP é recusado
+            // dentro do posto (WorkbenchPage) e pelo backend.
+            const exclusive = stationIsBlocked(station);
+            const state = exclusive ? "ocupada" : usage ? "em-uso" : "livre";
             return (
               <button
                 type="button"
                 key={resource}
-                className="operator-resource-card operator-resource-card--livre"
+                className={`operator-resource-card operator-resource-card--${state}`}
                 onClick={() => onSelect(resource)}
               >
                 {resourceImage ? <img src={resourceImage} alt="" /> : null}
                 <strong>{resource}</strong>
+                {usage ? <span className="operator-resource-card__usage">{usage}</span> : null}
+                {exclusive ? <small className="operator-resource-card__reason">{STATION_EXCLUSIVE_NOTICE}</small> : null}
               </button>
             );
           })}

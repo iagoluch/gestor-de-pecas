@@ -12,7 +12,7 @@ import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { PageMeta, PagedOrders, ProductionResponse } from "../../types/management";
-import { formatDateTime, formatHours, formatNumber, formatPercent } from "../../utils/format";
+import { displayName, formatDateTime, formatHours, formatNumber, formatPercent } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 
 interface PlanActualRow {
@@ -91,9 +91,9 @@ export function ProductionOrdersPage() {
             { key: "op", label: "OP", sticky: true, sortValue: (row) => row.op, render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
             { key: "status", label: "Status", sortValue: (row) => row.status, render: (row) => <StatusBadge value={row.status} /> },
             { key: "product", label: "Produto", sortValue: (row) => row.produto, render: (row) => <span title={row.descricao ?? undefined}>{row.produto ?? "Não disponível"}</span> },
-            { key: "operation", label: "Operação", sortValue: (row) => row.sequencia, render: (row) => row.operacao_atual ? (row.sequencia ? `${row.sequencia} · ${row.operacao_atual}` : row.operacao_atual) : "Não disponível" },
+            { key: "operation", label: "Operação", sortValue: (row) => row.sequencia, render: (row) => row.operacao_atual ? (row.sequencia ? `${row.sequencia} · ${displayName(row.operacao_atual)}` : displayName(row.operacao_atual)) : "Não disponível" },
             { key: "resource", label: "Recurso", sortValue: (row) => row.recurso_real ?? row.recurso_planejado, render: (row) => row.recurso_real ?? row.recurso_planejado ?? "Não disponível" },
-            { key: "priority", label: "Prioridade", sortValue: (row) => row.prioridade, render: (row) => row.prioridade ?? "Não disponível" },
+            { key: "priority", label: "Prioridade", sortValue: (row) => row.prioridade, render: (row) => displayName(row.prioridade) },
             { key: "planned", label: "Planejada", sortValue: (row) => row.quantidade_planejada, render: (row) => formatNumber(row.quantidade_planejada) },
             { key: "good", label: "Boa", sortValue: (row) => row.quantidade_boa, render: (row) => formatNumber(row.quantidade_boa) },
             { key: "scrap", label: "Refugo", sortValue: (row) => row.refugo, render: (row) => formatNumber(row.refugo) },
@@ -101,7 +101,7 @@ export function ProductionOrdersPage() {
             { key: "balance", label: "Saldo", sortValue: (row) => row.saldo_quantidade, render: (row) => formatNumber(row.saldo_quantidade) },
             // GE-10: a base do percentual fica no rótulo (atendida = boas + refugo).
             { key: "progress", label: "% atendida", sortValue: (row) => row.progresso_percentual, render: (row) => formatPercent(row.progresso_percentual) },
-            { key: "next", label: "Próxima operação", render: (row) => row.proxima_operacao ?? "Não disponível" },
+            { key: "next", label: "Próxima operação", render: (row) => displayName(row.proxima_operacao) },
           ]}
         />
       </SectionCard>
@@ -145,7 +145,7 @@ export function ProductionCompletedPage() {
             rows={sectors}
             rowKey={(row) => row.setor}
             columns={[
-              { key: "sector", label: "Setor", render: (row) => row.setor },
+              { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
               { key: "good", label: "Boas", render: (row) => formatNumber(row.producao_boa) },
               { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
               { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
@@ -190,10 +190,10 @@ export function ProductionPlanActualPage() {
           rowKey={(row, index) => row.apontamento_id ?? `${row.op}-${index}`}
           columns={[
             { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
-            { key: "operation", label: "Operação", render: (row) => row.operacao ?? "Não disponível" },
+            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
             { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
-            { key: "planned-resource", label: "Recurso planejado", render: (row) => row.recurso_planejado ?? "Não disponível" },
-            { key: "real-resource", label: "Recurso real", render: (row) => row.recurso_real ?? "Não disponível" },
+            { key: "planned-resource", label: "Recurso planejado", render: (row) => displayName(row.recurso_planejado) },
+            { key: "real-resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
             { key: "planned-qty", label: "Quantidade plano", render: (row) => formatNumber(row.quantidade_planejada) },
             { key: "good", label: "Quantidade boa", render: (row) => formatNumber(row.quantidade_boa) },
             { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },

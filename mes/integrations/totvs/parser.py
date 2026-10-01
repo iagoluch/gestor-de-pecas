@@ -349,6 +349,9 @@ class TotvsMessageParser:
             ),
             time_mod=_decimal(_text(item, "TimeMOD"), "ActivityOrder.TimeMOD"),
             time_ind_mes=_decimal(_text(item, "TimeIndMES"), "ActivityOrder.TimeIndMES"),
+            unit_item_number=_decimal(
+                _text(item, "UnitItemNumber"), "ActivityOrder.UnitItemNumber"
+            ),
         )
 
     @staticmethod

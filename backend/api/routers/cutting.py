@@ -19,7 +19,7 @@ from mes.domain import EventCategory
 from mes.services.cut import CutService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.telegram_alerts import schedule_resource_stop_alert
-from mes.services.telegram_cut import build_cut_plan_notifier
+from mes.services.telegram_cut import notify_cut_plan_in_background
 
 
 router = APIRouter(prefix="/cutting", tags=["Corte"])
@@ -279,15 +279,14 @@ def action(
     if payload.action == "Parada":
         schedule_resource_stop_alert(background, request.app.state.settings, result.data or {})
     if telegram_event:
-        try:
-            notifier = build_cut_plan_notifier(
-                database, request.app.state.settings
-            )
-            if notifier is not None:
-                notifier.notify(result.data or {}, event=telegram_event)
-        except Exception:
-            # O fato industrial já foi persistido; indisponibilidade do canal
-            # nunca pode desfazer nem transformar o apontamento em erro.
-            LOGGER.exception("Falha ao atualizar o apontamento de Corte no Telegram.")
+        # Depois da resposta: o fato industrial já está persistido e um Telegram
+        # lento nunca pode segurar o apontamento do Corte.
+        background.add_task(
+            notify_cut_plan_in_background,
+            database,
+            request.app.state.settings,
+            dict(result.data or {}),
+            event=telegram_event,
+        )
     request.app.state.realtime.publish("cutting_action")
     return response

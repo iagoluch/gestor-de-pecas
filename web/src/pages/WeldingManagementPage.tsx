@@ -14,7 +14,7 @@ import type {
   WeldingOrderRow,
   WeldingStationGroup,
 } from "../types/welding";
-import { formatDateTime, formatHours, formatNumber } from "../utils/format";
+import { displayName, displayText, formatDateTime, formatHours, formatNumber } from "../utils/format";
 import { reportedValueText } from "../utils/systemState";
 
 /**
@@ -349,7 +349,7 @@ function OrderRows({ rows }: { rows: WeldingOrderRow[] }) {
               {row.produto.codigo && row.produto.descricao ? <small>{row.produto.codigo}</small> : null}
             </td>
             <td className="welding-machine">
-              <strong>{row.maquina.nome ?? row.maquina.operacao}</strong>
+              <strong>{displayName(row.maquina.nome ?? row.maquina.operacao)}</strong>
               <small data-availability={row.modelo.availability}>
                 {reportedValueText(row.modelo, MODEL_ABSENT)}
               </small>
@@ -357,7 +357,7 @@ function OrderRows({ rows }: { rows: WeldingOrderRow[] }) {
             <td><DateCell row={row} /></td>
             <td className="welding-status">
               <StatusBadge row={row} />
-              <small>{row.status.reason}</small>
+              <small>{displayText(row.status.reason, "")}</small>
             </td>
           </tr>
         ))}
@@ -493,7 +493,7 @@ function LatePanel({ rows, reference }: { rows: FlatRow[]; reference: number }) 
                       {row.datas.referencia_prazo.value ? (
                         <>
                           <strong>{formatDateTime(row.datas.referencia_prazo.value)}</strong>
-                          <small>{row.datas.referencia_prazo.label}</small>
+                          <small>{displayText(row.datas.referencia_prazo.label, "")}</small>
                         </>
                       ) : (
                         <small>{DEADLINE_ABSENT}</small>
@@ -507,7 +507,7 @@ function LatePanel({ rows, reference }: { rows: FlatRow[]; reference: number }) 
                           {days === 0 ? "Vence hoje" : days === 1 ? "1 dia" : `${formatNumber(days)} dias`}
                         </span>
                       )}
-                      <small>{row.status.reason}</small>
+                      <small>{displayText(row.status.reason, "")}</small>
                     </td>
                   </tr>
                 );

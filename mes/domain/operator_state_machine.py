@@ -312,6 +312,50 @@ def validate_transition(current, target, payload=None) -> TransitionValidation:
     return TransitionValidation(True)
 
 
+def resource_concurrency_conflict(origem, destino, outros_status):
+    """Decide se um apontamento pode ocupar um recurso que já tem outros ativos.
+
+    Decisão do usuário (01/10/2026): o operador pode apontar 2 ou mais OPs ao
+    mesmo tempo no mesmo recurso. A simultaneidade vale para PRODUÇÃO: cada
+    OP continua sendo um apontamento próprio, e o tempo físico do recurso é
+    uma união (``mes.analytics.physical_time``), então não dobra.
+
+    Continuam exclusivos, por serem uma ocupação que muda o recurso inteiro:
+
+    * Setup e Retrabalho, de qualquer lado — entrar neles com outra OP ativa
+      no recurso, ou entrar em produção/parada com outra OP em Setup ou
+      Retrabalho;
+    * Parada direto da fila: a OP nunca produziu, então não "ocupa" o recurso
+      para parar, e isso permitiria contornar a trava.
+
+    Parada de OP que já produz e retomada são permitidas: sem isso, uma
+    quebra de máquina com 2 OPs deixaria o operador sem como registrá-la.
+    No estado físico do recurso (``_reconciliar_estado_recurso_apontamentos_tx``)
+    produção prevalece sobre parada: com ao menos uma OP produzindo o recurso
+    está em produção, e só vira parada quando TODAS as OPs ativas estão
+    paradas. ``desconhecido`` fica para combinações realmente incompatíveis
+    (por exemplo, paradas com motivos distintos).
+
+    ``outros_status`` são os status persistidos dos demais apontamentos ativos
+    do recurso (``Em processo``, ``Parada``, ``Setup``, ``Retrabalho``).
+    Devolve ``True`` quando há conflito.
+    """
+
+    outros = [
+        operator_state_from_status(status) for status in (outros_status or ())
+    ]
+    outros = [estado for estado in outros if estado is not None]
+    if not outros:
+        return False
+    if destino in {OperatorState.SETUP, OperatorState.REWORK}:
+        return True
+    if any(estado in {OperatorState.SETUP, OperatorState.REWORK} for estado in outros):
+        return True
+    if origem == OperatorState.QUEUED and destino != OperatorState.PRODUCTION:
+        return True
+    return False
+
+
 __all__ = [
     "ALLOWED_TRANSITIONS",
     "OPERATOR_STATE_BY_STATUS",
@@ -323,6 +367,7 @@ __all__ = [
     "operator_state_from_status",
     "operator_status_for_state",
     "resolve_operator_action",
+    "resource_concurrency_conflict",
     "return_state_for_transition",
     "validate_transition",
 ]

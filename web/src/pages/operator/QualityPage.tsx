@@ -5,7 +5,7 @@ import { OperatorDialog } from "../../components/OperatorDialog";
 import { assets } from "../../config/assets";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { QualityHistoryItem, QualityQueue, QualityQueueItem, QualitySummary } from "../../types/api";
-import { formatDateTime, formatMeasurement } from "../../utils/format";
+import { displayName, formatDateTime, formatMeasurement } from "../../utils/format";
 import { QualityInspectionPage } from "./QualityInspectionPage";
 import { Notice } from "../../components/Notice";
 
@@ -323,9 +323,9 @@ function QualityHistoryDialog({ sector, onClose }: { sector: string; onClose: ()
                   <td>{item.op}</td>
                   <td>{item.produto}</td>
                   <td>{item.peca}</td>
-                  <td>{item.recurso}</td>
+                  <td>{displayName(item.recurso)}</td>
                   <td>{item.operador}</td>
-                  <td><span className={`insp-result insp-result--${item.resultado.toLowerCase()}`}>{item.resultado}</span></td>
+                  <td><span className={`insp-result insp-result--${item.resultado.toLowerCase()}`}>{displayName(item.resultado)}</span></td>
                   <td>{item.rnc ?? "—"}</td>
                   <td>
                     <button type="button" className="insp-detail-button" onClick={() => setDetail(item.peca_id === detail ? null : item.peca_id)}>

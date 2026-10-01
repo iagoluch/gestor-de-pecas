@@ -245,6 +245,46 @@ class OperationalReportServiceTests(unittest.TestCase):
         self.assertEqual(resultado["etapas"][0]["setor"], "SFG-330")
         self.assertEqual(resultado["ops"][0]["status_processo"], "Em processo")
 
+    def test_divisao_conserva_a_soma_e_nao_atenua_o_alarme_de_op_aberta(self):
+        # A6: duas OPs abertas há 9h no mesmo recurso. O tempo produtivo é
+        # dividido (soma = 9h físicas), mas o alarme usa o tempo corrido da OP.
+        db = FakeReportDb()
+        for ident, op in ((10, "OP-S1"), (11, "OP-S2")):
+            db.apontamentos.append(
+                {
+                    "id": ident, "op": op, "peca": "Perfil", "tarefa_id": 1,
+                    "tipo_setor": "Serra", "maquina": "SFG-330", "status": "Em processo",
+                    "data_inicio": "2026-07-01 03:00:00", "data_fim": None,
+                    "setor_destino": None,
+                    "eventos": [
+                        {"id": ident, "estado": "producao",
+                         "data_hora": datetime(2026, 7, 1, 3, 0)},
+                    ],
+                }
+            )
+        resultado = self._service(db).calcular_relatorio_tempos_mes(
+            datetime(2026, 7, 1, 0, 0, 0), datetime(2026, 7, 1, 23, 59, 59), "Serra"
+        )
+
+        linhas = {row["op"]: row for row in resultado["ops"]}
+        self.assertEqual(
+            sum(row["tempo_produtivo_seg"] for row in linhas.values()), 9 * 3600
+        )
+        for linha in linhas.values():
+            self.assertEqual(linha["fonte_tempo_produtivo"], "timeline_op_rateio_igualitario")
+            self.assertEqual(linha["tempo_aberto_seg"], 9 * 3600)
+            self.assertEqual(linha["status_tempo"], "Atrasado")
+
+    def test_arredondamento_por_maior_resto_conserva_a_soma_por_recurso(self):
+        valores = {1: 1200.4, 2: 1200.4, 3: 1200.2, 4: 50.0}
+        grupos = {1: "R1", 2: "R1", 3: "R1", 4: "R2"}
+
+        resultado = OperationalReportService._arredondar_conservando_soma(valores, grupos)
+
+        self.assertEqual(resultado[1] + resultado[2] + resultado[3], 3601)
+        self.assertEqual(resultado[4], 50)
+        self.assertEqual({resultado[1], resultado[2], resultado[3]}, {1200, 1201})
+
     def test_busca_movimentacoes_periodo_preserva_recorte_operacional(self):
         service = self._service(PeriodDb())
 

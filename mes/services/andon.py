@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from app.core.resource_mapping import station_resource_code
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
+from mes.services.display_labels import strip_status_code_prefix
 
 
 #: Leitura explícita de "fora de turno, sem HE e sem ninguém trabalhando".
@@ -108,6 +109,38 @@ def _metric_unavailable():
         ),
     }
 
+
+
+# Quantas OPs simultâneas o card/drawer detalha; a contagem total segue em
+# ``active_operations``. Lista curta: o Andon é painel de TV, não relatório.
+MAX_ANDON_ACTIVE_OPS = 6
+
+
+def _andon_active_ops(operations):
+    """Resumo humanizado das OPs ativas do recurso: ``{op, status, operador}``.
+
+    Deriva do mesmo dado que já produz ``active_operations`` (sem consulta
+    nova), sem ids técnicos e sem repetir a mesma OP.
+    """
+
+    summary = []
+    seen = set()
+    for raw in operations or ():
+        op = dict(raw or {})
+        code = str(op.get("op") or op.get("codigo_op") or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        summary.append({
+            "op": code,
+            "status": str(op.get("status") or "").strip() or None,
+            "operador": str(
+                op.get("operador_inicio") or op.get("operador_estado") or ""
+            ).strip() or None,
+        })
+        if len(summary) >= MAX_ANDON_ACTIVE_OPS:
+            break
+    return summary
 
 class AndonService:
     """Monta o snapshot do Andon sem depender de FastAPI ou React."""
@@ -402,11 +435,9 @@ class AndonService:
 
         reason = str(current.get("motivo") or "").strip() or None
         if category == EventCategory.DOWNTIME.value:
-            display_label = reason or "Motivo não informado"
-            status_code = str(current.get("codigo_status_recurso") or "").strip()
-            prefix = f"{status_code} - "
-            if status_code and display_label.casefold().startswith(prefix.casefold()):
-                display_label = display_label[len(prefix):].strip()
+            display_label = strip_status_code_prefix(
+                reason or "Motivo não informado", current.get("codigo_status_recurso")
+            )
         elif category == EventCategory.UNKNOWN.value:
             display_label = "Estados simultâneos"
         else:
@@ -454,6 +485,14 @@ class AndonService:
                 "started_at": current.get("data_hora"),
             } if operation else None),
             "active_operations": max(len(operations), len(rows)),
+            "ops_ativas": _andon_active_ops([
+                {
+                    "op": op.get("codigo_op"),
+                    "status": "Destaque",
+                    "operador_inicio": current.get("operador"),
+                }
+                for op in operations
+            ]),
             "metrics": {
                 "oee": _metric_unavailable(),
                 "availability": _metric_unavailable(),
@@ -527,6 +566,7 @@ class AndonService:
             },
             "operation": None,
             "active_operations": 0,
+            "ops_ativas": [],
             "metrics": {
                 "oee": _metric_unavailable(),
                 "availability": _metric_unavailable(),
@@ -613,6 +653,8 @@ class AndonService:
                 "operador_inicio": item.get("operador_estado"),
             }
             resource["active_operations"] = max(1, resource["active_operations"])
+            operations = [current]
+        resource["ops_ativas"] = _andon_active_ops(operations)
         if current is not None:
             resource["operation"] = {
                 "op": current.get("op"),
