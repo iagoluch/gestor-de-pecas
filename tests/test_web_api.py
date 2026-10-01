@@ -311,6 +311,23 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(session.status_code, 401)
         self.assertEqual(session.json()["code"], "session_revoked")
 
+    def test_logout_revoga_sessao_emitida_antes(self):
+        self.login_manager()
+        cookie_da_sessao = self.client.cookies.get("gestor_session")
+
+        logout = self.client.post("/api/v1/auth/logout", headers=self.csrf())
+        self.assertEqual(logout.status_code, 204, logout.text)
+
+        # Um cookie copiado/vazado ANTES do logout não pode continuar válido
+        # depois: o logout precisa revogar no servidor, não só apagar o
+        # cookie no navegador que pediu o logout.
+        outro_navegador = TestClient(self.app)
+        self.addCleanup(outro_navegador.close)
+        outro_navegador.cookies.set("gestor_session", cookie_da_sessao)
+        sessao_com_cookie_antigo = outro_navegador.get("/api/v1/auth/session")
+        self.assertEqual(sessao_com_cookie_antigo.status_code, 401)
+        self.assertEqual(sessao_com_cookie_antigo.json()["code"], "session_revoked")
+
     def test_credencial_invalida_tem_erro_padronizado(self):
         response = self.client.post(
             "/api/v1/auth/login",

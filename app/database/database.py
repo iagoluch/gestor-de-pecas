@@ -6766,3 +6766,11 @@ class Database(
                 (bool(ativo), usuario_id),
             )
             return cursor.rowcount == 1
+
+    def revogar_sessoes_usuario(self, usuario_id):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE usuarios SET session_version = session_version + 1 WHERE id = %s",
+                (usuario_id,),
+            )
+            return cursor.rowcount == 1

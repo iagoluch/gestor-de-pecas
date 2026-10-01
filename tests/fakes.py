@@ -274,6 +274,13 @@ class FakeDatabase:
         user["session_version"] = int(user.get("session_version") or 0) + 1
         return True
 
+    def revogar_sessoes_usuario(self, user_id):
+        user = next((item for item in self.users if item["id"] == user_id), None)
+        if not user:
+            return False
+        user["session_version"] = int(user.get("session_version") or 0) + 1
+        return True
+
     def criar_conversa_ia(self, user_id, title):
         now = datetime.now().replace(microsecond=0)
         item = {

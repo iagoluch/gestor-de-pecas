@@ -55,9 +55,19 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
     throttle_key = login_throttle_key(request, payload.username)
     # O contador vive no PostgreSQL (`login_throttle`): compartilhado entre
     # workers e reinícios, sem um segundo caminho em memória (BK-22).
+    #
+    # A reserva (increment atômico) acontece ANTES da tentativa de senha, não
+    # depois de uma falha: se fosse ler o contador antes e só incrementar
+    # depois de autenticar (como era), N requisições concorrentes com a mesma
+    # chave leriam o mesmo contador desatualizado, aplicariam o mesmo atraso
+    # (ou nenhum) e tentariam a senha ao mesmo tempo — o throttle nunca
+    # freava uma rajada, só tentativas em sequência. `registrar_falha_login`
+    # já é atômico (INSERT ... ON CONFLICT ... RETURNING no Postgres), então
+    # reservar aqui serializa a rajada em contadores crescentes de verdade
+    # (achado M1 da auditoria). Sucesso limpa o contador logo abaixo.
     failures = await anyio.to_thread.run_sync(
         partial(
-            database.obter_falhas_login,
+            database.registrar_falha_login,
             throttle_key,
             janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
         ),
@@ -77,14 +87,8 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         limiter=request.app.state.auth_thread_limiter,
     )
     if not user:
-        await anyio.to_thread.run_sync(
-            partial(
-                database.registrar_falha_login,
-                throttle_key,
-                janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
-            ),
-            limiter=request.app.state.auth_thread_limiter,
-        )
+        # A falha já foi reservada/contada ANTES da tentativa (acima); não
+        # incrementa de novo aqui.
         raise AppError(
             "invalid_credentials",
             "Usuário ou senha inválidos.",
@@ -143,7 +147,19 @@ def session(user: SessionUser = Depends(get_current_user)):
 
 
 @router.post("/logout", status_code=204, dependencies=[Depends(require_csrf)])
-def logout(request: Request):
+def logout(
+    request: Request,
+    user: SessionUser = Depends(get_current_user),
+    database=Depends(get_database),
+):
+    # Revoga o token no servidor (bump de session_version) além de apagar o
+    # cookie: sem isso, um cookie roubado/copiado continuava válido até
+    # expirar sozinho mesmo depois do usuário clicar em Sair (achado B1 da
+    # auditoria de segurança). Mesmo mecanismo já usado em troca de senha,
+    # de nível e desativação de usuário — aqui derruba também outros
+    # terminais logados na mesma conta, comportamento já aceito nesses
+    # outros pontos.
+    database.revogar_sessoes_usuario(user.id)
     response = Response(status_code=204)
     settings = request.app.state.settings
     response.delete_cookie(
