@@ -399,6 +399,22 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(command.status_code, 403)
         self.assertEqual(command.json()["code"], "operator_resource_denied")
 
+    def test_soldador_so_enxerga_a_propria_estacao(self):
+        self.login_operator("Soldador Web A", "senha-solda-a")
+        own = self.client.get("/api/v1/operator/workbench", params={"resource": "Estação 1"})
+        self.assertEqual(own.status_code, 200, own.text)
+        for resource in ("Estação 2", "Estação 9", "1303", "Gasparini"):
+            with self.subTest(resource=resource):
+                denied = self.client.get("/api/v1/operator/workbench", params={"resource": resource})
+                self.assertEqual(denied.status_code, 403)
+                command = self.client.post(
+                    "/api/v1/operator/actions",
+                    headers=self.csrf(),
+                    json={"action": "Início", "resource": resource, "op": "OP-SOLDA-A", "operation_id": 201},
+                )
+                self.assertEqual(command.status_code, 403)
+                self.assertEqual(command.json()["code"], "operator_resource_denied")
+
     def test_fluxo_web_operador_reutiliza_servico_transacional_e_csrf(self):
         self.login_operator()
         operations = self.client.get("/api/v1/operator/operations/OP-WEB")
