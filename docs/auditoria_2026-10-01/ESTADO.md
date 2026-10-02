@@ -53,10 +53,10 @@ Nota: a extensão `claude-sync:headroom` falha ao iniciar no Goose (incompatibil
 - Uma execução anterior teve `Page crashed` do Chromium; não reproduziu nas 9 execuções finais (suspeita: carga da máquina com execuções sobrepostas). Não investigado.
 - Autorização: 113 operações sem login = 106x 401 (exceções esperadas: health/live/ready/capabilities, login, SOAP 503). Como operador da Dobra: 65x 403 nas rotas de gestão; Corte e Qualidade com guarda por setor. Sem escalada achada.
 - Ponto 3 (Solda por estação), sondado na API como `estacao1aco` e fixado em teste (`test_soldador_so_enxerga_a_propria_estacao`): Estação 1 → bancada 200 (ação em OP fora do roteiro → 409 `operator_operation_unavailable`); Estação 2/9, Dobra e Gasparini → 403 `operator_resource_denied` na leitura e na ação. O isolamento é por 403, não 409.
+- E2E roteirizado do portão Setup/Qualidade (`tests/e2e_quality_gate_flow.py`, Dobra 1303), 7/7 PASS com vídeo/trace locais: Finalizar bloqueado até o Setup; Setup abre confirmação; produto sem cotas abre o cadastro das cotas (Salvar só libera com padrão e tolerância); cancelar mantém Finalizar bloqueado. Galeria única: `tests/e2e_gallery.py` → `e2e/galeria.html` (varredura + 3 fluxos + tabela da caminhada aleatória). Solda no navegador não roteirizada: regra provada por teste de API e pela caminhada aleatória.
 - Achados menores: diálogo "Registrar parada" abre para OP digitada inexistente (backend recusa com 409; só folga de UI). Banco fake do preview ganhou 4 stubs de leitura (`tests/test_web_api.py`).
 
 ## Pendências reais (não feitas por limite de orçamento, não por bloqueio técnico)
-- E2E roteirizado (não aleatório) com vídeo: fluxo de Qualidade e Solda no navegador (a regra da Solda já está provada por teste de API); galeria única juntando as pastas.
 - Passada de qualidade (código morto/duplicação) e auditoria linha-a-linha de backend/segurança além do que a suíte cobre.
 - Invariantes de concorrência em Postgres real (`TEST_DATABASE_URL`) e lint/bandit/pip-audit locais.
 
