@@ -37,7 +37,7 @@ RAW = re.compile(r"undefined|\[object |\bNaN\b|\bnull\b|Traceback|Internal Serve
 AVOID = re.compile(r"\b(sair|logout|encerrar sess)", re.I)
 HOSTILE = ["", "0", "-1", "1", "2", "999999999", "OP-VISUAL-101", "OP-VISUAL-102", "OP-INEXISTENTE",
            "abc", "<script>alert(1)</script>", "x" * 300, "ação çãõ ü 🚀", "   ", "1.5", "1,5", "' OR 1=1 --"]
-START = {"operador": "/operador", "destaque": "/operador", "1": "/"}
+START = {"operador": "/operador", "destaque": "/operador", "corte": "/operador", "solda": "/operador", "1": "/"}
 CONTROLS = ("button:visible, a[href]:visible, input:visible, select:visible, textarea:visible, "
             "[role=button]:visible, [role=tab]:visible, [role=checkbox]:visible, [role=menuitem]:visible")
 

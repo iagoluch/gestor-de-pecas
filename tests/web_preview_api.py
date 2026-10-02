@@ -446,13 +446,15 @@ if settings.ai_enabled and settings.ai_configured:
     if os.getenv("GESTOR_VISUAL_AI_COOLDOWN") == "1":
         app.state.ai_rate_limit.activate({"retry_after": "90"})
 _autologin = os.getenv("GESTOR_VISUAL_AUTOLOGIN")
-if _autologin in ("1", "operador", "destaque"):
+_PERFIS = {"operador": ("Operador Dobra Visual", "operador_dobra"), "destaque": ("Operador Destaque Visual", "operador_destaque"),
+           "corte": ("Operador Corte Visual", "operador_corte"), "solda": ("Operador Solda Visual", "estacao1aco")}
+if _autologin == "1" or _autologin in _PERFIS:
     # "operador" = Dobra, "destaque" = Destaque; "1" = gestor com Andon.
     _as_operator = _autologin != "1"
     visual_manager = SessionUser(
         id=visual_manager_id,
-        name={"operador": "Operador Dobra Visual", "destaque": "Operador Destaque Visual"}.get(_autologin, "Gestor Visual"),
-        role={"operador": "operador_dobra", "destaque": "operador_destaque"}.get(_autologin, "gestor"),
+        name=_PERFIS.get(_autologin, ("Gestor Visual", ""))[0],
+        role=_PERFIS.get(_autologin, ("", "gestor"))[1],
         management_access=not _as_operator,
         andon_access=not _as_operator,
         operator_access=_as_operator,

@@ -49,13 +49,13 @@ Nota: a extensão `claude-sync:headroom` falha ao iniciar no Goose (incompatibil
 - Lint: não há script `lint` no `web/package.json`; Python usa bandit/pip-audit só no CI (não rodados aqui).
 
 ## Rodada 3 (02/10): aleatoriedade e autorização
-- `tests/e2e_random_walk.py`: caminhada aleatória com semente (perfis operador, Destaque e gestor), entradas hostis, invariantes de console/5xx/texto cru/página vazia. 9 execuções (3 perfis x 3 sementes x 120 passos): 0 violações; 14 a 65 controles distintos por execução. Relatório: `e2e/random/random_report.json`. Reproduz com `--profiles X --seeds N`. Não cobre "todos os caminhos" (inviável): amostra; mais sementes ampliam.
+- `tests/e2e_random_walk.py`: caminhada aleatória com semente (perfis operador, Destaque e gestor), entradas hostis, invariantes de console/5xx/texto cru/página vazia. 9 execuções (3 perfis x 3 sementes x 120 passos): 0 violações; 14 a 65 controles distintos por execução. Relatório: `e2e/random/random_report.json`. Depois, perfis Corte e Solda (estação Aço) também: 6 execuções, 0 violações (preview ganhou autologin `corte`/`solda`). Reproduz com `--profiles X --seeds N`. Não cobre "todos os caminhos" (inviável): amostra; mais sementes ampliam.
 - Uma execução anterior teve `Page crashed` do Chromium; não reproduziu nas 9 execuções finais (suspeita: carga da máquina com execuções sobrepostas). Não investigado.
 - Autorização: 113 operações sem login = 106x 401 (exceções esperadas: health/live/ready/capabilities, login, SOAP 503). Como operador da Dobra: 65x 403 nas rotas de gestão; Corte e Qualidade com guarda por setor. Sem escalada achada.
 - Achados menores: diálogo "Registrar parada" abre para OP digitada inexistente (backend recusa com 409; só folga de UI). Banco fake do preview ganhou 4 stubs de leitura (`tests/test_web_api.py`).
 
 ## Pendências reais (não feitas por limite de orçamento, não por bloqueio técnico)
-- E2E humanizado: Solda por estação (409 em outra estação, ponto 3), Corte e fluxo de Qualidade; galeria única juntando as 3 pastas.
+- E2E roteirizado (não aleatório): Solda por estação (409 em outra estação, ponto 3) e fluxo de Qualidade com vídeo; galeria única juntando as 3 pastas.
 - Passada de qualidade (código morto/duplicação) e auditoria linha-a-linha de backend/segurança além do que a suíte cobre.
 - Invariantes de concorrência em Postgres real (`TEST_DATABASE_URL`) e lint/bandit/pip-audit locais.
 
