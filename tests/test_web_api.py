@@ -46,6 +46,19 @@ class ApiFakeDatabase(FakeDatabase):
     def connection(self):
         yield _Connection()
 
+    # Consultas de leitura que o preview/E2E aleatório alcança; vazio = sem cadastro.
+    def listar_codigos_recursos_totvs(self):
+        return []
+
+    def listar_setores_recursos_totvs(self):
+        return []
+
+    def listar_chamada_contatos(self, *args, **kwargs):
+        return []
+
+    def buscar_contato_padrao_gestao(self, *args, **kwargs):
+        return None
+
 
 def _settings():
     return WebSettings(
