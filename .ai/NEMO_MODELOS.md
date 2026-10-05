@@ -18,4 +18,5 @@ Medido em 05/10/2026 no repo real, gabarito oculto. **Uma amostra por modelo e t
 - Limite de caixa de tempo: `timeout 900` no runner. `glm` e `gemma` encostaram nele; `super` e `kimi` não.
 - NVIDIA free: ~40 req/min por modelo, chave única; 503 "overloaded" acontece (plugin `auto-retry` cobre). `ultra` roda no Zen, sem essa cota.
 - Termos de uso comercial dos endpoints gratuitos da NVIDIA não estão claros: não mandar dados REAL nem segredo, só código do repo.
+- Painel 2D: abrir `scripts/nemo-hub.html` como arquivo local. `nemo.sh` grava início/fim de cada run em `../nemo-runs.js` (fora do repo) e o painel mostra a mesa trabalhando ao vivo; sem esse arquivo, mostra só os dados do benchmark embutidos.
 - Os runs com `kimi`/`glm` carregaram a skill `task-observer` do OpenCode no WSL e bateram em `external_directory: deny` (3 negações seguidas no glm; abortou o kimi na 1ª amostra). Provável causa de parte do tempo gasto. Remover a skill do OpenCode no WSL (config do usuário) deve ajudar; não feito.

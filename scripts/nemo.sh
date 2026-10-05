@@ -18,11 +18,18 @@ case "${3:-ultra}" in
   *)     model=$3 ;;
 esac
 
+# feed do painel scripts/nemo-hub.html: eventos em ../nemo-runs.js (fora do repo); o EXIT fecha a run mesmo se algo abortar
+runs="$repo/../nemo-runs.js"; id="$slug-$(date +%s)"; t0=$(date +%s); state=erro; bytes=0
+ev() { [ -f "$runs" ] || echo 'window.NEMO_LIVE=[];' > "$runs"; echo "NEMO_LIVE.push({id:\"$id\",slug:\"$slug\",model:\"$model\",$1});" >> "$runs"; }
+ev "state:\"running\",t0:$t0"
+trap 'ev "state:\"$state\",secs:$(( $(date +%s) - t0 )),bytes:$bytes"' EXIT
+log=$(mktemp)
+
 # entrega prompt e permissões (opencode.json local, possivelmente ainda não commitado) ao WSL
 w bash -c "cat > /tmp/nemo-$slug.prompt" < "$prompt_file"
 w bash -c "cat > /tmp/nemo-$slug.json" < "$repo/opencode.json"
 
-w bash -s "$slug" "$model" <<'EOS' | tr -d '\r'
+w bash -s "$slug" "$model" <<'EOS' | tr -d '\r' | tee "$log"
 set -euo pipefail
 export PATH=$HOME/.npm-global/bin:$HOME/.local/bin:$PATH
 slug=$1; model=$2; repo=$HOME/gestor; wt=$HOME/nemo-$slug
@@ -38,4 +45,7 @@ git diff --cached --binary > "/tmp/nemo-$slug.patch"
 EOS
 
 w cat "/tmp/nemo-$slug.patch" > "$repo/../nemo-$slug.patch"
-echo "[nemo] patch: $repo/../nemo-$slug.patch ($(wc -c < "$repo/../nemo-$slug.patch") bytes) — revise e aplique com: git apply ../nemo-$slug.patch"
+bytes=$(wc -c < "$repo/../nemo-$slug.patch")
+if grep -q 'erro/timeout: 124' "$log"; then state=timeout; elif grep -q 'saiu com erro' "$log"; then state=erro; elif [ "$bytes" -eq 0 ]; then state=vazio; else state=ok; fi
+rm -f "$log"
+echo "[nemo] patch: $repo/../nemo-$slug.patch ($bytes bytes) — revise e aplique com: git apply ../nemo-$slug.patch"
