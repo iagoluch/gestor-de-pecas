@@ -3,6 +3,19 @@
   "instructions": [
     "CLAUDE.md"
   ],
+  "permission": {
+    "external_directory": {
+      "*": "deny"
+    },
+    "bash": {
+      "*": "allow",
+      "*.env*": "deny",
+      "*.ssh*": "deny",
+      "*.claude*": "deny",
+      "git push*": "deny",
+      "git commit*": "deny"
+    }
+  },
   "mcp": {
     "context7": {
       "type": "remote",

@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 24/09/2026 (fallback de turno global e nomes operacionais de recursos).
+**Atualizado em:** 05/10/2026 (prévia visual isolada e ensaio autorizado do posto).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -11,6 +11,12 @@ ferramenta.
 Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
+
+### Exploração visual — 05/10/2026
+
+- DECISÃO DO USUÁRIO (vigente): rejeitou e cancelou a proposta de identidade nova; preservar a identidade original e somente aprimorar as telas atuais. Prévia isolada em `outputs/proposta_visual_2026-10-05/`; o `DESIGN.md` vigente permanece autoridade e não houve mudança no React/API.
+- FATO: gestão e Dobra observadas em `127.0.0.1:8001`, em Full HD. Ensaio autorizado no `gestor_pecas_test`, com outbox/worker TOTVS desabilitados: OP `PCMIDN01017`, Início → Setup/checklist → liberação → parada → retomada → finalização. Histórico confirmou 2 boas e 0 refugo. Refugo/retrabalho não foram exercitados nesse ensaio.
+- PENDENTE: avaliar aprimoramentos mantendo o visual atual antes de implementar nas telas reais. WIP de outras sessões preservado; nenhum commit ou push desta exploração.
 
 ### Atualização de auditoria — 23/09/2026
 
