@@ -491,7 +491,7 @@ describe("Andon Geral Web", () => {
     const { container } = renderAndon(fetchMock);
     await screen.findByText("Produção");
     const previousCard = container.querySelector('[data-state="producao"]');
-    expect(MockEventSource.instances).toHaveLength(1);
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(1));
     const andonCalls = () => fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/v1/andon")).length;
     expect(andonCalls()).toBe(1);
 
