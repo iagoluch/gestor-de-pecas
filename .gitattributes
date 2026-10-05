@@ -1,1 +1,4 @@
 graphify-out/graph.json merge=graphify
+
+# Scripts executados no WSL/Linux precisam de LF
+*.sh text eol=lf
