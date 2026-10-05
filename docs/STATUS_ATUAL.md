@@ -17,6 +17,10 @@ commit `4a60564`.
 - DECISÃO DO USUÁRIO (vigente): rejeitou e cancelou a proposta de identidade nova; preservar a identidade original e somente aprimorar as telas atuais. Prévia isolada em `outputs/proposta_visual_2026-10-05/`; o `DESIGN.md` vigente permanece autoridade e não houve mudança no React/API.
 - FATO: gestão e Dobra observadas em `127.0.0.1:8001`, em Full HD. Ensaio autorizado no `gestor_pecas_test`, com outbox/worker TOTVS desabilitados: OP `PCMIDN01017`, Início → Setup/checklist → liberação → parada → retomada → finalização. Histórico confirmou 2 boas e 0 refugo. Refugo/retrabalho não foram exercitados nesse ensaio.
 - PENDENTE: avaliar aprimoramentos mantendo o visual atual antes de implementar nas telas reais. WIP de outras sessões preservado; nenhum commit ou push desta exploração.
+- DECISÃO DO USUÁRIO: a evolução deve ter acabamento profissional, efeitos/transições, interações e conforto visual, preservando os fluxos e conteúdos atuais. Movimento serve seleção, contexto e confirmação de ações; não muda regra industrial.
+- FATO: a segunda prévia, com identidade azul, passou pelas seis correções pontuadas na revisão anterior, mas foi **reprovada pelo usuário como inferior ao sistema atual**. A revisão das correções não representava aprovação estética. Ambas as propostas de `outputs/proposta_visual_2026-10-05/` estão rejeitadas.
+- DECISÃO: reconstruir a prévia a partir da riqueza das telas atuais, preservando identidade, conteúdo e fluxos. Nova exploração isolada em `outputs/evolucao_visual_2026-10-05/`; aprovação estética e implementação no produto permanecem pendentes.
+- FATO: nesta retomada o login de `8001` respondeu banco indisponível. As referências atuais foram capturadas em Full HD com o React vigente e a API de QA já existente (`tests.web_preview_api`), inteiramente em memória, sem banco operacional. Não foram reutilizados assets históricos.
 
 ### Atualização de auditoria — 23/09/2026
 
