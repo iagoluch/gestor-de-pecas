@@ -5,8 +5,8 @@ Estes testes complementam test_wave5_1.py cobrindo casos não exercidos lá.
 
 from __future__ import annotations
 
+import unittest
 from decimal import Decimal
-import pytest
 
 from mes.domain.quality_measures import (
     evaluate_measure,
@@ -15,10 +15,26 @@ from mes.domain.quality_measures import (
 )
 
 
-class TestParseDecimalEdgeCases:
+def parametrize(nomes, casos):
+    """Equivalente mínimo de pytest.mark.parametrize usando subTest (o CI roda unittest)."""
+    chaves = [n.strip() for n in nomes.split(",")]
+
+    def decorador(teste):
+        def executar(self):
+            for caso in casos:
+                with self.subTest(caso=caso):
+                    teste(self, *(caso if len(chaves) > 1 else (caso,)))
+
+        executar.__name__ = teste.__name__
+        return executar
+
+    return decorador
+
+
+class TestParseDecimalEdgeCases(unittest.TestCase):
     """Casos de borda de parse_decimal não cobertos em test_wave5_1.py."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "entrada, esperado",
         [
             ("+12,5", Decimal("12.5")),
@@ -29,7 +45,7 @@ class TestParseDecimalEdgeCases:
     def test_numero_com_sinal_positivo_explicito(self, entrada, esperado):
         assert parse_decimal(entrada) == esperado
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "entrada",
         [
             "12,3,4",
@@ -57,10 +73,10 @@ class TestParseDecimalEdgeCases:
         assert parse_decimal(42) == Decimal(42)
 
 
-class TestParseToleranceEdgeCases:
+class TestParseToleranceEdgeCases(unittest.TestCase):
     """Casos de borda de parse_tolerance não cobertos em test_wave5_1.py."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "padrao, ref_esperada, margem_esperada",
         [
             ("12,0 +/- 0,2", Decimal("12.0"), Decimal("0.2")),
@@ -85,7 +101,7 @@ class TestParseToleranceEdgeCases:
         assert ref == Decimal("453.0")
         assert margem == Decimal("0")
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "padrao",
         [
             "12,0 +/- -0,2",
@@ -98,7 +114,7 @@ class TestParseToleranceEdgeCases:
         assert ref == Decimal("12.0")
         assert margem == Decimal("0.2")
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "padrao",
         [
             "",
@@ -109,7 +125,7 @@ class TestParseToleranceEdgeCases:
     def test_padrao_vazio_none_espacos_retorna_none(self, padrao):
         assert parse_tolerance(padrao) is None
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "padrao",
         [
             "12,0 +/- abc",
@@ -128,7 +144,7 @@ class TestParseToleranceEdgeCases:
         assert margem == Decimal("0.5")
 
 
-class TestEvaluateMeasureEdgeCases:
+class TestEvaluateMeasureEdgeCases(unittest.TestCase):
     """Casos de borda de evaluate_measure não cobertos em test_wave5_1.py.
 
     O limite pertence à faixa: limite_inferior <= medida <= limite_superior.
@@ -136,7 +152,7 @@ class TestEvaluateMeasureEdgeCases:
 
     PADRAO = "12,0 +/- 0,2"  # faixa 11,8 .. 12,2
 
-    @pytest.mark.parametrize(
+    @parametrize(
         "medida, status_esperado",
         [
             ("11,8", "CONFORME"),   # exatamente no limite inferior
