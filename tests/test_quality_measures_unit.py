@@ -8,6 +8,10 @@ from __future__ import annotations
 import unittest
 from decimal import Decimal
 
+from app.core.quality import (
+    QUALITY_MEASURE_CONFORMING,
+    QUALITY_MEASURE_NON_CONFORMING,
+)
 from mes.domain.quality_measures import (
     evaluate_measure,
     parse_decimal,
@@ -155,10 +159,10 @@ class TestEvaluateMeasureEdgeCases(unittest.TestCase):
     @parametrize(
         "medida, status_esperado",
         [
-            ("11,8", "CONFORME"),   # exatamente no limite inferior
-            ("12,2", "CONFORME"),   # exatamente no limite superior
-            ("11,79", "NAO_CONFORME"),
-            ("12,21", "NAO_CONFORME"),
+            ("11,8", QUALITY_MEASURE_CONFORMING),   # exatamente no limite inferior
+            ("12,2", QUALITY_MEASURE_CONFORMING),   # exatamente no limite superior
+            ("11,79", QUALITY_MEASURE_NON_CONFORMING),
+            ("12,21", QUALITY_MEASURE_NON_CONFORMING),
         ],
     )
     def test_limites_pertencem_a_faixa(self, medida, status_esperado):
@@ -171,34 +175,34 @@ class TestEvaluateMeasureEdgeCases(unittest.TestCase):
     def test_padrao_sem_margem_exige_exatidao(self):
         avaliacao = evaluate_measure("453", "453")
         assert avaliacao.calculado is True
-        assert avaliacao.status == "CONFORME"
+        assert avaliacao.status == QUALITY_MEASURE_CONFORMING
         assert avaliacao.margem == Decimal("0")
         assert avaliacao.limite_inferior == Decimal("453")
         assert avaliacao.limite_superior == Decimal("453")
 
         avaliacao = evaluate_measure("453,1", "453")
         assert avaliacao.calculado is True
-        assert avaliacao.status == "NAO_CONFORME"
+        assert avaliacao.status == QUALITY_MEASURE_NON_CONFORMING
 
     def test_referencia_negativa_com_limites(self):
         # padrão -5,0 +/- 0,5 -> faixa -5,5 .. -4,5
         avaliacao = evaluate_measure("-5,5", "-5,0 +/- 0,5")
         assert avaliacao.calculado is True
-        assert avaliacao.status == "CONFORME"
+        assert avaliacao.status == QUALITY_MEASURE_CONFORMING
         assert avaliacao.limite_inferior == Decimal("-5.5")
         assert avaliacao.limite_superior == Decimal("-4.5")
 
         avaliacao = evaluate_measure("-4,5", "-5,0 +/- 0,5")
         assert avaliacao.calculado is True
-        assert avaliacao.status == "CONFORME"
+        assert avaliacao.status == QUALITY_MEASURE_CONFORMING
 
         avaliacao = evaluate_measure("-5,6", "-5,0 +/- 0,5")
         assert avaliacao.calculado is True
-        assert avaliacao.status == "NAO_CONFORME"
+        assert avaliacao.status == QUALITY_MEASURE_NON_CONFORMING
 
         avaliacao = evaluate_measure("-4,4", "-5,0 +/- 0,5")
         assert avaliacao.calculado is True
-        assert avaliacao.status == "NAO_CONFORME"
+        assert avaliacao.status == QUALITY_MEASURE_NON_CONFORMING
 
     def test_medida_ou_padrao_nao_numerico_calculado_falso(self):
         avaliacao = evaluate_measure("12,1", "conforme gabarito")
@@ -218,7 +222,7 @@ class TestEvaluateMeasureEdgeCases(unittest.TestCase):
         assert a1.limite_inferior == a2.limite_inferior
         assert a1.limite_superior == a2.limite_superior
 
-    def test_avaliacao_expõe_campos_corretos(self):
+    def test_avaliacao_expoe_campos_corretos(self):
         avaliacao = evaluate_measure("12,1", "12,0 +/- 0,2")
         assert avaliacao.referencia == Decimal("12.0")
         assert avaliacao.margem == Decimal("0.2")
