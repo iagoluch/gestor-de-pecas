@@ -4,6 +4,7 @@
     "CLAUDE.md"
   ],
   "permission": {
+    "filesystem_*": "deny",
     "external_directory": {
       "*": "deny"
     },
