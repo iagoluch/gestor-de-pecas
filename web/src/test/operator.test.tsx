@@ -410,7 +410,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
     // A busca do motivo filtra a lista pelo texto digitado.
     fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "quebra" } });
-    expect(screen.getByRole("option", { name: "0029 - Quebra de ferramenta" })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "0029 - Quebra de ferramenta" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "0030 - Falta de material" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "0029" } });
     await waitFor(() => expect(screen.getByRole("option", { name: "0029 - Quebra de ferramenta" })).toHaveAttribute("aria-selected", "true"));
