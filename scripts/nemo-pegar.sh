@@ -14,6 +14,6 @@ w bash -c 'cd ~/gestor && git add -A -- . ":!opencode.json" && git diff --cached
 w cat /tmp/nemo-pegar.patch > "$repo/../nemo-$slug.patch"
 echo "[nemo-pegar] patch: $repo/../nemo-$slug.patch ($(wc -c < "$repo/../nemo-$slug.patch") bytes)"
 if [ "$reset" = 1 ]; then
-  w bash -c 'cd ~/gestor && git reset -q --hard origin/master && git clean -qfd && cp /tmp/nemo-tela.json opencode.json'
+  w bash -c 'cd ~/gestor && git fetch -q origin master && git reset -q --hard origin/master && git clean -qfd && cp /tmp/nemo-tela.json opencode.json'
   echo "[nemo-pegar] ~/gestor resetado para origin/master"
 fi
