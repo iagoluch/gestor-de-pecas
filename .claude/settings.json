@@ -76,6 +76,16 @@
             "statusMessage": "Validando IA Workforce..."
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-compact-context.sh",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },
