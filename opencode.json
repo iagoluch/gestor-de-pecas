@@ -13,6 +13,8 @@
       "*.env*": "deny",
       "*.ssh*": "deny",
       "*.claude*": "deny",
+      "*auth.json*": "deny",
+      "*share/opencode*": "deny",
       "git push*": "deny",
       "git commit*": "deny"
     }

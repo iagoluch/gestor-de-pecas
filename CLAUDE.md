@@ -17,6 +17,10 @@ São curtas e específicas do Gestor; carregue a que casar com a tarefa, junto c
 - Antes de commit de R2/R3 → `release-gate`
 - Delegação R1+ → `ai-orchestrate`
 
+## Delegação a modelos livres (Nemotron/OpenCode)
+
+Escolha do modelo por tipo de tarefa em `.ai/NEMO_MODELOS.md`; `scripts/nemo.sh <slug> <prompt> [ultra|super|kimi|glm|gemma]`. Tarefa que escreve testes: `super`, e mutação no patch antes de aceitar.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
