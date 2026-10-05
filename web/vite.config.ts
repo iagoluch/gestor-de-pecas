@@ -27,5 +27,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    // 5 s (padrão) é menor que o waitFor (4 s) somado ao render; o CI é ~3x mais lento que o notebook.
+    testTimeout: 15000,
   },
 });
