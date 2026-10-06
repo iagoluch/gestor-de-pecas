@@ -14,4 +14,5 @@ regexes = [
   # Segredos de teste com nome explícito indicando fixture, não produção.
   '''segredo-de-teste-com-tamanho-suficiente-123456''',
   '''devobs-secret-that-is-long-enough-for-signatures-123456''',
+  '''scheduler\-test\-secret\-32\-bytes\-long''',
 ]
