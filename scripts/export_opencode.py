@@ -70,7 +70,7 @@ ferramentas do Claude, use o equivalente do OpenCode:
 | `WebFetch` | `webfetch` |
 
 Os hooks do Claude Code (lembretes de ponytail, graphify, headroom, type-check,
-impeccable, task-observer e memória do projeto) chegam a você por plugins do
+impeccable e memória do projeto) chegam a você por plugins do
 OpenCode — trate essas mensagens como instruções do sistema.
 
 ## Esforço máximo
@@ -303,6 +303,9 @@ def export_rules() -> str:
         end = text.find("\n## ", start + len(HANDOFF_HEADING))
         text = text[:start] + (text[end + 1 :] if end != -1 else "")
     text = HANDOFF_STEP.sub("", text)
+    # task-observer fora do OpenCode (06/10/2026): os workers batiam em external_directory negado
+    text = re.sub(r"# task-observer\n.*?(?=\n# |\Z)", "", text, flags=re.S)
+    text = re.sub(r"^Observações task-observer:.*\n", "", text, flags=re.M)
     return f"{MARK}\n{PREAMBLE}{text}"
 
 

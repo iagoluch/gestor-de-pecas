@@ -1,7 +1,7 @@
 // Plugin GLOBAL do OpenCode (copiado para ~/.config/opencode/plugins/ por
 // scripts/export_opencode.py). Equivale aos hooks globais do Claude Code:
-// task-observer (SessionStart), memória por projeto (leitura + caixa de entrada
-// revisada pelo Claude) e esforço máximo do Nemotron.
+// memória por projeto (leitura + caixa de entrada revisada pelo Claude) e
+// esforço máximo do Nemotron. O task-observer fica só no Claude Code.
 //
 // Dois formatos no mesmo arquivo: `export default {id, setup}` para o OpenCode
 // 2.x (Desktop) e o export nomeado `ClaudeCompat` para a CLI 1.x.
@@ -10,13 +10,6 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 
 const PROJECTS = join(homedir(), ".claude", "projects")
-
-const TASK_OBSERVER =
-  "Antes da primeira chamada de ferramenta da sessao (e antes de propor qualquer plano): " +
-  'carregue a skill "task-observer" com a ferramenta `skill` e execute seu Session Start Protocol ' +
-  "(checagem de storage, varredura de frontmatter do observation-log, checagem de review trigger). " +
-  "Carregar a skill e rodar o protocolo sao passos separados. Depois de concluir cada tarefa, " +
-  "reporte em 1 linha as observacoes registradas nesta sessao (ids e titulos, ou 'nenhuma registrada')."
 
 const COMPACTION =
   "Ao resumir, preserve: objetivo e restricoes do usuario; decisoes relevantes; alteracoes feitas " +
@@ -79,7 +72,7 @@ function saveToInbox(memDir, { nome, tipo, descricao, conteudo }) {
 }
 
 function systemBlocks(memDir) {
-  const blocks = [TASK_OBSERVER]
+  const blocks = []
   const index = memDir && join(memDir, "MEMORY.md")
   if (index && existsSync(index)) {
     blocks.push(

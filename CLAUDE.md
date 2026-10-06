@@ -19,7 +19,7 @@ São curtas e específicas do Gestor; carregue a que casar com a tarefa, junto c
 
 ## Delegação a modelos livres (Nemotron/OpenCode)
 
-Escolha do modelo por tipo de tarefa em `.ai/NEMO_MODELOS.md`; `scripts/nemo.sh <slug> <prompt> [ultra|super|kimi|glm|gemma]`. Tarefa que escreve testes: `super`, e mutação no patch antes de aceitar.
+Escolha do modelo por tipo de tarefa em `.ai/NEMO_MODELOS.md`; `scripts/nemo.sh <slug> <prompt> [ultra|super|kimi]`. Tarefa que escreve testes: `super`, e mutação no patch antes de aceitar.
 
 ## graphify
 
