@@ -203,7 +203,7 @@ def _wsdl(address: str) -> str:
 @router.get("/PcfIntegService")
 def get_wsdl(request: Request):
     settings = request.app.state.settings
-    if not settings.totvs_soap_enabled:
+    if getattr(settings, "andon_demo_mode", False) or not settings.totvs_soap_enabled:
         return _fault(
             "totvs_soap_disabled",
             "Receptor SOAP TOTVS desabilitado por configuração.",
@@ -234,7 +234,7 @@ def get_wsdl(request: Request):
 @router.post("/PcfIntegService")
 async def receive_message(request: Request):
     settings = request.app.state.settings
-    if not settings.totvs_soap_enabled:
+    if getattr(settings, "andon_demo_mode", False) or not settings.totvs_soap_enabled:
         return _fault(
             "totvs_soap_disabled",
             "Receptor SOAP TOTVS desabilitado por configuração.",

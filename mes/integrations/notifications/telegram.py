@@ -55,7 +55,9 @@ def telegram_outbound_allowed(settings) -> bool:
     função só responde se o canal de saída pode ser usado.
     """
 
-    return bool(getattr(settings, "telegram_enabled", False))
+    return bool(getattr(settings, "telegram_enabled", False)) and not bool(
+        getattr(settings, "andon_demo_mode", False)
+    )
 
 
 TEST_MESSAGE_PREFIX = "[TESTE] "

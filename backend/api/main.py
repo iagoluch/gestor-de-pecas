@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from backend.api.config import WebSettings
+from backend.api.config import ANDON_DEMO_DATABASE, WebSettings
 from backend.api.clock import ApplicationClock
 from backend.ai import GroqProvider
 from backend.ai.rate_limit_state import AIRateLimitState, AIUserRateLimiter
@@ -99,9 +99,40 @@ _PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb
 _HSTS_POLICY = "max-age=15552000"
 
 
-def _default_database_factory(*, now_func=None, environment="development"):
+def _validate_andon_demo_database(database) -> None:
+    """Comprova a identidade no socket antes de migrations ou escritores."""
+    if (getattr(database, "safe_target", {}) or {}).get("dbname") != ANDON_DEMO_DATABASE:
+        raise RuntimeError("A DEMO Andon exige seu banco dedicado.")
+    with database.connection() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT current_database() AS dbname")
+        row = cursor.fetchone()
+    if not row or row["dbname"] != ANDON_DEMO_DATABASE:
+        raise RuntimeError("O PostgreSQL conectado não é o banco dedicado da DEMO Andon.")
+
+
+def _default_database_factory(*, now_func=None, environment="development", andon_demo_mode=False):
     from app.database import Database
     from app.database.config import load_postgres_config
+
+    if andon_demo_mode:
+        from app.database.migrations import apply_migrations
+        from mes.integrations.totvs.outbound_enqueue import OutboundEnqueueConfig
+
+        config = load_postgres_config(testing=True)
+        if config.safe_target["dbname"] != ANDON_DEMO_DATABASE:
+            raise RuntimeError("A DEMO Andon exige seu banco dedicado.")
+        database = Database(
+            config=config, now_func=now_func, auto_migrate=False,
+            totvs_outbox_config=OutboundEnqueueConfig(enabled=False),
+        )
+        try:
+            _validate_andon_demo_database(database)
+            with database.connection() as connection:
+                apply_migrations(connection)
+        except Exception:
+            database.close()
+            raise
+        return database
 
     # ``Database()`` sem argumentos usa TEST_DATABASE_URL, conferido contra
     # GESTOR_EXPECTED_DATABASE. O REAL (DATABASE_URL) só é alcançado aqui, e só
@@ -125,6 +156,8 @@ def _simulation_target_is_explicit(database) -> bool:
 
 def _build_background_scheduler(application: FastAPI) -> ReportScheduler:
     settings = application.state.settings
+    if getattr(settings, "andon_demo_mode", False):
+        raise RuntimeError("Automação externa indisponível na DEMO Andon.")
     database = application.state.database_manager.get()
     if settings.simulation_mode and not _simulation_target_is_explicit(database):
         raise RuntimeError(
@@ -195,6 +228,8 @@ async def _report_scheduler_loop(application: FastAPI) -> None:
 
 def _build_totvs_outbox_worker(application: FastAPI) -> TotvsOutboxWorker:
     settings = application.state.settings
+    if getattr(settings, "andon_demo_mode", False):
+        raise RuntimeError("Outbox externa indisponível na DEMO Andon.")
     database = application.state.database_manager.get()
     return TotvsOutboxWorker(
         database,
@@ -442,7 +477,7 @@ async def _telegram_digest_loop(application: FastAPI, config: tuple) -> None:
         lease.release()
 
 
-def build_sigmanest_refresh(application: FastAPI) -> SigmaNestRefreshCoordinator:
+def build_sigmanest_refresh(application: FastAPI) -> SigmaNestRefreshCoordinator | None:
     """Coordenador único da sincronização de Corte (ciclo + botão Atualizar).
 
     Ciclo automático e atualização manual dividem o mesmo lock e o mesmo
@@ -451,6 +486,8 @@ def build_sigmanest_refresh(application: FastAPI) -> SigmaNestRefreshCoordinator
     """
 
     settings = application.state.settings
+    if getattr(settings, "andon_demo_mode", False):
+        return None
     factory = getattr(
         application.state, "sigmanest_gateway_factory", SigmaNestSqlServerGateway
     )
@@ -574,7 +611,15 @@ async def _dev_observatory_loop(application: FastAPI) -> None:
 
 
 def create_app(*, settings: WebSettings | None = None, database_factory=None) -> FastAPI:
-    resolved_settings = settings or WebSettings.from_env()
+    resolved_settings = (settings or WebSettings.from_env()).isolated_andon_demo()
+    if resolved_settings.andon_demo_mode:
+        from app.database.config import load_postgres_config
+
+        if str(os.getenv("GESTOR_EXPECTED_DATABASE") or "").strip() != ANDON_DEMO_DATABASE:
+            raise RuntimeError("GESTOR_EXPECTED_DATABASE deve identificar o banco dedicado da DEMO Andon.")
+        config = load_postgres_config(testing=True)
+        if config.safe_target["dbname"] != ANDON_DEMO_DATABASE:
+            raise RuntimeError("TEST_DATABASE_URL deve identificar o banco dedicado da DEMO Andon.")
     configure_logging()
     if database_factory is None:
         # Banco real: recusa subir com o SO em outro fuso (BK-11), antes de
@@ -589,13 +634,22 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     )
     manager = DatabaseManager(
         database_factory or (
-            lambda: _default_database_factory(now_func=clock.now, environment=resolved_settings.environment)
+            lambda: _default_database_factory(
+                now_func=clock.now, environment=resolved_settings.environment,
+                andon_demo_mode=resolved_settings.andon_demo_mode,
+            )
         ),
         retry_seconds=resolved_settings.database_retry_seconds,
     )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        if resolved_settings.andon_demo_mode:
+            try:
+                _validate_andon_demo_database(manager.get())
+            except Exception:
+                manager.close()
+                raise
         # Rotas síncronas (login, posto do operador, ações) rodam na
         # threadpool padrão do anyio — 40 slots por padrão, bem abaixo do
         # chão de fábrica real. Acima disso, requisições concorrentes ficam
@@ -633,10 +687,13 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 _report_scheduler_loop(_app),
                 name="gestor-report-scheduler",
             )
-        shift_boundary_task = asyncio.create_task(
-            _shift_boundary_loop(_app),
-            name="gestor-shift-boundary",
-        )
+        # A DEMO contínua publica seu cenário temporal completo; o scheduler
+        # operacional concorreria com esses estados durante o warmup/reset.
+        if not resolved_settings.andon_demo_mode:
+            shift_boundary_task = asyncio.create_task(
+                _shift_boundary_loop(_app),
+                name="gestor-shift-boundary",
+            )
         if resolved_settings.telegram_configured and resolved_settings.telegram_bot_polling_enabled:
             telegram_bot_task = asyncio.create_task(
                 _telegram_bot_loop(_app),
@@ -758,12 +815,12 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         if resolved_settings.dev_observatory_enabled
         else None
     )
-    application.state.dev_observatory_real = ReadOnlyDatabaseManager(
+    application.state.dev_observatory_real = None if resolved_settings.andon_demo_mode else ReadOnlyDatabaseManager(
         resolved_settings.dev_observatory_real_dsn
         if resolved_settings.dev_observatory_enabled
         else ""
     )
-    application.state.ai_provider = GroqProvider(
+    application.state.ai_provider = None if resolved_settings.andon_demo_mode else GroqProvider(
         api_key=resolved_settings.ai_api_key,
         model=resolved_settings.ai_model,
         reasoning_effort=resolved_settings.ai_reasoning_effort,
@@ -775,6 +832,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.state.ai_rate_limit = AIRateLimitState()
     application.state.ai_user_rate_limit = AIUserRateLimiter()
     application.state.totvs_service_factory = (
+        None if resolved_settings.andon_demo_mode else
         lambda database: build_totvs_ingestion_service(database, resolved_settings)
     )
     # Busca sob demanda: reaproveita o MESMO serviço de ingestão. Não existe um
@@ -785,7 +843,9 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     )
     # Planejamento de Corte: um único gateway somente leitura, o mesmo do
     # script manual. Não existe segundo pipeline SigmaNEST no Gestor.
-    application.state.sigmanest_gateway_factory = SigmaNestSqlServerGateway
+    application.state.sigmanest_gateway_factory = (
+        None if resolved_settings.andon_demo_mode else SigmaNestSqlServerGateway
+    )
     # Um coordenador por aplicação: é ele que impede dois ciclos concorrentes
     # entre o timer de fundo e o botão Atualizar da tela de Corte.
     application.state.sigmanest_refresh = None

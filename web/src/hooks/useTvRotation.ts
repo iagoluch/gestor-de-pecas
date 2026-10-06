@@ -18,8 +18,12 @@ import { useAuth } from "../auth/AuthContext";
 /** Tempo de exibição de cada visão, em segundos. */
 export const TV_ROTATION_SECONDS = 10;
 
-/** Ordem do ciclo: Andon → Solda → Andon → … */
-export const TV_ROTATION_ROUTES = ["/andon", "/welding-management"] as const;
+/**
+ * Ordem do ciclo. Por ora a TV mostra só o Andon (decisão do usuário,
+ * 06/10/2026): a Solda gerencial segue existindo em `/welding-management`,
+ * fora do ciclo. Para religar, acrescente "/welding-management" aqui.
+ */
+export const TV_ROTATION_ROUTES = ["/andon"] as const;
 
 export type TvRotationRoute = (typeof TV_ROTATION_ROUTES)[number];
 
@@ -45,7 +49,7 @@ export function useTvRotation(currentRoute: string): boolean {
   useEffect(() => {
     if (!isTelevision) return undefined;
     const next = nextTvRotationRoute(currentRoute);
-    if (!next) return undefined;
+    if (!next || next === currentRoute) return undefined; // ciclo de uma tela só: nada a alternar
     const timer = window.setTimeout(
       () => navigate(next, { replace: true }),
       TV_ROTATION_SECONDS * 1000,

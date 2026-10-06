@@ -209,13 +209,16 @@ def build_on_demand_sync_service(
     apenas o lookup local — nada é inventado para preencher a lacuna.
     """
 
-    if gateway is None:
+    demo_mode = bool(getattr(settings, "andon_demo_mode", False))
+    if demo_mode:
+        gateway = model_gateway = ingestion_service = None
+    elif gateway is None:
         gateway = ProtheusOnDemandRequestGateway.from_env(env)
     # Sem gateway não existe busca remota, e montar o pipeline de ingestão só
     # para descartá-lo custaria uma consulta de catálogo por requisição.
     if ingestion_service is None and gateway is not None:
         ingestion_service = build_totvs_ingestion_service(repository, settings)
-    if model_gateway is None:
+    if model_gateway is None and not demo_mode:
         model_gateway = ProtheusProductModelGateway.from_env(env)
     return ProductionOrderOnDemandSyncService(
         repository,

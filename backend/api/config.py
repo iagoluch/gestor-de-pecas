@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from ipaddress import ip_network
 import json
@@ -17,6 +17,16 @@ from mes.integrations.totvs.response import DEFAULT_GESTOR_IDENTITY
 
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+
+ANDON_DEMO_DATABASE = "gestor_pecas_test_andon_demo"
+
+_DEMO_DISABLED_ENV_FLAGS = (
+    "GESTOR_TOTVS_ENABLED", "GESTOR_TOTVS_SOAP_ENABLED",
+    "GESTOR_TOTVS_OUTBOX_WORKER_ENABLED", "GESTOR_SIGMANEST_SYNC_ENABLED",
+    "TELEGRAM_ENABLED", "GESTOR_TELEGRAM_BOT_POLLING_ENABLED",
+    "GESTOR_TELEGRAM_DIGEST_ENABLED", "GESTOR_REPORT_AUTOMATION_ENABLED",
+    "GESTOR_AI_ENABLED", "GESTOR_DEV_OBSERVATORY_ENABLED",
+)
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -127,6 +137,7 @@ class WebSettings:
     session_cookie_name: str = "gestor_session"
     csrf_cookie_name: str = "gestor_csrf"
     simulation_mode: bool = False
+    andon_demo_mode: bool = False
     simulation_reference_time: datetime | None = None
     simulation_time_scale: float = 0.0
     ai_enabled: bool = False
@@ -249,9 +260,40 @@ class WebSettings:
     def telegram_configured(self) -> bool:
         return bool(self.telegram_enabled and self.telegram_bot_token.strip())
 
+    def isolated_andon_demo(self) -> "WebSettings":
+        """Aplica o perfil também quando settings são injetados por um caller."""
+        if not self.andon_demo_mode:
+            return self
+        if self.environment != "development" or not self.simulation_mode:
+            raise RuntimeError("A DEMO Andon exige development e modo de simulação.")
+        if self.simulation_reference_time is None:
+            raise RuntimeError("A DEMO Andon exige um relógio de simulação explícito.")
+        return replace(
+            self,
+            session_cookie_name="gestor_andon_demo_session",
+            csrf_cookie_name="gestor_andon_demo_csrf",
+            ai_enabled=False, ai_api_key="",
+            telegram_enabled=False, telegram_bot_token="",
+            telegram_bot_polling_enabled=False, telegram_digest_enabled=False,
+            totvs_enabled=False, totvs_soap_enabled=False,
+            totvs_outbox_worker_enabled=False, totvs_op_pull_enabled=False,
+            sigmanest_sync_enabled=False, report_automation_enabled=False,
+            dev_observatory_enabled=False, dev_observatory_real_dsn="",
+            operator_drawing_roots="",
+        )
+
     @classmethod
     def from_env(cls, environ=None) -> "WebSettings":
         env = environ if environ is not None else os.environ
+        andon_demo_mode = _as_bool(env.get("GESTOR_ANDON_DEMO_MODE"), default=False)
+        if andon_demo_mode:
+            # A configuração herdada do .env não pode montar transports na DEMO.
+            env = dict(env)
+            env.update({name: "0" for name in _DEMO_DISABLED_ENV_FLAGS})
+            env.update({name: "" for name in (
+                "GROQ_API_KEY", "TELEGRAM_BOT_TOKEN", "GESTOR_TOTVS_OP_PULL_ENDPOINT",
+                "GESTOR_DEVOBS_REAL_DATABASE_URL", "DATABASE_URL",
+            )})
         environment = str(env.get("GESTOR_WEB_ENV") or "development").strip().casefold()
         secret = str(env.get("GESTOR_WEB_SESSION_SECRET") or "").strip()
         if not secret:
@@ -353,6 +395,7 @@ class WebSettings:
 
         return cls(
             environment=environment,
+            andon_demo_mode=andon_demo_mode,
             session_secret=secret,
             session_ttl_seconds=max(300, int(env.get("GESTOR_WEB_SESSION_TTL_SECONDS", "28800"))),
             cookie_secure=_as_bool(
@@ -678,4 +721,4 @@ class WebSettings:
                 env.get("GESTOR_DEVOBS_LOGIN_PASSWORD"), default=""
             ),
             dev_observatory_session_secret=dev_observatory_secret,
-        )
+        ).isolated_andon_demo()

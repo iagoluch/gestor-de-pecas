@@ -508,7 +508,7 @@ describe("Ciclo automático da TV", () => {
     expect(container.querySelector(".welding-page--manager")).toBeInTheDocument();
   });
 
-  it("alterna Andon → Solda → Andon a cada 10 segundos, sem nenhum clique", async () => {
+  it("a TV fica só no Andon: o ciclo não alterna para a Solda (06/10/2026)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { container } = renderApp(apiMock(snapshot(), "andon"), "/andon");
 
@@ -516,22 +516,10 @@ describe("Ciclo automático da TV", () => {
     expect(container.querySelector(".andon-page--tv")).toBeInTheDocument();
 
     await act(async () => {
-      vi.advanceTimersByTime(TV_ROTATION_SECONDS * 1000);
+      vi.advanceTimersByTime(TV_ROTATION_SECONDS * 3 * 1000);
     });
-    await screen.findByRole("heading", { name: /acompanhamento da solda/i });
-    expect(container.querySelector(".andon-page")).not.toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(TV_ROTATION_SECONDS * 1000);
-    });
-    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
-    expect(container.querySelector(".welding-page")).not.toBeInTheDocument();
-
-    // Terceira volta: o ciclo não para depois de uma alternância.
-    await act(async () => {
-      vi.advanceTimersByTime(TV_ROTATION_SECONDS * 1000);
-    });
-    await screen.findByRole("heading", { name: /acompanhamento da solda/i });
+    expect(screen.getByRole("heading", { name: /Painéis Operacionais — Andon/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /acompanhamento da solda/i })).not.toBeInTheDocument();
   });
 
   it("não troca de tela antes dos 10 segundos", async () => {
