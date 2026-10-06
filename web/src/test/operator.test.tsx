@@ -119,7 +119,9 @@ describe("fluxo Web do operador", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByRole("heading", { name: "Selecione o recurso" });
-    const shared = await screen.findByRole("button", { name: /1303/ });
+    // O botão do recurso aparece antes de /operator/stations responder; esperar o texto evita a corrida.
+    await screen.findByText("Em uso por 2 OP(s)");
+    const shared = screen.getByRole("button", { name: /1303/ });
     expect(shared).toBeEnabled();
     expect(within(shared).getByText("Em uso por 2 OP(s)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /2204/ })).toBeEnabled();
