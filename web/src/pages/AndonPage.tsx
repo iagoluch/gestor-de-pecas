@@ -38,6 +38,10 @@ function usesPerResourceGroups(sector: AndonSnapshot["sectors"][number]) {
   const groups = sector.groups ?? [];
   return groups.length === 0 || (groups.length === 1 && groups[0].name === sector.name);
 }
+// Cartões que cabem empilhados numa coluna do painel; grupo maior ocupa mais colunas
+// em vez de espremer os cartões (Solda Aço tem 9 estações ao lado de grupos de 1 a 4).
+const CARDS_PER_GROUP_COLUMN = 4;
+const groupColumns = (count: number) => Math.max(1, Math.ceil(count / CARDS_PER_GROUP_COLUMN));
 const PANEL_ICONS: Record<string, string> = {
   Corte: assets.operator.navigation.Corte,
   Caldeiraria: assets.operator.navigation.Dobra,
@@ -251,13 +255,14 @@ function SectorPanel({ sector, elapsed, transitions, highlightAlert = false, onO
       {count === 0 ? (
         <div className="andon-sector-panel__empty">Nenhum recurso ativo</div>
       ) : (
-        <div className="andon-sector-panel__groups" style={{ "--andon-group-count": groups.length } as CSSProperties}>
+        <div className="andon-sector-panel__groups" style={{ "--andon-group-count": groups.reduce((total, group) => total + groupColumns(group.resources.length), 0) } as CSSProperties}>
           {groups.map((group) => (
             <section
               className="andon-resource-group"
               key={group.key}
               aria-label={`${sector.name} — ${group.name}`}
               data-stack={group.resources.length}
+              style={perResource ? undefined : { gridColumn: `span ${groupColumns(group.resources.length)}` }}
             >
               {!hideSingleGroupTitle ? (
                 <header className="andon-resource-group__header"><h3>{group.name}</h3><span>ATIVOS ({group.resources.length})</span></header>
