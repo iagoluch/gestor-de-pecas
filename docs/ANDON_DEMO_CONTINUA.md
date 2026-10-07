@@ -27,8 +27,12 @@ necessários, aqueça o histórico e mantenha a fábrica em execução:
 .\.venv\Scripts\python.exe scripts\run_andon_demo.py --prepare --seed 1234
 ```
 
-No segundo terminal, depois de liberar a porta 8001 do processo anterior,
-carregue o ambiente isolado e inicie o backend oficial:
+No segundo terminal, depois de liberar a porta 8001, carregue o ambiente
+isolado e inicie o backend oficial. Desde 07/10/2026 a porta 8001 é da API
+REAL (configuração `gestor-real-8001`), usada pela TV do Andon em produção; a
+DEMO só deve subir sob demanda e **a API REAL precisa ser parada antes**, para
+a TV não passar a mostrar dados sintéticos. Ao terminar a demonstração, pare a
+DEMO e o simulador e reinicie a API REAL:
 
 ```powershell
 . .\scripts\andon_demo_env.ps1
