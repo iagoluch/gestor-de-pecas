@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import datetime
 import unittest
 
@@ -92,6 +93,38 @@ class AndonActiveResourcesTests(unittest.TestCase):
         self.assertEqual(resources["SOLDA2"]["state"]["display_label"], "Atividade s/OP")
         self.assertIsNone(resources["SOLDA1"]["operation"])
         self.assertIsNone(resources["SOLDA2"]["operation"])
+
+    def test_planta_traz_todo_posto_apontavel_sem_alterar_os_cards_ativos(self):
+        snapshot = self.snapshot()
+        plant = {
+            (resource["panel"], resource["group"], resource["code"]): resource
+            for sector in snapshot["plant_sectors"]
+            for resource in sector["resources"]
+        }
+        by_group = Counter((panel, group) for panel, group, _code in plant)
+
+        self.assertEqual(snapshot["resource_count"], 8)  # cards ativos intactos
+        self.assertEqual(by_group[("Solda", "Aço")], 9 + 2)  # 9 estações + SOLDA1/SOLDA2 (ativos fora do cadastro de postos)
+        self.assertEqual(by_group[("Solda", "Alumínio")], 4)
+        self.assertEqual(by_group[("Solda", "Robô")], 1)
+        self.assertEqual(by_group[("Solda", "Ferramentaria")], 4)
+        self.assertEqual(by_group[("Solda", "Protótipo")], 2)
+        self.assertEqual(by_group[("Pintura", "Pintura")], 5)
+        self.assertEqual(by_group[("Corte", "Destaque")], 1)
+        # posto ativo reaproveita o card (sem duplicar); ocioso vem sem estado registrado
+        self.assertEqual(plant[("Corte", "Laser", "LASER1")]["state"]["category"], "producao")
+        self.assertEqual(plant[("Solda", "Alumínio", "Alumínio 4")]["state"]["category"], "desconhecido")
+        self.assertEqual(plant[("Corte", "Destaque", "DESTAQUE")]["state"]["category"], "desconhecido")
+
+    def test_planta_usa_estado_operacional_do_posto_ocioso(self):
+        states = [*self.states, {"recurso": "Alumínio 2", "setor": "Solda Alumínio", "categoria": "fora_turno", "inicio": self.now}]
+        plant = {
+            resource["code"]: resource
+            for sector in self.snapshot(states)["plant_sectors"]
+            for resource in sector["resources"]
+        }
+
+        self.assertEqual(plant["Alumínio 2"]["state"]["category"], "fora_turno")
 
     def test_finalizacao_remove_recurso_quando_nao_resta_estado_ativo(self):
         before = self.snapshot()

@@ -63,13 +63,13 @@ def _sector_level_slug(name):
 WELDING_FAMILY_SECTORS = (
     (
         "Solda Aço",
-        tuple(f"Estação {number}" for number in range(1, 7)),
-        tuple(f"estacao{number}aco" for number in range(1, 7)),
+        tuple(f"Estação {number}" for number in range(1, 10)),
+        tuple(f"estacao{number}aco" for number in range(1, 10)),
     ),
     (
         "Solda Alumínio",
-        tuple(f"Alumínio {number}" for number in range(1, 4)),
-        tuple(f"estacao{number}alu" for number in range(1, 4)),
+        tuple(f"Alumínio {number}" for number in range(1, 5)),
+        tuple(f"estacao{number}alu" for number in range(1, 5)),
     ),
     ("Solda Robô", ("Robô 1",), ("robo1",)),
     # Proj. Ferramentaria e Protótipo têm uma conta só, mas cobrem mais de um
@@ -82,8 +82,8 @@ WELDING_FAMILY_SECTORS = (
 )
 
 #: Sucessor direto do antigo setor "Solda", mesma regra. Contagem de estações
-#: atualizada em 16/09/2026 (cadastro real de PCs por estação): 6 na Solda
-#: Aço, 3 na Solda Alumínio — antes eram 10 e 6.
+#: atualizada em 07/10/2026 (informada pelo usuário): 9 na Solda Aço, 4 na Solda
+#: Alumínio — em 16/09/2026 eram 6 e 3.
 WELDING_STEEL_SECTOR = WELDING_FAMILY_SECTORS[0][0]
 
 #: Nomes dos cinco setores que substituíram o antigo "Solda". Consultado por

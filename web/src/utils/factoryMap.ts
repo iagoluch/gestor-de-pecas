@@ -74,6 +74,7 @@ export const MAP_LEGEND: ReadonlyArray<{ state: MapState; label: string }> = [
   { state: "fila", label: "Fila (OP aguardando)" },
   { state: "sem_demanda", label: "Sem demanda" },
   { state: "fora_turno", label: "Fora de turno" },
+  { state: "desconhecido", label: "Sem estado registrado" },
 ];
 
 export function mapState(resource: AndonResource): MapState {

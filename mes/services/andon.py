@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 
-from app.core.resource_mapping import resolve_resource_identity, station_resource_code
+from app.core.operator_sectors import OPERATOR_SECTORS
+from app.core.resource_mapping import (
+    STATION_RESOURCE_CODES,
+    resolve_resource_identity,
+    resource_display_name,
+    station_resource_code,
+)
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
 from mes.services.display_labels import strip_status_code_prefix
 
@@ -391,6 +397,9 @@ class AndonService:
             },
             "summary": summary,
             "sectors": sectors,
+            # Todos os postos apontáveis (inclusive os sem estado ativo): é o que o
+            # mapa da fábrica desenha. ``sectors`` segue só com os ativos.
+            "plant_sectors": self._plant_sectors(ordered, operational),
             "resource_count": len(ordered),
             "simulation_only": self.simulation_mode,
             "availability": (
@@ -407,6 +416,59 @@ class AndonService:
                 "cut_context": "apontamentos_corte",
             },
         }
+
+    def _plant_sectors(self, cards, operational):
+        """Todo posto apontável, ativo ou não, agrupado por painel (mapa da fábrica).
+
+        A lista vem de ``OPERATOR_SECTORS`` (o que algum operador aponta), não do
+        catálogo sincronizado. Posto com card ativo reaproveita o card; os demais
+        ganham o estado operacional que existir ou ``desconhecido`` — nunca somem.
+        """
+
+        card_by_identity = {}
+        for card in cards:
+            for identity in (card.get("code"), card.get("name"), resource_display_name(card.get("code"))):
+                card_by_identity.setdefault(_key(identity), card)
+        row_by_identity = {}
+        for raw in operational.get("resources", []) or []:
+            name = raw.get("recurso")
+            for identity in (name, resource_display_name(name)):
+                row_by_identity.setdefault(_key(identity), raw)
+
+        plant = []
+        for sector in OPERATOR_SECTORS:
+            postos = sector.resources or ((sector.name,) if sector.name == "Destaque" else ())
+            for posto in postos:
+                mapped = STATION_RESOURCE_CODES.get((_key(sector.name), _key(posto)))
+                identities = [_key(posto), _key(mapped)] if mapped else [_key(posto)]
+                card = next((card_by_identity[i] for i in identities if i in card_by_identity), None)
+                if card is None:
+                    item = {"tipo_setor": sector.name}
+                    if sector.name == "Destaque":
+                        item = {"tipo_setor": "Corte", "grupo_andon": "Destaque"}
+                    code = mapped or (posto.upper() if sector.name == "Destaque" else posto)
+                    card = self._catalog_resource(item, code=code, name=posto)
+                    row = next((row_by_identity[i] for i in identities if i in row_by_identity), None)
+                    if row is not None:
+                        self._apply_operational_state(card, row)
+                    placement = self._andon_placement(card)
+                    if placement[0] == ANDON_UNCLASSIFIED_PANEL:
+                        continue
+                    card["panel"], card["group"] = placement
+                plant.append(card)
+        # Card ativo que nenhum posto reivindicou (recurso fora do cadastro de
+        # postos) continua na planta: o mapa nunca esconde o que o Andon mostra.
+        placed = {id(card) for card in plant}
+        plant.extend(card for card in cards if id(card) not in placed)
+        return [
+            {
+                "name": panel,
+                "resource_count": len(members),
+                "resources": members,
+            }
+            for panel in ANDON_PANEL_ORDER
+            if (members := [card for card in plant if card.get("panel") == panel])
+        ]
 
     def _active_highlight_resource(self):
         """Consolida eventos canônicos ativos no único posto de Destaque."""

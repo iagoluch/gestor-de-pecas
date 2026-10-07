@@ -106,6 +106,8 @@ export interface AndonSnapshot {
     groups?: Array<{ name: string; resources: AndonResource[] }>;
     resources: AndonResource[];
   }>;
+  /** Todos os postos apontáveis por painel (ativos ou não); o mapa da fábrica desenha este. */
+  plant_sectors?: AndonSnapshot["sectors"];
   resource_count: number;
   simulation_only: boolean;
   availability: Availability;
