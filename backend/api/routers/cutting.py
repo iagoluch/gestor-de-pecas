@@ -18,6 +18,7 @@ from backend.api.schemas.operator import CuttingActionRequest
 from mes.domain import EventCategory
 from mes.services.cut import CutService
 from mes.services.operator_flow import OperatorFlowService
+from mes.services.sigmanest_refresh import SigmaNestRefreshCoordinator
 from mes.services.telegram_alerts import schedule_resource_stop_alert
 from mes.services.telegram_cut import notify_cut_plan_in_background
 
@@ -148,7 +149,8 @@ def _sync_state(request: Request, database) -> dict:
         "ultima_sincronizacao": estado.get("ultima_sincronizacao"),
         "executando": estado.get("executando", False),
         "ciclos": estado.get("ciclos", 0),
-        "erro": estado.get("ultimo_erro"),
+        # Texto bruto (ODBC: servidor/banco/usuário) fica no log e no diagnóstico da gestão.
+        "erro": SigmaNestRefreshCoordinator.MENSAGEM_ERRO if estado.get("ultimo_erro") else None,
         "erro_em": estado.get("ultimo_erro_em"),
         # Só o que a tela precisa; o diagnóstico completo fica no log e no
         # endpoint administrativo.
