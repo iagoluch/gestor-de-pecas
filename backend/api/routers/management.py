@@ -377,7 +377,7 @@ def create_telegram_link_code(
     user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
-    result = database.gerar_codigo_vinculo_telegram(operator_id, criado_por=user.username)
+    result = database.gerar_codigo_vinculo_telegram(operator_id, criado_por=user.name)
     status = result.get("status")
     if status == "nao_encontrado":
         raise AppError("badge_not_found", "Crachá não encontrado ou inativo.", status_code=404)

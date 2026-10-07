@@ -161,5 +161,21 @@ class UserManagementApiTests(unittest.TestCase):
         self.assertEqual(resposta.json()["item"]["nivel"], "admin")
 
 
+    def test_admin_gera_codigo_de_vinculo_do_telegram(self):
+        # Regressão: a rota usava user.username (inexistente em SessionUser) e dava 500.
+        chamadas = []
+
+        def gerar(operador_id, criado_por=None):
+            chamadas.append((operador_id, criado_por))
+            return {"status": "ok", "codigo": "ABC123", "expira_em": "2026-10-07T20:00:00", "operador": "Ana"}
+
+        self.db.gerar_codigo_vinculo_telegram = gerar
+        self._as(_admin_user())
+        resposta = self.client.post("/api/v1/management/badges/7/telegram-link-code")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["code"], "ABC123")
+        self.assertEqual(chamadas, [(7, "Admin Z")])
+
+
 if __name__ == "__main__":
     unittest.main()
