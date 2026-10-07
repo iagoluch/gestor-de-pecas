@@ -79,24 +79,33 @@ describe("Qualidade (cotas padrão) — acesso por nível", () => {
     expect([...QUALITY_TEMPLATE_LEVELS]).toEqual(["admin", "qualidade"]);
   });
 
-  it.each(["qualidade", "admin"])("a aba aparece para %s", async (role) => {
+  it.each(["qualidade", "admin"])("a seção Qualidade aparece para %s, com a aba Cotas padrão", async (role) => {
     stubFetch(role);
     renderAt("/producao/ordens");
+    const menu = await screen.findByRole("navigation", { name: "Navegação gerencial" });
+    expect(within(menu).getByRole("link", { name: /Qualidade/ })).toHaveAttribute("href", "/qualidade/cotas");
     const nav = await screen.findByRole("navigation", { name: "Produção" });
-    expect(within(nav).getByRole("link", { name: "Qualidade" })).toHaveAttribute("href", "/producao/qualidade");
+    expect(within(nav).queryByRole("link", { name: "Qualidade" })).not.toBeInTheDocument();
   });
 
-  it.each(["gestor", "manufatura", "supervisor"])("a aba NÃO aparece para %s", async (role) => {
+  it.each(["gestor", "manufatura", "supervisor"])("a seção Qualidade NÃO aparece para %s", async (role) => {
     stubFetch(role);
     renderAt("/producao/ordens");
-    const nav = await screen.findByRole("navigation", { name: "Produção" });
-    expect(within(nav).getByRole("link", { name: "Ordens de Produção" })).toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: "Qualidade" })).not.toBeInTheDocument();
+    const menu = await screen.findByRole("navigation", { name: "Navegação gerencial" });
+    expect(within(menu).getByRole("link", { name: /Produção/ })).toBeInTheDocument();
+    expect(within(menu).queryByRole("link", { name: /Qualidade/ })).not.toBeInTheDocument();
+  });
+
+  it("a aba Cotas padrão fica dentro da seção Qualidade", async () => {
+    stubFetch("qualidade");
+    renderAt("/qualidade/cotas");
+    const nav = await screen.findByRole("navigation", { name: "Qualidade" });
+    expect(within(nav).getByRole("link", { name: "Cotas padrão" })).toHaveAttribute("href", "/qualidade/cotas");
   });
 
   it("o gestor que abre a URL direta recebe o aviso e nenhuma API de cotas é chamada", async () => {
     const mock = stubFetch("gestor");
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     expect(await screen.findByText("Acesso restrito à Qualidade")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cadastrar produto" })).not.toBeInTheDocument();
     expect(qualityCalls(mock)).toHaveLength(0);
@@ -106,7 +115,7 @@ describe("Qualidade (cotas padrão) — acesso por nível", () => {
 describe("Qualidade (cotas padrão) — lista", () => {
   it("mostra produto, descrição, revisão, nº de cotas e quem atualizou, com paginação de 100", async () => {
     const mock = stubFetch("qualidade");
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("PROD-1");
     const rows = document.querySelectorAll(".data-table tbody tr");
     expect(rows).toHaveLength(2);
@@ -123,7 +132,7 @@ describe("Qualidade (cotas padrão) — lista", () => {
 
   it("a busca vira parâmetro `produto` e volta para a primeira página", async () => {
     const mock = stubFetch("qualidade");
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("PROD-1");
     fireEvent.change(screen.getByLabelText("Produto"), { target: { value: "PROD-9" } });
     await waitFor(() => expect(listCalls(mock).at(-1)).toContain("produto=PROD-9"));
@@ -135,7 +144,7 @@ describe("Qualidade (cotas padrão) — lista", () => {
       if (path.includes("/management/quality-templates?")) return json(listResponse([PROD_1, PROD_2], 150, path.includes("offset=100") ? 100 : 0));
       return undefined;
     });
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("Mostrando 1–2 de 150");
     fireEvent.click(screen.getByRole("button", { name: "Próxima" }));
     await waitFor(() => expect(listCalls(mock).at(-1)).toContain("offset=100"));
@@ -146,14 +155,14 @@ describe("Qualidade (cotas padrão) — lista", () => {
       if (path.includes("/management/quality-templates?")) return json({ code: "quality_templates_access_denied", message: "negado" }, 403);
       return undefined;
     });
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     expect(await screen.findByText(/Seu perfil não tem acesso às cotas padrão/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("quality_templates_access_denied");
   });
 
   it("lista vazia explica o próximo passo", async () => {
     stubFetch("qualidade", (path) => (path.includes("/management/quality-templates?") ? json(listResponse([])) : undefined));
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     expect(await screen.findByText("Nenhum produto com cotas cadastradas")).toBeInTheDocument();
   });
 });
@@ -164,7 +173,7 @@ describe("Qualidade (cotas padrão) — edição", () => {
       if (path.endsWith("/api/v1/quality/templates") && init?.method === "POST") return json({ ok: true, message: "Cotas padrão atualizadas.", code: null, data: {} });
       return undefined;
     });
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("PROD-1");
     const antes = listCalls(mock).length;
 
@@ -201,7 +210,7 @@ describe("Qualidade (cotas padrão) — edição", () => {
       }
       return undefined;
     });
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("PROD-1");
     fireEvent.click(screen.getByRole("button", { name: "Editar cotas de PROD-1" }));
     const dialogo = await screen.findByRole("dialog");
@@ -219,7 +228,7 @@ describe("Qualidade (cotas padrão) — edição", () => {
       if (path.endsWith("/api/v1/quality/templates") && init?.method === "POST") return json({ ok: true, message: "Cotas padrão salvas para o produto.", code: null, data: {} });
       return undefined;
     });
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("PROD-1");
 
     fireEvent.click(screen.getByRole("button", { name: "Cadastrar produto" }));
@@ -243,7 +252,7 @@ describe("Qualidade (cotas padrão) — edição", () => {
 
   it("cadastrar um código que já tem cotas abre a edição, com aviso, em vez de sobrescrever", async () => {
     stubFetch("qualidade");
-    renderAt("/producao/qualidade");
+    renderAt("/qualidade/cotas");
     await screen.findByText("PROD-1");
     fireEvent.click(screen.getByRole("button", { name: "Cadastrar produto" }));
     const dialogo = await screen.findByRole("dialog");

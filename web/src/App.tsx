@@ -151,8 +151,8 @@ export default function App() {
         <Route path="producao/ordens" element={<ProductionOrdersPage />} />
         <Route path="producao/realizada" element={<ProductionCompletedPage />} />
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
-        <Route path="producao/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
-        <Route path="producao/qualidade" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
+        <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
+        <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
 
         <Route path="analises/oee" element={<AnalyticsOeePage />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />

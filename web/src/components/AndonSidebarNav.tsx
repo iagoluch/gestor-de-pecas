@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { assets } from "../config/assets";
-import { isSectionActive, managementSections, sectionById } from "../config/navigation";
+import { isSectionActive, managementSections, sectionById, sectionVisibleFor } from "../config/navigation";
 import { ChamadaSino } from "./ChamadaSino";
 import { LogoutButton } from "./LogoutButton";
 import { SystemClock } from "./SystemClock";
@@ -47,7 +47,7 @@ export function AndonSidebarNav() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [tabsHidden, setTabsHidden] = useState(readStoredHidden);
-  const sections = managementSections.filter((section) => !section.adminOnly || user?.role === "admin");
+  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role));
   const panelsSection = sectionById("panels");
 
   function toggleTabs() {

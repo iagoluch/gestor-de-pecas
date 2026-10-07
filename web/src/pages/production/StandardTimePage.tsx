@@ -223,7 +223,7 @@ export function StandardTimePage() {
   );
 
   return (
-    <PageFrame sectionId="production" title={TITLE} subtitle={SUBTITLE} filters={false} actions={header} staleError={query.data ? query.error : null}>
+    <PageFrame sectionId="manufacturing" title={TITLE} subtitle={SUBTITLE} filters={false} actions={header} staleError={query.data ? query.error : null}>
       {feedback ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
       {confirmDialog}
 

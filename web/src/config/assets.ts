@@ -8,6 +8,8 @@ import audit from "../../../assets/web/navigation/audit.png";
 import reports from "../../../assets/web/navigation/reports.png";
 import traceability from "../../../assets/web/navigation/traceability.png";
 import panels from "../../../assets/web/navigation/panels.svg";
+import manufacturing from "../../../assets/web/navigation/manufacturing.svg";
+import quality from "../../../assets/web/navigation/quality.svg";
 import dev from "../../../assets/web/navigation/dev.svg";
 import search from "../../../assets/icons/Pesquisa.svg";
 import clock from "../../../assets/icons/Relógio.svg";
@@ -111,6 +113,8 @@ export const assets = {
     reports,
     traceability,
     panels,
+    manufacturing,
+    quality,
     dev,
   },
 } as const;

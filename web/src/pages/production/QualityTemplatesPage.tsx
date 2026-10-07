@@ -20,7 +20,7 @@ const LIST_API = "/api/v1/management/quality-templates";
 const TEMPLATE_API = "/api/v1/quality/templates";
 const PAGE_SIZE = 100;
 
-const TITLE = "Produção — Qualidade";
+const TITLE = "Qualidade — Cotas padrão";
 const SUBTITLE = "Consulte e ajuste as cotas padrão de cada produto. Cada alteração gera uma nova revisão e vale para as próximas inspeções.";
 
 /** Mensagem humana por `code`; nunca o código técnico. */
@@ -103,7 +103,7 @@ export function QualityTemplatesPage() {
   );
 
   return (
-    <PageFrame sectionId="production" title={TITLE} subtitle={SUBTITLE} filters={false} actions={header} staleError={query.data ? query.error : null}>
+    <PageFrame sectionId="quality" title={TITLE} subtitle={SUBTITLE} filters={false} actions={header} staleError={query.data ? query.error : null}>
       {feedback ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
 
       <div className="record-toolbar" role="search" aria-label="Filtros das cotas padrão">

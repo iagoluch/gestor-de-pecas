@@ -5,6 +5,8 @@ export type ManagementSectionId =
   | "panels"
   | "operations"
   | "production"
+  | "manufacturing"
+  | "quality"
   | "analytics"
   | "audit"
   | "reports"
@@ -45,6 +47,15 @@ export interface ManagementSection {
   tabs: ManagementTab[];
   /** Só a conta admin vê a seção inteira (decisão do usuário, 14/09/2026). */
   adminOnly?: boolean;
+  /** Níveis (`usuarios.nivel`) que veem a seção. Omitido, vale a regra comum da gestão. */
+  levels?: readonly string[];
+}
+
+/** A seção aparece no menu para este nível? */
+export function sectionVisibleFor(section: ManagementSection, role: string | null | undefined) {
+  if (section.adminOnly && role !== "admin") return false;
+  if (section.levels && !(role && section.levels.includes(role))) return false;
+  return true;
 }
 
 export const managementSections: ManagementSection[] = [
@@ -100,13 +111,32 @@ export const managementSections: ManagementSection[] = [
       { label: "Ordens de Produção", path: "/producao/ordens", screen: "production-orders" },
       { label: "Produção realizada", path: "/producao/realizada", screen: "production-completed" },
       { label: "Planejado × Realizado", path: "/producao/planejado-realizado", screen: "production-plan-actual" },
-      // Cadastro do tempo padrão manual e das estimativas: só a engenharia de
-      // manufatura e o admin (decisão do usuário, 06/10/2026). O gestor comum
-      // não vê a aba nem a rota.
-      { label: "Tempo padrão", path: "/producao/tempo-padrao", screen: "production-standard-time", levels: STANDARD_TIME_LEVELS },
-      // Cotas padrão por produto: só a conta Qualidade e o admin (decisão do
-      // usuário, 06/10/2026). O gestor comum não vê a aba nem a rota.
-      { label: "Qualidade", path: "/producao/qualidade", screen: "production-quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
+    ],
+  },
+  {
+    id: "manufacturing",
+    label: "Manufatura",
+    icon: assets.navigation.manufacturing,
+    defaultPath: "/manufatura/tempo-padrao",
+    // Seção da engenharia de manufatura (decisão do usuário, 07/10/2026): o
+    // cadastro do tempo padrão saiu de Produção e ganhou casa própria; novas
+    // telas da engenharia entram aqui. O gestor comum não vê a seção nem a rota.
+    levels: STANDARD_TIME_LEVELS,
+    tabs: [
+      { label: "Tempo padrão", path: "/manufatura/tempo-padrao", screen: "manufacturing-standard-time", levels: STANDARD_TIME_LEVELS },
+    ],
+  },
+  {
+    id: "quality",
+    label: "Qualidade",
+    icon: assets.navigation.quality,
+    defaultPath: "/qualidade/cotas",
+    // Seção da conta Qualidade (decisão do usuário, 07/10/2026): as cotas padrão
+    // por produto saíram de Produção; novas telas dela entram aqui. O gestor
+    // comum não vê a seção nem a rota.
+    levels: QUALITY_TEMPLATE_LEVELS,
+    tabs: [
+      { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
     ],
   },
   {

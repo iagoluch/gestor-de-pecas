@@ -79,24 +79,33 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("Tempo padrão — acesso por nível", () => {
-  it.each(["manufatura", "admin"])("a aba aparece para %s", async (role) => {
+  it.each(["manufatura", "admin"])("a seção Manufatura aparece para %s, com a aba Tempo padrão", async (role) => {
     stubFetch(role);
     renderAt("/producao/ordens");
+    const menu = await screen.findByRole("navigation", { name: "Navegação gerencial" });
+    expect(within(menu).getByRole("link", { name: /Manufatura/ })).toHaveAttribute("href", "/manufatura/tempo-padrao");
     const nav = await screen.findByRole("navigation", { name: "Produção" });
-    expect(within(nav).getByRole("link", { name: "Tempo padrão" })).toHaveAttribute("href", "/producao/tempo-padrao");
+    expect(within(nav).queryByRole("link", { name: "Tempo padrão" })).not.toBeInTheDocument();
   });
 
-  it("a aba NÃO aparece para o gestor comum", async () => {
+  it("a seção Manufatura NÃO aparece para o gestor comum", async () => {
     stubFetch("gestor");
     renderAt("/producao/ordens");
-    const nav = await screen.findByRole("navigation", { name: "Produção" });
-    expect(within(nav).getByRole("link", { name: "Ordens de Produção" })).toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: "Tempo padrão" })).not.toBeInTheDocument();
+    const menu = await screen.findByRole("navigation", { name: "Navegação gerencial" });
+    expect(within(menu).getByRole("link", { name: /Produção/ })).toBeInTheDocument();
+    expect(within(menu).queryByRole("link", { name: /Manufatura/ })).not.toBeInTheDocument();
+  });
+
+  it("a aba Tempo padrão fica dentro da seção Manufatura", async () => {
+    stubFetch("manufatura");
+    renderAt("/manufatura/tempo-padrao");
+    const nav = await screen.findByRole("navigation", { name: "Manufatura" });
+    expect(within(nav).getByRole("link", { name: "Tempo padrão" })).toHaveAttribute("href", "/manufatura/tempo-padrao");
   });
 
   it("o gestor que abre a URL direta recebe o aviso e a API nem é consultada", async () => {
     const mock = stubFetch("gestor");
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     expect(await screen.findByText("Acesso restrito à engenharia de manufatura")).toBeInTheDocument();
     expect(listCalls(mock)).toHaveLength(0);
   });
@@ -105,7 +114,7 @@ describe("Tempo padrão — acesso por nível", () => {
 describe("Tempo padrão — tela", () => {
   it("lista as operações com a fonte rotulada e o estimado sempre como estimado", async () => {
     stubFetch("manufatura");
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     const rows = document.querySelectorAll(".data-table tbody tr");
     expect(rows).toHaveLength(3);
@@ -120,7 +129,7 @@ describe("Tempo padrão — tela", () => {
 
   it("campo manual fica desabilitado quando o Protheus já define o tempo", async () => {
     stubFetch("manufatura");
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-3");
     const campo = screen.getByLabelText(/Tempo manual em segundos por peça: PROD-3/);
     expect(campo).toBeDisabled();
@@ -134,7 +143,7 @@ describe("Tempo padrão — tela", () => {
       }
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
 
     const campo = screen.getByLabelText(/Tempo manual em segundos por peça: PROD-1/);
@@ -161,7 +170,7 @@ describe("Tempo padrão — tela", () => {
       }
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     const antes = listCalls(mock).length;
 
@@ -176,7 +185,7 @@ describe("Tempo padrão — tela", () => {
 
   it("valida no cliente: zero, acima de 86400 e texto, sem chamar a API", async () => {
     const mock = stubFetch("manufatura");
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     const campo = screen.getByLabelText(/Tempo manual em segundos por peça: PROD-1/);
 
@@ -194,7 +203,7 @@ describe("Tempo padrão — tela", () => {
 
   it("'somente sem padrão' vem ligado e o filtro vira parâmetro da consulta", async () => {
     const mock = stubFetch("manufatura");
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     const toggle = screen.getByRole("checkbox", { name: "Somente sem padrão" });
     expect(toggle).toBeChecked();
@@ -230,7 +239,7 @@ describe("Tempo padrão — tela", () => {
       }
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     fireEvent.click(screen.getByRole("button", { name: "Recalcular estimativas" }));
     const aviso = await screen.findByText(/Estimativas recalculadas: 12 de 340 operações avaliadas/);
@@ -247,7 +256,7 @@ describe("Tempo padrão — tela", () => {
       if (path.includes("/management/standard-times?")) return json(listResponse([comManual]));
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
 
     fireEvent.click(screen.getByRole("button", { name: /^Histórico:/ }));
@@ -282,7 +291,7 @@ describe("Tempo padrão — chave mista e vigência", () => {
       if (path.includes("/management/standard-times?")) return json(listResponse([MISTA, ESTIMADA]));
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-M");
     const rows = document.querySelectorAll(".data-table tbody tr");
     const mista = rows[0] as HTMLElement;
@@ -308,14 +317,14 @@ describe("Tempo padrão — chave mista e vigência", () => {
       }
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-3");
     expect(screen.queryByText(/Manual cobre/)).not.toBeInTheDocument();
   });
 
   it("lembra que o valor manual não altera períodos já passados ao editar", async () => {
     stubFetch("manufatura");
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     expect(screen.queryByText(/não altera períodos já passados\./, { selector: "small" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Tempo manual em segundos por peça: PROD-1/), { target: { value: "30" } });
@@ -334,7 +343,7 @@ describe("Tempo padrão — chave mista e vigência", () => {
       if (path.includes("/management/standard-times?")) return json(listResponse([comManual]));
       return undefined;
     });
-    renderAt("/producao/tempo-padrao");
+    renderAt("/manufatura/tempo-padrao");
     await screen.findByText("PROD-1");
     fireEvent.click(screen.getByRole("button", { name: /^Histórico:/ }));
     const dialogo = await screen.findByRole("dialog", { name: "Histórico do tempo manual" });

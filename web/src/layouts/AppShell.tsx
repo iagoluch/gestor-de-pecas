@@ -9,7 +9,7 @@ import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { assets } from "../config/assets";
 import { useDialogFocus } from "../hooks/useDialogFocus";
-import { isSectionActive, managementSections } from "../config/navigation";
+import { isSectionActive, managementSections, sectionVisibleFor } from "../config/navigation";
 
 const SIDEBAR_COLLAPSED_KEY = "gestor.sidebar.collapsed";
 
@@ -33,7 +33,7 @@ export function AppShell({ children }: PropsWithChildren) {
   // No celular a barra vira gaveta modal: foco preso nela, Esc fecha e o foco
   // volta ao botão de menu (AX-05). No desktop `open` nunca liga.
   useDialogFocus(drawerRef, open, () => setOpen(false));
-  const sections = managementSections.filter((section) => !section.adminOnly || user?.role === "admin");
+  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role));
 
   useEffect(() => {
     try {
