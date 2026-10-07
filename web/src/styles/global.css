@@ -172,7 +172,7 @@ table, .metric-card__value, .insight-drawer__summary strong, .resource-card dd, 
 .metric-card { position: relative; min-width: 0; min-height: 114px; display: flex; flex-direction: column; padding: 17px 18px 14px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); transition: box-shadow .18s var(--ease); overflow: hidden; }
 .metric-card:hover { box-shadow: var(--shadow-hover); }
 /* impeccable-disable-next-line side-tab -- cor fixa por KPI = identidade da série, igual à legenda dos gráficos; não julga o valor */
-.metric-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; border-radius: var(--radius-card) var(--radius-card) 0 0; background: var(--primary-fill); }
+.metric-card::before { content: ""; position: absolute; top: 0; right: 0; left: 0; height: 3px; border-radius: var(--radius-card) var(--radius-card) 0 0; background: var(--primary-fill); }
 .metric-card--success::before { background: var(--accent); }
 .metric-card--warning::before { background: var(--warning); }
 .metric-card--danger::before { background: var(--danger); }
@@ -615,10 +615,10 @@ th[aria-sort="ascending"] .data-table__sort-icon, th[aria-sort="descending"] .da
 .andon-empty { min-height: 420px; display: grid; place-items: center; }
 
 @media (max-width: 1680px) {
-  .andon-header { grid-template-columns: auto minmax(250px, 1fr) auto auto; gap: 18px; padding-inline: 22px; }
+  .andon-header { grid-template-columns: auto minmax(250px, 1fr) auto auto; gap: 18px; padding-left: 22px; padding-right: 22px; }
   .andon-header__brand { min-width: 218px; padding-right: 18px; }
   .andon-header__brand img { width: 205px; }
-  .andon-content { padding-inline: 22px; }
+  .andon-content { padding-left: 22px; padding-right: 22px; }
   .andon-resource-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
@@ -669,7 +669,7 @@ th[aria-sort="ascending"] .data-table__sort-icon, th[aria-sort="descending"] .da
 .andon-card__indicators { min-width: 0; }
 
 @media (min-width: 1700px) and (min-height: 900px) {
-  .andon-page--single-view { height: 100dvh; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  .andon-page--single-view { height: 100vh; height: 100dvh; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
   /* A faixa de Painéis é irmã do quadro no Andon gerencial. Sem uma linha
      própria, ela ocupava o único `1fr` e empurrava o quadro para uma linha
      implícita abaixo da viewport em Full HD. */

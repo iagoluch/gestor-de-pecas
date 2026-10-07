@@ -5,6 +5,7 @@ import { AndonNotifications } from "../components/AndonNotifications";
 import { AndonResourceDrawer } from "../components/AndonResourceDrawer";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
+import { FactoryMap } from "../components/FactoryMap";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { SnapshotStatus } from "../components/SnapshotStatus";
 import { useForceLightTheme } from "../hooks/useForceLightTheme";
@@ -142,6 +143,7 @@ function useResourceTransitions(snapshot: AndonSnapshot | null) {
 
 function ResourceCard({ resource, elapsed, transition, onOpen }: { resource: AndonResource; elapsed: number; transition?: "enter" | "update"; onOpen: (resource: AndonResource) => void }) {
   const operation = resource.operation;
+  const cut = resource.cut;
   const duration = resource.state.duration_seconds;
   const liveDuration = duration === null || duration === undefined ? null : duration + elapsed;
   const oeeValue = resource.metrics.oee.value;
@@ -186,7 +188,13 @@ function ResourceCard({ resource, elapsed, transition, onOpen }: { resource: And
         </div>
       </div>
 
-      {hasOperation ? (
+      {cut && (cut.task || cut.plan) ? (
+        <div className="andon-card__operation">
+          {cut.task ? <div><span>Tarefa</span><strong>{cut.task}</strong></div> : null}
+          {cut.plan ? <div><span>Plano</span><strong>{cut.plan}</strong></div> : null}
+          {cut.sheet || cut.nesting != null ? <small>{[cut.sheet ? `Chapa ${cut.sheet}` : "", cut.nesting != null ? `nesting ${cut.nesting}` : ""].filter(Boolean).join(" · ")}</small> : null}
+        </div>
+      ) : hasOperation ? (
         <div className="andon-card__operation">
           {operation?.op ? <div><span>OP</span><strong>{operation.op}{operation.operation !== null && operation.operation !== undefined ? ` • ${operation.operation}` : ""}</strong></div> : null}
           {operation?.product || operation?.product_description ? (
@@ -337,7 +345,7 @@ export function AndonPage() {
         <SnapshotStatus error={query.error} updatedAt={query.updatedAt} staleClassName="andon-stale" />
         <section className="andon-board-section" aria-labelledby="andon-resources-title">
           <h2 className="visually-hidden" id="andon-resources-title">Recursos ativos por setor</h2>
-          {sectors.length ? (
+          {sectors.length && isTv && !focusedSector ? <FactoryMap sectors={sectors} /> : sectors.length ? (
             <div className={`andon-board${focusedSector ? " andon-board--focus" : ""}`} style={boardStyle}>
               {columns.map((column, index) => (
                 <div

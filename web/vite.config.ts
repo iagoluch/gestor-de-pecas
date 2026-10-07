@@ -23,6 +23,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // A TV do Andon (LG webOS) roda Chrome 79: sem `?.`/`??`, `inset`, etc.
+    target: "chrome79",
+    cssTarget: "chrome79",
   },
   test: {
     environment: "jsdom",

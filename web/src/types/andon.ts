@@ -62,6 +62,8 @@ export interface AndonResource {
   panel?: "Corte" | "Caldeiraria" | "Solda" | "Pintura" | string;
   group?: string | null;
   operation?: AndonOperation | null;
+  /** Só no Corte: tarefa e plano (programa) em execução; `nesting` é a repetição da chapa. */
+  cut?: { task?: string | null; plan?: string | null; sheet?: string | null; nesting?: number | null } | null;
   active_operations: number;
   /** OPs simultâneas no recurso (lista curta, já humanizada; a contagem total é `active_operations`). */
   ops_ativas?: AndonActiveOp[];

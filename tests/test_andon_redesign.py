@@ -247,6 +247,7 @@ class AndonActiveResourcesTests(unittest.TestCase):
         self.assertEqual(laser["state"]["category"], "producao")
         self.assertEqual(laser["state"]["source"], "apontamentos_corte")
         self.assertIn("Tarefa 8478", laser["state"]["activity_description"])
+        self.assertEqual(laser["cut"], {"task": "8478", "plan": "N-8478", "sheet": "CH-1", "nesting": 1})
 
 
 class AndonNoDemandStateTests(unittest.TestCase):

@@ -102,7 +102,7 @@ export function reportTypeLabel(type: unknown): string {
   const normalized = String(type ?? "").trim().toLocaleLowerCase("pt-BR");
   if (!normalized) return "Relatório";
   if (known[normalized]) return known[normalized];
-  const readable = normalized.replaceAll("_", " ");
+  const readable = normalized.replace(/_/g, " ");
   return readable.charAt(0).toLocaleUpperCase("pt-BR") + readable.slice(1);
 }
 

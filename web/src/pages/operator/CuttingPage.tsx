@@ -164,7 +164,7 @@ function slug(value: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
-    .replaceAll(" ", "-");
+    .replace(/ /g, "-");
 }
 
 function produtoDaOp(op: CuttingOp) {

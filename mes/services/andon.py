@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 
-from app.core.resource_mapping import station_resource_code
+from app.core.resource_mapping import resolve_resource_identity, station_resource_code
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
 from mes.services.display_labels import strip_status_code_prefix
 
@@ -225,6 +225,9 @@ class AndonService:
         for raw in cut_rows:
             cut = dict(raw or {})
             resource_name = str(cut.get("maquina") or "").strip()
+            # SigmaNEST manda "LASER"; o catálogo usa LASER1. Sem resolver, o corte
+            # vira um segundo card (corte::LASER) ao lado do recurso catalogado.
+            resource_name = resolve_resource_identity(resource_name)
             station_code = station_resource_code("Corte", resource_name)
             resource_key = (
                 (exact_code_aliases.get(station_code) or f"posto::{station_code}")
@@ -269,6 +272,14 @@ class AndonService:
             )
             if context:
                 resource["state"]["activity_description"] = context
+            # Corte trabalha com tarefa e plano (programa), não com OP/produto; nesting é
+            # a repetição da chapa dentro do plano.
+            resource["cut"] = {
+                "task": task or None,
+                "plan": program or None,
+                "sheet": sheet or None,
+                "nesting": repeat,
+            }
 
         # O catálogo resolve identidade/nome/setor, mas nunca cria um card. Um
         # recurso só entra no Andon se houver estado operacional atual elegível.

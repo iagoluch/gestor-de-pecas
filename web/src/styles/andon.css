@@ -9,6 +9,7 @@ body:has(.andon-page--single-view) #root {
 
 .andon-page {
   width: 100%;
+  height: 100vh;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -343,8 +344,10 @@ body:has(.andon-page--single-view) #root {
   gap: 4px;
   overflow: hidden;
   padding: 3px 5px;
+  border: 1px solid var(--state-color);
   border: 1px solid color-mix(in srgb, var(--state-color) 55%, var(--border));
   border-radius: 5px;
+  color: var(--text);
   color: color-mix(in srgb, var(--state-color) 68%, var(--text));
   background: var(--state-soft);
   font-size: 9px;
@@ -406,6 +409,7 @@ body:has(.andon-page--single-view) #root {
   inset: -3px;
   border: 2px solid transparent;
   border-top-color: var(--primary);
+  border-right-color: transparent;
   border-right-color: color-mix(in srgb, var(--primary) 35%, transparent);
   border-radius: 50%;
   animation: andon-oee-active 2.2s linear infinite;
@@ -577,6 +581,7 @@ body:has(.andon-page--single-view) #root {
     gap: 4px;
     padding: 2px 5px;
     border-color: color-mix(in srgb, var(--state-color) 55%, var(--border));
+    color: var(--text);
     color: color-mix(in srgb, var(--state-color) 68%, var(--text));
     background: var(--state-soft);
     font-size: 10px;
@@ -676,7 +681,7 @@ body:has(.andon-page--single-view) #root {
     --andon-panel-chrome: 82px;
   }
   .andon-sector-panel { grid-template-rows: 37px minmax(0, 1fr); }
-  .andon-sector-panel__header { padding-inline: 9px; }
+  .andon-sector-panel__header { padding-left: 9px; padding-right: 9px; }
   .andon-sector-panel__header img { width: 21px; height: 21px; }
   .andon-sector-panel__header h2 { font-size: 14px; }
   .andon-sector-panel__header > strong { font-size: 8px; }
@@ -745,6 +750,7 @@ body:has(.andon-page--manager) #root {
 
 .andon-page--manager {
   height: auto;
+  min-height: 100vh;
   min-height: 100dvh;
   overflow: visible;
 }
@@ -795,7 +801,7 @@ body:has(.andon-page--manager) #root {
     --andon-panel-chrome: 132px;
   }
   .andon-page--tv .andon-sector-panel { grid-template-rows: 56px minmax(0, 1fr); border-radius: 14px; }
-  .andon-page--tv .andon-sector-panel__header { padding-inline: 20px; }
+  .andon-page--tv .andon-sector-panel__header { padding-left: 20px; padding-right: 20px; }
   .andon-page--tv .andon-sector-panel__header img { width: 34px; height: 34px; }
   .andon-page--tv .andon-sector-panel__header h2 { font-size: 23px; }
   .andon-page--tv .andon-sector-panel__header > strong { font-size: 14px; }
@@ -878,6 +884,7 @@ body:has(.andon-page--manager) #root {
   font-size: clamp(10px, 4.6cqi, 20px);
   line-height: 1.2;
   white-space: normal;
+  overflow-wrap: break-word;
   overflow-wrap: anywhere;
 }
 
@@ -907,7 +914,7 @@ body:has(.andon-page--manager) #root {
 .andon-page--single-view .andon-card--parada .andon-card__state > span { color: var(--state-ink); }
 
 .andon-page--single-view .andon-card--parada .andon-card__state > span {
-  padding-inline: 0;
+  padding-left: 0; padding-right: 0;
   border-color: transparent;
   background: transparent;
 }
@@ -923,11 +930,13 @@ body:has(.andon-page--manager) #root {
 /* Visão geral da TV: parada destaca o painel, mas nunca fixa o rodízio. */
 .andon-page--tv .andon-sector-panel[data-alert="danger"] {
   border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 55%, transparent);
 }
 
 .andon-page--tv .andon-sector-panel[data-alert="warning"] {
   border-color: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 55%, transparent);
 }
 
@@ -966,7 +975,7 @@ body:has(.andon-page--manager) #root {
   border-radius: calc(var(--u) * 8);
 }
 
-.andon-page--tv .andon-board--focus .andon-sector-panel__header { padding-inline: calc(var(--u) * 14); }
+.andon-page--tv .andon-board--focus .andon-sector-panel__header { padding-left: calc(var(--u) * 14); padding-right: calc(var(--u) * 14); }
 .andon-page--tv .andon-board--focus .andon-sector-panel__header img { width: calc(var(--u) * 20); height: calc(var(--u) * 20); }
 .andon-page--tv .andon-board--focus .andon-sector-panel__header h2 { font-size: calc(var(--u) * 18); }
 .andon-page--tv .andon-board--focus .andon-sector-panel__header > strong { font-size: calc(var(--u) * 10); }
@@ -993,10 +1002,8 @@ body:has(.andon-page--manager) #root {
 .andon-page--tv .andon-board--focus .andon-card__state > span { max-width: none; }
 .andon-page--tv .andon-board--focus .andon-card__state > strong { font-size: calc(var(--u) * 12); }
 .andon-page--tv .andon-board--focus .andon-card__state > span { padding: calc(var(--u) * 1) calc(var(--u) * 6); font-size: calc(var(--u) * 10); }
-.andon-page--tv .andon-board--focus .andon-card__indicators { grid-template-columns: calc(var(--u) * 50) minmax(0, 1fr); gap: calc(var(--u) * 8); padding: calc(var(--u) * 6) calc(var(--u) * 8); }
-.andon-page--tv .andon-board--focus .andon-card__oee { width: calc(var(--u) * 50); height: calc(var(--u) * 50); }
+.andon-page--tv .andon-board--focus .andon-card__indicators { gap: calc(var(--u) * 8); padding: calc(var(--u) * 6) calc(var(--u) * 8); }
 .andon-page--tv .andon-board--focus .andon-card__oee span { font-size: calc(var(--u) * 10); }
-.andon-page--tv .andon-board--focus .andon-card__oee strong { font-size: calc(var(--u) * 16); }
 .andon-page--tv .andon-board--focus .andon-card__metrics { gap: calc(var(--u) * 3); }
 .andon-page--tv .andon-board--focus .andon-card__metric { padding: calc(var(--u) * 4) calc(var(--u) * 1); }
 .andon-page--tv .andon-board--focus .andon-card__metric > div:first-child { font-size: calc(var(--u) * 10); }
@@ -1006,6 +1013,19 @@ body:has(.andon-page--manager) #root {
 .andon-page--tv .andon-board--focus .andon-card__operation strong { font-size: calc(var(--u) * 14); }
 .andon-page--tv .andon-board--focus .andon-card__operation small { font-size: calc(var(--u) * 10); }
 .andon-page--tv .andon-board--focus .andon-card__activity { padding: calc(var(--u) * 6) calc(var(--u) * 8); font-size: calc(var(--u) * 10); }
+
+/* Chrome 79 da TV não aplica `gap` em flexbox: o espaço entre rótulo e valor vem de margem. */
+.andon-page--tv .andon-board--focus .andon-card__state { gap: 0; }
+.andon-page--tv .andon-board--focus .andon-card__state > span { gap: 0; }
+.andon-page--tv .andon-board--focus .andon-card__state > span i { width: calc(var(--u) * 6); height: calc(var(--u) * 6); flex-basis: calc(var(--u) * 6); margin-right: calc(var(--u) * 5); }
+.andon-page--tv .andon-board--focus .andon-card__operation > div { gap: 0; }
+.andon-page--tv .andon-board--focus .andon-card__operation > div > strong { margin-left: calc(var(--u) * 6); }
+
+/* Anel do OEE: o miolo e a fonte acompanham `--u`, senão "100%" estoura o círculo. */
+.andon-page--tv .andon-board--focus .andon-card__indicators { grid-template-columns: calc(var(--u) * 52) minmax(0, 1fr); }
+.andon-page--tv .andon-board--focus .andon-card__oee { width: calc(var(--u) * 52); height: calc(var(--u) * 52); }
+.andon-page--tv .andon-board--focus .andon-card__oee::before { top: calc(var(--u) * 4); right: calc(var(--u) * 4); bottom: calc(var(--u) * 4); left: calc(var(--u) * 4); }
+.andon-page--tv .andon-board--focus .andon-card__oee strong { margin-top: calc(var(--u) * 1); font-size: calc(var(--u) * 12); white-space: nowrap; }
 
 /*
  * Balões de mudança de estado, canto superior esquerdo. As cores repetem as do
@@ -1069,10 +1089,12 @@ body:has(.andon-page--manager) #root {
   display: flex;
   align-items: center;
   gap: .45em;
+  color: var(--text);
   color: color-mix(in srgb, var(--state-color) 68%, var(--text));
   font-size: 1.15em;
   font-weight: 800;
   text-transform: uppercase;
+  overflow-wrap: break-word;
   overflow-wrap: anywhere;
 }
 
@@ -1088,3 +1110,100 @@ body:has(.andon-page--manager) #root {
   from { opacity: 0; transform: translateX(-16px); }
   to { opacity: 1; transform: none; }
 }
+
+/*
+ * Navegadores sem `gap` em flexbox (Chrome < 84, caso da TV LG webOS com Chrome 79):
+ * o espaçamento vira margem. `aspect-ratio` chegou depois do `gap`, então o bloco
+ * só vale onde o `gap` não existe e, nos demais, no máximo duplica uma folga.
+ * Cabeçalho do cartão e `.andon-card__state` ficam de fora: no Andon são grid/contents.
+ */
+@supports not (aspect-ratio: 1 / 1) {
+  .andon-board__column > * + * { margin-top: var(--andon-board-gap); }
+  .andon-sector-panel__header > * + * { margin-left: 12px; }
+  .andon-sector-panel__header > div > * + * { margin-left: 9px; }
+  .andon-resource-group__header > * + * { margin-left: 6px; }
+  .andon-card__state > span > i { margin-right: .45em; }
+  .andon-card__operation > div > span { margin-right: .5em; }
+  .andon-toast__header > * + * { margin-left: .6em; }
+  .andon-toast__state > i { margin-right: .45em; }
+}
+
+/* Cartão parado: rótulos cinza sobre o fundo rosado não se leem de longe; usa a cor do texto. */
+.andon-page--tv .andon-board--focus .andon-card--parada .andon-card__oee span,
+.andon-page--tv .andon-board--focus .andon-card--parada .andon-card__metric > div:first-child,
+.andon-page--tv .andon-board--focus .andon-card--parada .andon-card__operation span { color: var(--text); }
+.andon-page--tv .andon-board--focus .andon-card__header { column-gap: calc(var(--u) * 10); }
+
+/* Mapa da fábrica (visão geral da TV): a planta baixa como SVG, uma pastilha por recurso.
+   Chrome 79: sem gap em flex (margens), sem color-mix, só tokens do sistema. */
+.andon-map {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.andon-map__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7vw 1.2vw;
+  color: #fff;
+  background: var(--sidebar);
+}
+.andon-map__header h2 { margin: 0; font-size: clamp(14px, 1.15vw, 44px); letter-spacing: 0.08em; text-transform: uppercase; }
+.andon-map__header span { font-size: clamp(11px, 0.9vw, 34px); color: var(--sidebar-text); }
+.andon-map__plan { display: block; flex: 1 1 0; width: 100%; min-height: 0; }
+.andon-map__structure { fill: none; stroke: var(--border-strong); stroke-width: 2; }
+.andon-map__structure--strong { stroke-width: 4; }
+.andon-map__structure--shaded { fill: var(--surface-alt); }
+.andon-map__area { fill: var(--surface); stroke: var(--border-strong); stroke-width: 2; }
+/* Área sem apontamento = hachurada e tracejada; recurso sem demanda = pastilha cinza lisa (não se confundem). */
+.andon-map__hatch-bg { fill: var(--surface-alt); }
+.andon-map__hatch-line { stroke: var(--border); stroke-width: 3; }
+.andon-map__area--idle { fill: url(#andon-map-hatch); stroke: var(--border-strong); stroke-dasharray: 8 6; }
+.andon-map__label { font-size: 24px; font-weight: 800; letter-spacing: 0.02em; fill: var(--text); }
+.andon-map__area--idle + .andon-map__label { fill: var(--muted); font-weight: 700; }
+.andon-map__tile rect { fill: var(--fill-neutral); stroke: none; }
+.andon-map__tile text { font-size: 15px; font-weight: 800; fill: var(--fill-ink); }
+.andon-map__tile--producao rect, .andon-map__swatch--producao { background: var(--fill-producing); fill: var(--fill-producing); }
+.andon-map__tile--setup rect, .andon-map__swatch--setup { background: var(--fill-setup); fill: var(--fill-setup); }
+.andon-map__tile--parada rect, .andon-map__swatch--parada { background: var(--fill-stopped); fill: var(--fill-stopped); }
+.andon-map__tile--parada_planejada rect, .andon-map__swatch--parada_planejada { background: var(--fill-waiting); fill: var(--fill-waiting); }
+.andon-map__tile--parada_planejada text, .andon-map__tile--atividade_sem_op text, .andon-map__tile--fila text { fill: var(--fill-ink-dark); }
+.andon-map__tile--retrabalho rect, .andon-map__swatch--retrabalho { background: var(--fill-rework); fill: var(--fill-rework); }
+.andon-map__tile--atividade_sem_op rect, .andon-map__swatch--atividade_sem_op { background: var(--teal); fill: var(--teal); }
+.andon-map__tile--fila rect, .andon-map__swatch--fila { background: var(--surface); fill: var(--surface); stroke: var(--muted); stroke-width: 3; }
+.andon-map__tile--sem_demanda rect, .andon-map__swatch--sem_demanda { background: var(--border); fill: var(--border); }
+.andon-map__tile--sem_demanda text { fill: var(--muted); }
+.andon-map__tile--fora_turno rect, .andon-map__swatch--fora_turno { background: var(--fill-neutral); fill: var(--fill-neutral); }
+.andon-map__tile--desconhecido rect, .andon-map__swatch--desconhecido { background: var(--fill-neutral); fill: var(--fill-neutral); }
+.andon-map__legend {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.5vw 1.2vw 0.6vw;
+  border-top: 1px solid var(--border);
+  font-size: clamp(10px, 0.85vw, 32px);
+  color: var(--text);
+  background: var(--surface-alt);
+}
+.andon-map__legend-item { display: inline-flex; align-items: center; margin: 0.15vw 1.4vw 0.15vw 0; white-space: nowrap; }
+.andon-map__swatch {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.45em;
+  border: 2px solid transparent;
+  border-radius: 3px;
+}
+.andon-map__swatch--fila { border-color: var(--muted); }
+.andon-map__swatch--idle { border: 2px dashed var(--border-strong); background: repeating-linear-gradient(135deg, var(--surface-alt) 0, var(--surface-alt) 3px, var(--border) 3px, var(--border) 5px); }
+.andon-map__unplaced { margin-left: auto; color: var(--fill-stopped); }
+.andon-map__swatch--sem_demanda { border-color: var(--border-strong); }

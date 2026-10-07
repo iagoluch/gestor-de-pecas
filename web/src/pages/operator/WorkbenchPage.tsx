@@ -108,7 +108,7 @@ function cardKey(item: OperatorCard) {
 function OperatorCardView({ item, onSelect, selected = false }: { item: OperatorCard; onSelect: (item: OperatorCard) => void; selected?: boolean }) {
   return (
     <button type="button" className={`operator-production-card ${selected ? "operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
-      <div><strong>{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replaceAll(" ", "-")}`}>{displayName(item.status, "Aguardando")}</span></div>
+      <div><strong>{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replace(/ /g, "-")}`}>{displayName(item.status, "Aguardando")}</span></div>
       <dl>
         <div><dt>Operação</dt><dd>{String(item.operation ?? item.numero_operacao ?? "—")}</dd></div>
         <div><dt>Produto</dt><dd>{String(item.product ?? "—")}</dd></div>

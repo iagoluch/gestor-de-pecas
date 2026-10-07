@@ -189,7 +189,7 @@ export function humanizeSlug(value: string): string {
   const base = shouting ? raw.toLocaleLowerCase("pt-BR") : raw;
   const isCode = base.includes("_") || base === base.toLocaleLowerCase("pt-BR");
   return base
-    .replaceAll("_", " ")
+    .replace(/_/g, " ")
     .split(/(\s+)/)
     .map((word) => (isCode ? SLUG_WORDS[word.toLocaleLowerCase("pt-BR")] ?? word : word))
     .join("")
