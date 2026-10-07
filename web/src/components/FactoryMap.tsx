@@ -20,6 +20,12 @@ export function FactoryMap({ sectors }: { sectors: AndonSnapshot["sectors"] }) {
         <span>{model.total - model.unplaced} de {model.total} recursos na planta</span>
       </header>
       <svg className="andon-map__plan" viewBox={MAP_VIEWBOX} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Planta da fábrica com o estado de cada recurso">
+        <defs>
+          <pattern id="andon-map-hatch" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="12" height="12" className="andon-map__hatch-bg" />
+            <line x1="0" y1="0" x2="0" y2="12" className="andon-map__hatch-line" />
+          </pattern>
+        </defs>
         {MAP_STRUCTURE.map((box) => (
           <rect
             key={`${box.x}-${box.y}`}
