@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { api, ApiError } from "../../api/client";
 import { AsyncButton } from "../../components/AsyncButton";
@@ -406,11 +406,15 @@ function ManualTimeCell({ row, onSaved, onStale }: {
   const dirty = value.trim() !== savedValue || note.trim() !== savedNote;
 
   // Depois de recarregar a lista, o campo volta a refletir o que está salvo.
-  useEffect(() => {
+  // O ajuste é feito durante a renderização, não em useEffect: um efeito passivo
+  // roda depois do commit e, se atrasasse, apagava o que o usuário já digitou.
+  const [syncedFrom, setSyncedFrom] = useState({ savedValue, savedNote });
+  if (syncedFrom.savedValue !== savedValue || syncedFrom.savedNote !== savedNote) {
+    setSyncedFrom({ savedValue, savedNote });
     setValue(savedValue);
     setNote(savedNote);
     setError("");
-  }, [savedValue, savedNote]);
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();

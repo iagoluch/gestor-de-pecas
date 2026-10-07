@@ -936,12 +936,16 @@ function SetupQualityDialog({
   // conforme `state.bloqueio_ativo` muda. Sem este reset, a medição reprovada
   // e o destino "RETRABALHO" ficavam presos no formulário depois de autorizar,
   // e reenviar sem perceber bloqueava a OP de novo com os mesmos dados.
-  useEffect(() => {
+  // O reset é feito durante a renderização, não em useEffect: um efeito passivo
+  // atrasado rodava depois da primeira digitação e apagava a medida já informada.
+  const [resetBloqueio, setResetBloqueio] = useState(state?.bloqueio_ativo);
+  if (resetBloqueio !== state?.bloqueio_ativo) {
+    setResetBloqueio(state?.bloqueio_ativo);
     setMeasures({});
     setDestination("RETRABALHO");
     setBadge("");
     setNote("");
-  }, [state?.bloqueio_ativo]);
+  }
 
   const cotas: QualityDimension[] = state?.checklist?.template?.cotas ?? [];
   const setupPendente = Boolean(state?.setup_obrigatorio && !state?.setup_registrado);
