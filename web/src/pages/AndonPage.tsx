@@ -201,9 +201,9 @@ function ResourceCard({ resource, elapsed, transition, onOpen }: { resource: And
       ) : hasOperation ? (
         <div className="andon-card__operation">
           {operation?.op ? <div><span>OP</span><strong>{operation.op}{operation.operation !== null && operation.operation !== undefined ? ` • ${operation.operation}` : ""}</strong></div> : null}
-          {operation?.product || operation?.product_description ? (
-            <div title={operation.product_description ?? operation.product ?? undefined}>
-              <span>Produto</span><strong>{operation.product_description ?? operation.product}</strong>
+          {operation?.product_description ? (
+            <div className="andon-card__product" title={operation.product_description}>
+              <span>Produto</span><strong>{operation.product_description}</strong>
             </div>
           ) : null}
           {resource.active_operations > 1 ? <small>+ {resource.active_operations - 1} OP(s) simultânea(s)</small> : null}

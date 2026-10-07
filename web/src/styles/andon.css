@@ -1010,8 +1010,11 @@ body:has(.andon-page--manager) #root {
 .andon-page--tv .andon-board--focus .andon-card__metric strong { font-size: calc(var(--u) * 10.5); white-space: nowrap; }
 .andon-page--tv .andon-board--focus .andon-card__operation { grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 3); padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 7); }
 .andon-page--tv .andon-board--focus .andon-card__operation span { font-size: calc(var(--u) * 10); }
-.andon-page--tv .andon-board--focus .andon-card__operation strong { font-size: calc(var(--u) * 14); }
+.andon-page--tv .andon-board--focus .andon-card__operation strong { font-size: calc(var(--u) * 14); white-space: normal; -webkit-line-clamp: 2; }
 .andon-page--tv .andon-board--focus .andon-card__operation small { font-size: calc(var(--u) * 10); }
+/* Produto: descrição em até 2 linhas na largura toda (sem o rótulo); código sem espaço ("SRF004001001") quebra em vez de virar reticências. */
+.andon-page--tv .andon-board--focus .andon-card__product > span { display: none; }
+.andon-page--tv .andon-board--focus .andon-card__operation > .andon-card__product > strong { margin-left: 0; font-size: calc(var(--u) * 12); line-height: 1.1; overflow-wrap: break-word; word-wrap: break-word; }
 .andon-page--tv .andon-board--focus .andon-card__activity { padding: calc(var(--u) * 6) calc(var(--u) * 8); font-size: calc(var(--u) * 10); }
 
 /* Chrome 79 da TV não aplica `gap` em flexbox: o espaço entre rótulo e valor vem de margem. */
@@ -1175,35 +1178,33 @@ body:has(.andon-page--manager) #root {
 .andon-map__tile--setup rect, .andon-map__swatch--setup { background: var(--fill-setup); fill: var(--fill-setup); }
 .andon-map__tile--parada rect, .andon-map__swatch--parada { background: var(--fill-stopped); fill: var(--fill-stopped); }
 .andon-map__tile--parada_planejada rect, .andon-map__swatch--parada_planejada { background: var(--fill-waiting); fill: var(--fill-waiting); }
-.andon-map__tile--parada_planejada text, .andon-map__tile--atividade_sem_op text, .andon-map__tile--fila text { fill: var(--fill-ink-dark); }
+.andon-map__tile--parada_planejada text, .andon-map__tile--atividade_sem_op text { fill: var(--fill-ink-dark); }
 .andon-map__tile--retrabalho rect, .andon-map__swatch--retrabalho { background: var(--fill-rework); fill: var(--fill-rework); }
 .andon-map__tile--atividade_sem_op rect, .andon-map__swatch--atividade_sem_op { background: var(--teal); fill: var(--teal); }
-.andon-map__tile--fila rect, .andon-map__swatch--fila { background: var(--surface); fill: var(--surface); stroke: var(--muted); stroke-width: 3; }
 .andon-map__tile--sem_demanda rect, .andon-map__swatch--sem_demanda { background: var(--border); fill: var(--border); }
-.andon-map__tile--sem_demanda text { fill: var(--muted); }
-.andon-map__tile--fora_turno rect, .andon-map__swatch--fora_turno { background: var(--fill-neutral); fill: var(--fill-neutral); }
-.andon-map__tile--desconhecido rect, .andon-map__swatch--desconhecido { background: var(--fill-neutral); fill: var(--fill-neutral); }
+.andon-map__tile--sem_demanda text { fill: var(--fill-ink-dark); }
 .andon-map__legend {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  padding: 0.5vw 1.2vw 0.6vw;
+  justify-content: center;
+  padding: 0.7vw 1.2vw 0.8vw;
   border-top: 1px solid var(--border);
-  font-size: clamp(10px, 0.85vw, 32px);
+  font-size: clamp(14px, 1.3vw, 48px);
+  font-weight: 700;
   color: var(--text);
   background: var(--surface-alt);
 }
-.andon-map__legend-item { display: inline-flex; align-items: center; margin: 0.15vw 1.4vw 0.15vw 0; white-space: nowrap; }
+.andon-map__legend-item { display: inline-flex; align-items: center; margin: 0.2vw 1.2vw; white-space: nowrap; }
 .andon-map__swatch {
   display: inline-block;
-  width: 1.1em;
-  height: 1.1em;
-  margin-right: 0.45em;
+  width: 1.4em;
+  height: 1.4em;
+  margin-right: 0.5em;
   border: 2px solid transparent;
   border-radius: 3px;
 }
-.andon-map__swatch--fila { border-color: var(--muted); }
 .andon-map__swatch--idle { border: 2px dashed var(--border-strong); background: repeating-linear-gradient(135deg, var(--surface-alt) 0, var(--surface-alt) 3px, var(--border) 3px, var(--border) 5px); }
 .andon-map__unplaced { margin-left: auto; color: var(--fill-stopped); }
 .andon-map__swatch--sem_demanda { border-color: var(--border-strong); }

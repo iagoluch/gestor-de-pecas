@@ -59,10 +59,7 @@ export type MapState =
   | "parada_planejada"
   | "retrabalho"
   | "atividade_sem_op"
-  | "fila"
-  | "sem_demanda"
-  | "fora_turno"
-  | "desconhecido";
+  | "sem_demanda";
 
 export const MAP_LEGEND: ReadonlyArray<{ state: MapState; label: string }> = [
   { state: "producao", label: "Produção" },
@@ -71,15 +68,14 @@ export const MAP_LEGEND: ReadonlyArray<{ state: MapState; label: string }> = [
   { state: "parada_planejada", label: "Parada planejada" },
   { state: "retrabalho", label: "Retrabalho" },
   { state: "atividade_sem_op", label: "Atividade sem OP" },
-  { state: "fila", label: "Fila (OP aguardando)" },
   { state: "sem_demanda", label: "Sem demanda" },
-  { state: "fora_turno", label: "Fora de turno" },
-  { state: "desconhecido", label: "Sem estado registrado" },
 ];
 
 export function mapState(resource: AndonResource): MapState {
   const { category, stop_classification: classification } = resource.state;
   if (category === "parada") return classification === "planejada" ? "parada_planejada" : "parada";
+  // Recurso ocioso (fila, fora de turno, sem estado) é um só: sem demanda. A planta não distingue ociosidades.
+  if (category === "fila" || category === "fora_turno" || category === "desconhecido") return "sem_demanda";
   return category;
 }
 

@@ -71,6 +71,11 @@ describe("mapState / tileLayout", () => {
     expect(mapState(resource("Corte", "Laser", "L", "L", "parada", "planejada"))).toBe("parada_planejada");
     expect(mapState(resource("Corte", "Laser", "L", "L", "parada", "nao_planejada"))).toBe("parada");
   });
+  it("recurso ocioso (fila, fora de turno, sem estado) usa a cor de sem demanda", () => {
+    (["fila", "fora_turno", "desconhecido", "sem_demanda"] as const).forEach((category) => {
+      expect(mapState(resource("Corte", "Laser", "L", "L", category))).toBe("sem_demanda");
+    });
+  });
   it("pastilhas: uma linha quando cabem, duas quando ficariam estreitas, nunca fora da área", () => {
     const solda = MAP_AREAS.find((a) => a.id === "solda-aco")!;
     const usinagem = MAP_AREAS.find((a) => a.id === "usinagem")!;
