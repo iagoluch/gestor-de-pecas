@@ -999,7 +999,7 @@ body:has(.andon-page--manager) #root {
 .andon-page--tv .andon-board--focus .andon-card__header { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 2); padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 5); }
 .andon-page--tv .andon-board--focus .andon-card__identity > strong { overflow: visible; text-overflow: clip; font-size: calc(var(--u) * 14 * var(--name-fit, 1)); line-height: 1.15; }
 .andon-page--tv .andon-board--focus .andon-card__state { justify-content: space-between; }
-.andon-page--tv .andon-board--focus .andon-card__state > span { max-width: none; }
+.andon-page--tv .andon-board--focus .andon-card__state > span { max-width: none; grid-column: 1 / span 2; }
 .andon-page--tv .andon-board--focus .andon-card__state > strong { font-size: calc(var(--u) * 12); }
 .andon-page--tv .andon-board--focus .andon-card__state > span { padding: calc(var(--u) * 1) calc(var(--u) * 6); font-size: calc(var(--u) * 10); }
 .andon-page--tv .andon-board--focus .andon-card__indicators { gap: calc(var(--u) * 6); padding: calc(var(--u) * 6) calc(var(--u) * 6); }
