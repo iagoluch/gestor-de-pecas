@@ -53,7 +53,6 @@ from backend.api.routers import (
     reports,
     system,
     traceability,
-    welding,
 )
 from backend.observability import DevObservatoryRecorder
 from backend.observability.capture import record_exception, record_response
@@ -990,7 +989,6 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.include_router(cutting.router, prefix=prefix)
     application.include_router(highlight.router, prefix=prefix)
     application.include_router(andon.router, prefix=prefix)
-    application.include_router(welding.router, prefix=prefix)
     application.include_router(management.router, prefix=prefix)
     application.include_router(operations.router, prefix=prefix)
     application.include_router(orders.router, prefix=prefix)

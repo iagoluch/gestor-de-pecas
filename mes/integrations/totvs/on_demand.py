@@ -503,11 +503,9 @@ class ProductionOrderOnDemandSyncService:
     def _sync_product_model_best_effort(self, order: dict, *, branch_id: str | None = None) -> None:
         """Busca o MODELO do produto após uma OP nascer, sem bloquear o operador.
 
-        ``B1_ZMODELO`` só tem sentido para conjunto soldado — é o campo que a
-        tela `/welding-management` mostra na coluna MÁQUINA/MODELO. Consultar
-        para toda OP seria uma chamada ao TOTVS sem consumidor nenhum, então
-        só dispara quando a OP tem operação ativa em algum setor da frente de
-        Solda.
+        ``B1_ZMODELO`` só tem sentido para conjunto soldado. Consultar para
+        toda OP seria uma chamada ao TOTVS sem consumidor, então só dispara
+        quando a OP tem operação ativa em algum setor da frente de Solda.
 
         Best-effort de propósito: a OP acabou de ser provisionada com sucesso e
         isso não pode regredir por causa de um campo auxiliar. Sem

@@ -15,7 +15,6 @@ from . import (
     reports,
     system,
     traceability,
-    welding,
 )
 
 __all__ = [
@@ -33,5 +32,4 @@ __all__ = [
     "reports",
     "system",
     "traceability",
-    "welding",
 ]

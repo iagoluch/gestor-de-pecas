@@ -43,7 +43,6 @@ from mes.services.management import ManagementService
 from mes.services.management_insights import ManagementInsightsService
 from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.traceability import TraceabilityService
-from mes.services.welding import WeldingManagementService
 
 
 #: Tipos aceitos pela fachada de relatórios da Web. A lista é o contrato: um
@@ -157,11 +156,6 @@ class FrontendBackendFacade:
         self.traceability = TraceabilityService(db)
         self.andon_service = AndonService(
             db,
-            simulation_mode=self.simulation_mode,
-        )
-        self.welding_management = WeldingManagementService(
-            db,
-            now_func=self._now,
             simulation_mode=self.simulation_mode,
         )
 
@@ -785,16 +779,6 @@ class FrontendBackendFacade:
             overview=overview,
             catalogo_recursos=catalogo_recursos,
         )
-
-    def solda_gerencial(self):
-        """Acompanhamento gerencial da Solda, sem recorte de período.
-
-        A PCP acompanha a situação corrente das OPs de conjunto soldado, não um
-        intervalo fechado; por isso a visão não recebe filtro de período e a
-        mesma projeção serve a tela de gestão e o ciclo da TV.
-        """
-
-        return self.welding_management.acompanhamento()
 
     def producao(self, filters: AnalyticsFilter):
         return {

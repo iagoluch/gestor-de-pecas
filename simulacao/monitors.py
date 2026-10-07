@@ -269,7 +269,6 @@ class Supervisor:
         await self.sessao.call(
             "GET", "/operations/overview", params=periodo, action="ler_consulta_operacional"
         )
-        await self.sessao.call("GET", "/welding", action="ler_gestao_solda")
         await self.sessao.call(
             "GET", "/management/internal-alerts", params={"pending_only": True},
             action="ler_alertas_internos",

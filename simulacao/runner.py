@@ -762,7 +762,6 @@ class SimulationRunner:
             ("andon", f"http://127.0.0.1:{base}/andon"),
             ("gestao_visao_geral", f"http://127.0.0.1:{base}/inicio/visao-geral"),
             ("gestao_setores", f"http://127.0.0.1:{base}/inicio/setores"),
-            ("solda_gerencial", f"http://127.0.0.1:{base}/welding-management"),
         ]
         # A TV entra no ciclo sozinha: abrir /andon no perfil dedicado e esperar
         # mais de 10 s captura a segunda visão sem navegar para ela.

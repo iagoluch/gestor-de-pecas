@@ -8,7 +8,6 @@ import "./styles/tokens.css";
 import "./styles/global.css";
 import "./styles/ai.css";
 import "./styles/andon.css";
-import "./styles/welding.css";
 import "./styles/standard-time.css";
 import "./styles/quality-templates.css";
 

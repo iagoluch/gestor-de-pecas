@@ -7,7 +7,6 @@ import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
 import { AndonPage } from "./pages/AndonPage";
-import { WeldingManagementPage } from "./pages/WeldingManagementPage";
 import { ManagementOverviewPage } from "./pages/ManagementOverviewPage";
 import { ManagementGoalsPage } from "./pages/home/GoalsPage";
 import { ManagementPausesPage } from "./pages/home/PausesPage";
@@ -116,9 +115,6 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/andon" element={<RequireAuth andon><AndonPage /></RequireAuth>} />
-      {/* Visão gerencial da Solda. Compartilha a autorização do Andon porque
-          participa do mesmo ciclo de TV, sem aplicação nem login separados. */}
-      <Route path="/welding-management" element={<RequireAuth andon><WeldingManagementPage /></RequireAuth>} />
       <Route
         path="/"
         element={(
@@ -132,7 +128,6 @@ export default function App() {
         <Route path="inicio/setores" element={<HomeSectorsPage />} />
         <Route path="inicio/alertas" element={<HomeAlertsPage />} />
         <Route path="inicio/andon" element={<Navigate to="/andon" replace />} />
-        <Route path="inicio/solda" element={<Navigate to="/welding-management" replace />} />
         <Route path="inicio/metas" element={<ManagementGoalsPage />} />
         <Route path="inicio/pausas" element={<ManagementPausesPage />} />
         <Route path="inicio/crachas" element={<RequireAdmin><ManagementBadgesPage /></RequireAdmin>} />

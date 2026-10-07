@@ -14,10 +14,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from app.database.welding_repository import WELDING_MANAGEMENT_SECTORS
+from app.core.operator_sectors import WELDING_SECTOR_NAMES
 
 
 MAX_ERROR_MESSAGE_CHARS = 2000
+
+#: Setores da frente de Solda. ``"Solda"`` continua na lista porque roteiros já
+#: gravados mantêm esse ``tipo_setor`` até a próxima sincronização da OP.
+WELDING_MANAGEMENT_SECTORS = ("Solda", *WELDING_SECTOR_NAMES)
 
 SYNC_REQUEST_COLUMNS = """
     id, codigo_op, status, attempts, requested_at, finished_at,
@@ -197,10 +201,9 @@ class TotvsOpSyncRepositoryMixin:
     def op_possui_operacao_solda(self, codigo_op: str) -> bool:
         """``B1_ZMODELO`` só tem sentido para conjunto soldado.
 
-        A tela que consome o campo (``/welding-management``) é a própria
-        definição de escopo: só as OPs com operação ativa nos setores da
-        frente de Solda precisam desse dado. Consultar o modelo para as
-        demais OPs seria uma chamada ao TOTVS sem nenhum consumidor.
+        Só as OPs com operação ativa nos setores da frente de Solda precisam
+        desse dado; consultar o modelo para as demais seria uma chamada ao
+        TOTVS sem consumidor.
         """
 
         codigo = str(codigo_op or "").strip().upper()

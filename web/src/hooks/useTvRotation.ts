@@ -19,9 +19,8 @@ import { useAuth } from "../auth/AuthContext";
 export const TV_ROTATION_SECONDS = 10;
 
 /**
- * Ordem do ciclo. Por ora a TV mostra só o Andon (decisão do usuário,
- * 06/10/2026): a Solda gerencial segue existindo em `/welding-management`,
- * fora do ciclo. Para religar, acrescente "/welding-management" aqui.
+ * Ordem do ciclo. A TV mostra só o Andon (decisão do usuário, 06/10/2026);
+ * a tela gerencial da Solda foi removida em 07/10/2026.
  */
 export const TV_ROTATION_ROUTES = ["/andon"] as const;
 

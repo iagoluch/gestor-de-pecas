@@ -7,7 +7,6 @@ import time as epoch_time
 from app.core.normalization import limpa_codigo, normalizar_data_db
 from app.core.resource_mapping import resolve_resource_identity, resource_display_name
 from app.database.schema import SCHEMA_VERSION
-from app.database.welding_repository import WELDING_MANAGEMENT_SECTORS
 from mes.domain import (
     ManufacturingRules,
     OperatorState,
@@ -18,10 +17,6 @@ from mes.domain import (
     resource_concurrency_conflict,
     return_state_for_transition,
 )
-
-
-#: Espelho do filtro de setor usado pela leitura gerencial da Solda no SQL.
-_SETORES_SOLDA = {nome.upper() for nome in WELDING_MANAGEMENT_SECTORS}
 
 
 class FakeDatabase:
@@ -1872,89 +1867,6 @@ class FakeDatabase:
 
     def listar_apontamentos_operacionais_periodo(self, tipo_setor, inicio, fim):
         return [dict(item) for item in self.appointments if item["tipo_setor"].upper() == tipo_setor.upper() and item["data_inicio"]]
-
-    def listar_ops_solda_gerencial(self, *, limite=300):
-        """Espelho em memória da leitura gerencial das OPs de Solda (Wave 6D).
-
-        Reproduz as mesmas junções do PostgreSQL: roteiro ativo de Solda, OP
-        ativa do catálogo, execução da própria operação e o primeiro apontamento
-        da OP inteira (base da regra de atraso).
-        """
-
-        ativos = ("Aguardando", "Em processo", "Parada", "Setup", "Retrabalho")
-        pcp_por_op = {
-            row["codigo_op"]: row
-            for row in self.pcp_ops
-            if row.get("ativo", True)
-        }
-        resultado = []
-        operacoes = sorted(
-            (
-                row for row in self.catalog_operations
-                if row.get("ativo", True)
-                and str(row.get("tipo_setor") or "").upper() in _SETORES_SOLDA
-                and row["codigo_op"] in pcp_por_op
-            ),
-            key=lambda row: (row["codigo_op"], int(row.get("ordem") or 0), int(row.get("id") or 0)),
-        )
-        for operacao in operacoes:
-            pcp = pcp_por_op[operacao["codigo_op"]]
-            candidatos = [
-                item for item in self.appointments
-                if item["op"] == operacao["codigo_op"]
-                and str(item["tipo_setor"]).upper() in _SETORES_SOLDA
-                and (
-                    item.get("catalogo_operacao_id") == operacao.get("id")
-                    or (
-                        item.get("catalogo_operacao_id") is None
-                        and str(item.get("numero_operacao") or "")
-                        == str(operacao.get("numero_operacao") or "")
-                    )
-                )
-            ]
-            execucao = next(
-                iter(sorted(
-                    candidatos,
-                    key=lambda item: (
-                        0 if item["status"] in ativos else 1,
-                        -(item.get("data_fim") or item.get("data_inicio") or item["data_entrada"]).timestamp(),
-                        -int(item["id"]),
-                    ),
-                )),
-                None,
-            )
-            instantes = [
-                item.get("data_inicio") or item.get("data_entrada")
-                for item in self.appointments
-                if item["op"] == operacao["codigo_op"]
-            ]
-            instantes = [valor for valor in instantes if valor is not None]
-            resultado.append({
-                "codigo_op": operacao["codigo_op"],
-                "numero_operacao": operacao.get("numero_operacao"),
-                "ordem": operacao.get("ordem"),
-                "codigo_recurso": operacao.get("codigo_recurso"),
-                "descricao_operacao": operacao.get("descricao_operacao"),
-                "recurso_nome": operacao.get("recurso_nome"),
-                "produto_codigo": pcp.get("produto_codigo"),
-                "produto_descricao": pcp.get("produto_descricao"),
-                "produto_modelo": pcp.get("produto_modelo"),
-                "quantidade": pcp.get("quantidade"),
-                "data_emissao": pcp.get("data_emissao"),
-                "prazo_entrega": pcp.get("prazo_entrega"),
-                "inicio_planejado": pcp.get("inicio_planejado"),
-                "fim_planejado": pcp.get("fim_planejado"),
-                "data_geracao": pcp.get("totvs_generated_on"),
-                "estacao_observada": (execucao or {}).get("maquina"),
-                "status_apontamento": (execucao or {}).get("status"),
-                "apontamento_inicio": (execucao or {}).get("data_inicio"),
-                "apontamento_fim": (execucao or {}).get("data_fim"),
-                "operador_inicio": (execucao or {}).get("operador_inicio"),
-                "operador_fim": (execucao or {}).get("operador_fim"),
-                "primeiro_apontamento": min(instantes) if instantes else None,
-                "total_apontamentos": len(instantes),
-            })
-        return resultado[:int(limite)]
 
     def transicionar_apontamento_operador(
         self, apontamento_id, estado, operador, *, motivo=None, comentario=None,

@@ -81,8 +81,6 @@ export const managementSections: ManagementSection[] = [
     defaultPath: "/inicio/andon",
     tabs: [
       { label: "Andon", path: "/inicio/andon", screen: "panels-andon" },
-      // Solda: aba oculta a pedido do usuário (21/09/2026). A tela e a rota
-      // seguem existindo (`/welding-management`) — nada foi excluído.
       // Metas: aba oculta temporariamente a pedido do usuário (01/10/2026).
       // Página e rota seguem existindo (`/inicio/metas`) — para voltar, basta
       // descomentar a linha abaixo.

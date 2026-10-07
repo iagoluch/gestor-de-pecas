@@ -1463,7 +1463,6 @@ class WebApiTests(unittest.TestCase):
         for path in (
             "/api/v1/auth/login",
             "/api/v1/andon",
-            "/api/v1/welding",
             "/api/v1/management/overview",
             "/api/v1/management/insights",
             "/api/v1/management/kpis/{kpi_key}/explanation",
@@ -1478,41 +1477,6 @@ class WebApiTests(unittest.TestCase):
             "/api/v1/traceability/orders/{op}",
         ):
             self.assertIn(path, paths)
-
-    def test_solda_gerencial_e_leitura_compartilhada_com_o_perfil_de_tv(self):
-        """Wave 6D — a visão gerencial da Solda usa a autorização do Andon.
-
-        A mesma projeção serve a tela de gestão e o ciclo da TV, sem segundo
-        backend e sem autenticação própria. O posto não acessa: a tela é de
-        acompanhamento, não de execução.
-        """
-
-        for suffix in ("A", "B"):
-            self.db.pcp_ops.append({
-                "codigo_op": f"OP-SOLDA-{suffix}",
-                "produto_codigo": f"PECA-SOLDA-{suffix}",
-                "produto_descricao": "Peça de solda Web",
-                "produto_modelo": None,
-                "quantidade": 1,
-                "unidade": "UN",
-                "ativo": True,
-                "fim_planejado": datetime(2026, 12, 31, 17, 30),
-            })
-
-        self.login_andon()
-        resposta = self.client.get("/api/v1/welding")
-        self.assertEqual(resposta.status_code, 200, resposta.text)
-        leitura = resposta.json()
-        self.assertEqual(leitura["setor"], "Solda")
-        linhas = [linha for grupo in leitura["estacoes"] for linha in grupo["ops"]]
-        self.assertEqual({linha["op"] for linha in linhas}, {"OP-SOLDA-A", "OP-SOLDA-B"})
-        # Sem execução observada, a estação continua ausente e declarada.
-        self.assertTrue(all(linha["estacao"]["value"] is None for linha in linhas))
-        self.assertTrue(all(linha["modelo"]["value"] is None for linha in linhas))
-
-        self.client.cookies.clear()
-        self.login_operator()
-        self.assertEqual(self.client.get("/api/v1/welding").status_code, 403)
 
     def test_andon_entrega_snapshot_geral_agrupado_e_somente_leitura(self):
         now = datetime(2026, 8, 24, 14, 30)

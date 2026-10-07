@@ -36,7 +36,6 @@ from app.database.totvs_repository import TotvsRepositoryMixin
 from app.database.totvs_outbound_repository import TotvsOutboundRepositoryMixin
 from app.database.totvs_outbox_repository import TotvsOutboxRepositoryMixin
 from app.database.totvs_op_sync_repository import TotvsOpSyncRepositoryMixin
-from app.database.welding_repository import WeldingRepositoryMixin
 from app.database.connection import PostgresPoolManager
 from app.database.diagnostics import run_database_diagnostic
 from app.database.errors import DatabaseIntegrityError, PauseOrderConflictError
@@ -196,7 +195,6 @@ class Database(
     TotvsOpSyncRepositoryMixin,
     ChamadaRepositoryMixin,
     QualityRepositoryMixin,
-    WeldingRepositoryMixin,
     FirstPieceRepositoryMixin,
     StandardTimeRepositoryMixin,
     ReportRepositoryMixin,

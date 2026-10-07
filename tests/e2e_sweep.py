@@ -24,7 +24,7 @@ RAW = re.compile(r"undefined|\[object |\bNaN\b|\bnull\b")
 
 def routes():
     paths = re.findall(r'<Route\s+path="([a-z][^"*]*)"', APP.read_text(encoding="utf-8"))
-    return ["/" + p for p in paths if p not in SKIP] + ["/andon", "/welding-management", "/operador"]
+    return ["/" + p for p in paths if p not in SKIP] + ["/andon", "/operador"]
 
 
 def main() -> int:
