@@ -76,6 +76,20 @@ from mes.domain import (
 PASSWORD_SCHEME = "pbkdf2_sha256"  # nosec B105 -- identificador de algoritmo de hash, não senha
 PASSWORD_ITERATIONS = 600_000
 LEGACY_PASSWORD_ITERATIONS = 100_000
+
+
+def _hash_senha_pbkdf2(senha, salt=None):
+    salt_bytes = os.urandom(32) if salt is None else bytes.fromhex(salt)
+    hash_obj = hashlib.pbkdf2_hmac(
+        "sha256", senha.encode("utf-8"), salt_bytes, PASSWORD_ITERATIONS
+    )
+    return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${salt_bytes.hex()}${hash_obj.hex()}"
+
+
+# Hash descartável para o login de usuário inexistente pagar o mesmo PBKDF2 de
+# uma senha errada. Calculado na carga do módulo: a primeira requisição não
+# paga o hash duas vezes.
+_HASH_SENHA_FANTASMA = _hash_senha_pbkdf2(os.urandom(16).hex())
 CATALOG_SYNC_LOCK_ID = 874_210_307
 AUTOMATIC_BREAK_INTERRUPTION = "intervalo_programado"
 # Estados copiados de uma OP/nesting: só valem enquanto a execução existir.
@@ -377,11 +391,7 @@ class Database(
             return cursor.rowcount > 0
 
     def _hash_senha(self, senha, salt=None):
-        salt_bytes = os.urandom(32) if salt is None else bytes.fromhex(salt)
-        hash_obj = hashlib.pbkdf2_hmac(
-            "sha256", senha.encode("utf-8"), salt_bytes, PASSWORD_ITERATIONS
-        )
-        return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${salt_bytes.hex()}${hash_obj.hex()}"
+        return _hash_senha_pbkdf2(senha, salt)
 
     def _verificar_senha(self, senha, hash_senha):
         try:
@@ -435,7 +445,13 @@ class Database(
                 (nome,),
             )
             row = cursor.fetchone()
-        if not row or not self._verificar_senha(senha, row["senha_hash"]):
+        if not row:
+            # Usuário inexistente/inativo paga o mesmo PBKDF2 de uma senha
+            # errada: sem isso a resposta voltava em milissegundos e o tempo
+            # revelava quais nomes de usuário existem.
+            self._verificar_senha(senha, _HASH_SENHA_FANTASMA)
+            return None
+        if not self._verificar_senha(senha, row["senha_hash"]):
             return None
         if self._senha_precisa_rehash(row["senha_hash"]):
             novo_hash = self._hash_senha(senha)

@@ -115,6 +115,28 @@ def require_admin_user(user: SessionUser = Depends(get_current_user)) -> Session
     return user
 
 
+DEV_OBSERVATORY_ROLE = "dev_observatory"
+
+
+def decode_dev_observatory_claims(request: Request, token: str):
+    """Valida a assinatura E o papel do token do observatório.
+
+    A assinatura sozinha não basta: se ``GESTOR_DEVOBS_SESSION_SECRET`` for
+    configurado igual a ``GESTOR_WEB_SESSION_SECRET``, o cookie de qualquer
+    operador logado passaria na verificação HMAC. Só tokens emitidos pelo
+    login do observatório carregam este papel.
+    """
+
+    claims = request.app.state.dev_observatory_session_signer.decode(token)
+    if claims.role != DEV_OBSERVATORY_ROLE:
+        raise AppError(
+            "invalid_session",
+            "A sessão é inválida. Entre novamente.",
+            status_code=401,
+        )
+    return claims
+
+
 def require_dev_observatory_user(request: Request) -> SessionUser:
     """Porta do Dev Observatory — login próprio, isolado do login principal.
 
@@ -133,11 +155,11 @@ def require_dev_observatory_user(request: Request) -> SessionUser:
             "Entre no Dev Observatory para continuar.",
             status_code=401,
         )
-    claims = request.app.state.dev_observatory_session_signer.decode(token)
+    claims = decode_dev_observatory_claims(request, token)
     return SessionUser(
         id=0,
         name=claims.username,
-        role="dev_observatory",
+        role=DEV_OBSERVATORY_ROLE,
         management_access=False,
         andon_access=False,
         operator_access=False,

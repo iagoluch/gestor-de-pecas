@@ -2020,6 +2020,145 @@ class LoginThrottleTests(unittest.TestCase):
         self.assertEqual(self._delay(depois), 0.0)
 
 
+class LoginEndpointThrottleTests(unittest.TestCase):
+    """Freio aplicado de ponta a ponta na rota ``/api/v1/auth/login``."""
+
+    def setUp(self):
+        from backend.api.routers import auth as auth_router
+
+        self.auth_router = auth_router
+        self.db = ApiFakeDatabase()
+        self.db.criar_usuario("Operador Web", "senha-operador", "operador_dobra")
+        self.db.criar_usuario("Gestor Web", "senha-segura", "gestor")
+        self.client = TestClient(create_app(settings=_settings(), database_factory=lambda: self.db))
+        self.addCleanup(self.client.close)
+        # Atraso zerado só para o teste não dormir; o teto continua valendo.
+        for name in ("LOGIN_DELAY_BASE_SECONDS", "LOGIN_DELAY_MAX_SECONDS"):
+            patcher = patch.object(auth_router, name, 0.0)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _login(self, username, password):
+        return self.client.post(
+            "/api/v1/auth/login", json={"username": username, "password": password}
+        )
+
+    def test_primeiro_login_nao_espera(self):
+        """A reserva conta a tentativa atual: o atraso é pelas falhas anteriores."""
+
+        with patch.object(
+            self.auth_router,
+            "_login_delay_for_failures",
+            wraps=self.auth_router._login_delay_for_failures,
+        ) as delay:
+            self.assertEqual(self._login("Operador Web", "senha-operador").status_code, 200)
+        delay.assert_called_once_with(0)
+
+    def test_segunda_tentativa_errada_dorme_o_atraso_base(self):
+        """Falha se o ``sleep`` do atraso for removido da rota."""
+
+        from unittest.mock import AsyncMock
+
+        router = self.auth_router
+        with patch.object(router, "LOGIN_DELAY_BASE_SECONDS", 0.5), patch.object(
+            router, "LOGIN_DELAY_MAX_SECONDS", 8.0
+        ), patch.object(
+            router, "_login_delay_for_failures", wraps=router._login_delay_for_failures
+        ) as delay, patch.object(router.anyio, "sleep", new=AsyncMock()) as sleep:
+            self.assertEqual(self._login("Operador Web", "errada").status_code, 401)
+            sleep.assert_not_awaited()
+            self.assertEqual(self._login("Operador Web", "errada").status_code, 401)
+        self.assertEqual([c.args[0] for c in delay.call_args_list], [0, 1])
+        sleep.assert_awaited_once_with(0.5)
+
+    def test_login_nunca_e_recusado_por_excesso_de_erros(self):
+        """Decisão do dono: no chão de fábrica o login só atrasa, nunca bloqueia."""
+
+        for _ in range(30):
+            self.assertEqual(self._login("Operador Web", "errada").status_code, 401)
+        self.assertEqual(self._login("Operador Web", "senha-operador").status_code, 200)
+
+    def _concorrentes(self, credenciais):
+        """Dispara os logins ao mesmo tempo e mede o pico de verificações simultâneas."""
+
+        import asyncio
+        import threading
+        import time as relogio
+
+        import httpx
+
+        estado = {"agora": 0, "pico": 0}
+        trava = threading.Lock()
+        original = self.db.autenticar_usuario
+
+        def lento(nome, senha):
+            with trava:
+                estado["agora"] += 1
+                estado["pico"] = max(estado["pico"], estado["agora"])
+            relogio.sleep(0.2)
+            with trava:
+                estado["agora"] -= 1
+            return original(nome, senha)
+
+        async def disparar():
+            transport = httpx.ASGITransport(app=self.client.app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+                return await asyncio.gather(*(
+                    http.post("/api/v1/auth/login", json={"username": u, "password": p})
+                    for u, p in credenciais
+                ))
+
+        with patch.object(self.db, "autenticar_usuario", side_effect=lento), patch.object(
+            self.auth_router,
+            "_login_delay_for_failures",
+            wraps=self.auth_router._login_delay_for_failures,
+        ) as delay:
+            respostas = asyncio.run(disparar())
+        return respostas, estado["pico"], sorted(c.args[0] for c in delay.call_args_list)
+
+    def test_rajada_da_mesma_chave_executa_em_sequencia(self):
+        respostas, pico, atrasos = self._concorrentes(
+            [("Operador Web", "errada"), ("Operador Web", "errada")]
+        )
+        self.assertEqual([r.status_code for r in respostas], [401, 401])
+        self.assertEqual(pico, 1)
+        # A segunda da fila paga o atraso da primeira falha.
+        self.assertEqual(atrasos, [0, 1])
+        self.assertEqual(self.auth_router._login_locks, {})
+
+    def test_chaves_diferentes_nao_se_esperam(self):
+        respostas, pico, atrasos = self._concorrentes(
+            [("Operador Web", "errada"), ("Gestor Web", "senha-segura")]
+        )
+        self.assertEqual(sorted(r.status_code for r in respostas), [200, 401])
+        self.assertEqual(pico, 2)
+        self.assertEqual(atrasos, [0, 0])
+
+
+class LoginTempoUsuarioInexistenteTests(unittest.TestCase):
+    """Usuário inexistente paga o mesmo PBKDF2: o tempo não revela contas."""
+
+    def test_usuario_inexistente_tambem_verifica_hash(self):
+        from app.database.database import Database
+
+        cursor = unittest.mock.MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.return_value = None
+        connection = unittest.mock.MagicMock()
+        connection.cursor.return_value = cursor
+
+        @contextmanager
+        def _connection():
+            yield connection
+
+        db = object.__new__(Database)
+        db.connection = _connection
+        with patch.object(Database, "_verificar_senha", return_value=False) as verificar:
+            self.assertIsNone(db.autenticar_usuario("ninguem", "qualquer"))
+        verificar.assert_called_once()
+        self.assertTrue(str(verificar.call_args.args[1]).startswith("pbkdf2"))
+
+
 class _BancoIntermitente(ApiFakeDatabase):
     def __init__(self):
         super().__init__()

@@ -28,7 +28,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.api.dependencies.auth import require_dev_observatory_user
+from backend.api.dependencies.auth import (
+    DEV_OBSERVATORY_ROLE,
+    decode_dev_observatory_claims,
+    require_dev_observatory_user,
+)
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.database import get_database
 from backend.api.errors import AppError
@@ -193,7 +197,7 @@ def _require_dev_observatory_csrf(request: Request) -> None:
             "Entre no Dev Observatory para continuar.",
             status_code=401,
         )
-    claims = request.app.state.dev_observatory_session_signer.decode(token)
+    claims = decode_dev_observatory_claims(request, token)
     header = str(request.headers.get("X-CSRF-Token") or "")
     cookie = str(request.cookies.get(settings.dev_observatory_csrf_cookie_name) or "")
     if not header or not cookie or not hmac.compare_digest(header, claims.csrf) or not hmac.compare_digest(cookie, claims.csrf):
@@ -231,7 +235,9 @@ def dev_observatory_login(
     database=Depends(get_database),
 ):
     settings = request.app.state.settings
-    throttle_key = login_throttle_key(request, payload.username)
+    # Prefixo próprio: o mesmo IP+usuário no login principal não pode zerar
+    # (sucesso) nem inflar (falha) o contador do observatório, e vice-versa.
+    throttle_key = "devobs:" + login_throttle_key(request, payload.username)
     # Contador persistente em `login_throttle`, sem caminho em memória (BK-22).
     if int(
         database.obter_falhas_login(throttle_key, janela_segundos=LOGIN_LOCKOUT_SECONDS) or 0
@@ -257,7 +263,7 @@ def dev_observatory_login(
         )
     database.limpar_falhas_login(throttle_key)
     token, claims = request.app.state.dev_observatory_session_signer.issue(
-        user_id=0, username=payload.username, role="dev_observatory",
+        user_id=0, username=payload.username, role=DEV_OBSERVATORY_ROLE,
     )
     response = JSONResponse(content={"username": payload.username})
     response.set_cookie(

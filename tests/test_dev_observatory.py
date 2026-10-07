@@ -287,6 +287,25 @@ class DevObservatoryApiTests(unittest.TestCase):
         self._login_dev_observatory()
         self.assertEqual(self.db.login_throttle, {})
 
+    def test_contador_do_observatorio_nao_se_mistura_com_o_login_principal(self):
+        """Mesmo nome nos dois logins: erros num não freiam/zeram o outro."""
+
+        errado = self.client.post(
+            "/api/v1/dev-observatory/login",
+            json={"username": "devobs", "password": "senha-errada"},
+        )
+        self.assertEqual(errado.status_code, 401)
+        self.client.post("/api/v1/auth/login", json={"username": "devobs", "password": "x"})
+
+        chaves = sorted(self.db.login_throttle)
+        self.assertEqual(len(chaves), 2)
+        self.assertTrue(chaves[0].startswith("devobs:"), chaves)
+        self.assertEqual(chaves[0], "devobs:" + chaves[1])
+
+        # Sucesso no observatório limpa só a chave dele.
+        self._login_dev_observatory()
+        self.assertEqual(list(self.db.login_throttle), [chaves[1]])
+
     def test_pagina_mostra_login_proprio_para_quem_nao_entrou(self):
         anonimo = self.client.get("/dev-observatory")
         self.assertEqual(anonimo.status_code, 401)
@@ -419,6 +438,83 @@ class DevObservatoryApiTests(unittest.TestCase):
     def test_schema_version_permanece_intacto(self):
         # Guarda contra uma regressão óbvia: o observatório não migra banco.
         self.assertEqual(self.db.obter_schema_version(), SCHEMA_VERSION)
+
+
+class SegredoRepetidoTests(unittest.TestCase):
+    """Segredo do observatório igual ao principal não abre o observatório."""
+
+    SEGREDO = "mesmo-segredo-que-tem-tamanho-suficiente-para-assinar-123456"
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+        self.db = ApiFakeDatabase()
+        self.db.criar_usuario("Gestor Web", "senha-segura", "gestor")
+        settings = WebSettings(
+            environment="test",
+            session_secret=self.SEGREDO,
+            allowed_hosts=("testserver",),
+            allowed_origins=("http://testserver",),
+            session_ttl_seconds=3600,
+            serve_static=False,
+            dev_observatory_enabled=True,
+            dev_observatory_report_dir=self._temp.name,
+            dev_observatory_real_dsn="",
+            dev_observatory_login_username="devobs",
+            dev_observatory_login_password="senha-do-observatorio",
+            dev_observatory_session_secret=self.SEGREDO,
+        )
+        self.client = TestClient(create_app(settings=settings, database_factory=lambda: self.db))
+        self.addCleanup(self.client.close)
+
+    def test_cookie_do_login_principal_nao_vira_sessao_do_observatorio(self):
+        login = self.client.post(
+            "/api/v1/auth/login", json={"username": "Gestor Web", "password": "senha-segura"}
+        )
+        self.assertEqual(login.status_code, 200, login.text)
+        principal = self.client.cookies.get("gestor_session")
+        self.client.cookies.set("gestor_devobs_session", principal)
+
+        negado = self.client.get("/api/v1/dev-observatory/status")
+        self.assertEqual(negado.status_code, 401)
+        self.assertEqual(negado.json()["code"], "invalid_session")
+
+        # O login próprio do observatório continua funcionando.
+        self.client.cookies.clear()
+        entrou = self.client.post(
+            "/api/v1/dev-observatory/login",
+            json={"username": "devobs", "password": "senha-do-observatorio"},
+        )
+        self.assertEqual(entrou.status_code, 200, entrou.text)
+        self.assertEqual(self.client.get("/api/v1/dev-observatory/status").status_code, 200)
+
+
+class SegredoDeSessaoConfigTests(unittest.TestCase):
+    """Ausência/repetição de segredo avisa alto sem impedir o boot."""
+
+    PRINCIPAL = "segredo-principal-com-tamanho-suficiente-para-assinar-123456"
+
+    def _from_env(self, **extra):
+        try:
+            WebSettings.from_env({"GESTOR_WEB_SESSION_SECRET": self.PRINCIPAL, **extra})
+        except RuntimeError as exc:
+            # Outras exigências de produção podem recusar depois; o que se
+            # prova aqui é só o aviso do segredo, que vem antes.
+            self.assertNotIn("SESSION_SECRET", str(exc))
+
+    def test_segredo_do_observatorio_ausente_em_producao_loga_error(self):
+        with self.assertLogs(level="ERROR") as logs:
+            self._from_env(GESTOR_WEB_ENV="production")
+        self.assertTrue(any("GESTOR_DEVOBS_SESSION_SECRET ausente" in m for m in logs.output))
+
+    def test_segredo_do_observatorio_igual_ao_principal_loga_error(self):
+        with self.assertLogs(level="ERROR") as logs:
+            self._from_env(GESTOR_DEVOBS_SESSION_SECRET=self.PRINCIPAL)
+        self.assertTrue(any("é igual a GESTOR_WEB_SESSION_SECRET" in m for m in logs.output))
+
+    def test_segredo_principal_ausente_em_producao_continua_recusando_o_boot(self):
+        with self.assertRaisesRegex(RuntimeError, "GESTOR_WEB_SESSION_SECRET é obrigatória"):
+            WebSettings.from_env({"GESTOR_WEB_ENV": "production"})
 
 
 if __name__ == "__main__":  # pragma: no cover

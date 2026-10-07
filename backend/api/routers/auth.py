@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager
 from functools import partial
 
 import anyio
@@ -28,9 +30,39 @@ router = APIRouter(prefix="/auth", tags=["Autenticação"])
 # apontar produção. O atraso torna adivinhação automatizada impraticável sem
 # nunca recusar uma tentativa legítima (achado A2 da auditoria de segurança
 # de 2026-09-14).
+#
+# O atraso sozinho não freia uma RAJADA paralela: N requisições simultâneas
+# dormiriam cada uma no máximo o teto e testariam a senha juntas. Por isso as
+# tentativas da MESMA chave IP+usuário passam uma de cada vez (lock por chave
+# abaixo): a taxa por chave fica em no máximo 1 tentativa por atraso, sem
+# nunca recusar. Chaves diferentes (outro operador, outro terminal) não se
+# esperam entre si.
 LOGIN_DELAY_BASE_SECONDS = 0.5
 LOGIN_DELAY_MAX_SECONDS = 8.0
 LOGIN_DELAY_WINDOW_SECONDS = 300
+
+# ponytail: o lock é por processo (API roda com 1 worker uvicorn). Se virar
+# multi-worker, cada worker serializa só a própria fila; o upgrade é um
+# advisory lock no PostgreSQL pela chave (pg_advisory_xact_lock(hashtext(...))).
+_login_locks: dict[str, asyncio.Lock] = {}
+_login_waiters: dict[str, int] = {}
+
+
+@asynccontextmanager
+async def _serialized_login(key: str):
+    """Uma tentativa por vez por chave; a entrada some quando ninguém espera."""
+
+    # Sem ``await`` entre ler e gravar o dict: no event loop isto é atômico.
+    lock = _login_locks.setdefault(key, asyncio.Lock())
+    _login_waiters[key] = _login_waiters.get(key, 0) + 1
+    try:
+        async with lock:
+            yield
+    finally:
+        _login_waiters[key] -= 1
+        if not _login_waiters[key]:
+            del _login_waiters[key]
+            _login_locks.pop(key, None)
 
 
 def _login_delay_for_failures(failures: int) -> float:
@@ -65,39 +97,47 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
     # já é atômico (INSERT ... ON CONFLICT ... RETURNING no Postgres), então
     # reservar aqui serializa a rajada em contadores crescentes de verdade
     # (achado M1 da auditoria). Sucesso limpa o contador logo abaixo.
-    failures = await anyio.to_thread.run_sync(
-        partial(
-            database.registrar_falha_login,
-            throttle_key,
-            janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
-        ),
-        limiter=request.app.state.auth_thread_limiter,
-    )
-    delay = _login_delay_for_failures(failures)
-    if delay:
-        await anyio.sleep(delay)
-    # O hash da senha (PBKDF2, 600 mil iterações) é caro de propósito — é o
-    # piso de segurança recomendado. Ele roda numa capacity limiter PRÓPRIA
-    # (``auth_thread_limiter``), separada da threadpool geral das rotas
-    # leves do posto: assim um pico de logins simultâneos no início do turno
-    # não enfileira quem já está com a tela aberta atrás da verificação de
-    # senha de quem está entrando (medido no teste de carga de conexão).
-    user = await anyio.to_thread.run_sync(
-        partial(database.autenticar_usuario, payload.username, payload.password),
-        limiter=request.app.state.auth_thread_limiter,
-    )
-    if not user:
-        # A falha já foi reservada/contada ANTES da tentativa (acima); não
-        # incrementa de novo aqui.
-        raise AppError(
-            "invalid_credentials",
-            "Usuário ou senha inválidos.",
-            status_code=401,
+    #
+    # Reserva → atraso → verificação rodam sob o lock da chave: a rajada da
+    # mesma chave vira fila, e cada uma paga o atraso da falha anterior.
+    async with _serialized_login(throttle_key):
+        failures = await anyio.to_thread.run_sync(
+            partial(
+                database.registrar_falha_login,
+                throttle_key,
+                janela_segundos=LOGIN_DELAY_WINDOW_SECONDS,
+            ),
+            limiter=request.app.state.auth_thread_limiter,
         )
-    await anyio.to_thread.run_sync(
-        partial(database.limpar_falhas_login, throttle_key),
-        limiter=request.app.state.auth_thread_limiter,
-    )
+        # O contador já inclui a tentativa atual (reserva acima): o atraso é
+        # pelas falhas ANTERIORES, para que o primeiro login do turno não
+        # espere nada.
+        delay = _login_delay_for_failures(failures - 1)
+        if delay:
+            await anyio.sleep(delay)
+        # O hash da senha (PBKDF2, 600 mil iterações) é caro de propósito — é
+        # o piso de segurança recomendado. Ele roda numa capacity limiter
+        # PRÓPRIA (``auth_thread_limiter``), separada da threadpool geral das
+        # rotas leves do posto: assim um pico de logins simultâneos no início
+        # do turno não enfileira quem já está com a tela aberta atrás da
+        # verificação de senha de quem está entrando (medido no teste de carga
+        # de conexão).
+        user = await anyio.to_thread.run_sync(
+            partial(database.autenticar_usuario, payload.username, payload.password),
+            limiter=request.app.state.auth_thread_limiter,
+        )
+        if not user:
+            # A falha já foi reservada/contada ANTES da tentativa (acima); não
+            # incrementa de novo aqui.
+            raise AppError(
+                "invalid_credentials",
+                "Usuário ou senha inválidos.",
+                status_code=401,
+            )
+        await anyio.to_thread.run_sync(
+            partial(database.limpar_falhas_login, throttle_key),
+            limiter=request.app.state.auth_thread_limiter,
+        )
     role = normalize_user_level(user.get("nivel"))
     if role is None:
         raise AppError(

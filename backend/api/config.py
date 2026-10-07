@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from ipaddress import ip_network
+import hmac
 import json
 import logging
 import os
@@ -312,10 +313,27 @@ class WebSettings:
         # principal, para que revogar/girar um não force o outro a girar junto.
         dev_observatory_secret = str(env.get("GESTOR_DEVOBS_SESSION_SECRET") or "").strip()
         if not dev_observatory_secret:
+            # Segredo efêmero é seguro (aleatório, nunca padrão fixo): o custo é
+            # só a sessão do observatório cair a cada reinício. Por isso não
+            # impede o boot — mas em produção o aviso sobe para ERROR.
             dev_observatory_secret = secrets.token_urlsafe(48)
-            logging.warning(
+            logging.log(
+                logging.ERROR if environment in {"production", "producao", "produção"}
+                else logging.WARNING,
                 "GESTOR_DEVOBS_SESSION_SECRET ausente; usando segredo efêmero "
-                "(sessões do Dev Observatory caem a cada reinício do processo)."
+                "(sessões do Dev Observatory caem a cada reinício do processo). "
+                "Defina no .env um valor aleatório de 32+ bytes, diferente de "
+                "GESTOR_WEB_SESSION_SECRET.",
+            )
+        elif hmac.compare_digest(
+            dev_observatory_secret.encode("utf-8"), secret.encode("utf-8")
+        ):
+            # Não derruba o boot de quem já roda assim; a sessão do observatório
+            # também confere o papel do token, então o login principal não abre
+            # o observatório mesmo com o segredo repetido.
+            logging.error(
+                "GESTOR_DEVOBS_SESSION_SECRET é igual a GESTOR_WEB_SESSION_SECRET; "
+                "gere um valor próprio para o Dev Observatory."
             )
         # Mesmo piso do segredo principal: um segredo curto torna a assinatura
         # HMAC do cookie do observatório forjável fora do servidor.
