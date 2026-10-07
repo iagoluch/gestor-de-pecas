@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { AndonNotifications } from "../components/AndonNotifications";
 import { AndonResourceDrawer } from "../components/AndonResourceDrawer";
 import { EmptyState, ErrorState, LoadingState } from "../components/DataState";
 import { AndonSidebarNav } from "../components/AndonSidebarNav";
@@ -8,6 +9,8 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { SnapshotStatus } from "../components/SnapshotStatus";
 import { useForceLightTheme } from "../hooks/useForceLightTheme";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
+import { cycleSectorNames, useAndonSectorCycle } from "../hooks/useAndonSectorCycle";
+import { useFocusFit } from "../hooks/useFocusFit";
 import { useTvRotation } from "../hooks/useTvRotation";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { assets } from "../config/assets";
@@ -53,6 +56,16 @@ function boardColumns(sectors: AndonSnapshot["sectors"]) {
     .filter((sector) => !assigned.has(sector.name))
     .forEach((sector, index) => columns[index % columns.length].push(sector));
   return columns.filter((column) => column.length > 0);
+}
+
+type SectorAlert = "danger" | "warning";
+
+/** Só lê a classificação que o backend já entrega: vermelho se há parada não planejada. */
+function sectorAlert(sector: AndonSnapshot["sectors"][number]): { level: SectorAlert; count: number } | null {
+  const stops = sector.resources.filter((resource) => resource.state.category === "parada");
+  if (stops.length === 0) return null;
+  const unplanned = stops.some((resource) => resource.state.stop_classification !== "planejada");
+  return { level: unplanned ? "danger" : "warning", count: stops.length };
 }
 
 function metricText(metric: MetricValue | undefined) {
@@ -190,9 +203,11 @@ function ResourceCard({ resource, elapsed, transition, onOpen }: { resource: And
   );
 }
 
-function SectorPanel({ sector, elapsed, transitions, onOpen }: {
+function SectorPanel({ sector, elapsed, transitions, highlightAlert = false, onOpen }: {
   sector: AndonSnapshot["sectors"][number];
   elapsed: number;
+  /** Só a TV, na visão geral: parada destaca o painel em vez de fixar o rodízio. */
+  highlightAlert?: boolean;
   transitions: Record<string, "enter" | "update">;
   onOpen: (resource: AndonResource) => void;
 }) {
@@ -206,6 +221,7 @@ function SectorPanel({ sector, elapsed, transitions, onOpen }: {
   const density = count > 6 ? "high" : count > 3 ? "medium" : "normal";
   const maximumGroupLoad = Math.max(1, ...groups.map((group) => group.resources.length));
   const hideSingleGroupTitle = !perResource && groups.length === 1 && groups[0].name === sector.name;
+  const alert = highlightAlert ? sectorAlert(sector) : null;
   return (
     <section
       className="andon-sector-panel"
@@ -213,12 +229,16 @@ function SectorPanel({ sector, elapsed, transitions, onOpen }: {
       data-density={density}
       data-groups={groups.length}
       data-group-flow={perResource ? "wrap" : "columns"}
+      data-alert={alert?.level}
       aria-labelledby={`andon-sector-${sector.name}`}
       style={{ "--andon-panel-rows": maximumGroupLoad } as CSSProperties}
     >
       <header className="andon-sector-panel__header">
         <div><img src={PANEL_ICONS[sector.name] ?? assets.navigation.panels} alt="" aria-hidden="true" /><h2 id={`andon-sector-${sector.name}`}>{sector.name}</h2></div>
-        <strong>RECURSOS ATIVOS <span>({count})</span></strong>
+        <strong>
+          {alert ? <em className="andon-sector-panel__alert">{alert.count} EM PARADA</em> : null}
+          RECURSOS ATIVOS <span>({count})</span>
+        </strong>
       </header>
       {count === 0 ? (
         <div className="andon-sector-panel__empty">Nenhum recurso ativo</div>
@@ -263,11 +283,18 @@ export function AndonPage() {
   const elapsed = useSnapshotClock(query.data?.clock);
   const transitions = useResourceTransitions(query.data ?? null);
   const [selectedResourceKey, setSelectedResourceKey] = useState<string | null>(null);
+  const isTv = user?.role === "andon";
+  // Rodízio de setores só na TV dedicada: a visão gerencial continua mostrando
+  // o quadro completo, sem trocar de tela sob o gestor.
+  const sectorNames = useMemo(() => cycleSectorNames(query.data?.sectors), [query.data?.sectors]);
+  const cycleFocus = useAndonSectorCycle(sectorNames, isTv);
+  const focusedCount = query.data?.sectors.find((sector) => sector.name === cycleFocus)?.resources.length ?? 0;
+  useFocusFit(cycleFocus && isTv ? `${cycleFocus}:${focusedCount}` : "");
   // O Andon continua sendo o Andon: a única adição da Wave 6D é entrar no ciclo
   // automático da TV, que troca de visão a cada 10 segundos no perfil dedicado.
   useTvRotation("/andon");
   const closeResource = useCallback(() => setSelectedResourceKey(null), []);
-  const pageClass = `andon-page andon-page--single-view ${user?.role === "andon" ? "andon-page--tv" : "andon-page--manager"}`;
+  const pageClass = `andon-page andon-page--single-view ${isTv ? "andon-page--tv" : "andon-page--manager"}`;
   // O Andon abre em página cheia, fora do menu lateral da gestão. Sem isso,
   // quem chegou aqui pelo menu ficaria sem jeito de voltar pra Tela inicial
   // (ou qualquer outra seção) a não ser pelo "voltar" do navegador (decisão
@@ -297,7 +324,9 @@ export function AndonPage() {
   // não classificado continua visível sem uma segunda lista de setores na UI.
   const sectors = data.sectors;
   const resources = sectors.flatMap((sector) => sector.resources);
-  const columns = boardColumns(sectors);
+  // Setor em foco ocupa a tela toda; se ele sumiu do snapshot, volta à visão geral.
+  const focusedSector = cycleFocus === null ? undefined : sectors.find((sector) => sector.name === cycleFocus);
+  const columns = focusedSector ? [[focusedSector]] : boardColumns(sectors);
   const boardStyle = { "--andon-column-count": columns.length } as CSSProperties;
   const selectedResource = resources.find((resource) => resourceKey(resource) === selectedResourceKey) ?? null;
   return (
@@ -309,7 +338,7 @@ export function AndonPage() {
         <section className="andon-board-section" aria-labelledby="andon-resources-title">
           <h2 className="visually-hidden" id="andon-resources-title">Recursos ativos por setor</h2>
           {sectors.length ? (
-            <div className="andon-board" style={boardStyle}>
+            <div className={`andon-board${focusedSector ? " andon-board--focus" : ""}`} style={boardStyle}>
               {columns.map((column, index) => (
                 <div
                   className="andon-board__column"
@@ -318,7 +347,7 @@ export function AndonPage() {
                   data-panels={column.length}
                 >
                   {column.map((item) => (
-                    <SectorPanel key={item.name} sector={item} elapsed={elapsed} transitions={transitions} onOpen={(resource) => setSelectedResourceKey(resourceKey(resource))} />
+                    <SectorPanel key={item.name} sector={item} elapsed={elapsed} transitions={transitions} highlightAlert={isTv && !focusedSector} onOpen={(resource) => setSelectedResourceKey(resourceKey(resource))} />
                   ))}
                 </div>
               ))}
@@ -326,6 +355,7 @@ export function AndonPage() {
           ) : <div className="andon-empty"><EmptyState title="Nenhum recurso ativo no Andon." /></div>}
         </section>
       </div>
+      {isTv ? <AndonNotifications snapshot={data} focusSector={focusedSector?.name ?? null} /> : null}
       <AndonResourceDrawer
         resource={selectedResource}
         elapsed={elapsed}
