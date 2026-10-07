@@ -950,7 +950,7 @@ class TotvsSoapContractTests(unittest.TestCase):
         hostname externo, o mesmo endpoint gravaria OP para qualquer um que
         descobrisse a URL. A porta do ERP existe só no caminho interno."""
 
-        publico = "dod-road-matches-clusters.trycloudflare.com"
+        publico = "gestor.exemplo.com.br"
         interno = "10.10.1.248"
         client, service = self._client(
             settings=_settings(

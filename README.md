@@ -226,8 +226,6 @@ falhas conhecidas que devem ser corrigidas sem mascaramento:
 - histórico produtivo não possui edição/exclusão genérica;
 - `.env`, tokens, credenciais, caches e `.venv` não entram em release;
 - nenhuma integração deve escrever diretamente em tabelas TOTVS;
-- Quick Tunnel/`trycloudflare.com` é somente homologação, nunca endpoint de
-  produção;
 - TESTE e REAL devem permanecer isolados.
 
 ## Documentação principal

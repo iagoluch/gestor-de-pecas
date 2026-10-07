@@ -1419,8 +1419,6 @@ Escolher uma única OP de TESTE controlada e provar:
 
 Objetivo: remover mecanismos temporários de homologação.
 
-O Quick Tunnel/`trycloudflare.com` é descartável e **não entra em produção**.
-
 Arquitetura de produção deve ser definida com TI, incluindo:
 
 - URL corporativa estável;

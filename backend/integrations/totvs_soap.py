@@ -33,10 +33,9 @@ def _arrived_through_public_host(request: Request) -> bool:
     """A requisição entrou pelo hostname publicado na internet?
 
     Este receptor não é autenticado — é o contrato do EAI do Protheus, que fala
-    com o Gestor pela rede interna da fábrica. Quando o sistema é publicado por
-    um túnel (``iniciar_sistema_teste_cloudflare.py`` grava o hostname em
-    ``GESTOR_WEB_PUBLIC_HOST`` e o acrescenta a ``GESTOR_WEB_ALLOWED_HOSTS``), o
-    mesmo endpoint passaria a aceitar ``ProductionOrder`` de qualquer um que
+    com o Gestor pela rede interna da fábrica. Quando o sistema é publicado
+    sob um hostname externo (``GESTOR_WEB_PUBLIC_HOST`` e
+    ``GESTOR_WEB_ALLOWED_HOSTS``), o mesmo endpoint passaria a aceitar ``ProductionOrder`` de qualquer um que
     descobrisse a URL — gravando OP no banco sem credencial alguma. A porta do
     ERP, portanto, existe apenas no caminho interno.
     """
