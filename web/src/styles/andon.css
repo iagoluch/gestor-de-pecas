@@ -1204,6 +1204,6 @@ body:has(.andon-page--manager) #root {
   border: 2px solid transparent;
   border-radius: 3px;
 }
-.andon-map__swatch--idle { border: 1.5px solid var(--border-strong); background: repeating-linear-gradient(135deg, var(--surface-alt) 0, var(--surface-alt) 3px, var(--border-strong) 3px, var(--border-strong) 5px); }
+.andon-map__swatch--idle { border: 1.5px solid var(--border-strong); background: repeating-linear-gradient(45deg, var(--surface-alt) 0, var(--surface-alt) 0.17em, var(--muted) 0.17em, var(--muted) 0.3em); }
 .andon-map__unplaced { margin-left: auto; color: var(--fill-stopped); }
 .andon-map__swatch--sem_demanda { border-color: var(--border-strong); }
