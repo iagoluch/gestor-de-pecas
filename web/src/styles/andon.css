@@ -960,7 +960,7 @@ body:has(.andon-page--manager) #root {
 .andon-page--tv .andon-board--focus .andon-sector-panel[data-density="medium"] { --u: max(1.5px, .1vw); }
 
 .andon-page--tv .andon-board--focus .andon-sector-panel {
-  --andon-card-height: calc(var(--u) * 132);
+  --andon-card-height: calc(var(--u) * 172);
   min-height: 0;
   grid-template-rows: calc(var(--u) * 30) minmax(0, 1fr);
   border-radius: calc(var(--u) * 8);
@@ -977,27 +977,34 @@ body:has(.andon-page--manager) #root {
 .andon-page--tv .andon-board--focus .andon-resource-group__header span { font-size: calc(var(--u) * 9); }
 
 .andon-page--tv .andon-board--focus .andon-sector-panel[data-density] .andon-resource-group__cards {
-  --andon-card-width: calc(var(--u) * 150);
+  --andon-card-width: calc(var(--u) * 176);
   gap: calc(var(--u) * 8);
   padding: calc(var(--u) * 8);
 }
 
-.andon-page--tv .andon-board--focus .andon-card__header { min-height: 0; padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 5); }
-.andon-page--tv .andon-board--focus .andon-card__identity > strong { font-size: calc(var(--u) * 14); }
-.andon-page--tv .andon-board--focus .andon-card__state > strong { font-size: calc(var(--u) * 13); }
+/*
+ * Prioridade de leitura de longe: OEE, OP e Produto (maiores), depois o nome do
+ * recurso (sempre numa linha só, inteiro; `--name-fit` encolhe a fonte só do nome
+ * que não coube, ver useFocusFit) e por último o estado.
+ */
+.andon-page--tv .andon-board--focus .andon-card__header { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 2); padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 5); }
+.andon-page--tv .andon-board--focus .andon-card__identity > strong { overflow: visible; text-overflow: clip; font-size: calc(var(--u) * 14 * var(--name-fit, 1)); line-height: 1.15; }
+.andon-page--tv .andon-board--focus .andon-card__state { justify-content: space-between; }
+.andon-page--tv .andon-board--focus .andon-card__state > span { max-width: none; }
+.andon-page--tv .andon-board--focus .andon-card__state > strong { font-size: calc(var(--u) * 12); }
 .andon-page--tv .andon-board--focus .andon-card__state > span { padding: calc(var(--u) * 1) calc(var(--u) * 6); font-size: calc(var(--u) * 10); }
-.andon-page--tv .andon-board--focus .andon-card__indicators { grid-template-columns: calc(var(--u) * 40) minmax(0, 1fr); gap: calc(var(--u) * 8); padding: calc(var(--u) * 6) calc(var(--u) * 8); }
-.andon-page--tv .andon-board--focus .andon-card__oee { width: calc(var(--u) * 38); height: calc(var(--u) * 38); }
-.andon-page--tv .andon-board--focus .andon-card__oee span { font-size: calc(var(--u) * 9); }
-.andon-page--tv .andon-board--focus .andon-card__oee strong { font-size: calc(var(--u) * 12); }
-.andon-page--tv .andon-board--focus .andon-card__metrics { gap: calc(var(--u) * 5); }
-.andon-page--tv .andon-board--focus .andon-card__metric { padding: calc(var(--u) * 4) calc(var(--u) * 3); }
-.andon-page--tv .andon-board--focus .andon-card__metric > div:first-child { font-size: calc(var(--u) * 9); }
-.andon-page--tv .andon-board--focus .andon-card__metric strong { font-size: calc(var(--u) * 12); }
-.andon-page--tv .andon-board--focus .andon-card__operation { gap: calc(var(--u) * 3) calc(var(--u) * 8); padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 7); }
-.andon-page--tv .andon-board--focus .andon-card__operation span { font-size: calc(var(--u) * 9); }
-.andon-page--tv .andon-board--focus .andon-card__operation strong { font-size: calc(var(--u) * 11); }
-.andon-page--tv .andon-board--focus .andon-card__operation small { font-size: calc(var(--u) * 9); }
+.andon-page--tv .andon-board--focus .andon-card__indicators { grid-template-columns: calc(var(--u) * 50) minmax(0, 1fr); gap: calc(var(--u) * 8); padding: calc(var(--u) * 6) calc(var(--u) * 8); }
+.andon-page--tv .andon-board--focus .andon-card__oee { width: calc(var(--u) * 50); height: calc(var(--u) * 50); }
+.andon-page--tv .andon-board--focus .andon-card__oee span { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__oee strong { font-size: calc(var(--u) * 16); }
+.andon-page--tv .andon-board--focus .andon-card__metrics { gap: calc(var(--u) * 3); }
+.andon-page--tv .andon-board--focus .andon-card__metric { padding: calc(var(--u) * 4) calc(var(--u) * 1); }
+.andon-page--tv .andon-board--focus .andon-card__metric > div:first-child { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__metric strong { font-size: calc(var(--u) * 13); }
+.andon-page--tv .andon-board--focus .andon-card__operation { grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 3); padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 7); }
+.andon-page--tv .andon-board--focus .andon-card__operation span { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__operation strong { font-size: calc(var(--u) * 14); }
+.andon-page--tv .andon-board--focus .andon-card__operation small { font-size: calc(var(--u) * 10); }
 .andon-page--tv .andon-board--focus .andon-card__activity { padding: calc(var(--u) * 6) calc(var(--u) * 8); font-size: calc(var(--u) * 10); }
 
 /*
