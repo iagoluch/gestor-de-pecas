@@ -373,7 +373,7 @@ def upload_drawing(
     if not can_manage_quality_template(user.role):
         raise AppError(
             "quality_drawing_forbidden",
-            "Somente Supervisor ou Líder pode publicar o desenho do produto.",
+            "Somente Supervisor, Líder ou Qualidade pode publicar o desenho do produto.",
             status_code=403,
         )
     try:

@@ -422,6 +422,34 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Parada", resource: "1303", op: null, operation_id: null });
   });
 
+  it("não abre o diálogo de parada para OP digitada que não existe e avisa no campo", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 4, name: "Operador Dobra", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra" });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/workbench")) return json({ sector: "Dobra", resource: "1303", queue: [], production: [] });
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/operations/ZZ777")) return json({ items: [], sync: { source: "miss", pending: false, remote_available: false } });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "ZZ777" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByText("OP ZZ777 não encontrada. Confira o código.");
+    fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
+    expect(await screen.findByText("OP não encontrada")).toHaveClass("field-error");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Código da OP/i)).toHaveAttribute("aria-invalid", "true");
+    // Apagar o código libera a parada do posto, sem confirmação extra.
+    fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
   it("retoma parada registrada sem OP carregada", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);

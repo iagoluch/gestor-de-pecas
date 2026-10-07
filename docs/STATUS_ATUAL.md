@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 05/10/2026 (prévia visual isolada e ensaio autorizado do posto).
+**Atualizado em:** 06/10/2026 (REAL promovido em v55; tempo padrão estimado em andamento).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -11,6 +11,16 @@ ferramenta.
 Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
+
+### REAL promovido e estado de 06/10/2026
+
+- FATO: o banco REAL `gestor_pecas` foi promovido em 06/10/2026 (decisão do usuário: PostgreSQL). Schema **v55** (migrations 54 e 55 aplicadas sobre a v53), `GESTOR_WEB_ENV=production`, `GESTOR_EXPECTED_DATABASE=gestor_pecas` e o túnel removido de `GESTOR_WEB_ALLOWED_HOSTS` (`GESTOR_WEB_PUBLIC_HOST` ainda cita o túnel; só marca requisição como externa). Backup prévio em `dev_reports/backup_real/`. Validado numa instância `:8010` (health v55, login e `/management/overview` 200); a API `:8001` foi reiniciada depois do `.env` e conecta somente em `gestor_pecas`. Rollback = voltar as duas chaves do `.env` (dados já gravados no REAL permanecem).
+- FATO: o catálogo REAL contém só os 24 códigos de `CAPACITY_TAB_WHITELIST_CODES` copiados do TEST (não os 300+ sincronizados). Contas copiadas do TEST com os mesmos hashes (sem `sim_*` nem `strix_pentest`; os logins genéricos `supervisor/lider/manufatura/gerente` não foram levados) e **14 contas de gestão nível `gestor`** com senha simples, aceita pelo usuário. As 84 linhas de `catalogo_status_recursos` foram copiadas TEST→REAL (hash idêntico). O calendário **não** foi copiado de propósito: o do TEST é fixture sem recurso vinculado; o turno real vem de `parametros_turno` + `pausas_automaticas_setor`.
+- PENDÊNCIA: o gerenciamento de usuários na web é só admin/supervisor e o supervisor antigo foi removido; hoje só admin o usa.
+- DECISÃO DO USUÁRIO: Solda fora da rotação da TV (`TV_ROTATION_ROUTES = ["/andon"]` em `web/src/hooks/useTvRotation.ts`, commit `810f049`; a Solda gerencial segue em `/welding-management`). Estações da Solda confirmadas: **10/6/1/1/1** (Aço/Alumínio/Robô/Projetos/Protótipo). A evolução visual de 05/10 saiu do checklist ("focar depois"); a prévia de `outputs/evolucao_visual_2026-10-05/` segue sem implementação no produto.
+- CI: o commit `810f049` falhou só no gitleaks (fixture `session_secret` de `tests/test_andon_demo_isolation.py`); allowlist em `.gitleaks.toml` no commit `6e38385`.
+- IMPLEMENTADO e testado, **NÃO COMMITADO**: "tempo padrão estimado + manual" e aba "Qualidade" (cotas padrão). Motivo: ~90% das atividades do Protheus chegam com `TimeResource` 0,01 (responsabilidade do PCP), ficando sem tempo padrão na Performance do OEE. Spec em `docs/ESPEC_TEMPO_PADRAO_ESTIMADO_2026-10-06.md`. Decisões fechadas: **P25** (mín. 5 amostras, IQR), estimada **separada** da oficial, **sem retroativo** (migration 57: `vigente_desde`; manual e estimado só valem para fatos a partir da vigência), prioridade Protheus > manual > estimado, Corte nunca recebe manual/estimado. Abas de gestão "Tempo padrão" (níveis `admin`/`manufatura`: Gabriel Fogaça, Lucas Santos) e "Qualidade" (níveis `admin`/`qualidade`: conta `sandro`; o nível `qualidade` enxerga toda a gestão). **Migrations 56/57 NÃO aplicadas ao REAL** (v55) e os níveis das contas NÃO foram trocados no banco; fazer com backup. Antes de ligar o recálculo diário, medir o volume real de apontamentos.
+- DEMANDAS ABERTAS (06/10): Andon legível na TV grande (a resolução real da TV não foi confirmada; reescrita de `andon.css` no working tree ainda não vista em tela).
 
 ### Exploração visual — 05/10/2026
 

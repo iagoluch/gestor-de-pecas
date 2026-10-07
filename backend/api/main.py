@@ -87,6 +87,7 @@ from mes.services.report_messaging import ReportMessagingService
 from mes.services.report_scheduler import ReportScheduler
 from mes.services.shift_boundary import ShiftBoundaryService
 from mes.services.shift_parameters import load_manufacturing_rules
+from mes.services.standard_time import StandardTimeRecalculationBusy, StandardTimeService
 from mes.services.sigmanest_refresh import SigmaNestRefreshCoordinator
 from mes.services.telegram_bot import FACTORY_BOT_CURSOR_KEY, TelegramFactoryBotService
 from mes.services.telegram_digest import (
@@ -528,12 +529,71 @@ async def _sigmanest_sync_loop(application: FastAPI) -> None:
         await asyncio.sleep(interval)
 
 
+def _recalculate_standard_time_estimates_if_due(database, now) -> bool:
+    """Recalcula o tempo padrão estimado no máximo uma vez por dia.
+
+    Retorna ``True`` quando recalculou. Não faz nada se o banco não tiver o
+    repositório de tempo padrão ou se o último recálculo já é de hoje.
+    """
+
+    if not hasattr(database, "substituir_tempos_padrao_estimados"):
+        return False
+    service = StandardTimeService(database, now_func=lambda: now)
+    try:
+        return service.recalculate_estimates_if_due(now)
+    except StandardTimeRecalculationBusy:
+        # Recálculo manual em curso (ou o anterior ainda rodando): ele grava o
+        # evento do dia ao terminar; este tick não duplica o trabalho.
+        logging.info("Recálculo diário do tempo padrão pulado: já há um em andamento.")
+        return False
+
+
+async def _standard_time_daily_tick(application: FastAPI, state: dict) -> None:
+    """Dispara o recálculo diário sem bloquear o ciclo de turnos.
+
+    Sem scheduler novo: pega carona no ``_shift_boundary_loop``. O trabalho
+    pesado roda em thread e há no máximo uma execução em voo; a checagem no
+    banco só acontece quando o dia muda (não a cada 5 s).
+    """
+
+    clock = application.state.clock
+    if clock.simulation_mode:
+        return
+    task = state.get("task")
+    if task is not None and not task.done():
+        return
+    if task is not None:
+        state["task"] = None
+        if not task.cancelled() and task.exception():
+            logging.error(
+                "Recálculo diário do tempo padrão estimado falhou (nova tentativa no próximo dia ou restart).",
+                exc_info=task.exception(),
+            )
+    now = clock.now()
+    if state.get("checked_date") == now.date():
+        return
+    state["checked_date"] = now.date()
+    database = application.state.database_manager.get()
+    state["task"] = asyncio.create_task(
+        asyncio.to_thread(_recalculate_standard_time_estimates_if_due, database, now),
+        name="gestor-standard-time-daily",
+    )
+
+
 async def _shift_boundary_loop(application: FastAPI) -> None:
     """Aplica pausas e limites canônicos no relógio ativo da aplicação."""
 
     clock = application.state.clock
     service = None
+    standard_time_state: dict = {}
     while True:
+        try:
+            await _standard_time_daily_tick(application, standard_time_state)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            standard_time_state["checked_date"] = None
+            logging.exception("Falha controlada no disparo diário do tempo padrão estimado.")
         try:
             if service is None:
                 database = application.state.database_manager.get()

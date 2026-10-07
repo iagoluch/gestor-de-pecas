@@ -305,6 +305,67 @@ class QualityRepositoryMixin:
             template["cotas"] = _rows(cursor)
             return template
 
+    def listar_templates_qualidade(self, *, produto=None, limite=100, deslocamento=0):
+        """Lista paginada dos templates de cotas (somente leitura).
+
+        ``produto`` é busca parcial no código. ``quantidade_cotas`` conta só as
+        cotas ativas. A descrição vem do próprio template e, na falta dela, do
+        catálogo de operações — consultado UMA vez só para os produtos da página
+        (``catalogo_operacoes_op`` não tem índice por produto; um lookup por
+        linha seria um scan por linha).
+        """
+
+        busca = str(produto or "").strip()
+        padrao = (
+            "%" + busca.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            if busca
+            else None
+        )
+        limite = max(1, min(int(limite), 500))
+        deslocamento = max(0, int(deslocamento))
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) AS total FROM qualidade_templates_produto t"
+                " WHERE (%s::text IS NULL OR t.produto_codigo ILIKE %s::text)",
+                (padrao, padrao),
+            )
+            total = int(cursor.fetchone()["total"])
+            cursor.execute(
+                """
+                SELECT t.produto_codigo, t.produto_descricao, t.revisao,
+                       t.atualizado_por_nome AS atualizado_por, t.atualizado_em,
+                       t.ativo,
+                       (SELECT COUNT(*) FROM qualidade_cotas_template c
+                         WHERE c.template_id = t.id AND c.ativo IS TRUE
+                       ) AS quantidade_cotas
+                FROM qualidade_templates_produto t
+                WHERE (%s::text IS NULL OR t.produto_codigo ILIKE %s::text)
+                ORDER BY t.produto_codigo
+                LIMIT %s OFFSET %s
+                """,
+                (padrao, padrao, limite, deslocamento),
+            )
+            itens = _rows(cursor)
+            faltando = [i["produto_codigo"] for i in itens if not i["produto_descricao"]]
+            descricoes = {}
+            if faltando:
+                cursor.execute(
+                    "SELECT produto_codigo, MAX(produto_descricao) AS produto_descricao"
+                    " FROM catalogo_operacoes_op"
+                    " WHERE produto_codigo = ANY(%s)"
+                    " GROUP BY produto_codigo",
+                    (faltando,),
+                )
+                descricoes = {
+                    row["produto_codigo"]: row["produto_descricao"] for row in cursor.fetchall()
+                }
+        for item in itens:
+            item["produto_descricao"] = (
+                item["produto_descricao"] or descricoes.get(item["produto_codigo"]) or None
+            )
+            item["quantidade_cotas"] = int(item["quantidade_cotas"])
+        return {"items": itens, "total": total}
+
     def salvar_template_qualidade(
         self,
         produto_codigo,

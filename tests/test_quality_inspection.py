@@ -80,8 +80,11 @@ class QualityCapabilityTests(unittest.TestCase):
             with self.subTest(setor=setor):
                 self.assertFalse(sector_has_quality(setor))
 
-    def test_nao_existe_perfil_exclusivo_de_qualidade(self):
-        self.assertNotIn("qualidade", {level.casefold() for level in USER_LEVELS})
+    def test_conta_qualidade_e_gerencial_e_nao_um_perfil_de_operador(self):
+        # 06/10/2026: a conta ``qualidade`` existe só para manter as cotas
+        # padrão; ela não é setor operacional nem habilita a fila de inspeção.
+        self.assertIn("qualidade", USER_LEVELS)
+        self.assertIsNone(quality_sector_for_user_level("qualidade"))
         self.assertNotIn(
             "qualidade",
             {sector.name.casefold() for sector in OPERATOR_SECTORS},
@@ -99,12 +102,13 @@ class QualityCapabilityTests(unittest.TestCase):
         self.assertIsNone(quality_sector_for_user_level("operador_corte"))
         self.assertIsNone(quality_sector_for_user_level("estacao1aco"))
 
-    def test_somente_supervisor_lider_e_admin_editam_template(self):
-        for level in ("admin", "supervisor", "lider"):
+    def test_somente_supervisor_lider_qualidade_e_admin_editam_template(self):
+        editores = {"admin", "supervisor", "lider", "qualidade"}
+        for level in editores:
             with self.subTest(level=level):
                 self.assertTrue(can_manage_quality_template(level))
         for level in USER_LEVELS:
-            if normalize_user_level(level) in {"admin", "supervisor", "lider"}:
+            if normalize_user_level(level) in editores:
                 continue
             with self.subTest(level=level):
                 self.assertFalse(can_manage_quality_template(level))
@@ -492,6 +496,34 @@ class QualityRuleTests(unittest.TestCase):
         cotas = self.service.detalhar_peca(peca["id"])
         self.assertEqual(cotas[0]["padrao"], "125,0 ± 0,5")
         self.assertEqual(cotas[0]["medida"], "124,9")
+
+    def test_qualidade_altera_template_salvo_sem_mexer_no_snapshot_antigo(self):
+        estado = self._abrir()
+        self._template("125,0 ± 0,5")
+        self.service.registrar_peca(
+            estado["id"],
+            numero_peca=1,
+            resultado="APROVADA",
+            medidas=_medidas(("124,9", "CONFORME")),
+        )
+        peca = self.db.listar_pecas_inspecionadas(estado["id"])[0]
+
+        qualidade = QualityInspectionService(
+            self.db, "SANDRO", nivel="qualidade", usuario_id=7
+        )
+        recusa = qualidade.definir_template(self.PRODUTO, _cotas("1,0"))
+        self.assertEqual(recusa.code, "qualidade_template_protegido")
+        alterado = qualidade.definir_template(
+            self.PRODUTO,
+            _cotas("130,0 ± 0,5"),
+            pode_editar=can_manage_quality_template("qualidade"),
+        )
+        self.assertTrue(alterado.ok, alterado.message)
+        self.assertEqual(alterado.data["revisao"], 2)
+        self.assertEqual(alterado.data["atualizado_por"], "SANDRO")
+
+        cotas = self.service.detalhar_peca(peca["id"])
+        self.assertEqual(cotas[0]["padrao"], "125,0 ± 0,5")
 
     # ------------------------------------------------------------------
     def test_inspecao_avanca_peca_a_peca_e_nao_duplica_unidade(self):

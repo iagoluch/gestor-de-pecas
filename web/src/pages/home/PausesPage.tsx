@@ -36,7 +36,7 @@ interface PausesResponse {
   active: number;
 }
 
-const SETORES = [
+export const SETORES = [
   "Corte", "Dobra", "Usinagem", "Serra", "Caldeiraria",
   "Solda Aço", "Solda Alumínio", "Solda Robô", "Proj. Ferramentaria", "Protótipo",
   "Pintura", "Montagem", "Destaque",

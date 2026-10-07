@@ -9,6 +9,8 @@ from fastapi import Depends, Request
 from app.core.permissions import (
     can_access_andon_web,
     can_access_management_web,
+    can_manage_quality_templates,
+    can_manage_standard_time,
     is_sector_operator,
     normalize_user_level,
     operator_sector_for_user_level,
@@ -65,6 +67,33 @@ def require_management_user(user: SessionUser = Depends(get_current_user)) -> Se
         raise AppError(
             "management_access_denied",
             "Seu perfil não possui acesso à área gerencial.",
+            status_code=403,
+        )
+    return user
+
+
+def require_tempo_padrao_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    """Engenharia de manufatura (``manufatura``) e admin: edição e leitura do
+    tempo padrão manual. O gestor e os demais níveis não veem nem escrevem."""
+
+    if not can_manage_standard_time(user.role):
+        raise AppError(
+            "standard_time_access_denied",
+            "Só a engenharia de manufatura e a conta administradora acessam o tempo padrão.",
+            status_code=403,
+        )
+    return user
+
+
+def require_qualidade_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    """Qualidade (``qualidade``) e admin: listagem gerencial das cotas padrão.
+
+    A edição reutiliza ``POST /quality/templates``, que tem a própria guarda."""
+
+    if not can_manage_quality_templates(user.role):
+        raise AppError(
+            "quality_templates_access_denied",
+            "Só a Qualidade e a conta administradora acessam o cadastro de cotas padrão.",
             status_code=403,
         )
     return user

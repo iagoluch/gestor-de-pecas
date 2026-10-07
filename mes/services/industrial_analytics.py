@@ -15,6 +15,12 @@ from mes.analytics.rateio import canonical_resource_key, split_concurrent_produc
 from mes.analytics.timeline import build_operator_timeline
 from mes.contracts import AnalyticsFilter
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
+from mes.domain.standard_time import (
+    SOURCE_ESTIMATED,
+    official_standard_seconds,
+    resolve_fact_standard,
+    sector_accepts_standard_time,
+)
 from mes.services.calendar import CalendarService
 from mes.services.display_labels import CLASSIFICATION_CONFLICT_REASON
 from mes.services.management import ManagementService
@@ -245,27 +251,23 @@ class IndustrialAnalyticsService:
             timeline = self._timeline(fact, filters)
             if timeline is None:
                 continue
-            standard_unit = _float_or_none(fact.get("tempo_medio_segundos"))
+            # Performance oficial: só Protheus + manual. O estimado não altera
+            # `tempo_padrao_unitario_segundos`; fica em campo próprio.
+            standard_unit = _float_or_none(official_standard_seconds(fact))
+            standard_value, standard_source = resolve_fact_standard(fact)
+            estimated_unit = (
+                _float_or_none(standard_value)
+                if standard_source == SOURCE_ESTIMATED
+                else None
+            )
             good = int(fact.get("quantidade_boa") or 0)
             key = (
                 str(fact.get("op") or "").strip().casefold(),
                 str(fact.get("numero_operacao") or "").strip(),
             )
-            if key in rateio:
-                production_seconds = rateio[key]
-                time_source = "rateio"
-            elif timeline.has_event_data:
-                production_seconds = timeline.seconds(EventCategory.PRODUCTION)
-                time_source = "timeline_op"
-                # OPs simultâneas no mesmo recurso dividem o tempo (igualitário):
-                # a soma por OP não pode passar do tempo físico do recurso.
-                divided = concurrent.get(fact.get("id"))
-                if divided is not None and divided < production_seconds - 0.5:
-                    production_seconds = divided
-                    time_source = "timeline_op_rateio_igualitario"
-            else:
-                production_seconds = None
-                time_source = "dados_insuficientes"
+            production_seconds, time_source = self._production_seconds(
+                fact, timeline, key, rateio, concurrent
+            )
             real_per_piece = (
                 production_seconds / good
                 if production_seconds is not None and good > 0
@@ -287,6 +289,8 @@ class IndustrialAnalyticsService:
                 "recurso_real": fact.get("maquina"),
                 "quantidade_boa": good,
                 "tempo_padrao_unitario_segundos": standard_unit,
+                "tempo_padrao_fonte": standard_source,
+                "tempo_padrao_unitario_estimado_segundos": estimated_unit,
                 "tempo_padrao_estimado_segundos": expected,
                 "tempo_producao_real_segundos": production_seconds,
                 "fonte_tempo_producao": time_source,
@@ -299,6 +303,74 @@ class IndustrialAnalyticsService:
         payload = {"periodo": filters.to_dict(), "items": rows}
         self._cache[cache_key] = payload
         return payload
+
+    @staticmethod
+    def _production_seconds(fact, timeline, key, rateio, concurrent):
+        """Tempo de produção do apontamento e a origem dele.
+
+        Origens: ``rateio`` (sessão de rateio), ``timeline_op``,
+        ``timeline_op_rateio_igualitario`` (dividido entre OPs simultâneas) e
+        ``dados_insuficientes``.
+        """
+
+        if key in rateio:
+            return rateio[key], "rateio"
+        if not timeline.has_event_data:
+            return None, "dados_insuficientes"
+        production_seconds = timeline.seconds(EventCategory.PRODUCTION)
+        # OPs simultâneas no mesmo recurso dividem o tempo (igualitário):
+        # a soma por OP não pode passar do tempo físico do recurso.
+        divided = concurrent.get(fact.get("id"))
+        if divided is not None and divided < production_seconds - 0.5:
+            return divided, "timeline_op_rateio_igualitario"
+        return production_seconds, "timeline_op"
+
+    def standard_time_samples(self, filters: AnalyticsFilter) -> list[dict]:
+        """Execuções elegíveis para estimar o tempo padrão (segundos/peça).
+
+        Elegível: finalizada, ``quantidade_boa >= 1``, vinculada ao catálogo,
+        fora do Corte, **inteira dentro** da janela (sem recorte parcial) e com
+        tempo de PRODUÇÃO próprio da timeline — setup/parada ficam fora do
+        tempo, e execuções com rateio ou divisão entre OPs simultâneas são
+        descartadas (tempo dividido não é capacidade).
+        """
+
+        rateio = self._rateio_allocation_map(filters)
+        concurrent = self._concurrent_production_seconds(filters)
+        samples = []
+        for fact in self._facts(filters):
+            if str(fact.get("status") or "").strip().casefold() != "finalizado":
+                continue
+            good = int(fact.get("quantidade_boa") or 0)
+            if good < 1 or not fact.get("catalogo_operacao_id"):
+                continue
+            if not sector_accepts_standard_time(fact.get("tipo_setor")):
+                continue
+            start, finish = _dt(fact.get("data_inicio")), _dt(fact.get("data_fim"))
+            if not start or not finish or start < filters.inicio or finish > filters.fim:
+                continue
+            timeline = self._timeline(fact, filters)
+            if timeline is None:
+                continue
+            key = (
+                str(fact.get("op") or "").strip().casefold(),
+                str(fact.get("numero_operacao") or "").strip(),
+            )
+            seconds, source = self._production_seconds(fact, timeline, key, rateio, concurrent)
+            if source != "timeline_op" or not seconds or seconds <= 0:
+                continue
+            samples.append({
+                "apontamento_id": fact.get("id"),
+                # Chave do catálogo (a das tabelas de padrão); o fato legado só
+                # tem a do apontamento.
+                "produto": fact.get("catalogo_produto_codigo") or fact.get("produto_codigo"),
+                "operacao": fact.get("catalogo_numero_operacao") or fact.get("numero_operacao"),
+                "recurso": fact.get("catalogo_codigo_recurso") or fact.get("codigo_recurso"),
+                "segundos_por_peca": seconds / good,
+                "inicio": start,
+                "fim": finish,
+            })
+        return samples
 
     def chronoanalysis(self, filters: AnalyticsFilter) -> dict:
         samples = defaultdict(list)

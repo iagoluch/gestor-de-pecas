@@ -612,7 +612,7 @@ class QualityInspectionService:
             return _fail(
                 "qualidade_template_protegido",
                 "As cotas padrão deste produto já estão cadastradas. "
-                "Somente Supervisor ou Líder pode alterá-las.",
+                "Somente Supervisor, Líder ou Qualidade pode alterá-las.",
             )
         normalizadas, erro = self._normalizar_cotas_template(cotas)
         if erro is not None:

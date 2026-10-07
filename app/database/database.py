@@ -25,6 +25,10 @@ from app.database.config import PostgresConfig, load_postgres_config
 from app.database.ai_repository import AIRepositoryMixin
 from app.database.chamada_repository import ChamadaRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
+from app.database.standard_time_repository import (
+    PROTHEUS_TIME_SQL,
+    StandardTimeRepositoryMixin,
+)
 from app.database.quality_repository import QualityRepositoryMixin
 from app.database.report_repository import ReportRepositoryMixin
 from app.database.sigmanest_repository import SigmaNestRepositoryMixin
@@ -194,6 +198,7 @@ class Database(
     QualityRepositoryMixin,
     WeldingRepositoryMixin,
     FirstPieceRepositoryMixin,
+    StandardTimeRepositoryMixin,
     ReportRepositoryMixin,
     AIRepositoryMixin,
 ):
@@ -3768,11 +3773,27 @@ class Database(
 
         start = _period_value(inicio)
         end = _period_value(fim)
-        query = """
+        query = f"""
             SELECT
                 a.*,
                 MAX(p.quantidade) AS quantidade_planejada_pcp,
                 c.tempo_medio_segundos,
+                -- Chave do catálogo: é a que as tabelas de tempo padrão usam.
+                c.produto_codigo AS catalogo_produto_codigo,
+                c.numero_operacao AS catalogo_numero_operacao,
+                c.codigo_recurso AS catalogo_codigo_recurso,
+                -- Tempo padrão efetivo: Protheus real > manual > estimado.
+                -- Manual e estimado valem pela VIGÊNCIA na data de início do
+                -- apontamento (período fechado não muda); ver os JOINs abaixo.
+                -- ``tempo_medio_segundos`` mantém o significado antigo (só Protheus).
+                -- "Tem Protheus" é PROTHEUS_TIME_SQL, a mesma regra da tela de tempo padrão.
+                CASE WHEN {PROTHEUS_TIME_SQL} THEN c.tempo_medio_segundos
+                     ELSE COALESCE(tm.segundos_por_peca, te.segundos_por_peca)
+                END AS tempo_padrao_segundos,
+                CASE WHEN {PROTHEUS_TIME_SQL} THEN 'protheus'
+                     WHEN tm.segundos_por_peca IS NOT NULL THEN 'manual'
+                     WHEN te.segundos_por_peca IS NOT NULL THEN 'estimado'
+                END AS tempo_padrao_fonte,
                 c.ordem AS ordem_operacao,
                 p.data_liberacao,
                 p.inicio_planejado,
@@ -3830,11 +3851,30 @@ class Database(
                 ) AS eventos
             FROM apontamentos_operacionais a
             LEFT JOIN catalogo_operacoes_op c ON c.id = a.catalogo_operacao_id
+            -- Manual vigente no instante de início: versão mais recente do histórico
+            -- com vigente_desde <= instante do fato. Remoção é versão com valor NULL.
+            LEFT JOIN LATERAL (
+                SELECT h.segundos_novo AS segundos_por_peca
+                FROM tempo_padrao_manual_historico h
+                WHERE h.produto_codigo = UPPER(BTRIM(c.produto_codigo))
+                  AND h.numero_operacao = BTRIM(c.numero_operacao)
+                  AND h.codigo_recurso = UPPER(BTRIM(c.codigo_recurso))
+                  AND UPPER(BTRIM(c.tipo_setor)) <> 'CORTE'
+                  AND h.vigente_desde <= COALESCE(a.data_inicio, a.data_entrada)
+                ORDER BY h.vigente_desde DESC, h.id DESC
+                LIMIT 1
+            ) tm ON TRUE
+            LEFT JOIN tempo_padrao_estimado te
+              ON te.produto_codigo = UPPER(BTRIM(c.produto_codigo))
+             AND te.numero_operacao = BTRIM(c.numero_operacao)
+             AND te.codigo_recurso = UPPER(BTRIM(c.codigo_recurso))
+             AND UPPER(BTRIM(c.tipo_setor)) <> 'CORTE'
+             AND te.vigente_desde <= COALESCE(a.data_inicio, a.data_entrada)
             LEFT JOIN catalogo_pcp_ops p ON p.codigo_op = a.op
             LEFT JOIN eventos_apontamento_operador e ON e.apontamento_id = a.id
             WHERE COALESCE(a.data_inicio, a.data_entrada) <= %s
               AND COALESCE(a.data_fim, %s) >= %s
-        """
+        """  # nosec B608 -- só PROTHEUS_TIME_SQL (constante) é interpolada; valores via %s
         params = [end, end, start]
         if start is not None and end is not None and start <= end:
             query += f" AND {APONTAMENTO_INTERVALO} && tsrange(%s, %s, '[]')"
@@ -3870,7 +3910,8 @@ class Database(
             """
             params.extend((pattern, pattern, pattern, pattern))
         query += """
-            GROUP BY a.id, c.tempo_medio_segundos, c.ordem,
+            GROUP BY a.id, c.id, c.tempo_medio_segundos, c.ordem,
+                     tm.segundos_por_peca, te.segundos_por_peca,
                      p.data_liberacao, p.inicio_planejado, p.fim_planejado,
                      p.prazo_entrega, p.prioridade
             ORDER BY a.data_inicio, a.id

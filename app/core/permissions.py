@@ -12,6 +12,7 @@ USER_LEVELS = (
     "lider",
     "supervisor",
     "manufatura",
+    "qualidade",
     "gestor",
     "diretoria",
     "andon",
@@ -35,6 +36,7 @@ MANAGEMENT_WEB_LEVELS = (
     "lider",
     "supervisor",
     "manufatura",
+    "qualidade",
     "gestor",
     "diretoria",
 )
@@ -65,6 +67,11 @@ NAVIGATION_BY_LEVEL = {
         "Relatórios",
     ),
     "manufatura": (
+        "Tela Inicial",
+        "Consulta Operacional",
+        "Relatórios",
+    ),
+    "qualidade": (
         "Tela Inicial",
         "Consulta Operacional",
         "Relatórios",
@@ -105,6 +112,7 @@ CONSULTATION_TABS_BY_LEVEL = {
     "lider": ALL_OPERATIONAL_CONSULTATION_TABS,
     "supervisor": ALL_OPERATIONAL_CONSULTATION_TABS,
     "manufatura": ALL_OPERATIONAL_CONSULTATION_TABS,
+    "qualidade": ALL_OPERATIONAL_CONSULTATION_TABS,
     "gestor": ALL_OPERATIONAL_CONSULTATION_TABS,
     "diretoria": ALL_OPERATIONAL_CONSULTATION_TABS,
     "andon": (),
@@ -121,6 +129,16 @@ for _operator_level in OPERATOR_LEVELS:
     CONSULTATION_TABS_BY_LEVEL.setdefault(_operator_level, ())
 
 USER_MANAGEMENT_LEVELS = ("admin", "supervisor")
+
+#: Edição de tempo padrão manual: só a engenharia de manufatura e o admin
+#: (decisão do usuário, 06/10/2026). O gestor lê o resultado, não edita.
+STANDARD_TIME_LEVELS = ("admin", "manufatura")
+
+#: Cadastro/edição das cotas padrão por produto na tela de gestão: só a
+#: Qualidade (conta ``qualidade``) e o admin (decisão do usuário, 06/10/2026).
+#: Controla a LISTAGEM gerencial; a edição em si segue o endpoint da Qualidade e
+#: ``QUALITY_TEMPLATE_EDITOR_LEVELS`` (que também inclui Supervisor/Líder).
+QUALITY_TEMPLATE_MANAGEMENT_LEVELS = ("admin", "qualidade")
 
 
 def normalize_user_level(level):
@@ -140,6 +158,17 @@ def consultation_tabs_for_level(level):
 
 def can_manage_users(level):
     return normalize_user_level(level) in USER_MANAGEMENT_LEVELS
+
+
+def can_manage_standard_time(level):
+    return normalize_user_level(level) in STANDARD_TIME_LEVELS
+
+
+def can_manage_quality_templates(level):
+    """Acesso à aba gerencial de cotas padrão (listagem). Não confundir com
+    ``can_manage_quality_template`` (singular), que decide quem EDITA um template."""
+
+    return normalize_user_level(level) in QUALITY_TEMPLATE_MANAGEMENT_LEVELS
 
 
 def can_access_management_web(level):
@@ -185,6 +214,6 @@ def can_access_quality(level):
 
 
 def can_manage_quality_template(level):
-    """Alteração de template salvo é exclusiva de Supervisor/Líder."""
+    """Alteração de template salvo: Supervisor/Líder, Qualidade e admin."""
 
     return can_edit_quality_template(normalize_user_level(level))

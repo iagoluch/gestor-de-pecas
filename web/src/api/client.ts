@@ -83,6 +83,11 @@ export const api = {
       method: "POST",
       body: payload === undefined ? undefined : JSON.stringify(payload),
     }),
+  put: <T>(path: string, payload?: unknown) =>
+    request<T>(path, {
+      method: "PUT",
+      body: payload === undefined ? undefined : JSON.stringify(payload),
+    }),
   delete: (path: string) => request<void>(path, { method: "DELETE" }),
   download,
 };

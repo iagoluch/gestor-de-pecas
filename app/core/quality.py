@@ -1,7 +1,9 @@
 """Regras canônicas da Qualidade, centralizadas em um único lugar.
 
-A Qualidade **não** é um perfil de usuário. Ela é uma capacidade que alguns
-setores possuem dentro da experiência normal do operador. Este módulo é a
+A inspeção **não** é um perfil de operador: é uma capacidade que alguns
+setores possuem dentro da experiência normal do operador. (A conta gerencial
+``qualidade`` existe só para manter o cadastro de cotas padrão; ela não
+inspeciona.) Este módulo é a
 autoridade única sobre:
 
 * quais setores enxergam a aba Qualidade;
@@ -82,8 +84,10 @@ QUALITY_SESSION_FINISHED = "CONCLUIDA"
 QUALITY_SESSION_STATUSES = (QUALITY_SESSION_OPEN, QUALITY_SESSION_FINISHED)
 
 # Níveis que podem alterar o template de cotas já salvo de um produto.
-# O operador comum cadastra a primeira definição e depois só visualiza.
-QUALITY_TEMPLATE_EDITOR_LEVELS = ("admin", "supervisor", "lider")
+# O operador comum cadastra a primeira definição e depois só visualiza. A conta
+# ``qualidade`` (decisão do usuário, 06/10/2026) é a dona do cadastro padrão;
+# ela não é um perfil de operador nem habilita a fila de inspeção.
+QUALITY_TEMPLATE_EDITOR_LEVELS = ("admin", "supervisor", "lider", "qualidade")
 
 
 def _normalized(value):
@@ -138,7 +142,7 @@ def normalize_measure_status(value):
 
 
 def can_edit_quality_template(level):
-    """Somente Supervisor/Líder (e admin) alteram um template já salvo."""
+    """Supervisor/Líder, Qualidade e admin alteram um template já salvo."""
 
     return _normalized(level) in {
         _normalized(item) for item in QUALITY_TEMPLATE_EDITOR_LEVELS

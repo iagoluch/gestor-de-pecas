@@ -144,6 +144,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // abre o PCPA109 e não precisa saber se ela já foi sincronizada antes.
   const [remoteSearch, setRemoteSearch] = useState<"idle" | "searching">("idle");
   const [searchedOp, setSearchedOp] = useState("");
+  // Erro do campo OP: só aparece quando o operador tenta parar com uma OP
+  // digitada que o Gestor e o TOTVS não conhecem.
+  const [opFieldError, setOpFieldError] = useState(false);
   const operationsPath = loadedOp
     ? `/api/v1/operator/operations/${encodeURIComponent(loadedOp)}?resource=${encodeURIComponent(resource)}`
     : null;
@@ -179,6 +182,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setRemoteSearch("idle");
     setSearchedOp("");
     setReleasedGateKey("");
+    setOpFieldError(false);
   }, [loadedOp]);
 
   // A OP não está no Gestor, mas pode existir no TOTVS. Pede UMA vez por OP:
@@ -382,6 +386,22 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     balance: Number(activeCard.balance ?? 0),
   } : context;
 
+  // OP digitada que não existe (nem local, nem no TOTVS). A busca remota já
+  // terminou (ou não há o que buscar); enquanto ela corre, a OP ainda é possível.
+  const opNotFound = Boolean(loadedOp) && !operations.loading && remoteSearch === "idle" && routeRows.length === 0
+    && (operations.error?.status === 404
+      || Boolean(operations.data && (!operations.data.sync?.pending || searchedOp === loadedOp)));
+
+  // Sem apontamento ativo o diálogo mostraria a OP digitada como contexto da
+  // parada; se ela não existe, a tela diz isso no campo em vez de abrir o diálogo.
+  function openStopDialog() {
+    if (!activeCard && opNotFound) {
+      setOpFieldError(true);
+      return;
+    }
+    setDialog({ kind: "stop" });
+  }
+
   function applyRouteStep(operationKey: string) {
     const item = routeRows.find((row) => routeStepKey(row) === operationKey);
     if (!item) return;
@@ -421,6 +441,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
 
   function handleOpChange(value: string) {
     setOp(value);
+    setOpFieldError(false);
     if (value.trim()) return;
     setLoadedOp("");
     setRouteSelection(null);
@@ -695,7 +716,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       <div className="operator-workbench__top">
         <div className="operator-workbench__main">
       <form className="operator-op-form" onSubmit={loadOperations}>
-        <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" autoFocus /></label>
+        <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
         <button type="submit">Carregar roteiro</button>
       </form>
       {(operations.data?.items?.length ?? 0) > 0 ? (
@@ -739,7 +760,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           preparação da máquina, que é quando a primeira peça é fabricada. */}
       <div className="operator-actions" aria-label="Ações operacionais">
         <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={() => setDialog({ kind: "stop" })}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
+        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
         <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>Retrabalho</span></button>

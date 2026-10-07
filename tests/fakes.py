@@ -2796,6 +2796,38 @@ class FakeDatabase:
         )
         return item
 
+    def listar_templates_qualidade(self, *, produto=None, limite=100, deslocamento=0):
+        busca = str(produto or "").strip().casefold()
+        linhas = sorted(
+            (
+                row for row in self.quality_templates
+                if not busca or busca in row["produto_codigo"].casefold()
+            ),
+            key=lambda row: row["produto_codigo"],
+        )
+        itens = []
+        for row in linhas[deslocamento:deslocamento + limite]:
+            descricao = row.get("produto_descricao") or next(
+                (
+                    op["produto_descricao"] for op in self.catalog_operations
+                    if op.get("produto_codigo") == row["produto_codigo"]
+                ),
+                None,
+            )
+            itens.append({
+                "produto_codigo": row["produto_codigo"],
+                "produto_descricao": descricao,
+                "revisao": row["revisao"],
+                "quantidade_cotas": sum(
+                    1 for cota in self.quality_dimensions
+                    if cota["template_id"] == row["id"] and cota.get("ativo", True)
+                ),
+                "atualizado_por": row.get("atualizado_por_nome"),
+                "atualizado_em": row["atualizado_em"],
+                "ativo": row["ativo"],
+            })
+        return {"items": itens, "total": len(linhas)}
+
     def salvar_template_qualidade(
         self, produto_codigo, cotas, *, produto_descricao=None, usuario_id=None,
         usuario_nome="", agora=None, nova_revisao=False,

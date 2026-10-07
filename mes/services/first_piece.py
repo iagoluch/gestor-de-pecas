@@ -57,6 +57,11 @@ class FirstPieceResult:
     data: dict | None = None
 
 
+#: Teto da observação da inspeção (coluna TEXT). Espelha o do repositório: o
+#: snapshot de revisão/padrão das cotas não pode ser cortado em silêncio.
+OBSERVACAO_INSPECAO_LIMITE = 2000
+
+
 def _fail(code, message, data=None):
     return FirstPieceResult(False, message, code, data)
 
@@ -509,7 +514,11 @@ class FirstPieceService:
             recurso=recurso,
             operacao=operacao,
             resultado=resultado,
-            observacao=self._observacao_checklist(cotas, observacao),
+            observacao=self._observacao_checklist(
+                cotas,
+                observacao,
+                revisao=((checklist or {}).get("template") or {}).get("revisao"),
+            ),
         )
         if not inspecao.ok:
             return FirstPieceResult(
@@ -536,20 +545,39 @@ class FirstPieceService:
         )
 
     @staticmethod
-    def _observacao_checklist(cotas, observacao=None):
+    def _observacao_checklist(cotas, observacao=None, revisao=None):
         """Resume o checklist no campo de observação que já existe.
 
         As medidas não ganham tabela nova: elas ficam legíveis no registro da
-        primeira peça, ao lado do que o operador escreveu.
+        primeira peça, ao lado do que o operador escreveu. O texto é também o
+        snapshot da genealogia: grava a revisão do template e o padrão de cada
+        cota **vigentes na inspeção**, para que editar o template depois não
+        mude o critério de um registro já gravado. Formato:
+
+            Template rev 3 · Cota 1: 1200,0 +/- 1,0 → 1200,4 mm (conforme); ...
         """
 
-        resumo = "; ".join(
-            f"Cota {cota['sequencia']}: {cota['medida']} {cota['unidade']} "
-            f"({'conforme' if cota['status'] != QUALITY_MEASURE_NON_CONFORMING else 'não conforme'})"
-            for cota in cotas or ()
-        )
+        def cota_texto(cota):
+            status = (
+                "não conforme"
+                if cota["status"] == QUALITY_MEASURE_NON_CONFORMING
+                else "conforme"
+            )
+            padrao = _texto(cota.get("padrao"), 60)
+            medida = f"{cota['medida']} {cota['unidade']} ({status})"
+            alvo = f"{padrao} → {medida}" if padrao else medida
+            return f"Cota {cota['sequencia']}: {alvo}"
+
+        resumo = "; ".join(cota_texto(cota) for cota in cotas or ())
+        if resumo and revisao:
+            resumo = f"Template rev {revisao} · {resumo}"
         nota = _texto(observacao, 300)
-        return " | ".join(part for part in (resumo, nota) if part)[:500]
+        # A nota do operador sempre sobrevive; só o resumo das cotas é cortado
+        # (com reticências) quando passa do limite do campo.
+        espaco = OBSERVACAO_INSPECAO_LIMITE - (len(nota) + 3 if nota else 0)
+        if len(resumo) > espaco:
+            resumo = resumo[: espaco - 1] + "…"
+        return " | ".join(part for part in (resumo, nota) if part)
 
     def autorizar(self, *, op, setor, recurso, operacao, cracha, observacao=None):
         """Valida o crachá do responsável e libera o bloqueio, com auditoria.

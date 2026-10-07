@@ -4,7 +4,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { aiApi } from "../api/ai";
 import { useOptionalAuth } from "../auth/AuthContext";
 import type { ManagementSectionId } from "../config/navigation";
-import { sectionById } from "../config/navigation";
+import { sectionById, tabVisibleFor } from "../config/navigation";
 import type { FilterField } from "../filters/FilterContext";
 import { FilterBar } from "./FilterBar";
 import { Notice } from "./Notice";
@@ -37,7 +37,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
   // Na própria tela da IA a aba é a atual e a página já consulta o status.
   const aiEnabled = useAiEnabled(sectionId === "home" && pathname !== "/inicio/ia");
   const tabs = section.tabs.filter((tab) =>
-    (!tab.adminOnly || auth?.user?.role === "admin") && !(tab.screen === "home-ai" && aiEnabled === false));
+    tabVisibleFor(tab, auth?.user?.role) && !(tab.screen === "home-ai" && aiEnabled === false));
   // IA-01: numa rota de aba, o h1 e o título do documento saem do menu
   // ("Seção — Aba"), para o mesmo destino nunca ter dois nomes. `title` só
   // vale para telas fora das abas.

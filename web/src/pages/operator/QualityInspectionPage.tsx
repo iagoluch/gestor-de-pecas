@@ -391,19 +391,19 @@ export function TemplateEditor({
   saving,
   onChange,
   onSave,
+  intro = "Este produto ainda não possui cotas cadastradas. Informe os padrões que a peça deveria possuir; eles serão reutilizados nas próximas inspeções.",
 }: {
   drafts: DraftDimension[];
   saving: boolean;
   onChange: (value: DraftDimension[]) => void;
   onSave: () => void;
+  intro?: string;
 }) {
   const incompleto = drafts.some((item) => !item.nominal.trim() || !item.tolerancia.trim());
   return (
     <>
       <h2 data-step-title tabIndex={-1}>Cadastro das cotas do produto</h2>
-      <p className="insp-template-note">
-        Este produto ainda não possui cotas cadastradas. Informe os padrões que a peça deveria possuir; eles serão reutilizados nas próximas inspeções.
-      </p>
+      <p className="insp-template-note">{intro}</p>
       <div className="insp-template-editor">
         {drafts.map((item, index) => (
           <fieldset key={index}>

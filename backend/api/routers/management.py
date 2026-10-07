@@ -1,16 +1,19 @@
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.core.permissions import USER_LEVELS
 from app.database.errors import PauseOrderConflictError
 from app.database.telegram_link_codes import TELEGRAM_LINK_CODE_TTL_SECONDS
 from backend.api.database import get_database
 from backend.api.dependencies.bulkhead import management_read_slot
+from backend.api.dependencies.clock import request_now_func
 from backend.api.dependencies.auth import (
     require_admin_user,
     require_csrf,
     require_management_user,
+    require_qualidade_user,
+    require_tempo_padrao_user,
 )
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
@@ -23,11 +26,13 @@ from backend.api.schemas.common import (
     ProductiveResourceCalendarRequest,
     ProductiveShiftRequest,
     ShiftParameterRequest,
+    StandardTimeManualRequest,
     UserAccountRequest,
 )
 from mes.contracts import AnalyticsFilter
 from mes.integrations.notifications.telegram import deliver_telegram_message, telegram_outbound_allowed
 from mes.services.internal_alerts import InternalAlertService
+from mes.services.standard_time import StandardTimeRuleError, StandardTimeService
 
 
 router = APIRouter(
@@ -544,4 +549,143 @@ def first_pieces(
         "authorizations": list(
             database.listar_autorizacoes_primeira_peca(limite=200) or []
         ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tempo padrão manual e estimado (06/10/2026).
+#
+# Exclusivo da engenharia de manufatura e do admin, inclusive a leitura: o
+# gestor vê só o resultado (Performance) no payload gerencial. Prioridade da
+# fonte: Protheus real > manual > estimado > NULL. O Corte não participa.
+# ---------------------------------------------------------------------------
+def _standard_time_error(error: StandardTimeRuleError) -> AppError:
+    return AppError(error.code, error.message, status_code=error.status_code)
+
+
+@router.get("/standard-times")
+def list_standard_times(
+    produto: str | None = Query(default=None, max_length=80),
+    setor: str | None = Query(default=None, max_length=40),
+    recurso: str | None = Query(default=None, max_length=80),
+    somente_sem_padrao: bool = True,
+    limit: int = 100,
+    offset: int = 0,
+    _user: SessionUser = Depends(require_tempo_padrao_user),
+    database=Depends(get_database),
+):
+    result = database.listar_tempos_padrao(
+        produto=produto or None,
+        setor=setor or None,
+        recurso=recurso or None,
+        somente_sem_padrao=somente_sem_padrao,
+        limite=max(1, min(int(limit), 500)),
+        deslocamento=max(0, int(offset)),
+    )
+    return {
+        "items": result["items"],
+        "total": result["total"],
+        "sem_produto": result.get("sem_produto", 0),
+        "limit": max(1, min(int(limit), 500)),
+        "offset": max(0, int(offset)),
+        "somente_sem_padrao": somente_sem_padrao,
+    }
+
+
+@router.put("/standard-times/manual", dependencies=[Depends(require_csrf)])
+def set_manual_standard_time(
+    payload: StandardTimeManualRequest,
+    user: SessionUser = Depends(require_tempo_padrao_user),
+    database=Depends(get_database),
+):
+    service = StandardTimeService(database)
+    try:
+        saved = service.set_manual(
+            payload.produto_codigo,
+            payload.numero_operacao,
+            payload.codigo_recurso,
+            payload.segundos_por_peca,
+            observacao=payload.observacao,
+            usuario_id=user.id,
+            usuario_nome=user.name,
+        )
+    except StandardTimeRuleError as error:
+        raise _standard_time_error(error) from error
+    return {"ok": True, "item": saved}
+
+
+@router.delete("/standard-times/manual", dependencies=[Depends(require_csrf)])
+def delete_manual_standard_time(
+    produto_codigo: str,
+    numero_operacao: str,
+    codigo_recurso: str,
+    user: SessionUser = Depends(require_tempo_padrao_user),
+    database=Depends(get_database),
+):
+    service = StandardTimeService(database)
+    try:
+        service.remove_manual(
+            produto_codigo,
+            numero_operacao,
+            codigo_recurso,
+            usuario_id=user.id,
+            usuario_nome=user.name,
+        )
+    except StandardTimeRuleError as error:
+        raise _standard_time_error(error) from error
+    return {"ok": True}
+
+
+@router.get("/standard-times/manual/history")
+def manual_standard_time_history(
+    produto_codigo: str,
+    numero_operacao: str,
+    codigo_recurso: str,
+    _user: SessionUser = Depends(require_tempo_padrao_user),
+    database=Depends(get_database),
+):
+    items = database.listar_historico_tempo_padrao_manual(
+        produto_codigo, numero_operacao, codigo_recurso
+    )
+    return {"items": items}
+
+
+@router.post("/standard-times/estimates/recalculate", dependencies=[Depends(require_csrf)])
+def recalculate_standard_time_estimates(
+    request: Request,
+    _user: SessionUser = Depends(require_tempo_padrao_user),
+    database=Depends(get_database),
+):
+    # Mesmo relógio da aplicação do tick diário (``clock.now`` em simulação).
+    service = StandardTimeService(database, now_func=request_now_func(request))
+    try:
+        summary = service.recalculate_estimates()
+    except StandardTimeRuleError as error:
+        raise _standard_time_error(error) from error
+    return {"ok": True, **summary}
+
+
+# ---------------------------------------------------------------------------
+# Cotas padrão da Qualidade por produto (06/10/2026).
+#
+# Só a listagem vive aqui. A edição reutiliza POST /quality/templates e
+# GET /quality/templates/{produto}, cuja guarda já aceita a conta ``qualidade``
+# (QUALITY_TEMPLATE_EDITOR_LEVELS); não há rota de edição duplicada.
+# ---------------------------------------------------------------------------
+@router.get("/quality-templates")
+def list_quality_templates(
+    produto: str | None = Query(default=None, max_length=60),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _user: SessionUser = Depends(require_qualidade_user),
+    database=Depends(get_database),
+):
+    result = database.listar_templates_qualidade(
+        produto=produto or None, limite=limit, deslocamento=offset
+    )
+    return {
+        "items": result["items"],
+        "total": result["total"],
+        "limit": limit,
+        "offset": offset,
     }

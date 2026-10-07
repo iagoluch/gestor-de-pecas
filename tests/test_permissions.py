@@ -76,7 +76,7 @@ class PermissionMatrixTests(unittest.TestCase):
         self.assertTrue(can_manage_users("supervisor"))
         self.assertFalse(can_manage_users("almoxarifado"))
         self.assertFalse(can_manage_users("operador_corte"))
-        for level in ("admin", "lider", "supervisor", "manufatura", "gestor", "diretoria"):
+        for level in ("admin", "lider", "supervisor", "manufatura", "qualidade", "gestor", "diretoria"):
             self.assertTrue(can_access_management_web(level))
             self.assertEqual(consultation_tabs_for_level(level), ALL_OPERATIONAL_CONSULTATION_TABS)
         self.assertFalse(can_access_management_web("operador_dobra"))

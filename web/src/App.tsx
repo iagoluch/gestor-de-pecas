@@ -2,6 +2,7 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { EmptyState, LoadingState } from "./components/DataState";
+import { QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -32,6 +33,8 @@ import { AuditAppointmentsPage, AuditIssuesPage, AuditReliabilityPage } from "./
 import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
 import { OperationsOrdersPage, OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
+import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
+import { StandardTimePage } from "./pages/production/StandardTimePage";
 import {
   AnalyticalDataReportPage,
   IndicatorsReportPage,
@@ -71,6 +74,38 @@ function RequireAdmin({ children }: PropsWithChildren) {
     <div className="page-wrap">
       <section className="page-panel">
         <EmptyState title="Acesso restrito ao administrador" detail="Esta tela é exclusiva da conta de administração. Peça a um administrador se precisar de alguma alteração aqui." />
+      </section>
+    </div>
+  );
+}
+
+/**
+ * Tempo padrão: só engenharia de manufatura e admin. O gestor comum não vê a
+ * aba (menu filtrado) e, pela URL direta, a página nem monta nem chama a API.
+ */
+function RequireStandardTimeAccess({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  if (user && (STANDARD_TIME_LEVELS as readonly string[]).includes(user.role)) return children;
+  return (
+    <div className="page-wrap">
+      <section className="page-panel">
+        <EmptyState title="Acesso restrito à engenharia de manufatura" detail="Esta tela é exclusiva da engenharia de manufatura e da administração. Peça a elas se precisar de alguma alteração aqui." />
+      </section>
+    </div>
+  );
+}
+
+/**
+ * Cotas padrão da Qualidade: só a conta qualidade e o admin. O gestor comum não
+ * vê a aba e, pela URL direta, a página nem monta nem chama a API.
+ */
+function RequireQualityTemplateAccess({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  if (user && (QUALITY_TEMPLATE_LEVELS as readonly string[]).includes(user.role)) return children;
+  return (
+    <div className="page-wrap">
+      <section className="page-panel">
+        <EmptyState title="Acesso restrito à Qualidade" detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar de alguma alteração nas cotas padrão." />
       </section>
     </div>
   );
@@ -116,6 +151,8 @@ export default function App() {
         <Route path="producao/ordens" element={<ProductionOrdersPage />} />
         <Route path="producao/realizada" element={<ProductionCompletedPage />} />
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
+        <Route path="producao/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
+        <Route path="producao/qualidade" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
 
         <Route path="analises/oee" element={<AnalyticsOeePage />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />

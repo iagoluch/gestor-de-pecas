@@ -22,6 +22,10 @@ from mes.domain import (
     ManufacturingRules,
     StopClassification,
 )
+from mes.domain.standard_time import (
+    estimated_view_standard_seconds,
+    official_standard_seconds,
+)
 
 
 class ManagementService:
@@ -49,6 +53,10 @@ class ManagementService:
         good = scrap = rework_qty = 0
         standard_run_seconds = 0.0
         good_without_standard = 0
+        # Leitura "estimada": mesma fórmula, padrão oficial + estimado do Gestor.
+        estimated_run_seconds = 0.0
+        estimated_good_without_standard = 0
+        good_with_estimated_standard = 0
         resources = set()
         ops = set()
         sectors = defaultdict(lambda: {"good": 0, "scrap": 0, "rework": 0, "seconds": defaultdict(float), "ops": set()})
@@ -60,6 +68,9 @@ class ManagementService:
             "rework": 0,
             "standard_run_seconds": 0.0,
             "good_without_standard": 0,
+            "estimated_run_seconds": 0.0,
+            "estimated_good_without_standard": 0,
+            "good_with_estimated_standard": 0,
             "seconds": defaultdict(float),
             "planned_downtime_seconds": 0.0,
         })
@@ -113,20 +124,34 @@ class ManagementService:
             if op:
                 ops.add(op)
             bucket = sectors[sector]
-            standard_unit_seconds = row.get("tempo_medio_segundos")
+            # Performance oficial: Protheus + manual. A estimada soma o
+            # estimado do Gestor sem tocar a oficial (decisão B, 06/10/2026).
+            standard_unit_seconds = official_standard_seconds(row)
+            view_unit_seconds = estimated_view_standard_seconds(row)
+            row_good = max(0, int(row.get("quantidade_boa") or 0))
+            row_bucket = resource_bucket(resource, sector) if resource else None
             if standard_unit_seconds is None:
-                row_good = max(0, int(row.get("quantidade_boa") or 0))
                 good_without_standard += row_good
-                if resource:
-                    resource_bucket(resource, sector)["good_without_standard"] += row_good
+                if row_bucket is not None:
+                    row_bucket["good_without_standard"] += row_good
             else:
-                row_standard_run_seconds = max(0.0, float(standard_unit_seconds)) * max(
-                    0,
-                    int(row.get("quantidade_boa") or 0),
-                )
+                row_standard_run_seconds = max(0.0, float(standard_unit_seconds)) * row_good
                 standard_run_seconds += row_standard_run_seconds
-                if resource:
-                    resource_bucket(resource, sector)["standard_run_seconds"] += row_standard_run_seconds
+                if row_bucket is not None:
+                    row_bucket["standard_run_seconds"] += row_standard_run_seconds
+            if view_unit_seconds is None:
+                estimated_good_without_standard += row_good
+                if row_bucket is not None:
+                    row_bucket["estimated_good_without_standard"] += row_good
+            else:
+                view_run_seconds = max(0.0, float(view_unit_seconds)) * row_good
+                estimated_run_seconds += view_run_seconds
+                if row_bucket is not None:
+                    row_bucket["estimated_run_seconds"] += view_run_seconds
+                if standard_unit_seconds is None:
+                    good_with_estimated_standard += row_good
+                    if row_bucket is not None:
+                        row_bucket["good_with_estimated_standard"] += row_good
             if not quantity_source_available:
                 bucket["good"] += int(row.get("quantidade_boa") or 0)
                 bucket["scrap"] += int(row.get("quantidade_refugo") or 0)
@@ -204,6 +229,7 @@ class ManagementService:
             # O Corte não tem tempo padrão por peça em S_boas: o previsto do
             # nesting é outra grandeza, ainda não homologada para a Performance.
             good_without_standard += qty
+            estimated_good_without_standard += qty
             ops.add(op)
             bucket = sectors["Corte"]
             bucket["good"] += qty
@@ -212,6 +238,7 @@ class ManagementService:
             if resource_input is not None:
                 resource_input["good"] += qty
                 resource_input["good_without_standard"] += qty
+                resource_input["estimated_good_without_standard"] += qty
         if cutting_production:
             quantity_evidence = True
 
@@ -318,6 +345,20 @@ class ManagementService:
         )
         availability = oee_calculation.availability
         performance = oee_calculation.performance
+        estimated_performance = (
+            calculate_oee(
+                seconds_by_category=oee_seconds_by_category(
+                    totals, planned_downtime_seconds=planned_downtime_seconds
+                ),
+                good_quantity=good,
+                scrap_quantity=scrap,
+                rework_quantity=rework_qty,
+                standard_run_seconds=estimated_run_seconds,
+                good_without_standard_quantity=estimated_good_without_standard,
+            ).performance
+            if good_with_estimated_standard
+            else performance
+        )
         ftt = oee_calculation.ftt
         oee = oee_calculation.oee
         time_bases = dict(oee_calculation.time_bases)
@@ -388,9 +429,26 @@ class ManagementService:
             )
             if resource_calculation.is_no_demand_exception:
                 no_demand_exception_resources.append(resource_input["resource"])
+            resource_estimated_performance = (
+                calculate_oee(
+                    seconds_by_category=oee_seconds_by_category(
+                        resource_input["seconds"],
+                        planned_downtime_seconds=resource_input["planned_downtime_seconds"],
+                    ),
+                    good_quantity=resource_input["good"],
+                    scrap_quantity=resource_input["scrap"],
+                    rework_quantity=resource_input["rework"],
+                    standard_run_seconds=resource_input["estimated_run_seconds"],
+                    good_without_standard_quantity=resource_input["estimated_good_without_standard"],
+                ).performance
+                if resource_input["good_with_estimated_standard"]
+                else resource_calculation.performance
+            )
             resource_kpis.append({
                 "resource": resource_input["resource"],
                 "sector": resource_input["sector"],
+                "performance_estimada": resource_estimated_performance.to_dict(),
+                "pecas_boas_tempo_estimado": resource_input["good_with_estimated_standard"],
                 "metrics": resource_calculation.metrics_dict(),
                 "kpi_time_bases": dict(resource_calculation.time_bases),
                 "kpi_calculation": resource_calculation.trace_dict(),
@@ -538,6 +596,14 @@ class ManagementService:
                 "performance": performance.to_dict(),
                 "ftt": ftt.to_dict(),
                 "oee": oee.to_dict(),
+            },
+            # Performance "estimada": mesma fórmula, mas também conta o tempo
+            # padrão estimado pelo Gestor (P25). Separada de `kpis` de propósito:
+            # a Performance oficial só usa Protheus + manual.
+            "kpis_estimados": {
+                "performance": estimated_performance.to_dict(),
+                "usa_tempo_estimado": bool(good_with_estimated_standard),
+                "pecas_boas_tempo_estimado": good_with_estimated_standard,
             },
             "kpi_contract": dict(OEE_CONTRACT),
             "kpi_time_bases": time_bases,

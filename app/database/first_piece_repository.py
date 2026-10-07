@@ -36,6 +36,11 @@ def _as_dict(row):
     return dict(row) if row else None
 
 
+#: Observação da inspeção carrega o snapshot de revisão/padrão das cotas
+#: (espelha mes.services.first_piece.OBSERVACAO_INSPECAO_LIMITE; coluna TEXT).
+OBSERVACAO_INSPECAO_LIMITE = 2000
+
+
 def _texto(valor, limite=200):
     return str(valor or "").strip()[:limite] or None
 
@@ -263,7 +268,7 @@ class FirstPieceRepositoryMixin:
                 """,
                 (
                     decisao, decisao, momento, str(operador or "Operador").strip(),
-                    _texto(observacao, 500), bool(bloquear),
+                    _texto(observacao, OBSERVACAO_INSPECAO_LIMITE), bool(bloquear),
                     _texto(ocorrencia, 60) if bloquear else None, bool(bloquear),
                     momento, bool(bloquear), momento, int(primeira_peca_id),
                 ),

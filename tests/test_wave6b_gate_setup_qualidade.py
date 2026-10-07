@@ -387,11 +387,85 @@ class LiberacaoDoLoteTests(unittest.TestCase):
         self.assertIn("Lote liberado", aprovado.message)
         self.assertTrue(aprovado.data["liberado"])
         self.assertEqual(db.first_pieces[0]["status"], "CONFORME")
-        self.assertIn("Cota 1: 12,0 mm", db.first_pieces[0]["observacao"])
+        self.assertIn("Cota 1: 12,0 +/- 0,2 → 12,0 mm", db.first_pieces[0]["observacao"])
 
         final = finalizar(fluxo, contexto)
         self.assertTrue(final.ok, final.message)
         self.assertEqual(db.appointments[0]["status"], "Finalizado")
+
+    def test_registro_grava_revisao_e_padrao_e_ignora_edicao_posterior_do_template(self):
+        """Genealogia: o registro carrega o critério vigente na inspeção."""
+
+        db, fluxo, contexto = cenario("Dobra", quantidade=1)
+        servico = FirstPieceService(db, "OPERADOR 6B")
+        self.assertTrue(fluxo.executar("Início", **contexto).ok)
+
+        aprovado = servico.registrar_checklist(
+            **contexto,
+            medidas=medidas("12,1", "40,0"),
+            observacao="Peça lisa",
+        )
+
+        self.assertTrue(aprovado.ok, aprovado.message)
+        esperado = (
+            "Template rev 1 · "
+            "Cota 1: 12,0 +/- 0,2 → 12,1 mm (conforme); "
+            "Cota 2: 40,0 +/- 1,0 → 40,0 mm (conforme) | Peça lisa"
+        )
+        self.assertEqual(db.first_pieces[0]["observacao"], esperado)
+
+        # O produto ganha nova revisão com padrões diferentes depois da inspeção.
+        db.salvar_template_qualidade(
+            contexto["operacao"]["produto_codigo"],
+            [
+                {"sequencia": 1, "descricao": "Altura", "padrao": "99,0 +/- 0,1"},
+                {"sequencia": 2, "descricao": "Largura", "padrao": "50,0 +/- 0,5"},
+            ],
+            nova_revisao=True,
+        )
+        atual = servico.checklist(
+            setor=contexto["setor"], operacao=contexto["operacao"]
+        )
+        self.assertEqual(atual["template"]["revisao"], 2)
+        self.assertEqual(atual["template"]["cotas"][0]["padrao"], "99,0 +/- 0,1")
+        self.assertEqual(db.first_pieces[0]["observacao"], esperado)
+
+    def test_nao_conforme_tambem_registra_padrao_e_revisao(self):
+        db, fluxo, contexto = cenario("Dobra", quantidade=1)
+        servico = FirstPieceService(db, "OPERADOR 6B")
+        self.assertTrue(fluxo.executar("Início", **contexto).ok)
+
+        retrabalho = servico.registrar_checklist(
+            **contexto, medidas=medidas("13,0", "40,0"), destino="RETRABALHO"
+        )
+
+        self.assertTrue(retrabalho.ok, retrabalho.message)
+        self.assertEqual(
+            db.first_pieces[0]["observacao"],
+            "Template rev 1 · "
+            "Cota 1: 12,0 +/- 0,2 → 13,0 mm (não conforme); "
+            "Cota 2: 40,0 +/- 1,0 → 40,0 mm (conforme)",
+        )
+
+    def test_snapshot_nao_e_cortado_pela_nota_longa_do_operador(self):
+        cotas = [
+            {"sequencia": i, "descricao": f"C{i}", "padrao": "1200,0 +/- 1,0"}
+            for i in range(1, 11)
+        ]
+        db, fluxo, contexto = cenario("Dobra", quantidade=1, cotas=cotas)
+        servico = FirstPieceService(db, "OPERADOR 6B")
+        self.assertTrue(fluxo.executar("Início", **contexto).ok)
+
+        resultado = servico.registrar_checklist(
+            **contexto,
+            medidas=medidas(*["1200,4"] * 10),
+            observacao="x" * 400,
+        )
+
+        self.assertTrue(resultado.ok, resultado.message)
+        texto = db.first_pieces[0]["observacao"]
+        self.assertIn("Cota 10: 1200,0 +/- 1,0 → 1200,4 mm (conforme)", texto)
+        self.assertTrue(texto.endswith("x" * 300))
 
     def test_sem_o_botao_setup_apontado_o_popup_recusa_liberar_o_lote(self):
         """O popup não confirma Setup: quem grava esse fato é o botão Setup."""
@@ -893,6 +967,33 @@ class IdempotenciaEConcorrenciaTests(unittest.TestCase):
             if row.get("status") in {"Em processo", "Parada", "Setup", "Retrabalho"}
         ]
         self.assertEqual(len(ativos), 1)
+
+
+class ObservacaoDoChecklistLimiteTests(unittest.TestCase):
+    def test_nota_do_operador_sobrevive_com_muitas_cotas(self):
+        cotas = [
+            {
+                "sequencia": i,
+                "padrao": "1200,0 +/- 1,0",
+                "medida": "1200,4",
+                "unidade": "mm",
+                "status": "conforme",
+            }
+            for i in range(1, 61)
+        ]
+        texto = FirstPieceService._observacao_checklist(
+            cotas, "peça riscada na lateral", revisao=3
+        )
+        self.assertLessEqual(len(texto), 2000)
+        self.assertTrue(texto.endswith("| peça riscada na lateral"))
+        self.assertIn("…", texto)
+
+    def test_sem_excesso_nao_corta_nada(self):
+        cotas = [
+            {"sequencia": 1, "padrao": "10 +/- 1", "medida": "10", "unidade": "mm", "status": "conforme"}
+        ]
+        texto = FirstPieceService._observacao_checklist(cotas, "ok", revisao=1)
+        self.assertEqual(texto, "Template rev 1 · Cota 1: 10 +/- 1 → 10 mm (conforme) | ok")
 
 
 if __name__ == "__main__":  # pragma: no cover

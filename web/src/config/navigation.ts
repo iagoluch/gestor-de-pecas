@@ -17,6 +17,24 @@ export interface ManagementTab {
   screen: string;
   /** Só a conta admin vê esta aba (decisão do usuário, 14/09/2026). */
   adminOnly?: boolean;
+  /**
+   * Níveis (`usuarios.nivel`) que veem esta aba. Omitido, vale a regra comum
+   * da gestão. A autorização de verdade continua no backend.
+   */
+  levels?: readonly string[];
+}
+
+/** Níveis do tempo padrão: espelha `STANDARD_TIME_LEVELS` do backend. */
+export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
+
+/** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
+export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
+
+/** A aba aparece para este nível? Usado pelo menu e pelo guarda de rota. */
+export function tabVisibleFor(tab: ManagementTab, role: string | null | undefined) {
+  if (tab.adminOnly && role !== "admin") return false;
+  if (tab.levels && !(role && tab.levels.includes(role))) return false;
+  return true;
 }
 
 export interface ManagementSection {
@@ -82,6 +100,13 @@ export const managementSections: ManagementSection[] = [
       { label: "Ordens de Produção", path: "/producao/ordens", screen: "production-orders" },
       { label: "Produção realizada", path: "/producao/realizada", screen: "production-completed" },
       { label: "Planejado × Realizado", path: "/producao/planejado-realizado", screen: "production-plan-actual" },
+      // Cadastro do tempo padrão manual e das estimativas: só a engenharia de
+      // manufatura e o admin (decisão do usuário, 06/10/2026). O gestor comum
+      // não vê a aba nem a rota.
+      { label: "Tempo padrão", path: "/producao/tempo-padrao", screen: "production-standard-time", levels: STANDARD_TIME_LEVELS },
+      // Cotas padrão por produto: só a conta Qualidade e o admin (decisão do
+      // usuário, 06/10/2026). O gestor comum não vê a aba nem a rota.
+      { label: "Qualidade", path: "/producao/qualidade", screen: "production-quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
     ],
   },
   {

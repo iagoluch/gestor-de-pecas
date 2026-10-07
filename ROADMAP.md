@@ -11,6 +11,14 @@
 > `docs/STATUS_ATUAL.md` **antes** de assumir que a seção 5 abaixo é o estado
 > mais recente do projeto.
 
+> **Estado em 06/10/2026 (resumo; detalhes em `docs/STATUS_ATUAL.md`):** o
+> REAL (`gestor_pecas`) foi promovido em schema v55 com
+> `GESTOR_WEB_ENV=production`. Em andamento, não commitado: tempo padrão
+> estimado + manual (`docs/ESPEC_TEMPO_PADRAO_ESTIMADO_2026-10-06.md`) e o nível
+> de usuário `manufatura`. Demandas abertas: Andon legível na TV grande e tela
+> da Qualidade para cotas padrão do produto. Solda saiu da rotação da TV por
+> decisão do usuário.
+
 > Este arquivo define a ordem oficial das próximas etapas. Quando um relatório
 > histórico, prompt antigo ou documentação anterior divergir deste roadmap,
 > prevalecem: (1) regras validadas com a Manufatura, (2) código/contratos atuais,

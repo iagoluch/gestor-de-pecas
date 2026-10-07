@@ -161,3 +161,18 @@ class ChamadaRequest(BaseModel):
     solicitante_cracha: str | None = Field(default=None, max_length=40)
     solicitante_nome_manual: str | None = Field(default=None, max_length=120)
     solicitante_email: str | None = Field(default=None, max_length=160)
+
+
+class StandardTimeManualRequest(BaseModel):
+    """Tempo padrão manual por (produto, operação, recurso), em segundos/peça.
+
+    O teto (24 h) e ``> 0`` são validados no serviço, com código de erro estável.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    produto_codigo: str = Field(min_length=1, max_length=80)
+    numero_operacao: str = Field(min_length=1, max_length=40)
+    codigo_recurso: str = Field(min_length=1, max_length=80)
+    segundos_por_peca: float
+    observacao: str | None = Field(default=None, max_length=500)
