@@ -32,8 +32,12 @@ from mes.services.resource_state import ResourceStateService
 
 LOGGER = logging.getLogger(__name__)
 DEMO_DATABASE = "gestor_pecas_test_andon_demo"
-DEMO_OP_PREFIX = "DEMO-ANDON-"
+# OPs sintéticas imitam o formato real (11 dígitos); o prefixo "99" não existe na
+# série do Protheus e só é varrido no banco dedicado (guardas por dbname abaixo).
+DEMO_OP_PREFIX = "99"
+LEGACY_DEMO_OP_PREFIX = "DEMO-ANDON-"
 DEMO_ORIGIN = "andon_demo"
+DEMO_CUT_PREFIX = "demo-corte-"
 MIN_VISIBLE_RESOURCES = 8
 DEFAULT_VISIBLE_RESOURCES = 16
 DEMO_INSTANCE_LOCK_NAME = "gestor_pecas:andon_demo:writer"
@@ -46,6 +50,62 @@ STOP_MINUTES_BY_PROFILE = {
     "BAIXA": (6, 18),
     "PERTURBACAO": (20, 45),
 }
+
+# Códigos e descrições no formato do catálogo real (nomes curtos e longos de propósito).
+PRODUCTS_PARTS = (
+    ("PPCX03001035", "CHAPA TRAVA MAIOR (9,5MM)"),
+    ("PPCX04002359", "LATERAL INTERNA DIR."),
+    ("PPCX03001052", "BASE INFERIOR CHASS  (9,5MM)"),
+    ("PPCX05001072", "FLANGE TUBO SUPERIOR CHASSI"),
+    ("IPM004001046", "PERFIL SUPERIOR LATERAL DIREITO  (4,5MM)"),
+    ("IPM004001054", "REFORCO LATERAL CHASSI 4,5MM"),
+    ("IPM011022108", "DOBRADICA INFERIOR 60"),
+    ("IPM017001135", "REGUA CHAPA DE FECHAMENTO 1147"),
+    ("PPM005001101", "MAO FRANCESA ESQUERDA PRODUTTIVA SS 16"),
+    ("PPCX03001011", "BUCHA CHASSI"),
+    ("PNT002003016", "TAMPA FRONTAL"),
+    ("PPL001000020", "SUPORTE DO MOTOR"),
+)
+PRODUCTS_WELDED = (
+    ("SPCX04001008", "CONJ.SOLD. CHASSI 40/41 PES RXS/FXS"),
+    ("SPCX04001007", "CONJ.SOLD. CHASSI 45/46 PES RXS/FXS"),
+    ("SPCX04014015", "CONJUNTO SOLDADO LATERAL INTERNA FX DIR."),
+    ("SPMX20435001", "CONJUNTO SOLDADO TAMPA DO BANHO A OLEO"),
+    ("SDT009001005", "CONJUNTO SOLDADO SUPORTE PE APOIO"),
+    ("SSDC01000251", "SUB CONJUNTO SOLDADO REBOQUE DIREITO"),
+    ("SSM014007071", "CONJUNTO SOLDADO SUPORTE DA RODA"),
+    ("7000007289", "GIRADOR SOLD ARTICULADOR PLAINA 510"),
+)
+PRODUCT_DESCRIPTIONS = dict(PRODUCTS_PARTS + PRODUCTS_WELDED)
+OPERATION_NAMES = (
+    ("corte", "CORTE"), ("dobra", "DOBRA"), ("solda", "SOLDAGEM"), ("pintura", "PINTURA"),
+    ("usinagem", "USINAGEM"), ("caldeiraria", "CALDEIRARIA"),
+)
+
+# Episódios que interrompem a produção. `planejado` só vale para "parada".
+# Cada tipo aparece no mostrador com cor e rótulo próprios.
+STOP_EPISODES = (
+    ("parada", "Falta de material", False),
+    ("parada", "Quebra de ferramenta", False),
+    ("parada", "Manutenção corretiva", False),
+    ("parada", "Aguardando inspeção da qualidade", False),
+    ("parada", "Falta de operador", False),
+    ("parada", "Manutenção preventiva", True),
+    ("parada", "Diálogo diário de segurança", True),
+    ("parada", "Limpeza e 5S", True),
+    ("setup", "Troca de ferramental", None),
+    ("setup", "Preparação de máquina", None),
+    ("setup", "Ajuste de programa", None),
+    ("retrabalho", "Correção dimensional", None),
+    ("retrabalho", "Remoção de rebarba", None),
+    ("fila", "Aguardando liberação da OP", None),
+    ("sem_demanda", "Aguardando programação", None),
+)
+# Ordem de apresentação no warm start: garante uma amostra de cada estado na tela.
+WARM_SCRIPT = (
+    "producao", "parada_nao_prog", "producao", "setup", "producao", "sem_demanda",
+    "retrabalho", "producao", "parada_plan", "producao", "fila", "producao",
+)
 
 LOAD_PROFILES = {
     "NORMAL": {"pace": (0.82, 0.98), "stop_chance": 0.10, "scrap": 0.025},
@@ -243,6 +303,8 @@ class AndonDemo:
         self.next_profile_at = datetime.now()
         self.resources: list[ResourceRuntime] = []
         self._day = datetime.now().date()
+        self._cut_sequence = 0
+        self._slots: dict[str, int] = {}
 
     def discover_resources(self) -> tuple[list[dict], list[str]]:
         # O inventário do scheduler é a fonte canônica de recursos físicos:
@@ -320,8 +382,12 @@ class AndonDemo:
             # retroativa do motor de estado.
             cursor.execute("DELETE FROM eventos_estado_recurso")
             cursor.execute("DELETE FROM eventos_quantidade_producao")
-            cursor.execute("DELETE FROM apontamentos_operacionais WHERE op LIKE %s", (DEMO_OP_PREFIX + "%",))
-            cursor.execute("DELETE FROM catalogo_pcp_ops WHERE codigo_op LIKE %s", (DEMO_OP_PREFIX + "%",))
+            cursor.execute("DELETE FROM apontamentos_corte WHERE plano_hash LIKE %s", (DEMO_CUT_PREFIX + "%",))
+            cursor.execute("DELETE FROM catalogo_sigmanest_planos_corte WHERE plano_hash LIKE %s", (DEMO_CUT_PREFIX + "%",))
+            for prefix in (DEMO_OP_PREFIX, LEGACY_DEMO_OP_PREFIX):
+                cursor.execute("DELETE FROM apontamentos_operacionais WHERE op LIKE %s", (prefix + "%",))
+                cursor.execute("DELETE FROM catalogo_operacoes_op WHERE codigo_op LIKE %s", (prefix + "%",))
+                cursor.execute("DELETE FROM catalogo_pcp_ops WHERE codigo_op LIKE %s", (prefix + "%",))
 
     @contextmanager
     def instance_lock(self):
@@ -359,6 +425,7 @@ class AndonDemo:
         if sector.casefold() == "corte":
             activity_start = max(history_start, now - timedelta(minutes=20 + index))
             self._activity_without_op(code, sector, activity_start)
+            self._start_cut(name, activity_start)
             self.resources.append(ResourceRuntime(
                 code, name, sector, "atividade_sem_op", None, None, None, None,
                 activity_start, activity_start + timedelta(minutes=self._cycle_minutes()),
@@ -378,28 +445,60 @@ class AndonDemo:
             code, sector, started, sequence, total
         )
         self._state(code, sector, "producao", started, op, operation, product)
-        initial_state = "parada" if index % 7 == 3 else ("setup" if index % 9 == 4 else "producao")
-        if initial_state != "producao":
-            self._state(code, sector, initial_state, now - timedelta(minutes=min(elapsed, 7)), op, operation, product)
-        resume_at = now + timedelta(minutes=self.rng.randint(3, 12)) if initial_state != "producao" else None
-        self.resources.append(ResourceRuntime(
-            code, name, sector, initial_state, appointment_id, op, operation, product,
+        item = ResourceRuntime(
+            code, name, sector, "producao", appointment_id, op, operation, product,
             started, started + timedelta(minutes=total),
-            now + timedelta(seconds=self.rng.randint(*QUANTITY_TICK_SECONDS)), resume_at, sequence,
-        ))
-
-    def _cycle_identity(self, resource: str, sequence: int) -> tuple[str, str, str]:
-        safe = "".join(ch for ch in resource.upper() if ch.isalnum())[:18] or "RECURSO"
-        return (
-            f"{DEMO_OP_PREFIX}{safe}-{sequence:05d}",
-            f"{sequence % 90 + 10:03d}",
-            f"DEMO-{safe}",
+            now + timedelta(seconds=self.rng.randint(*QUANTITY_TICK_SECONDS)), None, sequence,
         )
+        scripted = WARM_SCRIPT[index % len(WARM_SCRIPT)]
+        if scripted != "producao":
+            self._begin_episode(item, now - timedelta(minutes=min(elapsed, 7)), scripted, resume_minutes=(6, 20))
+        self.resources.append(item)
+
+    def _begin_episode(self, item, moment, kind=None, *, resume_minutes=None):
+        """Interrompe a produção com um episódio (parada, setup, retrabalho, fila...)."""
+
+        if kind is None:
+            episode = self.rng.choice(STOP_EPISODES)
+        else:
+            wanted = {
+                "parada_nao_prog": ("parada", False), "parada_plan": ("parada", True),
+            }.get(kind, (kind, None))
+            pool = [e for e in STOP_EPISODES if e[0] == wanted[0] and (wanted[1] is None or e[2] == wanted[1])]
+            episode = self.rng.choice(pool)
+        category, motivo, planejado = episode
+        without_op = category == "sem_demanda"
+        item.state = category
+        low, high = resume_minutes or STOP_MINUTES_BY_PROFILE[self.profile]
+        item.resume_at = moment + timedelta(minutes=self.rng.randint(low, high))
+        self._state(
+            item.code, item.sector, "fila" if without_op else category, moment,
+            None if without_op else item.op, None if without_op else item.operation,
+            None if without_op else item.product, motivo=motivo, planejado=planejado,
+        )
+
+    def _cycle_identity(self, resource: str, sequence: int, sector: str = "") -> tuple[str, str, str]:
+        slot = self._slots.setdefault(resource, len(self._slots) + 1)
+        welded = any(key in sector.casefold() for key in ("solda", "pintura"))
+        products = PRODUCTS_WELDED if welded else PRODUCTS_PARTS
+        product = products[(slot * 5 + sequence) % len(products)][0]
+        # 99 + nº do recurso (3) + ciclo (3) + item (3): 11 dígitos como as OPs reais.
+        return (
+            f"{DEMO_OP_PREFIX}{slot % 1000:03d}{sequence % 1000:03d}001",
+            f"{sequence % 90 + 10:03d}",
+            product,
+        )
+
+    @staticmethod
+    def _operation_name(sector: str) -> str:
+        lowered = sector.casefold()
+        return next((name for key, name in OPERATION_NAMES if key in lowered), lowered.upper() or "OPERAÇÃO")
 
     def _insert_catalog_operation(
         self, connection, resource, sector, sequence, ideal_seconds, planned_quantity
     ):
-        op, operation, product = self._cycle_identity(resource, sequence)
+        op, operation, product = self._cycle_identity(resource, sequence, sector)
+        description = PRODUCT_DESCRIPTIONS[product]
         moment = datetime.now().replace(microsecond=0)
         connection.execute(
             "INSERT INTO catalogo_pcp_ops "
@@ -408,7 +507,7 @@ class AndonDemo:
             "VALUES (%s,%s,%s,%s,'UN',%s,'DEMO',TRUE,%s) "
             "ON CONFLICT (codigo_op) DO UPDATE SET quantidade=EXCLUDED.quantidade",
             (
-                op, product, f"Produto demonstrativo {product}", planned_quantity,
+                op, product, description, planned_quantity,
                 moment.date(), moment,
             ),
         )
@@ -420,8 +519,8 @@ class AndonDemo:
             "ON CONFLICT (codigo_op,numero_operacao,codigo_recurso) "
             "WHERE totvs_activity_id IS NULL DO UPDATE SET "
             "tempo_medio_segundos=EXCLUDED.tempo_medio_segundos RETURNING id",
-            (op, product, f"Produto demonstrativo {product}", operation, resource,
-             f"Operação demonstrativa {sector}", sector, ideal_seconds, DEMO_ORIGIN, moment),
+            (op, product, description, operation, resource,
+             self._operation_name(sector), sector, ideal_seconds, DEMO_ORIGIN, moment),
         ).fetchone()
         return op, operation, product, row["id"]
 
@@ -456,8 +555,8 @@ class AndonDemo:
                     op, product, sector, resource,
                     "Finalizado" if finished else "Aguardando", planned_quantity,
                     start, start, "DEMO" if finished else None, finish, catalog_id, operation,
-                  resource, f"Operação demonstrativa {sector}", product,
-                    f"Produto demonstrativo {product}", good, scrap,
+                    resource, self._operation_name(sector), product,
+                    PRODUCT_DESCRIPTIONS[product], good, scrap,
                 ),
             ).fetchone()
             appointment_id = row["id"]
@@ -503,8 +602,8 @@ class AndonDemo:
                 "VALUES (%s,%s,%s,%s,'Em processo',%s,'DEMO',%s,'DEMO',%s,%s,%s,%s,%s,%s,%s,0,0,0) RETURNING id",
                 (
                     op, product, sector, resource, planned_quantity, start, start,
-                    catalog_id, operation, resource, f"Operação demonstrativa {sector}",
-                    product, f"Produto demonstrativo {product}",
+                    catalog_id, operation, resource, self._operation_name(sector),
+                    product, PRODUCT_DESCRIPTIONS[product],
                 ),
             ).fetchone()
             connection.execute(
@@ -514,20 +613,21 @@ class AndonDemo:
             )
         return row["id"], op, operation, product
 
-    def _state(self, resource, sector, state, moment, op, operation, product):
+    def _state(self, resource, sector, state, moment, op, operation, product, *, motivo=None, planejado=None):
         service = ResourceStateService(self.db, "DEMO")
         if state == "parada":
             result = service.registrar_estado(
                 resource, EventCategory.DOWNTIME.value, tipo_setor=sector,
                 op=op, numero_operacao=operation, produto_codigo=product,
-                motivo="Ajuste não programado da demonstração", planejado=False,
+                motivo=motivo or "Falta de material",
+                planejado=False if planejado is None else planejado,
                 comentario="Fato sintético isolado no ambiente DEMO", data_hora=moment,
             )
-        elif state == "setup":
+        elif state in ("setup", "retrabalho", "fila"):
             result = service.registrar_estado(
-                resource, EventCategory.SETUP.value, tipo_setor=sector,
+                resource, EventCategory(state).value, tipo_setor=sector,
                 op=op, numero_operacao=operation, produto_codigo=product,
-                motivo="Preparação de máquina", data_hora=moment,
+                motivo=motivo or "Preparação de máquina", data_hora=moment,
             )
         else:
             result = service.registrar_estado(
@@ -547,6 +647,48 @@ class AndonDemo:
             data_hora=moment,
         )
         self._mark_state_origin(result)
+
+    def _start_cut(self, machine: str, moment: datetime) -> None:
+        """Corte em processo: tarefa, plano (programa) e nesting vêm de apontamentos_corte."""
+
+        self._end_cut(machine, moment)
+        self._cut_sequence += 1
+        number = self._cut_sequence
+        plan_hash = f"{DEMO_CUT_PREFIX}{number}"
+        task = str(8400 + number)
+        program = f"{self.rng.randint(1, 9)}0{number % 10}{self.rng.randint(10, 99)}"
+        nesting = self.rng.randint(1, 4)
+        sheet = self.rng.choice(("CH-3.00", "CH-4.75", "CH-6.35", "CH-8.00"))
+        with self.db.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO catalogo_sigmanest_planos_corte
+                    (plano_hash, codigo_tarefa, programa, nome_chapa, sequencia_nesting,
+                     quantidade_processo, maquina_sigmanest, sigmanest_repeat_id, sincronizado_em)
+                VALUES (%s, %s, %s, %s, %s, 1, %s, %s, %s)
+                """,
+                (plan_hash, task, program, sheet, nesting, machine, nesting, moment),
+            )
+            connection.execute(
+                """
+                INSERT INTO apontamentos_corte
+                    (plano_hash, codigo_tarefa, programa, nome_chapa, sequencia_nesting,
+                     maquina, status, operador_inicio, data_inicio)
+                VALUES (%s, %s, %s, %s, %s, %s, 'Em processo', 'Operador DEMO', %s)
+                """,
+                (plan_hash, task, program, sheet, nesting, machine, moment),
+            )
+
+    def _end_cut(self, machine: str, moment: datetime) -> None:
+        with self.db.connection() as connection:
+            connection.execute(
+                """
+                UPDATE apontamentos_corte
+                   SET status = 'Finalizado', operador_fim = 'Operador DEMO', data_fim = %s
+                 WHERE maquina = %s AND status = 'Em processo' AND plano_hash LIKE %s
+                """,
+                (moment, machine, DEMO_CUT_PREFIX + "%"),
+            )
 
     def _mark_state_origin(self, result):
         event_id = (result or {}).get("id")
@@ -670,6 +812,7 @@ class AndonDemo:
                     item.state = "atividade_sem_op"
                     item.resume_at = None
                     self._activity_without_op(item.code, item.sector, now)
+                    self._start_cut(item.name, now)
                     events.append({"event": "resume_activity", "resource": item.code})
                 if now >= item.cycle_ends:
                     should_stop = (
@@ -679,16 +822,23 @@ class AndonDemo:
                     if should_stop:
                         item.state = "parada"
                         item.resume_at = now + timedelta(minutes=self._stop_minutes())
+                        self._end_cut(item.name, now)
                         self._state(item.code, item.sector, "parada", now, None, None, None)
                         events.append({"event": "stop", "resource": item.code})
                     else:
                         item.state = "atividade_sem_op"
                         self._activity_without_op(item.code, item.sector, now)
+                        self._start_cut(item.name, now)
                         events.append({"event": "activity", "resource": item.code})
                     item.cycle_started = now
                     item.cycle_ends = now + timedelta(minutes=self._cycle_minutes())
                 continue
             if item.resume_at and now >= item.resume_at:
+                if item.state == "sem_demanda":
+                    # Sem OP no estado: ao voltar, o recurso recebe a próxima OP.
+                    self._finish_and_restart(item, now)
+                    events.append({"event": "new_cycle", "resource": item.code})
+                    continue
                 item.state = "producao"; item.resume_at = None
                 self._state(item.code, item.sector, "producao", now, item.op, item.operation, item.product)
                 events.append({"event": "resume", "resource": item.code})
@@ -700,10 +850,8 @@ class AndonDemo:
                 self._increment_quantities(item, now)
                 events.append({"event": "quantity", "resource": item.code})
                 if self.rng.random() < LOAD_PROFILES[self.profile]["stop_chance"]:
-                    item.state = "parada"
-                    item.resume_at = now + timedelta(minutes=self._stop_minutes())
-                    self._state(item.code, item.sector, "parada", now, item.op, item.operation, item.product)
-                    events.append({"event": "stop", "resource": item.code})
+                    self._begin_episode(item, now)
+                    events.append({"event": "stop", "resource": item.code, "state": item.state})
         return events
 
     def run_forever(self, *, poll_seconds: float = 2.0) -> None:

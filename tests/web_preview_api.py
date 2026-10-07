@@ -57,28 +57,28 @@ visual_resources = [
     {"codigo": "PINT.L", "nome": "Pintura", "tipo_setor": "Pintura", "habilitado": True},
 ]
 visual_states = [
-    {"id": 801, "recurso": "DOBRA3", "setor": "Dobra", "tipo_setor": "Dobra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=47), "op": "OP-VISUAL-101", "numero_operacao": "10", "produto_codigo": "SUPORTE-101"},
+    {"id": 801, "recurso": "DOBRA3", "setor": "Dobra", "tipo_setor": "Dobra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=47), "op": "10735703001", "numero_operacao": "10", "produto_codigo": "IPCX04014283"},
     {"id": 802, "recurso": "DOBRA2", "setor": "Dobra", "tipo_setor": "Dobra", "categoria": "parada", "data_inicio": visual_now - timedelta(minutes=18), "motivo": "Aguardando material"},
-    {"id": 803, "recurso": "DOBRA1", "setor": "Dobra", "tipo_setor": "Dobra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=27), "op": "OP-VISUAL-105", "numero_operacao": "10", "produto_codigo": "TRAVESSA-105"},
+    {"id": 803, "recurso": "DOBRA1", "setor": "Dobra", "tipo_setor": "Dobra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=27), "op": "10735901012", "numero_operacao": "10", "produto_codigo": "PPCX12001012"},
     {"id": 804, "recurso": "CNC-01", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "setup", "data_inicio": visual_now - timedelta(minutes=12)},
     {"id": 805, "recurso": "CNC-02", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "retrabalho", "data_inicio": visual_now - timedelta(minutes=9)},
-    {"id": 806, "recurso": "FRESA1", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=63), "op": "OP-VISUAL-203", "numero_operacao": "20", "produto_codigo": "EIXO-203"},
-    {"id": 807, "recurso": "TCNC-1", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=41), "op": "OP-VISUAL-204", "numero_operacao": "30", "produto_codigo": "BUCHA-204"},
+    {"id": 806, "recurso": "FRESA1", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=63), "op": "00652704001", "numero_operacao": "20", "produto_codigo": "PPCX04002312"},
+    {"id": 807, "recurso": "TCNC-1", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=41), "op": "PCML9501001", "numero_operacao": "30", "produto_codigo": "PNT002002032"},
     {"id": 808, "recurso": "TORNOC", "setor": "Usinagem", "tipo_setor": "Usinagem", "categoria": "parada", "data_inicio": visual_now - timedelta(minutes=7), "motivo": "Troca de ferramenta"},
-    {"id": 809, "recurso": "SERRA1", "setor": "Serra", "tipo_setor": "Serra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=31), "op": "OP-VISUAL-303", "numero_operacao": "40", "produto_codigo": "TUBO-303"},
+    {"id": 809, "recurso": "SERRA1", "setor": "Serra", "tipo_setor": "Serra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=31), "op": "PCMKXF01001", "numero_operacao": "40", "produto_codigo": "PPCX04002371"},
     {"id": 810, "recurso": "SERRA2", "setor": "Serra", "tipo_setor": "Serra", "categoria": "setup", "data_inicio": visual_now - timedelta(minutes=5)},
-    {"id": 811, "recurso": "SERRA3", "setor": "Serra", "tipo_setor": "Serra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=22), "op": "OP-VISUAL-305", "numero_operacao": "10", "produto_codigo": "PERFIL-305"},
+    {"id": 811, "recurso": "SERRA3", "setor": "Serra", "tipo_setor": "Serra", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=22), "op": "00652706001", "numero_operacao": "10", "produto_codigo": "PSM002005049"},
     # A Solda aponta por estação: o posto escolhido pelo operador é o recurso do
     # evento de estado, e é assim que ele chega ao Andon (recurso fora do
     # catálogo, com pertencimento canônico ao setor). Setup não existe em Solda.
-    {"id": 8121, "recurso": "Estação 1", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=44), "op": "OP-VISUAL-601", "numero_operacao": "10", "produto_codigo": "CHASSI-601"},
-    {"id": 8122, "recurso": "Estação 3", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "parada", "data_inicio": visual_now - timedelta(minutes=14), "motivo": "Aguardando ponte rolante"},
-    {"id": 8123, "recurso": "Estação 5", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "atividade_sem_op", "data_inicio": visual_now - timedelta(hours=1, minutes=6), "motivo": "Apoio à montagem"},
-    {"id": 8124, "recurso": "Estação 7", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=58), "op": "OP-VISUAL-606", "numero_operacao": "20", "produto_codigo": "LONGARINA-606"},
-    {"id": 8125, "recurso": "Estação 9", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "retrabalho", "data_inicio": visual_now - timedelta(minutes=11), "op": "OP-VISUAL-603", "numero_operacao": "10", "produto_codigo": "SUPORTE-603"},
-    {"id": 813, "recurso": "PINT.L", "setor": "Pintura", "tipo_setor": "Pintura", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=52), "op": "OP-VISUAL-401", "produto_codigo": "ESTRUTURA-401"},
-    {"id": 814, "recurso": "LASER1", "setor": "Corte", "tipo_setor": "Corte", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=38), "op": "OP-VISUAL-501", "produto_codigo": "SUPORTE-501"},
-    {"id": 815, "recurso": "PLASMA", "setor": "Corte", "tipo_setor": "Corte", "categoria": "setup", "data_inicio": visual_now - timedelta(minutes=8), "op": "OP-VISUAL-502", "produto_codigo": "CHAPA-502"},
+    {"id": 8121, "recurso": "Estação 1", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=44), "op": "00652801001", "numero_operacao": "10", "produto_codigo": "SRF004001001"},
+    {"id": 8122, "recurso": "Estação 2", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "parada", "data_inicio": visual_now - timedelta(minutes=14), "motivo": "Aguardando ponte rolante"},
+    {"id": 8123, "recurso": "Estação 3", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "atividade_sem_op", "data_inicio": visual_now - timedelta(hours=1, minutes=6), "motivo": "Apoio à montagem"},
+    {"id": 8124, "recurso": "Estação 4", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=58), "op": "00652802001", "numero_operacao": "20", "produto_codigo": "PNT002001136"},
+    {"id": 8125, "recurso": "Estação 5", "setor": "Solda Aço", "tipo_setor": "Solda Aço", "categoria": "retrabalho", "data_inicio": visual_now - timedelta(minutes=11), "op": "00652803001", "numero_operacao": "10", "produto_codigo": "PCGX08001006"},
+    {"id": 813, "recurso": "PINT.L", "setor": "Pintura", "tipo_setor": "Pintura", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=52), "op": "10735801001", "produto_codigo": "PNT002003016"},
+    {"id": 814, "recurso": "LASER1", "setor": "Corte", "tipo_setor": "Corte", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=38), "op": "10735701001", "produto_codigo": "PNT002003016"},
+    {"id": 815, "recurso": "PLASMA", "setor": "Corte", "tipo_setor": "Corte", "categoria": "producao", "data_inicio": visual_now - timedelta(minutes=26), "op": "10735702001", "produto_codigo": "PPL001000020"},
 ]
 
 # O Destaque é um posto operacional de Corte: sem este evento o grupo não
@@ -87,19 +87,19 @@ visual_highlights = [{
     "estado": "inicio",
     "data_hora": visual_now - timedelta(minutes=21),
     "operador": "Operador Destaque Visual",
-    "codigo_tarefa": "T-CORTE-310",
-    "programa": "PROG-310",
-    "nome_chapa": "CHAPA 3000 x 1500",
+    "codigo_tarefa": "T3419",
+    "programa": "8461",
+    "nome_chapa": "S194",
     "motivo": None,
     "codigo_status_recurso": None,
     "ops": [
-        {"codigo_op": "OP-CORTE-310", "produto_codigo": "CHAPA-310", "produto_descricao": "Chapa cortada 310"},
-        {"codigo_op": "OP-CORTE-311", "produto_codigo": "CHAPA-311", "produto_descricao": "Chapa cortada 311"},
+        {"codigo_op": "10735701001", "produto_codigo": "PNT002003016", "produto_descricao": "CHAPA EXTERNA RODADO"},
+        {"codigo_op": "10735703001", "produto_codigo": "IPCX04014283", "produto_descricao": "LATERAL 6 FX DIR."},
     ],
 }]
 visual_facts = [{
     "id": 901,
-    "op": "OP-VISUAL-101",
+    "op": "10735703001",
     "tipo_setor": "Dobra",
     "maquina": "DOBRA3",
     "status": "Em processo",
@@ -111,8 +111,8 @@ visual_facts = [{
     "quantidade_boa": 5,
     "quantidade_refugo": 1,
     "quantidade_retrabalho": 0,
-    "produto_codigo": "SUPORTE-101",
-    "produto_descricao": "Suporte estrutural",
+    "produto_codigo": "IPCX04014283",
+    "produto_descricao": "LATERAL 6 FX DIR.",
     "numero_operacao": "10",
     "descricao_operacao": "DOBRAR SUPORTE",
     "eventos": [],
@@ -179,24 +179,24 @@ highlight_task_id = database.inserir_tarefa("T-DESTAQUE-202", material="AÇO CAR
 database.inserir_op_na_tarefa(highlight_task_id, "OP-DEST-201", "CHAPA-201", "Dobra", 8)
 database.inserir_op_na_tarefa(highlight_task_id, "OP-DEST-202", "CHAPA-202", "Solda", 4)
 
-# Hierarquia real do Corte (Wave 6C): a tarefa T-CORTE-310 tem DOIS planos.
-# O plano 310 tem quatro chapas físicas do mesmo programa (repetição 1..4, duas
-# já cortadas) e o plano 311 tem duas ainda aguardando. Nada é presumido como
+# Hierarquia real do Corte (Wave 6C): a tarefa T3419 tem DOIS planos.
+# O programa 8461 tem quatro chapas físicas do mesmo programa (repetição 1..4, duas
+# já cortadas) e o 8462 tem três ainda aguardando. Nada é presumido como
 # "1 nesting = 1 chapa": a contagem e a repetição vêm do planejamento.
-for programa, chapas, quantidade in (("PROG-310", 4, 14), ("PROG-311", 2, 8)):
+for programa, chapas, quantidade in (("8461", 4, 20), ("8462", 3, 6)):
     for sequence in range(1, chapas + 1):
         database.cut_plans.append({
             "plano_hash": f"hash-visual-{programa}-{sequence}",
-            "codigo_tarefa": "T-CORTE-310",
+            "codigo_tarefa": "T3419",
             "programa": programa,
-            "nome_chapa": "CHAPA 3000 x 1500" if programa == "PROG-310" else "CHAPA 2000 x 1000",
+            "nome_chapa": "S194" if programa == "8461" else "S201",
             "sequencia_nesting": sequence,
             "sigmanest_repeat_id": sequence,
-            "material": "AÇO 304",
-            "espessura": 3.0,
-            "maquina_sigmanest": "AMADA_ENSIS",
+            "material": "ASTM A36",
+            "espessura": 6.35,
+            "maquina_sigmanest": "Amada_ensis",
             "quantidade_processo": quantidade,
-            "tempo_previsto_segundos": 420,
+            "tempo_previsto_segundos": 1220 if programa == "8461" else 760,
             "data_programa": date.today(),
             "area_usada": 1_250_000,
             "fracao_sucata": 0.12,
@@ -208,8 +208,8 @@ for programa, chapas, quantidade in (("PROG-310", 4, 14), ("PROG-311", 2, 8)):
 # para mostrar as OPs dentro do plano correto.
 database.sigmanest_ops.extend([
     {
-        "linha_hash": f"T-CORTE-310|{programa}|{codigo_op}|{peca}",
-        "codigo_tarefa": "T-CORTE-310",
+        "linha_hash": f"T3419|{programa}|{codigo_op}|{peca}",
+        "codigo_tarefa": "T3419",
         "programa": programa,
         "codigo_op": codigo_op,
         "id_peca": peca,
@@ -218,9 +218,9 @@ database.sigmanest_ops.extend([
         "ativo": True,
     }
     for programa, codigo_op, peca, setor, quantidade in (
-        ("PROG-310", "OP-CORTE-310", "CHAPA-310", "Aguardando Dobra", 14),
-        ("PROG-310", "OP-CORTE-311", "CHAPA-311", "Aguardando Usinagem", 8),
-        ("PROG-311", "OP-CORTE-312", "CHAPA-312", "Almoxarifado", 6),
+        ("8461", "10735701001", "PNT002003016", "Aguardando Dobra", 12),
+        ("8461", "10735703001", "IPCX04014283", "Aguardando Usinagem", 8),
+        ("8462", "10735704001", "PPL001000020", "Almoxarifado", 6),
     )
 ])
 database.pcp_ops.extend([
@@ -230,19 +230,28 @@ database.pcp_ops.extend([
         "unidade": "UN", "ativo": True,
     }
     for codigo_op, produto, descricao, quantidade in (
-        ("OP-CORTE-310", "PNT310001", "SUPORTE LATERAL", 14),
-        ("OP-CORTE-311", "PNT311002", "BRACO ARTICULACAO", 8),
-        ("OP-CORTE-312", "PNT312003", "TAMPA TRASEIRA", 6),
+        ("10735701001", "PNT002003016", "CHAPA EXTERNA RODADO", 12),
+        ("10735703001", "IPCX04014283", "LATERAL 6 FX DIR.", 8),
+        ("10735704001", "PPL001000020", "CHAPA DIANTEIRA DE FIX.TUBO DO ENGATE", 6),
+        ("10735702001", "PPL001000020", "CHAPA DIANTEIRA DE FIX.TUBO DO ENGATE", 6),
+        ("10735901012", "PPCX12001012", "CHAPA SUPORTE CANOS", 3),
+        ("00652704001", "PPCX04002312", "ENCOSTO INFERIOR MASCARA", 10),
+        ("PCML9501001", "PNT002002032", "ARTICULACAO CILINDRO", 6),
+        ("PCMKXF01001", "PPCX04002371", "TUBO ESCORA ACOPLADOR ESQ.", 10),
+        ("00652706001", "PSM002005049", "REFORCO CHASSI", 4),
+        ("00652801001", "SRF004001001", "CONJUNTO SOLDADO CHASSI CENTRAL", 2),
+        ("00652802001", "PNT002001136", "SUPORTE PARAFUSADO", 8),
+        ("00652803001", "PCGX08001006", "SUPORTE ESQUERDA PARACHQOUE", 4),
     )
 ])
 
 # A tarefa do Destaque precisa existir no fluxo de tarefas para agrupar as OPs.
-corte_task_id = database.inserir_tarefa("T-CORTE-310", material="AÇO 304", espessura=3.0)
-database.inserir_op_na_tarefa(corte_task_id, "OP-CORTE-310", "CHAPA-310", "Dobra", 14)
-database.inserir_op_na_tarefa(corte_task_id, "OP-CORTE-311", "CHAPA-311", "Usinagem", 8)
+corte_task_id = database.inserir_tarefa("T3419", material="ASTM A36", espessura=6.35)
+database.inserir_op_na_tarefa(corte_task_id, "10735701001", "PNT002003016", "Dobra", 12)
+database.inserir_op_na_tarefa(corte_task_id, "10735703001", "IPCX04014283", "Usinagem", 8)
 for sequence in (1, 2):
     iniciado = database.iniciar_apontamento_corte(
-        f"hash-visual-PROG-310-{sequence}",
+        f"hash-visual-8461-{sequence}",
         "Laser Ensis 3015",
         "Operador Corte Visual",
         "2026-01-01",
@@ -401,7 +410,7 @@ for (
 settings = WebSettings(
     environment="test",
     session_secret="visual-preview-only-secret-with-more-than-thirty-two-bytes",
-    allowed_hosts=("127.0.0.1", "localhost"),
+    allowed_hosts=("127.0.0.1", "localhost", *filter(None, os.getenv("GESTOR_VISUAL_EXTRA_HOSTS", "").split(","))),
     allowed_origins=("http://127.0.0.1:5173",),
     ai_enabled=os.getenv("GESTOR_VISUAL_AI") == "1",
     ai_api_key=os.getenv("GESTOR_VISUAL_AI_KEY", ""),
@@ -436,6 +445,14 @@ class VisualFacade:
                 "performance": {"value": float(min(99, base + 8)), "availability": "disponivel", "unit": "%", "reason": None},
                 "ftt": {"value": float(min(99, base + 12)), "availability": "disponivel", "unit": "%", "reason": None},
             }
+        # O Corte real publica tarefa/plano (apontamentos_corte), não OP/produto.
+        cuts = {"LASER1": ("8478", "50412", "CH-6.35", 2), "PLASMA": ("8481", "60307", "CH-4.75", 1)}
+        for sector in snapshot["sectors"]:
+            for resource in sector["resources"]:
+                if resource["code"] in cuts:
+                    task, plan, sheet, nesting = cuts[resource["code"]]
+                    resource["operation"] = None
+                    resource["cut"] = {"task": task, "plan": plan, "sheet": sheet, "nesting": nesting}
         return snapshot
 
 
@@ -447,15 +464,16 @@ if settings.ai_enabled and settings.ai_configured:
         app.state.ai_rate_limit.activate({"retry_after": "90"})
 _autologin = os.getenv("GESTOR_VISUAL_AUTOLOGIN")
 _PERFIS = {"operador": ("Operador Dobra Visual", "operador_dobra"), "destaque": ("Operador Destaque Visual", "operador_destaque"),
-           "corte": ("Operador Corte Visual", "operador_corte"), "solda": ("Operador Solda Visual", "estacao1aco")}
+           "corte": ("Operador Corte Visual", "operador_corte"), "solda": ("Operador Solda Visual", "estacao1aco"),
+           "andon": ("Andon TV Visual", "andon")}
 if _autologin == "1" or _autologin in _PERFIS:
     # "operador" = Dobra, "destaque" = Destaque; "1" = gestor com Andon.
-    _as_operator = _autologin != "1"
+    _as_operator = _autologin not in ("1", "andon")
     visual_manager = SessionUser(
         id=visual_manager_id,
         name=_PERFIS.get(_autologin, ("Gestor Visual", ""))[0],
         role=_PERFIS.get(_autologin, ("", "gestor"))[1],
-        management_access=not _as_operator,
+        management_access=_autologin == "1",
         andon_access=not _as_operator,
         operator_access=_as_operator,
     )

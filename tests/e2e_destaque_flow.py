@@ -29,7 +29,7 @@ def main() -> int:
         parada = page.get_by_role("button", name="Parada", exact=True)
         page.goto(flow.BASE + "/operador", wait_until="networkidle")
         selecionada = re.compile("tarefa selecionada", re.I)  # o CSS põe em caixa alta; o DOM não
-        card = page.get_by_role("button").filter(has_text="T-CORTE-310").first
+        card = page.get_by_role("button").filter(has_text="T3419").first
 
         flow.check("1 fila do Destaque lista a tarefa liberada pelo Corte",
                    lambda: expect(card).to_be_visible(), page)
