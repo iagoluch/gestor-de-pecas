@@ -32,7 +32,12 @@ from backend.api.schemas.common import (
 from mes.contracts import AnalyticsFilter
 from mes.integrations.notifications.telegram import deliver_telegram_message, telegram_outbound_allowed
 from mes.services.internal_alerts import InternalAlertService
-from mes.services.standard_time import StandardTimeRuleError, StandardTimeService
+from mes.services.standard_time import (
+    RECALCULATION_JOB,
+    RecalculationJob,
+    StandardTimeRuleError,
+    StandardTimeService,
+)
 
 
 router = APIRouter(
@@ -650,19 +655,33 @@ def manual_standard_time_history(
     return {"items": items}
 
 
-@router.post("/standard-times/estimates/recalculate", dependencies=[Depends(require_csrf)])
+@router.post(
+    "/standard-times/estimates/recalculate",
+    status_code=202,
+    dependencies=[Depends(require_csrf)],
+)
 def recalculate_standard_time_estimates(
     request: Request,
     _user: SessionUser = Depends(require_tempo_padrao_user),
     database=Depends(get_database),
 ):
+    # Assíncrono: com volume alto o recálculo leva minutos. Responde 202 na hora
+    # e o resultado sai em ``GET .../recalculate/status``. 409 se já houver um
+    # em andamento (manual ou tick diário).
     # Mesmo relógio da aplicação do tick diário (``clock.now`` em simulação).
     service = StandardTimeService(database, now_func=request_now_func(request))
     try:
-        summary = service.recalculate_estimates()
+        started_at = RECALCULATION_JOB.start(service)
     except StandardTimeRuleError as error:
         raise _standard_time_error(error) from error
-    return {"ok": True, **summary}
+    return {"status": RecalculationJob.RUNNING, "started_at": started_at}
+
+
+@router.get("/standard-times/estimates/recalculate/status")
+def recalculate_standard_time_estimates_status(
+    _user: SessionUser = Depends(require_tempo_padrao_user),
+):
+    return RECALCULATION_JOB.snapshot()
 
 
 # ---------------------------------------------------------------------------

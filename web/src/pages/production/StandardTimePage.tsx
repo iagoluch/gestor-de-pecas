@@ -16,6 +16,7 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type {
   StandardTimeHistoryEntry,
   StandardTimeListResponse,
+  StandardTimeRecalculateStatus,
   StandardTimeRecalculateSummary,
   StandardTimeRow,
   StandardTimeSource,
@@ -190,11 +191,21 @@ export function StandardTimePage() {
   async function recalculate() {
     setFeedback(null);
     try {
-      const summary = await api.post<StandardTimeRecalculateSummary>(`${API}/estimates/recalculate`);
+      // O servidor responde 202 e calcula em segundo plano; um 409 significa
+      // que outro recálculo já está rodando, então só acompanhamos o dele.
+      await api.post(`${API}/estimates/recalculate`).catch((reason) => {
+        if (!(reason instanceof ApiError && reason.code === RECALCULATING_CODE)) throw reason;
+      });
+      const summary = await waitForRecalculation();
       setFeedback({ tone: "success", text: recalculateMessage(summary) });
       query.reload();
     } catch (reason) {
-      setFeedback({ tone: "error", text: standardTimeErrorMessage(reason) });
+      setFeedback({
+        tone: "error",
+        text: reason instanceof RecalculationFailed
+          ? "O recálculo não terminou. Tente de novo; se repetir, avise o suporte."
+          : standardTimeErrorMessage(reason),
+      });
     }
   }
 
@@ -342,6 +353,21 @@ export function StandardTimePage() {
       {historico ? <HistoryDialog row={historico} onClose={() => setHistorico(null)} /> : null}
     </PageFrame>
   );
+}
+
+const RECALCULATING_CODE = "standard_time_recalculation_in_progress";
+const RECALCULATE_POLL_MS = 2000;
+
+class RecalculationFailed extends Error {}
+
+/** Consulta o status até o servidor terminar. ponytail: sem tempo limite; fechar a tela encerra o laço pelo fim da página. */
+async function waitForRecalculation(): Promise<StandardTimeRecalculateSummary> {
+  for (;;) {
+    const state = await api.get<StandardTimeRecalculateStatus>(`${API}/estimates/recalculate/status`);
+    if (state.status === "done" && state.summary) return state.summary;
+    if (state.status === "error" || state.status === "idle") throw new RecalculationFailed();
+    await new Promise((resolve) => setTimeout(resolve, RECALCULATE_POLL_MS));
+  }
 }
 
 function recalculateMessage(summary: StandardTimeRecalculateSummary) {

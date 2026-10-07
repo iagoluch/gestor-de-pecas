@@ -29,6 +29,7 @@ processo da API o upsert idempotente continua seguro, mas o trabalho pode duplic
 
 from __future__ import annotations
 
+import logging
 import math
 import threading
 from collections import defaultdict
@@ -82,6 +83,99 @@ def _exclusive_recalculation():
         yield
     finally:
         _RECALCULATION_LOCK.release()
+
+
+class RecalculationJob:
+    """Estado do recálculo manual em segundo plano (botão da tela).
+
+    Só em memória do processo: um reinício perde o estado (volta a ``idle``) e
+    um recálculo em voo morre com o processo. A garantia de unicidade continua
+    sendo ``_RECALCULATION_LOCK`` (e o advisory lock do repositório); este
+    objeto só informa o progresso para o ``GET`` de status.
+
+    ``start`` adquire ``_RECALCULATION_LOCK`` na thread da requisição, para o
+    409 ser síncrono, e a thread de trabalho o libera ao terminar.
+    """
+
+    IDLE, RUNNING, DONE, ERROR = "idle", "running", "done", "error"
+
+    def __init__(self):
+        self._state_lock = threading.Lock()
+        self._reset_state()
+
+    def _reset_state(self) -> None:
+        self._status = self.IDLE
+        self._started_at = None
+        self._finished_at = None
+        self._error = None
+        self._summary = None
+
+    def reset(self) -> None:
+        """Volta a ``idle`` (uso em testes); não toca no lock do recálculo."""
+
+        with self._state_lock:
+            self._reset_state()
+
+    def snapshot(self) -> dict:
+        with self._state_lock:
+            return {
+                "status": self._status,
+                "started_at": self._started_at,
+                "finished_at": self._finished_at,
+                "error": self._error,
+                "summary": self._summary,
+            }
+
+    def start(self, service: "StandardTimeService") -> datetime:
+        """Dispara o recálculo em thread; 409 se já houver um em andamento."""
+
+        if not _RECALCULATION_LOCK.acquire(blocking=False):
+            raise StandardTimeRecalculationBusy()
+        try:
+            started_at = service._now()
+            with self._state_lock:
+                self._status = self.RUNNING
+                self._started_at = started_at
+                self._finished_at = None
+                self._error = None
+                self._summary = None
+            threading.Thread(
+                target=self._run,
+                args=(service,),
+                name="gestor-standard-time-manual",
+                daemon=True,
+            ).start()
+        except BaseException:
+            _RECALCULATION_LOCK.release()
+            raise
+        return started_at
+
+    def _run(self, service: "StandardTimeService") -> None:
+        summary = None
+        error = None
+        try:
+            try:
+                summary = service._recalculate(None, DEFAULT_LOOKBACK_DAYS, DEFAULT_MIN_SAMPLES)
+            except Exception as exc:
+                # Nunca engolir: stack no log; o status leva só uma mensagem curta.
+                logging.exception("Recálculo manual do tempo padrão estimado falhou.")
+                if isinstance(exc, StandardTimeRuleError):
+                    error = exc.message
+                else:
+                    error = f"Falha ao recalcular ({type(exc).__name__}). Consulte o log do servidor."
+            # O estado final é gravado antes de soltar o lock, para um novo
+            # ``start`` não ser sobrescrito por este término.
+            with self._state_lock:
+                self._finished_at = service._now()
+                if error is None:
+                    self._status, self._summary = self.DONE, summary
+                else:
+                    self._status, self._error = self.ERROR, error
+        finally:
+            _RECALCULATION_LOCK.release()
+
+
+RECALCULATION_JOB = RecalculationJob()
 
 
 class StandardTimeService:

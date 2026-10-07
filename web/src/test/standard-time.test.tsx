@@ -226,15 +226,20 @@ describe("Tempo padrão — tela", () => {
   it("recalcular estimativas mostra o resumo humanizado, sem JSON cru", async () => {
     stubFetch("manufatura", (path, init) => {
       if (path.endsWith("/standard-times/estimates/recalculate") && init?.method === "POST") {
+        return json({ status: "running", started_at: "2026-10-06T10:00:00" }, 202);
+      }
+      if (path.endsWith("/standard-times/estimates/recalculate/status")) {
         return json({
-          ok: true,
-          calculado_em: "2026-10-06T10:00:00",
-          janela_inicio: "2026-09-01",
-          janela_fim: "2026-10-05",
-          execucoes_elegiveis: 1204,
-          chaves_avaliadas: 340,
-          chaves_estimadas: 12,
-          amostra_minima: 3,
+          status: "done",
+          summary: {
+            calculado_em: "2026-10-06T10:00:00",
+            janela_inicio: "2026-09-01",
+            janela_fim: "2026-10-05",
+            execucoes_elegiveis: 1204,
+            chaves_avaliadas: 340,
+            chaves_estimadas: 12,
+            amostra_minima: 3,
+          },
         });
       }
       return undefined;

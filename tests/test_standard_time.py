@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta
+import threading
+import time
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -35,6 +38,7 @@ from mes.services import standard_time as standard_time_module
 from mes.services.standard_time import (
     ESTIMATE_EVENT_TYPE,
     RECALCULATION_BUSY_CODE,
+    RECALCULATION_JOB,
     StandardTimeRecalculationBusy,
     StandardTimeRuleError,
     StandardTimeService,
@@ -421,6 +425,7 @@ class StandardTimeApiTests(unittest.TestCase):
         self.app.dependency_overrides[get_database] = lambda: self.db
         self.app.dependency_overrides[require_csrf] = lambda: None
         self.client = TestClient(self.app)
+        RECALCULATION_JOB.reset()
 
     def _as(self, role, uid=5):
         self.app.dependency_overrides[get_current_user] = lambda: _user(role, uid)
@@ -474,14 +479,83 @@ class StandardTimeApiTests(unittest.TestCase):
         extra = self.client.put(url, json={**BODY, "campo_extra": 1})
         self.assertEqual(extra.status_code, 422)
 
-    def test_recalculo_manual_devolve_resumo(self):
+    URL_RECALC = "/api/v1/management/standard-times/estimates/recalculate"
+    URL_STATUS = URL_RECALC + "/status"
+
+    def _wait_job(self, expected, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            body = self.client.get(self.URL_STATUS).json()
+            if body["status"] == expected:
+                return body
+            time.sleep(0.01)
+        self.fail(f"status nao chegou a {expected!r}: {body}")
+
+    def test_recalculo_manual_responde_202_e_o_status_vira_done_com_resumo(self):
         self._as("manufatura")
-        resposta = self.client.post("/api/v1/management/standard-times/estimates/recalculate")
-        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(self.client.get(self.URL_STATUS).json()["status"], "idle")
+        resposta = self.client.post(self.URL_RECALC)
+        self.assertEqual(resposta.status_code, 202, resposta.text)
         corpo = resposta.json()
-        self.assertTrue(corpo["ok"])
-        self.assertEqual(corpo["chaves_estimadas"], 1)
+        self.assertEqual(corpo["status"], "running")
+        self.assertEqual(set(corpo), {"status", "started_at"})
+        final = self._wait_job("done")
+        self.assertIsNotNone(final["started_at"])
+        self.assertIsNotNone(final["finished_at"])
+        self.assertIsNone(final["error"])
+        self.assertEqual(final["summary"]["chaves_estimadas"], 1)
         self.assertIn(KEY, self.memory.estimados)
+
+    def test_post_nao_espera_o_recalculo_e_o_status_mostra_running_ate_terminar(self):
+        self._as("manufatura")
+        liberar = threading.Event()
+        iniciou = threading.Event()
+
+        def lento(service, now, lookback, min_samples):
+            iniciou.set()
+            self.assertTrue(liberar.wait(5.0))
+            return {"chaves_estimadas": 0}
+
+        with mock.patch.object(StandardTimeService, "_recalculate", autospec=True, side_effect=lento):
+            inicio = time.monotonic()
+            resposta = self.client.post(self.URL_RECALC)
+            self.assertLess(time.monotonic() - inicio, 2.0)
+            self.assertEqual(resposta.status_code, 202, resposta.text)
+            self.assertTrue(iniciou.wait(5.0))
+            andamento = self.client.get(self.URL_STATUS).json()
+            self.assertEqual(andamento["status"], "running")
+            self.assertIsNone(andamento["finished_at"])
+            self.assertIsNone(andamento["summary"])
+            # Segundo disparo durante o running: 409 estruturado.
+            segundo = self.client.post(self.URL_RECALC)
+            self.assertEqual(segundo.status_code, 409, segundo.text)
+            self.assertEqual(segundo.json()["code"], RECALCULATION_BUSY_CODE)
+            liberar.set()
+            self._wait_job("done")
+        # Terminou: o lock foi solto e um novo disparo é aceito.
+        self.assertEqual(self.client.post(self.URL_RECALC).status_code, 202)
+        self._wait_job("done")
+
+    def test_falha_do_job_vira_status_error_com_log_e_libera_o_lock(self):
+        self._as("manufatura")
+        with mock.patch.object(
+            StandardTimeService, "_recalculate", autospec=True,
+            side_effect=RuntimeError("senha=segredo no DSN"),
+        ):
+            with self.assertLogs(level="ERROR") as logs:
+                self.assertEqual(self.client.post(self.URL_RECALC).status_code, 202)
+                final = self._wait_job("error")
+        self.assertIn("RuntimeError", final["error"])
+        self.assertNotIn("segredo", final["error"])
+        self.assertNotIn("Traceback", final["error"])
+        self.assertIsNone(final["summary"])
+        self.assertIsNotNone(final["finished_at"])
+        self.assertIsNotNone(logs.records[0].exc_info)
+        self.assertFalse(standard_time_module._RECALCULATION_LOCK.locked())
+        # Novo disparo (sem o mock) funciona e limpa o erro.
+        self.assertEqual(self.client.post(self.URL_RECALC).status_code, 202)
+        recuperado = self._wait_job("done")
+        self.assertIsNone(recuperado["error"])
 
     def test_recalculo_manual_usa_o_relogio_da_aplicacao(self):
         # Em simulação o relógio da aplicação (não datetime.now) fixa o "agora"
@@ -495,22 +569,32 @@ class StandardTimeApiTests(unittest.TestCase):
         self.app.state.settings = replace(self.app.state.settings, simulation_mode=True)
         self.app.state.clock = _Clock()
         self._as("manufatura")
-        resposta = self.client.post("/api/v1/management/standard-times/estimates/recalculate")
-        self.assertEqual(resposta.status_code, 200, resposta.text)
+        resposta = self.client.post(self.URL_RECALC)
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self._wait_job("done")
         self.assertEqual(self.memory.eventos[-1]["data_hora"], NOW)
 
-    def test_recalculo_manual_concorrente_devolve_409_estruturado(self):
+    def test_recalculo_manual_com_lock_ocupado_devolve_409_estruturado(self):
+        # Ex.: tick diário em curso (não é o job manual, mas o mesmo lock).
         self._as("manufatura")
-        url = "/api/v1/management/standard-times/estimates/recalculate"
         self.assertTrue(standard_time_module._RECALCULATION_LOCK.acquire(blocking=False))
         try:
-            ocupado = self.client.post(url)
+            ocupado = self.client.post(self.URL_RECALC)
         finally:
             standard_time_module._RECALCULATION_LOCK.release()
         self.assertEqual(ocupado.status_code, 409, ocupado.text)
         self.assertEqual(ocupado.json()["code"], RECALCULATION_BUSY_CODE)
         self.assertEqual(self.memory.estimados, {})
-        self.assertEqual(self.client.post(url).status_code, 200)
+        self.assertEqual(self.client.get(self.URL_STATUS).json()["status"], "idle")
+        self.assertEqual(self.client.post(self.URL_RECALC).status_code, 202)
+        self._wait_job("done")
+
+    def test_status_do_recalculo_exige_a_mesma_permissao(self):
+        for role in ("gestor", "supervisor", "diretoria", "operador_dobra"):
+            self._as(role)
+            self.assertEqual(self.client.get(self.URL_STATUS).status_code, 403, role)
+        self._as("admin")
+        self.assertEqual(self.client.get(self.URL_STATUS).status_code, 200)
 
     def test_filtros_da_lista_tem_tamanho_maximo(self):
         self._as("admin")

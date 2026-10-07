@@ -54,7 +54,6 @@ export interface StandardTimeHistoryEntry {
 }
 
 export interface StandardTimeRecalculateSummary {
-  ok: boolean;
   calculado_em?: string | null;
   janela_inicio?: string | null;
   janela_fim?: string | null;
@@ -62,4 +61,12 @@ export interface StandardTimeRecalculateSummary {
   chaves_avaliadas: number;
   chaves_estimadas: number;
   amostra_minima: number;
+}
+
+export interface StandardTimeRecalculateStatus {
+  status: "idle" | "running" | "done" | "error";
+  started_at?: string | null;
+  finished_at?: string | null;
+  error?: string | null;
+  summary?: StandardTimeRecalculateSummary | null;
 }
