@@ -1163,15 +1163,12 @@ body:has(.andon-page--manager) #root {
 .andon-map__header span { font-size: clamp(11px, 0.9vw, 34px); color: var(--sidebar-text); }
 .andon-map__plan { display: block; flex: 1 1 0; width: 100%; min-height: 0; }
 .andon-map__structure { fill: none; stroke: var(--border-strong); stroke-width: 2; }
-.andon-map__structure--strong { stroke-width: 4; }
+.andon-map__structure--strong { stroke: var(--text); stroke-width: 4; }
+.andon-map__structure--thin { stroke-width: 1.5; stroke: var(--muted); }
 .andon-map__structure--shaded { fill: var(--surface-alt); }
-.andon-map__area { fill: var(--surface); stroke: var(--border-strong); stroke-width: 2; }
-/* Área sem apontamento = hachurada e tracejada; recurso sem demanda = pastilha cinza lisa (não se confundem). */
-.andon-map__hatch-bg { fill: var(--surface-alt); }
-.andon-map__hatch-line { stroke: var(--border); stroke-width: 3; }
-.andon-map__area--idle { fill: url(#andon-map-hatch); stroke: var(--border-strong); stroke-dasharray: 8 6; }
+.andon-map__area { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+.andon-map__area--idle { fill: var(--surface-alt); }
 .andon-map__label { font-size: 24px; font-weight: 800; letter-spacing: 0.02em; fill: var(--text); }
-.andon-map__area--idle + .andon-map__label { fill: var(--muted); font-weight: 700; }
 .andon-map__tile rect { fill: var(--fill-neutral); stroke: none; }
 .andon-map__tile text { font-size: 15px; font-weight: 800; fill: var(--fill-ink); }
 .andon-map__tile--producao rect, .andon-map__swatch--producao { background: var(--fill-producing); fill: var(--fill-producing); }
@@ -1205,6 +1202,6 @@ body:has(.andon-page--manager) #root {
   border: 2px solid transparent;
   border-radius: 3px;
 }
-.andon-map__swatch--idle { border: 2px dashed var(--border-strong); background: repeating-linear-gradient(135deg, var(--surface-alt) 0, var(--surface-alt) 3px, var(--border) 3px, var(--border) 5px); }
+.andon-map__swatch--idle { border: 1.5px solid var(--border-strong); background: var(--surface-alt); }
 .andon-map__unplaced { margin-left: auto; color: var(--fill-stopped); }
 .andon-map__swatch--sem_demanda { border-color: var(--border-strong); }

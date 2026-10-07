@@ -19,38 +19,64 @@ export interface MapArea {
 }
 
 export const MAP_AREAS: ReadonlyArray<MapArea> = [
-  { id: "estoque-chapas", label: "ESTOQUE CHAPAS", x: 70, y: 192, w: 302, h: 92 },
-  { id: "plasma", label: "PLASMA", x: 384, y: 192, w: 254, h: 92 },
-  { id: "rebarbacao", label: "REBARBAÇÃO", x: 648, y: 192, w: 187, h: 92 },
-  { id: "robo", label: "ROBÔ", x: 845, y: 192, w: 133, h: 92 },
-  { id: "expedicao", label: "EXPEDIÇÃO", x: 989, y: 192, w: 237, h: 92 },
-  { id: "almox", label: "ALMOX", x: 1237, y: 196, w: 145, h: 281 },
-  { id: "destaque", label: "DESTAQUE", x: 70, y: 302, w: 147, h: 93 },
-  { id: "laser", label: "LASER", x: 229, y: 302, w: 186, h: 93 },
-  { id: "dobra", label: "DOBRA", x: 427, y: 302, w: 367, h: 93 },
-  { id: "usinagem", label: "USINAGEM", x: 806, y: 303, w: 178, h: 92 },
-  { id: "projetos", label: "PROJETOS / FERRAM.", x: 995, y: 303, w: 231, h: 92, fontSize: 18 },
-  { id: "solda-aluminio-a", label: "SOLDA ALUM.", x: 70, y: 412, w: 154, h: 91, fontSize: 17 },
-  { id: "solda-aluminio-b", label: "SOLDA DE ALUMÍNIO", x: 236, y: 412, w: 696, h: 91 },
-  { id: "serras", label: "SERRAS", x: 943, y: 412, w: 282, h: 91 },
-  { id: "prototipo", label: "PROTÓTIPO", x: 1237, y: 491, w: 145, h: 135, fontSize: 20 },
-  { id: "estoque-tubos", label: "ESTOQUE DE TUBOS", x: 236, y: 526, w: 988, h: 87 },
-  { id: "robo-solda", label: "ROBÔ DE SOLDA", x: 237, y: 632, w: 179, h: 87, fontSize: 18 },
-  { id: "cab-secagem", label: "CAB. SECAGEM", x: 427, y: 632, w: 225, h: 87 },
-  { id: "pintura", label: "PINTURA", x: 663, y: 632, w: 274, h: 87 },
-  { id: "jateamento", label: "JATEAMENTO", x: 948, y: 632, w: 275, h: 87 },
+  { id: "estoque-chapas", label: "ESTOQUE CHAPAS", x: 70, y: 192, w: 306, h: 92 },
+  { id: "plasma", label: "PLASMA", x: 400, y: 192, w: 248, h: 92 },
+  { id: "rebarbacao", label: "REBARBAÇÃO", x: 672, y: 192, w: 178, h: 92, fontSize: 22 },
+  { id: "robo", label: "ROBÔ", x: 874, y: 192, w: 128, h: 92 },
+  { id: "expedicao", label: "EXPEDIÇÃO", x: 1026, y: 192, w: 164, h: 92, fontSize: 22 },
+  { id: "almox", label: "ALMOX", x: 1223, y: 196, w: 159, h: 281 },
+  { id: "destaque", label: "DESTAQUE", x: 70, y: 302, w: 161, h: 93 },
+  { id: "laser", label: "LASER", x: 255, y: 302, w: 160, h: 93 },
+  { id: "dobra", label: "DOBRA", x: 439, y: 302, w: 342, h: 93 },
+  { id: "usinagem", label: "USINAGEM", x: 805, y: 303, w: 160, h: 92 },
+  { id: "projetos", label: "PROJETOS / FERRAM.", x: 989, y: 303, w: 201, h: 92, fontSize: 18 },
+  { id: "solda-aluminio-a", label: "SOLDA ALUM.", x: 70, y: 412, w: 156, h: 91, fontSize: 17 },
+  { id: "solda-aluminio-b", label: "SOLDA DE ALUMÍNIO", x: 250, y: 412, w: 660, h: 91 },
+  { id: "serras", label: "SERRAS", x: 934, y: 412, w: 256, h: 91 },
+  { id: "prototipo", label: "PROTÓTIPO", x: 1240, y: 491, w: 142, h: 135, fontSize: 20 },
+  { id: "estoque-tubos", label: "ESTOQUE DE TUBOS", x: 248, y: 526, w: 942, h: 87 },
+  { id: "robo-solda", label: "ROBÔ DE SOLDA", x: 250, y: 632, w: 170, h: 87, fontSize: 18 },
+  { id: "cab-secagem", label: "CAB. SECAGEM", x: 444, y: 632, w: 200, h: 87 },
+  { id: "pintura", label: "PINTURA", x: 668, y: 632, w: 247, h: 87 },
+  { id: "jateamento", label: "JATEAMENTO", x: 939, y: 632, w: 225, h: 87 },
   { id: "solda-aco", label: "SOLDA DE AÇO", x: 191, y: 742, w: 1187, h: 118 },
 ];
 
-/** Traços do prédio: contorno, linha das docas, docas e banheiros. */
-export const MAP_STRUCTURE = [
-  { x: 48, y: 115, w: 1352, h: 785, strong: true },
-  { x: 668, y: 108, w: 126, h: 67 },
-  { x: 52, y: 610, w: 124, h: 295, shaded: true },
-  { x: 290, y: 900, w: 82, h: 36 },
-  { x: 1014, y: 900, w: 82, h: 36 },
-] as const;
-export const MAP_DOCK_LINE = { x1: 48, y1: 175, x2: 1400, y2: 175 } as const;
+export interface StructureBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Parede do prédio (traço grosso e escuro). */
+  strong?: boolean;
+  /** Detalhe (porta, doca, baia): traço fino. */
+  thin?: boolean;
+  shaded?: boolean;
+}
+
+/** Esquema do prédio como na planta da manufatura: anexo das docas, corpo, baias, banheiros, docas e portas. */
+const DOCK_BAYS: ReadonlyArray<[number, number]> = [[319, 57], [455, 37], [556, 55], [614, 53], [848, 37], [923, 37], [978, 101], [1135, 79]];
+const BOTTOM_DOCKS: ReadonlyArray<number> = [315, 1011];
+export const MAP_STRUCTURE: ReadonlyArray<StructureBox> = [
+  { x: 82, y: 115, w: 1284, h: 60, strong: true },
+  { x: 48, y: 175, w: 1352, h: 725, strong: true },
+  { x: 680, y: 106, w: 115, h: 9, thin: true },
+  ...DOCK_BAYS.map(([x, w]): StructureBox => ({ x, y: 141, w, h: 34, thin: true })),
+  { x: 52, y: 626, w: 124, h: 274, shaded: true, thin: true },
+  ...BOTTOM_DOCKS.flatMap((x): StructureBox[] => [
+    { x, y: 900, w: 76, h: 34, strong: true },
+    { x: x + 12, y: 900, w: 52, h: 20, thin: true },
+  ]),
+  ...[262, 392].map((y): StructureBox => ({ x: 40, y, w: 8, h: 34, thin: true })),
+  ...[236, 398, 534].map((y): StructureBox => ({ x: 1400, y, w: 8, h: 34, thin: true })),
+];
+
+/** Divisórias dos banheiros (baias à esquerda, escada à direita), traço fino. */
+export const MAP_RESTROOM_LINES: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }> = [
+  ...[1, 2, 3, 4, 5, 6].map((i) => ({ x1: 52, y1: 626 + i * 39, x2: 128, y2: 626 + i * 39 })),
+  { x1: 128, y1: 626, x2: 128, y2: 900 },
+  ...[0, 1, 2, 3, 4].map((i) => ({ x1: 140, y1: 846 + i * 11, x2: 172, y2: 846 + i * 11 })),
+];
 
 export type MapState =
   | "producao"
@@ -210,7 +236,7 @@ export function tileLayout(area: MapArea, labels: ReadonlyArray<string>): TileBo
     const col = index % perRow;
     const needed = label.length * CHAR_WIDTH * (rows === 1 ? 1 : 0.85);
     return {
-      x: area.x + 12 + col * (width + TILE_GAP),
+      x: area.x + (area.w - (perRow * width + (perRow - 1) * TILE_GAP)) / 2 + col * (width + TILE_GAP),
       y: top + row * (height + TILE_GAP / 2),
       width,
       height,

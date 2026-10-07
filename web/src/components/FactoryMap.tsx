@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import type { AndonSnapshot } from "../types/andon";
 import {
   MAP_AREAS,
-  MAP_DOCK_LINE,
   MAP_LEGEND,
+  MAP_RESTROOM_LINES,
   MAP_STRUCTURE,
   MAP_VIEWBOX,
   buildFactoryMap,
@@ -20,31 +20,27 @@ export function FactoryMap({ sectors }: { sectors: AndonSnapshot["sectors"] }) {
         <span>{model.total - model.unplaced} de {model.total} recursos na planta</span>
       </header>
       <svg className="andon-map__plan" viewBox={MAP_VIEWBOX} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Planta da fábrica com o estado de cada recurso">
-        <defs>
-          <pattern id="andon-map-hatch" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="12" height="12" className="andon-map__hatch-bg" />
-            <line x1="0" y1="0" x2="0" y2="12" className="andon-map__hatch-line" />
-          </pattern>
-        </defs>
         {MAP_STRUCTURE.map((box) => (
           <rect
             key={`${box.x}-${box.y}`}
-            className={`andon-map__structure${"strong" in box ? " andon-map__structure--strong" : ""}${"shaded" in box ? " andon-map__structure--shaded" : ""}`}
+            className={`andon-map__structure${box.strong ? " andon-map__structure--strong" : ""}${box.thin ? " andon-map__structure--thin" : ""}${box.shaded ? " andon-map__structure--shaded" : ""}`}
             x={box.x} y={box.y} width={box.w} height={box.h}
           />
         ))}
-        <line className="andon-map__structure" x1={MAP_DOCK_LINE.x1} y1={MAP_DOCK_LINE.y1} x2={MAP_DOCK_LINE.x2} y2={MAP_DOCK_LINE.y2} />
+        {MAP_RESTROOM_LINES.map((line) => (
+          <line key={`${line.x1}-${line.y1}`} className="andon-map__structure andon-map__structure--thin" x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} />
+        ))}
         {MAP_AREAS.map((area) => {
           const tiles = model.tiles[area.id] ?? [];
           const boxes = tileLayout(area, tiles.map((tile) => tile.label));
-          const labelY = area.y + (area.h > 200 ? 58 : 28);
+          const labelY = tiles.length ? area.y + (area.h > 200 ? 58 : 28) : area.y + area.h / 2 + 8;
           return (
             <g key={area.id} data-area={area.id}>
               <rect
                 className={`andon-map__area${tiles.length ? "" : " andon-map__area--idle"}`}
-                x={area.x} y={area.y} width={area.w} height={area.h} rx={6}
+                x={area.x} y={area.y} width={area.w} height={area.h} rx={3}
               />
-              <text className="andon-map__label" x={area.x + 12} y={labelY} style={area.fontSize ? { fontSize: area.fontSize } : undefined}>
+              <text className="andon-map__label" x={area.x + area.w / 2} y={labelY} textAnchor="middle" style={area.fontSize ? { fontSize: area.fontSize } : undefined}>
                 {area.label}
               </text>
               {tiles.map((tile, index) => (
