@@ -231,7 +231,7 @@ class AndonService:
         for raw in cut_rows:
             cut = dict(raw or {})
             resource_name = str(cut.get("maquina") or "").strip()
-            # SigmaNEST manda "LASER"; o catálogo usa LASER1. Sem resolver, o corte
+            # O corte chega com maquina "LASER"; o catálogo usa LASER1. Sem resolver, o corte
             # vira um segundo card (corte::LASER) ao lado do recurso catalogado.
             resource_name = resolve_resource_identity(resource_name)
             station_code = station_resource_code("Corte", resource_name)
