@@ -22,7 +22,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from backend.api.config import ANDON_DEMO_DATABASE, WebSettings
 from backend.api.clock import ApplicationClock
-from backend.ai import GroqProvider
+from backend.ai.openai_compatible_provider import OpenAICompatibleProvider
 from backend.ai.rate_limit_state import AIRateLimitState, AIUserRateLimiter
 from backend.api.database import DatabaseManager
 from app.database.leadership import (
@@ -879,9 +879,10 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         if resolved_settings.dev_observatory_enabled
         else ""
     )
-    application.state.ai_provider = None if resolved_settings.andon_demo_mode else GroqProvider(
+    application.state.ai_provider = None if resolved_settings.andon_demo_mode else OpenAICompatibleProvider(
         api_key=resolved_settings.ai_api_key,
         model=resolved_settings.ai_model,
+        base_url=resolved_settings.ai_base_url,
         reasoning_effort=resolved_settings.ai_reasoning_effort,
         temperature=resolved_settings.ai_temperature,
         max_completion_tokens=resolved_settings.ai_max_completion_tokens,

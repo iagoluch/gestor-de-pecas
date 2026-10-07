@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.database import Database
 from app.database.config import load_postgres_config
-from backend.ai.groq_provider import GroqProvider
+from backend.ai.openai_compatible_provider import OpenAICompatibleProvider
 from backend.api.config import WebSettings
 from mes.contracts import AIRequestContext, AIServiceConfig, AIServiceError
 from mes.services.ai_service import AIService
@@ -119,7 +119,7 @@ async def _run(index: int) -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if not _enabled(os.getenv("GESTOR_AI_REAL_TEST")):
-        print("SKIP: defina GESTOR_AI_REAL_TEST=true para autorizar o consumo real da Groq.")
+        print("SKIP: defina GESTOR_AI_REAL_TEST=true para autorizar o consumo real do provedor de IA.")
         return
     if not 1 <= index <= len(QUESTIONS):
         raise ValueError(f"question-index deve estar entre 1 e {len(QUESTIONS)}.")
@@ -127,7 +127,7 @@ async def _run(index: int) -> None:
     configure_environment()
     settings = WebSettings.from_env()
     if not settings.ai_configured:
-        raise RuntimeError("GROQ_API_KEY não está configurada no ambiente local.")
+        raise RuntimeError("GESTOR_AI_API_KEY (ou o legado GROQ_API_KEY) não está configurada no ambiente local.")
 
     question = QUESTIONS[index - 1]
     now_func = (
@@ -149,8 +149,9 @@ async def _run(index: int) -> None:
         )
         selected = tools.select_schemas(question)
         selected_names = [schema["function"]["name"] for schema in selected]
-        provider = GroqProvider(
+        provider = OpenAICompatibleProvider(
             api_key=settings.ai_api_key,
+            base_url=settings.ai_base_url,
             model=settings.ai_model,
             reasoning_effort=settings.ai_reasoning_effort,
             temperature=settings.ai_temperature,

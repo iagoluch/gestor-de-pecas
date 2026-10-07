@@ -14,6 +14,7 @@ import secrets
 
 from dotenv import load_dotenv
 
+from backend.ai.provider_profiles import GROQ, NVIDIA, resolve_provider_profile
 from mes.integrations.totvs.response import DEFAULT_GESTOR_IDENTITY
 
 
@@ -143,7 +144,8 @@ class WebSettings:
     simulation_time_scale: float = 0.0
     ai_enabled: bool = False
     ai_api_key: str = field(default="", repr=False)
-    ai_model: str = "openai/gpt-oss-120b"
+    ai_base_url: str = NVIDIA.default_base_url
+    ai_model: str = NVIDIA.default_model
     ai_reasoning_effort: str = "medium"
     ai_temperature: float = 0.2
     ai_max_completion_tokens: int = 640
@@ -292,7 +294,7 @@ class WebSettings:
             env = dict(env)
             env.update({name: "0" for name in _DEMO_DISABLED_ENV_FLAGS})
             env.update({name: "" for name in (
-                "GROQ_API_KEY", "TELEGRAM_BOT_TOKEN", "GESTOR_TOTVS_OP_PULL_ENDPOINT",
+                "GESTOR_AI_API_KEY", "GROQ_API_KEY", "TELEGRAM_BOT_TOKEN", "GESTOR_TOTVS_OP_PULL_ENDPOINT",
                 "GESTOR_DEVOBS_REAL_DATABASE_URL", "DATABASE_URL",
             )})
         environment = str(env.get("GESTOR_WEB_ENV") or "development").strip().casefold()
@@ -373,9 +375,25 @@ class WebSettings:
             raise RuntimeError(
                 "GESTOR_AI_REASONING_EFFORT deve ser low, medium ou high."
             )
-        ai_model = str(env.get("GESTOR_AI_MODEL") or "openai/gpt-oss-120b").strip()
-        if not ai_model:
-            raise RuntimeError("GESTOR_AI_MODEL não pode ficar vazio.")
+        # GESTOR_AI_API_KEY é a chave do provedor atual; GROQ_API_KEY segue
+        # aceita para .env antigos e, sozinha, mantém a Groq como destino.
+        ai_api_key = str(env.get("GESTOR_AI_API_KEY") or "").strip()
+        default_profile = NVIDIA
+        if not ai_api_key:
+            ai_api_key = str(env.get("GROQ_API_KEY") or "").strip()
+            if ai_api_key:
+                default_profile = GROQ
+        ai_base_url = str(env.get("GESTOR_AI_BASE_URL") or "").strip() or default_profile.default_base_url
+        try:
+            ai_profile = resolve_provider_profile(ai_base_url)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from None
+        if default_profile is GROQ and ai_profile is not GROQ:
+            # A chave legada é da Groq: não pode seguir para outro fornecedor.
+            raise RuntimeError(
+                "GROQ_API_KEY só vale com a Groq. Para outro provedor, preencha GESTOR_AI_API_KEY."
+            )
+        ai_model = str(env.get("GESTOR_AI_MODEL") or "").strip() or ai_profile.default_model
 
         totvs_enabled = _as_bool(env.get("GESTOR_TOTVS_ENABLED"), default=False)
         totvs_soap_enabled = _as_bool(
@@ -455,7 +473,8 @@ class WebSettings:
             simulation_reference_time=simulation_reference_time,
             simulation_time_scale=simulation_time_scale,
             ai_enabled=_as_bool(env.get("GESTOR_AI_ENABLED"), default=False),
-            ai_api_key=str(env.get("GROQ_API_KEY") or "").strip(),
+            ai_api_key=ai_api_key,
+            ai_base_url=ai_base_url,
             ai_model=ai_model,
             ai_reasoning_effort=ai_reasoning_effort,
             ai_temperature=_bounded_float(

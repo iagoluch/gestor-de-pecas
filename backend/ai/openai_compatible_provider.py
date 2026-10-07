@@ -1,4 +1,8 @@
-"""Adaptador assíncrono da Groq, isolado do FastAPI e do domínio industrial."""
+"""Adaptador assíncrono para APIs OpenAI-compatíveis (NVIDIA NIM, Groq, OpenRouter).
+
+Isolado do FastAPI e do domínio industrial: o provedor é escolhido só pelo
+``base_url`` validado em ``provider_profiles``.
+"""
 
 from __future__ import annotations
 
@@ -13,13 +17,14 @@ import re
 import time
 from typing import Any, Callable
 
+from backend.ai.provider_profiles import NVIDIA, resolve_provider_profile
 from mes.ai.context_budget import estimate_request_tokens
 from mes.contracts.ai import AIProviderError, AIProviderResponse, AIToolCall
 
 try:
-    from groq import AsyncGroq
+    from openai import AsyncOpenAI
 except ImportError:  # O restante do MES deve iniciar mesmo sem o extra instalado.
-    AsyncGroq = None
+    AsyncOpenAI = None
 
 
 LOGGER = logging.getLogger(__name__)
@@ -27,6 +32,8 @@ STRICT_TOOL_RETRY_INSTRUCTION = (
     "Gere no máximo uma tool call e use somente o nome e os argumentos declarados. "
     "Os arguments devem ser um objeto JSON válido, sem campos adicionais."
 )
+_ASSISTANT_MESSAGE_KEYS = ("role", "content", "tool_calls")
+_GENERIC_TOOL_CALL_ERROR = re.compile(r"tool[ _-]?calls?|function[ _-]?calls?|tool[ _-]?use", re.IGNORECASE)
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,79}$")
 _TOOL_NAME_PATTERNS = (
     re.compile(r"<(?:tool|function)=([A-Za-z_][A-Za-z0-9_-]{0,79})"),
@@ -45,12 +52,13 @@ def _safe_scalar(value: Any, *, limit: int, fallback: str) -> str:
     return text[:limit]
 
 
-class GroqProvider:
+class OpenAICompatibleProvider:
     def __init__(
         self,
         *,
         api_key: str,
         model: str,
+        base_url: str = NVIDIA.default_base_url,
         reasoning_effort: str = "medium",
         temperature: float = 0.2,
         max_completion_tokens: int = 512,
@@ -59,6 +67,8 @@ class GroqProvider:
         client=None,
         monotonic_func: Callable[[], float] | None = None,
     ):
+        self.profile = resolve_provider_profile(base_url)
+        self.base_url = str(base_url).strip()
         self.model = str(model)
         self.reasoning_effort = str(reasoning_effort)
         self.temperature = float(temperature)
@@ -71,9 +81,10 @@ class GroqProvider:
         self._api_key_present = bool(str(api_key or "").strip())
         if client is not None:
             self._client = client
-        elif self._api_key_present and AsyncGroq is not None:
-            self._client = AsyncGroq(
+        elif self._api_key_present and AsyncOpenAI is not None:
+            self._client = AsyncOpenAI(
                 api_key=str(api_key).strip(),
+                base_url=self.base_url,
                 timeout=self.timeout_seconds,
                 # O provider controla os únicos retries permitidos. Em especial,
                 # o SDK não pode repetir 429 automaticamente.
@@ -95,31 +106,37 @@ class GroqProvider:
         stream: bool,
         temperature: float | None = None,
     ):
+        profile = self.profile
         request: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature if temperature is None else float(temperature),
-            "reasoning_effort": self.reasoning_effort,
-            "reasoning_format": "hidden",
-            "max_completion_tokens": self.max_completion_tokens,
+            profile.max_tokens_field: self.max_completion_tokens,
             "stream": stream,
         }
+        if profile.groq_reasoning:
+            request["reasoning_effort"] = self.reasoning_effort
+            request["reasoning_format"] = "hidden"
         if tools:
             request["tools"] = tools
             request["tool_choice"] = tool_choice
-            request["parallel_tool_calls"] = False
+            if profile.send_parallel_tool_calls:
+                request["parallel_tool_calls"] = False
+        if profile.extra_body:
+            # Cópia profunda: o perfil é compartilhado entre requisições.
+            request["extra_body"] = json.loads(json.dumps(profile.extra_body))
         return request
 
     def _ensure_configured(self):
-        if AsyncGroq is None and self._client is None:
+        if AsyncOpenAI is None and self._client is None:
             raise AIProviderError(
                 "ai_sdk_unavailable",
-                "O componente da Groq não está instalado no servidor.",
+                "O componente do provedor de IA não está instalado no servidor.",
             )
         if not self.configured:
             raise AIProviderError(
                 "ai_not_configured",
-                "IA não configurada. Defina a chave da Groq no servidor.",
+                "IA não configurada. Defina a chave do provedor de IA no servidor.",
             )
 
     def _ensure_request_budget(self, messages, tools):
@@ -130,7 +147,8 @@ class GroqProvider:
         )
         if estimated > self.request_token_budget:
             LOGGER.warning(
-                "Groq request_budget_blocked estimated_tokens=%s budget=%s",
+                "AI provider=%s request_budget_blocked estimated_tokens=%s budget=%s",
+                self.profile.name,
                 estimated,
                 self.request_token_budget,
             )
@@ -163,7 +181,13 @@ class GroqProvider:
             str(error.get("code") or "").casefold(),
             str(error.get("type") or "").casefold(),
         }
-        return "tool_use_failed" in markers or "failed_generation" in error
+        if "tool_use_failed" in markers or "failed_generation" in error:
+            return True  # sinais explícitos da Groq
+        # NIM/OpenRouter: 400 genérico cuja mensagem cita a tool call gerada.
+        text = " ".join(
+            str(error.get(key) or "") for key in ("message", "detail", "code", "type")
+        )
+        return bool(_GENERIC_TOOL_CALL_ERROR.search(text))
 
     @staticmethod
     def _offered_tool_names(tools: list[dict[str, Any]]) -> set[str]:
@@ -289,7 +313,7 @@ class GroqProvider:
     @staticmethod
     def _rate_limit_error(details: dict[str, Any]) -> AIProviderError:
         return AIProviderError(
-            "groq_rate_limited",
+            "ai_rate_limited",
             "Limite temporário da IA atingido. Aguarde alguns segundos e tente novamente.",
             retryable=True,
             technical_details=details,
@@ -314,19 +338,32 @@ class GroqProvider:
         status = getattr(exc, "status_code", None)
         if isinstance(exc, TimeoutError) or name in {"APITimeoutError", "TimeoutException"}:
             return AIProviderError(
-                "groq_timeout",
-                "A Groq excedeu o tempo máximo da consulta. Tente novamente.",
+                "ai_timeout",
+                "O provedor de IA excedeu o tempo máximo da consulta. Tente novamente.",
                 retryable=True,
             )
         if status in {401, 403} or name in {"AuthenticationError", "PermissionDeniedError"}:
             return AIProviderError(
-                "groq_authentication_failed",
-                "A configuração da Groq foi recusada. Verifique a chave no servidor.",
+                "ai_authentication_failed",
+                "A configuração do provedor de IA foi recusada. Verifique a chave no servidor.",
+            )
+        if status == 404 or name == "NotFoundError":
+            # Caso típico: GESTOR_AI_MODEL de um provedor usado com o base_url de outro.
+            LOGGER.warning(
+                "AI provider=%s model_unavailable request_id=%s model=%s",
+                self.profile.name,
+                request_id,
+                self.model,
+            )
+            return AIProviderError(
+                "ai_model_unavailable",
+                "O modelo de IA configurado não está disponível no provedor.",
             )
         if status == 413:
             details = self._request_limit_error_details(exc)
             LOGGER.warning(
-                "Groq request_token_limit request_id=%s error_type=%s attempt=%s limit_tokens=%s requested_tokens=%s",
+                "AI provider=%s request_token_limit request_id=%s error_type=%s attempt=%s limit_tokens=%s requested_tokens=%s",
+                self.profile.name,
                 request_id,
                 details.get("error_type"),
                 attempt,
@@ -346,7 +383,8 @@ class GroqProvider:
                 self._rate_limited_until = self._monotonic() + retry_after
                 self._rate_limit_details = dict(details)
             LOGGER.warning(
-                "Groq rate_limit request_id=%s error_type=%s attempt=%s remaining_tokens=%s reset_tokens=%s retry_after=%s",
+                "AI provider=%s rate_limit request_id=%s error_type=%s attempt=%s remaining_tokens=%s reset_tokens=%s retry_after=%s",
+                self.profile.name,
                 request_id,
                 name,
                 attempt,
@@ -357,28 +395,34 @@ class GroqProvider:
             return self._rate_limit_error(details)
         if status and int(status) >= 500:
             return AIProviderError(
-                "groq_unavailable",
-                "A Groq está temporariamente indisponível. Tente novamente.",
+                "ai_unavailable",
+                "O provedor de IA está temporariamente indisponível. Tente novamente.",
                 retryable=True,
             )
         if name in {"APIConnectionError", "ConnectError", "ConnectionError"}:
             return AIProviderError(
-                "groq_connection_failed",
-                "Não foi possível conectar à Groq. Verifique a rede e tente novamente.",
+                "ai_connection_failed",
+                "Não foi possível conectar ao provedor de IA. Verifique a rede e tente novamente.",
                 retryable=True,
             )
         return AIProviderError(
-            "groq_invalid_response",
-            "A Groq não conseguiu produzir uma resposta válida.",
+            "ai_invalid_response",
+            "O provedor de IA não conseguiu produzir uma resposta válida.",
             retryable=True,
         )
+
+    @staticmethod
+    def _strict_retry_messages(messages) -> list[dict[str, Any]]:
+        return [*messages, {"role": "system", "content": STRICT_TOOL_RETRY_INSTRUCTION}]
 
     @staticmethod
     def _assistant_message(message, tool_calls: tuple[AIToolCall, ...]) -> dict[str, Any]:
         if hasattr(message, "model_dump"):
             dumped = message.model_dump(exclude_none=True, mode="json")
             if isinstance(dumped, dict):
-                return dumped
+                # Só o que o histórico OpenAI precisa: campos extras do provedor
+                # (ex.: reasoning_content) não voltam na rodada seguinte.
+                return {key: dumped[key] for key in _ASSISTANT_MESSAGE_KEYS if key in dumped}
         result: dict[str, Any] = {
             "role": "assistant",
             "content": str(message.content) if message.content else None,
@@ -435,13 +479,19 @@ class GroqProvider:
                 )
                 if len(tool_calls) > 1:
                     LOGGER.warning(
-                        "Groq parallel_tool_calls_rejected request_id=%s count=%s attempt=%s",
+                        "AI provider=%s parallel_tool_calls_rejected request_id=%s count=%s attempt=%s",
+                        self.profile.name,
                         request_id,
                         len(tool_calls),
                         attempt,
                     )
+                    # Nem todo provedor honra parallel_tool_calls=False (o NIM
+                    # não documenta o campo): 1 retry com a instrução estrita.
+                    if attempt == 1 and tools:
+                        request_messages = self._strict_retry_messages(messages)
+                        continue
                     raise AIProviderError(
-                        "groq_parallel_tool_calls_rejected",
+                        "ai_parallel_tool_calls_rejected",
                         "Não foi possível consultar os dados necessários neste momento.",
                     )
                 usage = response.usage.model_dump(exclude_none=True) if response.usage else {}
@@ -460,7 +510,8 @@ class GroqProvider:
                 if self._is_tool_use_failed(exc):
                     details = self._failed_generation_details(exc, tools)
                     LOGGER.warning(
-                        "Groq tool_use_failed request_id=%s error_type=%s tool=%s reason=%s attempt=%s",
+                        "AI provider=%s tool_use_failed request_id=%s error_type=%s tool=%s reason=%s attempt=%s",
+                        self.profile.name,
                         request_id,
                         details.get("error_type"),
                         details.get("tool"),
@@ -468,13 +519,10 @@ class GroqProvider:
                         attempt,
                     )
                     if attempt == 1 and tools:
-                        request_messages = [
-                            *messages,
-                            {"role": "system", "content": STRICT_TOOL_RETRY_INSTRUCTION},
-                        ]
+                        request_messages = self._strict_retry_messages(messages)
                         continue
                     raise AIProviderError(
-                        "groq_tool_use_failed",
+                        "ai_tool_use_failed",
                         "Não foi possível consultar os dados necessários neste momento.",
                         technical_details={**details, "attempt": attempt},
                     ) from exc
@@ -483,7 +531,7 @@ class GroqProvider:
                     request_id=request_id,
                     attempt=attempt,
                 ) from exc
-        raise AssertionError("Fluxo de retry da Groq terminou sem resultado.")
+        raise AssertionError("Fluxo de retry do provedor de IA terminou sem resultado.")
 
     async def stream(
         self,

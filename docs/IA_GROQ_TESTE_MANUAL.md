@@ -1,4 +1,4 @@
-# IA Industrial com Groq — teste manual
+# IA Industrial (provedor OpenAI-compatível: NVIDIA, Groq ou OpenRouter) — teste manual
 
 ## Limites desta V1
 
@@ -6,9 +6,9 @@ A IA é exclusivamente gerencial e read-only em relação ao MES. As únicas esc
 
 ## Configuração local
 
-1. Gere uma chave nova no console da Groq.
+1. Gere uma chave nova no provedor (NVIDIA: build.nvidia.com, chave começa com `nvapi-`).
 2. Abra o `.env` local do servidor. Não coloque a chave em código, React, `.env.example`, log ou mensagem de chat.
-3. Localize ou crie a linha `GROQ_API_KEY=` e cole a chave imediatamente após o sinal `=` apenas no `.env` local.
+3. Localize ou crie a linha `GESTOR_AI_API_KEY=` (e, se não for NVIDIA, `GESTOR_AI_BASE_URL=`) e cole a chave imediatamente após o sinal `=` apenas no `.env` local.
 4. Acrescente ou ajuste as demais opções:
 
    ```dotenv
@@ -31,7 +31,7 @@ A IA é exclusivamente gerencial e read-only em relação ao MES. As únicas esc
 8. Abra **Tela inicial → IA** (`/inicio/ia`).
 9. Crie uma conversa e pergunte: `Como está a fábrica agora?`
 
-Ao alterar `GROQ_API_KEY` ou `GESTOR_AI_ENABLED`, reinicie o backend. O entrypoint
+Ao alterar `GESTOR_AI_API_KEY`, `GESTOR_AI_BASE_URL` ou `GESTOR_AI_ENABLED`, reinicie o backend. O entrypoint
 `scripts/run_simulacao_residencia.py` carrega essas variáveis diretamente do `.env`;
 uma instância iniciada antes da alteração continua com a configuração antiga até ser
 reiniciada.
@@ -47,12 +47,12 @@ O resultado esperado após configurar e reiniciar é `True True`.
 ## Teste real isolado de tool calling
 
 Esse teste é manual, usa somente o banco indicado por `TEST_DATABASE_URL` e não
-faz parte da suíte automática. Ele só consome a Groq quando a autorização
+faz parte da suíte automática. Ele só consome o provedor de IA (GESTOR_AI_BASE_URL) quando a autorização
 explícita estiver ativa:
 
 ```powershell
 $env:GESTOR_AI_REAL_TEST = "true"
-C:\Python314\python.exe scripts\verificar_groq_tool_call_real.py
+C:\Python314\python.exe scripts\verificar_ia_provedor_real.py --models nvidia/nemotron-3-super-120b-a12b
 ```
 
 O primeiro passo disponibiliza exclusivamente `get_factory_status`; o script
@@ -74,4 +74,4 @@ processo ao terminar se não quiser autorizar novos testes reais.
 
 ## Testes automáticos
 
-Os testes usam provider simulado e não consomem quota da Groq. A migration 14 deve ser validada somente com `TEST_DATABASE_URL` apontando para banco cujo nome contenha `test`.
+Os testes usam provider simulado e não consomem quota do provedor de IA. A migration 14 deve ser validada somente com `TEST_DATABASE_URL` apontando para banco cujo nome contenha `test`.

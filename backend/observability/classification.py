@@ -63,6 +63,8 @@ _REDACTED_KEYS = frozenset(
         "cookie",
         "csrf",
         "groq_api_key",
+        "gestor_ai_api_key",
+        "nvidia_api_key",
         "password",
         "secret",
         "senha",

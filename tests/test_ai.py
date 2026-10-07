@@ -8,7 +8,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from backend.ai.groq_provider import GroqProvider
+from backend.ai.openai_compatible_provider import OpenAICompatibleProvider
+from backend.ai.provider_profiles import resolve_provider_profile
 from backend.ai.rate_limit_state import AIRateLimitState, AIUserRateLimiter
 from backend.api.config import WebSettings
 from backend.api.main import create_app
@@ -760,6 +761,11 @@ def _completion(*, content="ok", tool_name=None, arguments="{}", call_id="call-1
     return SimpleNamespace(choices=[choice], usage=None)
 
 
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+TEST_SESSION_SECRET = "test-secret-that-is-long-enough-for-session-signatures-123456"
+
+
 def _api_error(name, status, body=None, headers=None):
     error = type(name, (Exception,), {})()
     error.status_code = status
@@ -768,7 +774,7 @@ def _api_error(name, status, body=None, headers=None):
     return error
 
 
-class GroqProviderTests(unittest.TestCase):
+class OpenAICompatibleProviderTests(unittest.TestCase):
     @staticmethod
     def schema(name="get_factory_status"):
         return {
@@ -785,11 +791,12 @@ class GroqProviderTests(unittest.TestCase):
             },
         }
 
-    def provider(self, results, *, monotonic_func=None):
+    def provider(self, results, *, monotonic_func=None, base_url=GROQ_BASE_URL):
         client = _Client(results)
-        provider = GroqProvider(
+        provider = OpenAICompatibleProvider(
             api_key="chave-de-teste",
             model="openai/gpt-oss-120b",
+            base_url=base_url,
             client=client,
             timeout_seconds=1,
             monotonic_func=monotonic_func,
@@ -813,8 +820,8 @@ class GroqProviderTests(unittest.TestCase):
 
     def test_sdk_nao_recebe_retries_automaticos(self):
         fake_client = SimpleNamespace()
-        with patch("backend.ai.groq_provider.AsyncGroq", return_value=fake_client) as factory:
-            provider = GroqProvider(
+        with patch("backend.ai.openai_compatible_provider.AsyncOpenAI", return_value=fake_client) as factory:
+            provider = OpenAICompatibleProvider(
                 api_key="chave-de-teste",
                 model="openai/gpt-oss-120b",
             )
@@ -836,17 +843,47 @@ class GroqProviderTests(unittest.TestCase):
             )],
             usage=None,
         )
-        provider, client = self.provider([response])
+        provider, client = self.provider([response, response], base_url=NVIDIA_BASE_URL)
         with self.assertRaises(AIProviderError) as caught:
             asyncio.run(provider.complete([], tools=[self.schema()]))
-        self.assertEqual(caught.exception.code, "groq_parallel_tool_calls_rejected")
+        self.assertEqual(caught.exception.code, "ai_parallel_tool_calls_rejected")
+        self.assertEqual(len(client.completions.requests), 2)
+        self.assertIn("no máximo uma tool call", client.completions.requests[1]["messages"][-1]["content"])
+
+        provider, client = self.provider(
+            [response, _completion(tool_name="get_factory_status")], base_url=NVIDIA_BASE_URL,
+        )
+        recovered = asyncio.run(provider.complete([], tools=[self.schema()]))
+        self.assertEqual(len(recovered.tool_calls), 1)
+        self.assertEqual(len(client.completions.requests), 2)
+
+    def test_400_generico_de_tool_call_tem_um_retry_e_nao_loga_corpo(self):
+        malformed = _api_error(
+            "BadRequestError",
+            400,
+            body={"message": "Failed to parse tool call: CORPO_SECRETO_NAO_LOGAR", "type": "BadRequestError"},
+        )
+        provider, client = self.provider(
+            [malformed, _completion(tool_name="get_factory_status")], base_url=NVIDIA_BASE_URL,
+        )
+        with self.assertLogs("backend.ai.openai_compatible_provider", level="WARNING") as captured:
+            response = asyncio.run(provider.complete([], tools=[self.schema()], request_id="req-nv"))
+        self.assertEqual(response.finish_reason, "tool_calls")
+        self.assertEqual(len(client.completions.requests), 2)
+        self.assertNotIn("CORPO_SECRETO_NAO_LOGAR", " ".join(captured.output))
+
+        other_400 = _api_error("BadRequestError", 400, body={"message": "temperature out of range"})
+        provider, client = self.provider([other_400], base_url=NVIDIA_BASE_URL)
+        with self.assertRaises(AIProviderError) as caught:
+            asyncio.run(provider.complete([], tools=[self.schema()]))
+        self.assertEqual(caught.exception.code, "ai_invalid_response")
         self.assertEqual(len(client.completions.requests), 1)
 
     def test_mapeia_timeout_rate_limit_autenticacao_e_erro_geral(self):
         errors = [
-            (type("APITimeoutError", (Exception,), {})(), "groq_timeout"),
-            (type("AuthenticationError", (Exception,), {})(), "groq_authentication_failed"),
-            (RuntimeError("falha"), "groq_invalid_response"),
+            (type("APITimeoutError", (Exception,), {})(), "ai_timeout"),
+            (type("AuthenticationError", (Exception,), {})(), "ai_authentication_failed"),
+            (RuntimeError("falha"), "ai_invalid_response"),
         ]
         for error, expected in errors:
             with self.subTest(expected=expected):
@@ -875,7 +912,7 @@ class GroqProviderTests(unittest.TestCase):
             failed,
             _completion(tool_name="get_factory_status"),
         ])
-        with self.assertLogs("backend.ai.groq_provider", level="WARNING") as captured:
+        with self.assertLogs("backend.ai.openai_compatible_provider", level="WARNING") as captured:
             response = asyncio.run(provider.complete(
                 [{"role": "user", "content": "Como está a fábrica?"}],
                 tools=[self.schema()],
@@ -897,7 +934,7 @@ class GroqProviderTests(unittest.TestCase):
         provider, client = self.provider([failed, failed])
         with self.assertRaises(AIProviderError) as caught:
             asyncio.run(provider.complete([], tools=[self.schema()], request_id="req-2"))
-        self.assertEqual(caught.exception.code, "groq_tool_use_failed")
+        self.assertEqual(caught.exception.code, "ai_tool_use_failed")
         self.assertEqual(
             caught.exception.user_message,
             "Não foi possível consultar os dados necessários neste momento.",
@@ -921,7 +958,7 @@ class GroqProviderTests(unittest.TestCase):
         )
         with self.assertRaises(AIProviderError) as caught:
             asyncio.run(provider.complete([], tools=[]))
-        self.assertEqual(caught.exception.code, "groq_rate_limited")
+        self.assertEqual(caught.exception.code, "ai_rate_limited")
         self.assertEqual(
             caught.exception.user_message,
             "Limite temporário da IA atingido. Aguarde alguns segundos e tente novamente.",
@@ -968,6 +1005,85 @@ class GroqProviderTests(unittest.TestCase):
         with self.assertRaises(asyncio.CancelledError):
             asyncio.run(provider.complete([], tools=[]))
 
+    def test_groq_recebe_campos_proprios(self):
+        provider, client = self.provider([_completion()])
+        asyncio.run(provider.complete([], tools=[self.schema()]))
+        request = client.completions.requests[0]
+        self.assertEqual(request["reasoning_effort"], "medium")
+        self.assertEqual(request["reasoning_format"], "hidden")
+        self.assertEqual(request["max_completion_tokens"], 512)
+        self.assertNotIn("extra_body", request)
+
+    def test_nvidia_nao_recebe_campos_da_groq_e_desliga_raciocinio(self):
+        provider, client = self.provider([_completion(), _completion()], base_url=NVIDIA_BASE_URL)
+        asyncio.run(provider.complete([], tools=[self.schema()]))
+        asyncio.run(provider.complete([], tools=[self.schema()]))
+        request = client.completions.requests[0]
+        for field in ("reasoning_effort", "reasoning_format", "max_completion_tokens", "parallel_tool_calls"):
+            self.assertNotIn(field, request)
+        self.assertEqual(request["max_tokens"], 512)
+        self.assertEqual(request["tool_choice"], "auto")
+        self.assertEqual(request["extra_body"], {"chat_template_kwargs": {"enable_thinking": False}})
+        # O perfil compartilhado não pode ser mutado por uma requisição.
+        request["extra_body"]["chat_template_kwargs"]["enable_thinking"] = True
+        self.assertFalse(
+            client.completions.requests[1]["extra_body"]["chat_template_kwargs"]["enable_thinking"]
+        )
+
+    def test_sdk_openai_recebe_base_url(self):
+        fake_client = SimpleNamespace()
+        with patch(
+            "backend.ai.openai_compatible_provider.AsyncOpenAI", return_value=fake_client
+        ) as factory:
+            OpenAICompatibleProvider(api_key="chave", model="m", base_url=NVIDIA_BASE_URL)
+        self.assertEqual(factory.call_args.kwargs["base_url"], NVIDIA_BASE_URL)
+        self.assertEqual(factory.call_args.kwargs["max_retries"], 0)
+
+    def test_modelo_inexistente_vira_erro_claro(self):
+        provider, _client = self.provider([_api_error("NotFoundError", 404)], base_url=NVIDIA_BASE_URL)
+        with self.assertRaises(AIProviderError) as caught:
+            asyncio.run(provider.complete([], tools=[]))
+        self.assertEqual(caught.exception.code, "ai_model_unavailable")
+        self.assertNotIn("chave-de-teste", caught.exception.user_message)
+
+    def test_mensagem_do_assistente_descarta_campos_extras_do_provedor(self):
+        message = SimpleNamespace(
+            content=None,
+            tool_calls=[SimpleNamespace(
+                id="call-1", function=SimpleNamespace(name="get_factory_status", arguments="{}"),
+            )],
+            model_dump=lambda **_kwargs: {
+                "role": "assistant",
+                "reasoning_content": "rastro interno",
+                "tool_calls": [{"id": "call-1", "type": "function",
+                                "function": {"name": "get_factory_status", "arguments": "{}"}}],
+            },
+        )
+        response = SimpleNamespace(
+            choices=[SimpleNamespace(message=message, finish_reason="tool_calls")], usage=None,
+        )
+        provider, _client = self.provider([response], base_url=NVIDIA_BASE_URL)
+        result = asyncio.run(provider.complete([], tools=[self.schema()]))
+        self.assertEqual(set(result.assistant_message), {"role", "tool_calls"})
+
+
+class ProviderProfileTests(unittest.TestCase):
+    def test_aceita_somente_hosts_permitidos_em_https(self):
+        self.assertEqual(resolve_provider_profile(NVIDIA_BASE_URL).name, "nvidia")
+        self.assertEqual(resolve_provider_profile(GROQ_BASE_URL).name, "groq")
+        self.assertEqual(resolve_provider_profile("https://openrouter.ai/api/v1").name, "openrouter")
+        for url in (
+            "http://integrate.api.nvidia.com/v1",
+            "https://evil.example.com/v1",
+            "https://integrate.api.nvidia.com.evil.example/v1",
+            "https://user:pw@integrate.api.nvidia.com/v1",
+            "https://integrate.api.nvidia.com:8443/v1",
+            "https://integrate.api.nvidia.com/v1?x=1",
+            "",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                resolve_provider_profile(url)
+
 
 class AISettingsTests(unittest.TestCase):
     def test_defaults_de_budget_e_completion(self):
@@ -978,6 +1094,53 @@ class AISettingsTests(unittest.TestCase):
         self.assertEqual(settings.ai_max_completion_tokens, 640)
         self.assertEqual(settings.ai_request_token_budget, 6_000)
         self.assertEqual(settings.ai_tool_result_max_chars, 10_000)
+
+    @staticmethod
+    def settings(**env):
+        return WebSettings.from_env({
+            "GESTOR_WEB_ENV": "test",
+            "GESTOR_WEB_SESSION_SECRET": TEST_SESSION_SECRET,
+            **env,
+        })
+
+    def test_chave_nova_usa_nvidia_por_padrao(self):
+        settings = self.settings(GESTOR_AI_API_KEY="nvapi-teste", GROQ_API_KEY="antiga")
+        self.assertEqual(settings.ai_api_key, "nvapi-teste")
+        self.assertEqual(settings.ai_base_url, NVIDIA_BASE_URL)
+        self.assertEqual(settings.ai_model, "nvidia/nemotron-3-super-120b-a12b")
+        self.assertNotIn("nvapi-teste", repr(settings))
+
+    def test_somente_groq_api_key_mantem_groq(self):
+        settings = self.settings(GROQ_API_KEY="chave-groq")
+        self.assertTrue(settings.ai_configured)
+        self.assertEqual(settings.ai_api_key, "chave-groq")
+        self.assertEqual(settings.ai_base_url, GROQ_BASE_URL)
+        self.assertEqual(settings.ai_model, "openai/gpt-oss-120b")
+
+    def test_base_url_e_modelo_explicitos(self):
+        settings = self.settings(
+            GESTOR_AI_API_KEY="k",
+            GESTOR_AI_BASE_URL="https://openrouter.ai/api/v1",
+            GESTOR_AI_MODEL="vendor/modelo",
+        )
+        self.assertEqual(settings.ai_base_url, "https://openrouter.ai/api/v1")
+        self.assertEqual(settings.ai_model, "vendor/modelo")
+
+    def test_base_url_fora_da_allowlist_falha_no_boot_sem_ecoar_url(self):
+        with self.assertRaises(RuntimeError) as caught:
+            self.settings(GESTOR_AI_API_KEY="k", GESTOR_AI_BASE_URL="https://user:segredo@evil.example/v1")
+        self.assertIn("GESTOR_AI_BASE_URL", str(caught.exception))
+        self.assertNotIn("segredo", str(caught.exception))
+        self.assertNotIn("evil", str(caught.exception))
+
+    def test_chave_da_groq_nao_vai_para_outro_provedor(self):
+        with self.assertRaises(RuntimeError) as caught:
+            self.settings(GROQ_API_KEY="chave-groq-secreta", GESTOR_AI_BASE_URL=NVIDIA_BASE_URL)
+        self.assertIn("GESTOR_AI_API_KEY", str(caught.exception))
+        self.assertNotIn("chave-groq-secreta", str(caught.exception))
+        self.assertEqual(
+            self.settings(GROQ_API_KEY="k", GESTOR_AI_BASE_URL=GROQ_BASE_URL).ai_base_url, GROQ_BASE_URL,
+        )
 
     def test_variaveis_sao_validadas_e_a_chave_nao_aparece_no_repr(self):
         settings = WebSettings.from_env({
@@ -1127,7 +1290,7 @@ class AIApiTests(unittest.TestCase):
     def test_429_publica_cooldown_estruturado_e_bloqueia_nova_chamada(self):
         self.app.state.ai_provider = FakeProvider(
             stream_error=AIProviderError(
-                "groq_rate_limited",
+                "ai_rate_limited",
                 "mensagem técnica do provider",
                 retryable=True,
                 technical_details={

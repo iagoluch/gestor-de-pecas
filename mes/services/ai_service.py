@@ -57,7 +57,7 @@ class AIService:
         if not self.config.configured:
             raise AIUnavailableError(
                 "ai_not_configured",
-                "IA não configurada. Defina a chave da Groq no servidor.",
+                "IA não configurada. Defina a chave do provedor de IA no servidor.",
             )
 
     @staticmethod
@@ -349,7 +349,7 @@ class AIService:
             if not answer:
                 raise AIServiceError(
                     "ai_empty_response",
-                    "A Groq não produziu uma resposta válida. Tente novamente.",
+                    "O provedor de IA não produziu uma resposta válida. Tente novamente.",
                     retryable=True,
                 )
             assistant_message = await asyncio.to_thread(

@@ -187,7 +187,7 @@ class AndonDemoIsolationTests(unittest.TestCase):
         database.registrar_chamada = Mock(return_value={"id": 1, "contato_telegram_chat_id": "sentinel"})
         database.marcar_chamada_telegram = Mock(return_value=None)
         external = (
-            "GroqProvider", "SigmaNestSqlServerGateway", "TelegramProvider", "ReadOnlyDatabaseManager",
+            "OpenAICompatibleProvider", "SigmaNestSqlServerGateway", "TelegramProvider", "ReadOnlyDatabaseManager",
             "_totvs_outbox_worker_loop", "_sigmanest_sync_loop", "_report_scheduler_loop",
             "_telegram_bot_loop", "_telegram_digest_loop", "_internal_alert_dispatch_loop",
             "_dev_observatory_loop",

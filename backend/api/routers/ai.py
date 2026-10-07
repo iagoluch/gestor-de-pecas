@@ -24,7 +24,7 @@ def _cooldown(request: Request):
 
 
 def _stream_error(exc: AIServiceError, request: Request) -> dict:
-    if exc.code == "groq_rate_limited":
+    if exc.code == "ai_rate_limited":
         cooldown = _cooldown(request).activate(exc.technical_details)
         return {
             "code": "rate_limit",
@@ -129,7 +129,7 @@ async def message(
     if not current_status["configured"]:
         raise AppError(
             "ai_not_configured",
-            "IA não configurada. Defina a chave da Groq no servidor.",
+            "IA não configurada. Defina a chave do provedor de IA no servidor.",
             status_code=503,
         )
     # O cooldown global vem antes: esperar o provider não gasta a cota do usuário.

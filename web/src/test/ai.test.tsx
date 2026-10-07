@@ -383,7 +383,7 @@ describe("IA Industrial gerencial", () => {
       if (path.endsWith("/ai/conversations")) return json({ items: [conversation], count: 1 });
       if (path.endsWith("/ai/conversations/4")) return json({ ...conversation, messages: [] });
       if (path.includes("/messages") && init?.method === "POST") {
-        return sse(["event: error\ndata: {\"code\":\"groq_timeout\",\"message\":\"A Groq excedeu o tempo máximo.\",\"retryable\":true,\"request_id\":\"req-4\"}\n\n"]);
+        return sse(["event: error\ndata: {\"code\":\"ai_timeout\",\"message\":\"O provedor de IA excedeu o tempo máximo.\",\"retryable\":true,\"request_id\":\"req-4\"}\n\n"]);
       }
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     });
@@ -391,7 +391,7 @@ describe("IA Industrial gerencial", () => {
     await screen.findByLabelText("Pergunta");
     fireEvent.change(screen.getByLabelText("Pergunta"), { target: { value: "Como está a qualidade?" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
-    expect(await screen.findByText("A Groq excedeu o tempo máximo.")).toBeInTheDocument();
+    expect(await screen.findByText("O provedor de IA excedeu o tempo máximo.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Tempo da solicitação")).toBeNull();
     expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeInTheDocument();
     expect(screen.getByText("Referência: req-4")).toBeInTheDocument();

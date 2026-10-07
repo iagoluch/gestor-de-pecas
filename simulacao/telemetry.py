@@ -53,6 +53,8 @@ _REDACTED_KEYS = frozenset(
         "api_key",
         "apikey",
         "groq_api_key",
+        "gestor_ai_api_key",
+        "nvidia_api_key",
         "secret",
         "session",
     }

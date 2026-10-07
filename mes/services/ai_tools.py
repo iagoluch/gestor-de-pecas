@@ -285,6 +285,8 @@ _FORBIDDEN_REQUEST_TERMS = (
     " senha ",
     " password ",
     " groq_api_key ",
+    " gestor_ai_api_key ",
+    " nvidia_api_key ",
     " api key ",
     " connection string ",
     " string de conexao ",

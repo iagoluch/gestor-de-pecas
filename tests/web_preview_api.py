@@ -14,7 +14,7 @@ from tests.test_web_api import ApiFakeDatabase
 
 
 class VisualAIProvider:
-    """Resposta determinística para validar a interface sem consumir a Groq."""
+    """Resposta determinística para validar a interface sem consumir o provedor de IA."""
 
     configured = True
 
