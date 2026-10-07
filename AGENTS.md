@@ -168,11 +168,6 @@ Não transformar logs, prompts ou relatórios históricos em fonte de verdade at
 - A linha é `(OP, operação de Solda do roteiro)` e a OP mantém a identidade
   canônica do catálogo (`codigo_op` = número + item + sequência). Não criar
   identificador novo nem duplicar OP quando o roteiro tiver mais de uma solda.
-- **MODELO** é atributo do produto no cadastro corporativo e vive em
-  `catalogo_pcp_ops.produto_modelo` (migration 29). **A ingestão automática
-  desse campo ainda não existe** e é pendência explícita de etapa futura: até
-  lá a coluna fica nula e a tela escreve "Modelo não identificado.". Não
-  derivar modelo de máquina, recurso, roteiro ou descrição do produto.
 - **ESTAÇÃO é dado operacional observado**, lido de
   `apontamentos_operacionais.maquina`. Decisão do usuário (11/09/2026): as
   estações pegam a OP e executam; **não existe mapeamento determinístico

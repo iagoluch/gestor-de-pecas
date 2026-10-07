@@ -1894,23 +1894,10 @@ WAVE6C_CUT_HIERARCHY_STATEMENTS = (
 
 
 WAVE6D_WELDING_MANAGEMENT_DESCRIPTION = (
-    "Wave 6D — o produto da OP guarda o modelo de máquina informado pelo "
-    "cadastro corporativo, usado pela visão gerencial da Solda"
+    "Wave 6D — reservada (coluna produto_modelo retirada do schema; sem alteração)"
 )
 
-WAVE6D_WELDING_MANAGEMENT_STATEMENTS = (
-    # MODELO é atributo do produto no cadastro corporativo (coluna customizada
-    # do item). A coluna nasce anulável e **sem carga automática nesta etapa**:
-    # a ingestão do campo é decisão registrada para uma etapa futura. Até lá a
-    # tela explica a ausência em linguagem humana; nenhum valor é inferido a
-    # partir de máquina, recurso, roteiro ou descrição do produto.
-    "ALTER TABLE catalogo_pcp_ops ADD COLUMN produto_modelo TEXT",
-    """
-    CREATE INDEX idx_catalogo_pcp_produto_modelo
-    ON catalogo_pcp_ops (produto_modelo)
-    WHERE produto_modelo IS NOT NULL
-    """,
-)
+WAVE6D_WELDING_MANAGEMENT_STATEMENTS = ()
 
 
 QUALITY_SECTOR_OWNERSHIP_DESCRIPTION = (

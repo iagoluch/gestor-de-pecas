@@ -40,7 +40,6 @@ from mes.integrations.totvs.on_demand import (
     ProductionOrderRequestResult,
     operator_message,
 )
-from mes.integrations.totvs.product_model_gateway import ProtheusProductModelGateway
 from mes.integrations.totvs.service import build_totvs_ingestion_service
 from mes.integrations.totvs.transport import transport_failure_kind
 from mes.services.order_provisioning import OrderProvisioningService
@@ -197,7 +196,6 @@ def build_on_demand_sync_service(
     *,
     ingestion_service=None,
     gateway=None,
-    model_gateway=None,
     env=None,
     now_func=None,
     sleep_func=None,
@@ -211,20 +209,17 @@ def build_on_demand_sync_service(
 
     demo_mode = bool(getattr(settings, "andon_demo_mode", False))
     if demo_mode:
-        gateway = model_gateway = ingestion_service = None
+        gateway = ingestion_service = None
     elif gateway is None:
         gateway = ProtheusOnDemandRequestGateway.from_env(env)
     # Sem gateway não existe busca remota, e montar o pipeline de ingestão só
     # para descartá-lo custaria uma consulta de catálogo por requisição.
     if ingestion_service is None and gateway is not None:
         ingestion_service = build_totvs_ingestion_service(repository, settings)
-    if model_gateway is None and not demo_mode:
-        model_gateway = ProtheusProductModelGateway.from_env(env)
     return ProductionOrderOnDemandSyncService(
         repository,
         ingestion_service=ingestion_service,
         gateway=gateway,
-        model_gateway=model_gateway,
         company_id=getattr(settings, "totvs_op_pull_company_id", "") or None,
         branch_ids=getattr(settings, "totvs_op_pull_branch_ids", ()) or (),
         timeout_seconds=float(getattr(settings, "totvs_op_pull_timeout_seconds", 25)),

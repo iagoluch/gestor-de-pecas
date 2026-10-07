@@ -165,17 +165,14 @@ class AndonDemoIsolationTests(unittest.TestCase):
                     self.assertFalse(constructor.call_args.kwargs["totvs_outbox_config"].enabled)
                     self.assertIn("SELECT current_database() AS dbname", database.commands)
 
-    def test_order_and_model_pull_ignore_hostile_env_and_injected_gateways(self):
+    def test_order_pull_ignores_hostile_env_and_injected_gateways(self):
         database = DemoDatabase()
         with patch(
             "mes.integrations.totvs.on_demand_gateway.ProtheusOnDemandRequestGateway.from_env",
             side_effect=AssertionError("remote order gateway"),
-        ), patch(
-            "mes.integrations.totvs.on_demand_gateway.ProtheusProductModelGateway.from_env",
-            side_effect=AssertionError("remote model gateway"),
         ):
             service = build_order_provisioning_service(
-                database, hostile_settings(), gateway=Mock(), model_gateway=Mock(), ingestion_service=Mock(),
+                database, hostile_settings(), gateway=Mock(), ingestion_service=Mock(),
             )
             self.assertFalse(service.available)
             self.assertFalse(service.provision("ABSENT-DEMO").requested)
@@ -209,10 +206,6 @@ class AndonDemoIsolationTests(unittest.TestCase):
             stack.enter_context(patch(
                 "mes.integrations.totvs.on_demand_gateway.ProtheusOnDemandRequestGateway.from_env",
                 side_effect=AssertionError("order pull"),
-            ))
-            stack.enter_context(patch(
-                "mes.integrations.totvs.on_demand_gateway.ProtheusProductModelGateway.from_env",
-                side_effect=AssertionError("model pull"),
             ))
             app = create_app(settings=hostile_settings(), database_factory=lambda: database)
             with TestClient(app) as client:
