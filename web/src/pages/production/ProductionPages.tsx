@@ -12,7 +12,7 @@ import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { PageMeta, PagedOrders, ProductionResponse } from "../../types/management";
-import { displayName, formatDateTime, formatHours, formatNumber, formatPercent } from "../../utils/format";
+import { displayName, formatDateTime, formatNumber, formatPercent } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 
 interface PlanActualRow {

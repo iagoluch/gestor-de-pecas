@@ -314,6 +314,3 @@ def sector_display_label(setor_atual, setor_roteiro=None):
 def operator_sector_for_level(level):
     return OPERATOR_SECTOR_BY_LEVEL.get(str(level or "").strip().lower())
 
-
-def is_operator_level(level):
-    return operator_sector_for_level(level) is not None

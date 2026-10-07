@@ -681,7 +681,7 @@ describe("fluxo Web do operador", () => {
   });
 
   it("mede a cota, libera o lote e habilita Finalizar", async () => {
-    const { calls } = await abrirPortao();
+    await abrirPortao();
 
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "12.1" } });

@@ -1,6 +1,5 @@
 import { useId, useMemo, useState } from "react";
 import { api } from "../../api/client";
-import { useAuth } from "../../auth/AuthContext";
 import { DataTable } from "../../components/DataTable";
 import { RowActions } from "../../components/RowActions";
 import { ErrorState, LoadingState } from "../../components/DataState";
