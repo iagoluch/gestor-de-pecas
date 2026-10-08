@@ -1,6 +1,0 @@
-{
-  "Path": "\\\\GTS01-PRO06.gtsdobrasil.com.br\\Components\\Máquinas AMADA",
-  "Success": false,
-  "Error": "Cannot find path '\\\\GTS01-PRO06.gtsdobrasil.com.br\\Components\\Máquinas AMADA' because it does not exist.",
-  "ErrorId": "PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand"
-}

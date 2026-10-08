@@ -1,8 +1,0 @@
-{
-  "MaxBytes": 65536,
-  "ExitCode": 7,
-  "Method": "GET",
-  "Target": "http://10.10.3.22/",
-  "TimeoutSeconds": 3,
-  "CollectedAt": "2026-10-08T11:24:50.8710050-03:00"
-}
