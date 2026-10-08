@@ -24,7 +24,6 @@ def main() -> int:
 
     sector_ids = [s["id"] for s in sectors]
     employee_ids = [e["id"] for e in employees]
-    orchestrator_ids = [o["id"] for o in orchestrators]
     specialist_ids = [s["id"] for s in specialists]
     all_nodes = orchestrators + employees + specialists
     all_ids = [n["id"] for n in all_nodes]

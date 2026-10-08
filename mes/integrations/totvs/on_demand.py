@@ -305,12 +305,10 @@ class ProductionOrderOnDemandSyncService:
         # "não encontrada". Erros de transporte/indisponibilidade não avançam
         # a varredura — não faz sentido multiplicar tentativas numa queda real.
         branches = self.branch_ids or (None,)
-        resolved_branch_id = branches[0]
         for index, branch_id in enumerate(branches):
             result = self.gateway.request_production_order(
                 company_id=self.company_id, branch_id=branch_id, number=codigo
             )
-            resolved_branch_id = branch_id
             if not result.not_found or index == len(branches) - 1:
                 break
 
