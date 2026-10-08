@@ -926,6 +926,14 @@ body:has(.andon-page--manager) #root {
 
 .andon-page--single-view .andon-card--parada .andon-card__state > span i { background: var(--state-ink); }
 
+/* Gestão: o cartão tem altura fixa (128px/94px), então a fonte que cresce com a
+ * largura do cartão (`cqi`) não pode passar do que o cabeçalho comporta — com
+ * poucos grupos no setor o cartão fica largo e o cabeçalho esmagava as métricas.
+ * A leitura à distância (maior teto) continua só na TV. */
+.andon-page--manager .andon-card__identity > strong { font-size: clamp(12px, 6.2cqi, 16px); }
+.andon-page--manager .andon-card__state > strong { font-size: clamp(12px, 6.8cqi, 16px); }
+.andon-page--manager .andon-card__state > span { font-size: clamp(10px, 4.6cqi, 12px); }
+
 
 /*
  * TV: rodízio de setores e balões de notificação. Nada daqui vale para a visão
