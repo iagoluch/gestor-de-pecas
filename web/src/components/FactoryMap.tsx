@@ -1,5 +1,7 @@
-import { useMemo } from "react";
-import type { AndonSnapshot } from "../types/andon";
+import { useMemo, useState } from "react";
+import type { MouseEvent } from "react";
+import type { MetricValue } from "../types/api";
+import type { AndonResource, AndonSnapshot } from "../types/andon";
 import {
   MAP_AREAS,
   MAP_LEGEND,
@@ -9,10 +11,76 @@ import {
   buildFactoryMap,
   tileLayout,
 } from "../utils/factoryMap";
+import { formatDuration } from "../utils/format";
 
-/** Planta da fábrica na TV: cada recurso é uma pastilha colorida pelo estado dentro da sua área. */
-export function FactoryMap({ sectors }: { sectors: AndonSnapshot["sectors"] }) {
+function metricText(metric: MetricValue | undefined) {
+  if (!metric || metric.value === null || metric.value === undefined) return "—";
+  return `${metric.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}${metric.unit ?? "%"}`;
+}
+
+function qty(value: number | null | undefined) {
+  return value === null || value === undefined ? "—" : value.toLocaleString("pt-BR");
+}
+
+/** Cartão do hover (só na visão gerencial): estado, indicadores e o que está apontado no recurso. */
+function MapTileCard({ resource, x, y, flip }: { resource: AndonResource; x: number; y: number; flip: boolean }) {
+  const { state, metrics, operation, cut, ops_ativas: ops } = resource;
+  const headline = state.display_label || state.label;
+  const reasonText = state.reason || state.activity_description;
+  const detail = reasonText && reasonText !== headline ? reasonText : null;
+  const extraOps = ops && ops.length > 1 ? ops : null;
+  return (
+    <aside className="andon-map__card" style={{ top: y, ...(flip ? { right: x } : { left: x }) }} role="tooltip">
+      <h3>{resource.name} <small>{resource.code}</small></h3>
+      <p className="andon-map__card-state">
+        {headline}
+        {state.duration_seconds != null ? ` · ${formatDuration(state.duration_seconds)}` : ""}
+      </p>
+      {detail ? <p className="andon-map__card-detail">{detail}</p> : null}
+      <dl className="andon-map__card-metrics">
+        <div><dt>OEE</dt><dd>{metricText(metrics.oee)}</dd></div>
+        <div><dt>Disp.</dt><dd>{metricText(metrics.availability)}</dd></div>
+        <div><dt>Perf.</dt><dd>{metricText(metrics.performance)}</dd></div>
+        <div><dt>FTT</dt><dd>{metricText(metrics.ftt)}</dd></div>
+      </dl>
+      {operation ? (
+        <dl className="andon-map__card-op">
+          {operation.op ? <div><dt>OP</dt><dd>{operation.op}</dd></div> : null}
+          {operation.product ? <div><dt>Produto</dt><dd>{operation.product_description || operation.product}</dd></div> : null}
+          {operation.operation_description || operation.operation ? <div><dt>Operação</dt><dd>{operation.operation_description || operation.operation}</dd></div> : null}
+          {operation.operator ? <div><dt>Operador</dt><dd>{operation.operator}</dd></div> : null}
+          {operation.planned_quantity != null || operation.good_quantity != null ? (
+            <div><dt>Boas / plan.</dt><dd>{qty(operation.good_quantity)} / {qty(operation.planned_quantity)}</dd></div>
+          ) : null}
+        </dl>
+      ) : null}
+      {cut && (cut.task || cut.plan) ? (
+        <dl className="andon-map__card-op">
+          {cut.task ? <div><dt>Tarefa</dt><dd>{cut.task}</dd></div> : null}
+          {cut.plan ? <div><dt>Plano</dt><dd>{cut.plan}</dd></div> : null}
+        </dl>
+      ) : null}
+      {extraOps ? <p className="andon-map__card-detail">{extraOps.length} OPs ativas: {extraOps.map((o) => o.op).join(", ")}</p> : null}
+      {!operation && !extraOps && !cut ? <p className="andon-map__card-detail">Nada apontado agora.</p> : null}
+    </aside>
+  );
+}
+
+/**
+ * Planta da fábrica: cada recurso é uma pastilha colorida pelo estado dentro da sua área.
+ * `interactive` (gestão): passar o mouse numa pastilha abre o cartão com OEE e o apontamento; a TV não usa.
+ */
+export function FactoryMap({ sectors, interactive = false }: { sectors: AndonSnapshot["sectors"]; interactive?: boolean }) {
   const model = useMemo(() => buildFactoryMap(sectors), [sectors]);
+  const [hover, setHover] = useState<{ key: string; x: number; y: number; flip: boolean } | null>(null);
+  const hovered = hover ? Object.values(model.tiles).flat().find((tile) => tile.key === hover.key) : undefined;
+  const track = (key: string) => (event: MouseEvent<SVGGElement>) => {
+    const box = event.currentTarget.ownerSVGElement?.parentElement?.getBoundingClientRect();
+    if (!box) return;
+    const x = event.clientX - box.left;
+    const flip = x > box.width / 2;
+    setHover({ key, x: flip ? box.width - x + 14 : x + 14, y: Math.min(event.clientY - box.top + 14, box.height - 40), flip });
+  };
   return (
     <div className="andon-map">
       <header className="andon-map__header">
@@ -50,8 +118,12 @@ export function FactoryMap({ sectors }: { sectors: AndonSnapshot["sectors"] }) {
                 {area.label}
               </text>
               {tiles.map((tile, index) => (
-                <g key={tile.key} className={`andon-map__tile andon-map__tile--${tile.state}`}>
-                  <title>{tile.title}</title>
+                <g
+                  key={tile.key}
+                  className={`andon-map__tile andon-map__tile--${tile.state}${interactive ? " andon-map__tile--hover" : ""}`}
+                  {...(interactive ? { onMouseEnter: track(tile.key), onMouseMove: track(tile.key), onMouseLeave: () => setHover(null) } : {})}
+                >
+                  {interactive ? null : <title>{tile.title}</title>}
                   <rect x={boxes[index].x} y={boxes[index].y} width={boxes[index].width} height={boxes[index].height} rx={5} />
                   <text
                     x={boxes[index].x + boxes[index].width / 2}
@@ -67,6 +139,7 @@ export function FactoryMap({ sectors }: { sectors: AndonSnapshot["sectors"] }) {
           );
         })}
       </svg>
+      {interactive && hover && hovered ? <MapTileCard resource={hovered.resource} x={hover.x} y={hover.y} flip={hover.flip} /> : null}
       <footer className="andon-map__legend">
         {MAP_LEGEND.map((item) => (
           <span className="andon-map__legend-item" key={item.state}>

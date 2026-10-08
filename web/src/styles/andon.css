@@ -1145,6 +1145,7 @@ body:has(.andon-page--manager) #root {
 /* Mapa da fábrica (visão geral da TV): a planta baixa como SVG, uma pastilha por recurso.
    Chrome 79: sem gap em flex (margens), sem color-mix, só tokens do sistema. */
 .andon-map {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -1211,4 +1212,32 @@ body:has(.andon-page--manager) #root {
 }
 .andon-map__swatch--idle { border: 1.5px solid var(--border-strong); background: repeating-linear-gradient(45deg, var(--surface-alt) 0, var(--surface-alt) 0.17em, var(--muted) 0.17em, var(--muted) 0.3em); }
 .andon-map__unplaced { margin-left: auto; color: var(--fill-stopped); }
+
+/* Hover da gestão: cartão com OEE e apontamento do recurso (a TV não usa). */
+.andon-map__tile--hover { cursor: pointer; }
+.andon-map__tile--hover:hover rect { stroke: var(--text); stroke-width: 3; }
+.andon-map__card {
+  position: absolute;
+  z-index: 5;
+  width: 280px;
+  max-width: 45%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+  pointer-events: none;
+}
+.andon-map__card h3 { margin: 0 0 2px; font-size: 14px; }
+.andon-map__card h3 small { color: var(--muted); font-weight: 600; margin-left: 4px; }
+.andon-map__card p { margin: 2px 0; }
+.andon-map__card-state { font-weight: 700; }
+.andon-map__card-detail { color: var(--muted); }
+.andon-map__card dl { margin: 6px 0 0; }
+.andon-map__card dl > div { display: flex; justify-content: space-between; margin: 2px 0; }
+.andon-map__card dt { color: var(--muted); margin-right: 8px; }
+.andon-map__card dd { margin: 0; font-weight: 700; text-align: right; word-break: break-word; }
+.andon-map__card-metrics { padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .andon-map__swatch--sem_demanda { border-color: var(--border-strong); }

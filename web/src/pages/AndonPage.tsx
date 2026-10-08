@@ -353,7 +353,7 @@ export function AndonPage({ mapOnly = false }: { mapOnly?: boolean } = {}) {
         <SnapshotStatus error={query.error} updatedAt={query.updatedAt} staleClassName="andon-stale" />
         <section className="andon-board-section" aria-labelledby="andon-resources-title">
           <h2 className="visually-hidden" id="andon-resources-title">Recursos ativos por setor</h2>
-          {sectors.length && (mapOnly || (isTv && !focusedSector)) ? <FactoryMap sectors={data.plant_sectors ?? sectors} /> : sectors.length ? (
+          {sectors.length && (mapOnly || (isTv && !focusedSector)) ? <FactoryMap sectors={data.plant_sectors ?? sectors} interactive={mapOnly} /> : sectors.length ? (
             <div className={`andon-board${focusedSector ? " andon-board--focus" : ""}`} style={boardStyle}>
               {columns.map((column, index) => (
                 <div

@@ -256,6 +256,16 @@ describe("Andon Geral Web", () => {
     const navRow = container.querySelector(".andon-nav-row") as HTMLElement;
     expect(within(navRow).getByRole("link", { name: "Mapa da fábrica" })).toHaveClass("page-tab--active");
     expect(within(navRow).getByRole("link", { name: "Andon" })).not.toHaveClass("page-tab--active");
+
+    // Hover na pastilha abre o cartão com os indicadores; ao sair, fecha.
+    const tile = container.querySelector(".andon-map__tile") as SVGGElement;
+    expect(container.querySelector(".andon-map__card")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(tile, { clientX: 100, clientY: 100 });
+    const card = container.querySelector(".andon-map__card") as HTMLElement;
+    expect(card).toBeInTheDocument();
+    expect(within(card).getByText("OEE")).toBeInTheDocument();
+    fireEvent.mouseLeave(tile);
+    expect(container.querySelector(".andon-map__card")).not.toBeInTheDocument();
   });
 
   it("redireciona a entrada gerencial para a visão geral dedicada", async () => {

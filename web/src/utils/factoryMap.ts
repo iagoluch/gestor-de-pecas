@@ -110,6 +110,7 @@ export interface MapTile {
   label: string;
   title: string;
   state: MapState;
+  resource: AndonResource;
 }
 
 /** Máximo de estações de Solda de Alumínio no bloco menor; o excedente vai ao bloco grande. */
@@ -162,6 +163,7 @@ export function buildFactoryMap(sectors: AndonSnapshot["sectors"]): FactoryMapMo
       label: tileLabel(resource, numbered),
       title: `${resource.name} — ${resource.state.display_label || resource.state.label}`,
       state,
+      resource,
     });
   };
   sectors.forEach((sector) => {
