@@ -19,7 +19,7 @@ commit `4a60564`.
 - FATO: IA Industrial com provedor OpenAI-compatível, NVIDIA (`nemotron-3-super`) por padrão; Groq/OpenRouter por env (`b1a1841`, 07/10). Código de vínculo do Telegram corrigido (`c513d3d`, 07/10). Erro do SigmaNEST na fila do Corte vira mensagem fixa, sem texto bruto do ODBC ao operador (`9e4c4ec`, 07/10). Limpeza de código morto e auditoria de segurança em `docs/auditoria_2026-10-07/` (`8d703dd`, 07/10).
 - FATO: API REAL (`:8001`) reiniciada em 08/10 com essas correções.
 - FATO: tempo padrão das peças sem tempo (0,01) resolvido pela aba Manufatura (`7e7bece`). SG2/G2_TEMPAD deixa de ser pendência externa.
-- PENDÊNCIA (OEE, com Gabriel Fogaça): (1) tempo previsto do SigmaNEST vale como padrão de corte?; (2) regra do FTT para retrabalho e unidade peça nestada; (3) aprovar consolidação "soma de bases" (PENDENTE_HOMOLOGACAO → HOMOLOGADO).
+- PENDÊNCIA (OEE, com Gabriel Fogaça): (1) tempo previsto do SigmaNEST vale como padrão de corte?; (2) regra do FTT para retrabalho e unidade peça nestada (Gabriel vai mandar explicação mais elaborada para (1) e (2)). FECHADO 08/10: (3) consolidação "soma de bases" HOMOLOGADA pelo Gabriel (`consolidation_status: HOMOLOGADO`).
 - FATO: branches remotas: só `master` (2 apagadas em 08/10).
 
 ### REAL promovido e estado de 06/10/2026

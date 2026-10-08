@@ -611,11 +611,11 @@ class ManagementService:
                 **oee_calculation.trace_dict(),
                 # Recursos cujo período foi integralmente sem demanda recebem
                 # 0% por convenção. No consolidado o tempo sem demanda não
-                # entra nas bases, logo esse zero fica segregado: a política
-                # de consolidação ainda aguarda homologação.
+                # entra nas bases, logo esse zero fica segregado. Política de
+                # consolidação homologada por Gabriel Fogaça em 08/10/2026.
                 "no_demand_exception_resources": no_demand_exception_resources,
                 "consolidation": "SOMA_DE_BASES_SEM_DEMANDA_SEGREGADO",
-                "consolidation_status": "PENDENTE_HOMOLOGACAO",
+                "consolidation_status": "HOMOLOGADO",
             },
             # Só consumidos pela aba Análises (OEE) — não entram no Andon nem
             # em outras telas, que continuam lendo apenas "kpis".

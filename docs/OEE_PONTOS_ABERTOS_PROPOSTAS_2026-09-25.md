@@ -67,7 +67,7 @@ NOT_CONFIGURED, e nunca usar a opção C.
 
 **Hoje:** um recurso com o período inteiro sem demanda dá 100/0/0 (regra fechada, não reabrir). No
 consolidado do setor/fábrica, as bases são somadas e o recurso sem demanda fica segregado
-(`SOMA_DE_BASES_SEM_DEMANDA_SEGREGADO`, status `PENDENTE_HOMOLOGACAO` em `management.py`).
+(`SOMA_DE_BASES_SEM_DEMANDA_SEGREGADO`, status `HOMOLOGADO` em `management.py`, homologada por Gabriel Fogaça em 08/10/2026).
 
 **Proposta:** homologar como está:
 - o consolidado soma **bases** (tempos e quantidades), nunca faz média de percentuais;
