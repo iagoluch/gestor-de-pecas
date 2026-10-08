@@ -20,6 +20,17 @@ from app.core.normalization import limpa_codigo
 from app.core.resource_mapping import resource_display_name
 
 
+# Parte fixa do upsert do template; ``on_conflict`` (uma de duas constantes
+# locais) é anexado em ``QualityRepositoryMixin``. Nada vem de entrada externa.
+_INSERIR_TEMPLATE_PRODUTO = """
+    INSERT INTO qualidade_templates_produto (
+        produto_codigo, produto_descricao, revisao, ativo,
+        criado_por, criado_por_nome, atualizado_por,
+        atualizado_por_nome, criado_em, atualizado_em
+    ) VALUES (%s, %s, 1, TRUE, %s, %s, %s, %s, %s, %s)
+    """
+
+
 def _as_dict(row):
     return dict(row) if row else None
 
@@ -418,18 +429,7 @@ class QualityRepositoryMixin:
         if not somente_criar:
             parametros.append(bool(nova_revisao))
         with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO qualidade_templates_produto (
-                    produto_codigo, produto_descricao, revisao, ativo,
-                    criado_por, criado_por_nome, atualizado_por,
-                    atualizado_por_nome, criado_em, atualizado_em
-                ) VALUES (%s, %s, 1, TRUE, %s, %s, %s, %s, %s, %s)
-                """ + on_conflict + """
-                RETURNING *
-                """,
-                parametros,
-            )
+            cursor.execute(_INSERIR_TEMPLATE_PRODUTO + on_conflict + " RETURNING *", parametros)
             criado = cursor.fetchone()
             if criado is None:
                 # DO NOTHING sem linha de retorno: outro operador já cadastrou o
