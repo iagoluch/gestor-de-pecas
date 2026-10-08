@@ -112,3 +112,18 @@ Os planos são de `listar_fatos_operacionais_periodo`, que o recálculo chama um
 - **Monitorar:** o evento `tempo_padrao_estimado_recalculado` já registra `execucoes_elegiveis`. Vale alertar quando o recálculo passar de 5 min ou registrar falha.
 
 Nenhuma migration é proposta, porque o gargalo não é índice.
+
+## Depois das otimizações (08/10/2026)
+
+Aplicadas (a) rateio por varredura de eventos (`9c5f712`), (b) um `IndustrialAnalyticsService` por janela e (c) leitura enxuta de fatos (`include_operators=False`, só no recálculo). Mesmo banco descartável, volume **sintético**, mesmas estimativas (hash das linhas de `tempo_padrao_estimado` idêntico antes/depois).
+
+| Volume (180 d) | Antes (b+c) | Depois (b+c) | Memória pico | Consulta de fatos de 1 janela |
+|---|---|---|---|---|
+| 50k | 34–40 s | 27,7 s | 0,56 → 0,12 GB | 1,6–1,8 s → 1,1 s |
+| 100k | 98,1 s | 38,7 s | 1,07 → 0,20 GB | 4,2 s → 0,85 s |
+| 500k | falha (timeout de 30 s na 1ª janela, 20,8 s) | falha (1ª janela 11,5 s; 2ª estoura os 30 s) | n/a | 11,9 s (sem timeout) |
+
+- **Até 100k apontamentos na janela de 180 dias o recálculo está dentro do folgado** (39 s, 0,2 GB, cada janela de fatos < 2,5 s). A memória agora é limitada a uma janela, não cresce com as 13.
+- **500k continua fora**: a leitura enxuta ajudou (1ª janela 20,8 → 11,5 s), mas uma janela posterior passou de 30 s. Causa não investigada; se o volume chegar perto disso, o próximo passo é `CHUNK_DAYS=7` e depois (d) upsert em lote.
+- Equivalência: `tests/test_standard_time.py` (estimativas idênticas entre o fluxo antigo e o novo; cache por janela; analytics padrão ainda lê operadores) e `tests/test_standard_time_postgres.py` (leitura enxuta = completa menos operadores, amostras iguais).
+- Banco descartável removido ao final.

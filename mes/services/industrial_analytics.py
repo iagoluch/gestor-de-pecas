@@ -28,8 +28,12 @@ from mes.services.shift_parameters import load_manufacturing_rules
 
 
 class IndustrialAnalyticsService:
-    def __init__(self, db, now_func=None, simulation_mode=False, management=None):
+    def __init__(self, db, now_func=None, simulation_mode=False, management=None,
+                 lean_facts=False):
         self.db = db
+        # Leitura de fatos sem operadores por evento: só para quem não os usa
+        # (recálculo do tempo padrão). O padrão mantém o payload completo.
+        self._lean_facts = bool(lean_facts)
         self._now = now_func or datetime.now
         self.simulation_mode = bool(simulation_mode)
         self.rules = load_manufacturing_rules(db)
@@ -884,10 +888,12 @@ class IndustrialAnalyticsService:
         loader = getattr(self.db, "listar_fatos_operacionais_periodo", None)
         if not callable(loader):
             return []
+        extra = {"include_operators": False} if self._lean_facts else {}
         rows = list(loader(
             filters.inicio, filters.fim,
             setor=filters.setor, recurso=filters.recurso, op=filters.op,
             operacao=filters.operacao, produto=filters.produto, operador=filters.operador,
+            **extra,
         ) or [])
         self._cache[cache_key] = rows
         return rows

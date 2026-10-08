@@ -3777,16 +3777,47 @@ class Database(
 
     def listar_fatos_operacionais_periodo(
         self, inicio, fim, *, setor=None, recurso=None, op=None, operacao=None, produto=None,
-        operador=None,
+        operador=None, include_operators=True,
     ):
         """Carrega fatos operacionais com eventos em uma única consulta.
 
         É a fonte preferencial dos serviços gerenciais; evita N+1 e mantém a UI
         desacoplada das tabelas físicas.
+
+        ``include_operators=False`` é a leitura enxuta (recálculo do tempo
+        padrão): mesmas colunas e chaves, mas sem consultar os operadores por
+        evento e por apontamento (``operadores`` vem ``[]`` e os nomes ``NULL``).
         """
 
         start = _period_value(inicio)
         end = _period_value(fim)
+        if include_operators:
+            name_sql = """(
+                    SELECT operador.nome
+                    FROM operadores_apontamento operador
+                    WHERE operador.id = a.operador_inicio_id
+                ) AS operador_inicio_nome,
+                (
+                    SELECT operador.nome
+                    FROM operadores_apontamento operador
+                    WHERE operador.id = a.operador_fim_id
+                ) AS operador_fim_nome"""
+            event_operators_sql = """(
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'id', operador.id,
+                                            'cracha', operador.cracha,
+                                            'nome', operador.nome
+                                        ) ORDER BY operador.cracha
+                                    )
+                                    FROM operadores_evento_apontamento vinculo
+                                    JOIN operadores_apontamento operador
+                                      ON operador.id = vinculo.operador_id
+                                    WHERE vinculo.evento_id = e.id
+                                )"""
+        else:
+            name_sql = "NULL::text AS operador_inicio_nome, NULL::text AS operador_fim_nome"
+            event_operators_sql = "NULL::jsonb"
         query = f"""
             SELECT
                 a.*,
@@ -3814,16 +3845,7 @@ class Database(
                 p.fim_planejado,
                 p.prazo_entrega,
                 p.prioridade,
-                (
-                    SELECT operador.nome
-                    FROM operadores_apontamento operador
-                    WHERE operador.id = a.operador_inicio_id
-                ) AS operador_inicio_nome,
-                (
-                    SELECT operador.nome
-                    FROM operadores_apontamento operador
-                    WHERE operador.id = a.operador_fim_id
-                ) AS operador_fim_nome,
+                {name_sql},
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -3834,22 +3856,7 @@ class Database(
                             'quantidade_boa', e.quantidade_boa,
                             'quantidade_refugo', e.quantidade_refugo,
                             'operador', e.operador,
-                            'operadores', COALESCE(
-                                (
-                                    SELECT jsonb_agg(
-                                        jsonb_build_object(
-                                            'id', operador.id,
-                                            'cracha', operador.cracha,
-                                            'nome', operador.nome
-                                        ) ORDER BY operador.cracha
-                                    )
-                                    FROM operadores_evento_apontamento vinculo
-                                    JOIN operadores_apontamento operador
-                                      ON operador.id = vinculo.operador_id
-                                    WHERE vinculo.evento_id = e.id
-                                ),
-                                '[]'::jsonb
-                            ),
+                            'operadores', COALESCE({event_operators_sql}, '[]'::jsonb),
                             'data_hora', e.data_hora,
                             'codigo_status_recurso', e.codigo_status_recurso,
                             'recurso_roteiro_codigo', e.recurso_roteiro_codigo,
@@ -3888,7 +3895,7 @@ class Database(
             LEFT JOIN eventos_apontamento_operador e ON e.apontamento_id = a.id
             WHERE COALESCE(a.data_inicio, a.data_entrada) <= %s
               AND COALESCE(a.data_fim, %s) >= %s
-        """  # nosec B608 -- só PROTHEUS_TIME_SQL (constante) é interpolada; valores via %s
+        """  # nosec B608 -- só constantes (PROTHEUS_TIME_SQL e os trechos de operadores) são interpoladas; valores via %s
         params = [end, end, start]
         if start is not None and end is not None and start <= end:
             query += f" AND {APONTAMENTO_INTERVALO} && tsrange(%s, %s, '[]')"

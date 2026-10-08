@@ -291,6 +291,83 @@ class StandardTimeEstimateTests(unittest.TestCase):
         self.assertFalse(_recalculate_standard_time_estimates_if_due(object(), NOW))
 
 
+class _OperatorsDb(_MemoryDb):
+    """Respeita ``include_operators`` como o banco: a leitura enxuta zera os operadores."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.fact_calls = []
+
+    def listar_fatos_operacionais_periodo(self, inicio, fim, *_a, include_operators=True, **_k):
+        self.fact_calls.append((inicio, fim, include_operators))
+        facts = []
+        for fact in self.facts:
+            fact = dict(fact)
+            if not include_operators:
+                fact["operador_inicio_nome"] = fact["operador_fim_nome"] = None
+                fact["eventos"] = [{**e, "operadores": []} for e in fact["eventos"]]
+            facts.append(fact)
+        return facts
+
+
+class StandardTimeRecalculationEquivalenceTests(unittest.TestCase):
+    """Recálculo com janelas isoladas e leitura enxuta = recálculo antigo."""
+
+    def _db(self):
+        facts = [_fact(i, seconds=600 + 37 * i, day_offset=3 * i) for i in range(1, 30)]
+        # Concorrentes no mesmo recurso/horário (descartadas pelo rateio igualitário)
+        # e outra chave em outro recurso.
+        facts += [_fact(40 + i, seconds=900, day_offset=20, produto="PROD2") for i in range(2)]
+        facts += [_fact(50 + i, seconds=700 + 50 * i, day_offset=2 + 5 * i, produto="PROD3",
+                        operacao="30", recurso="DOBRA2") for i in range(8)]
+        for fact in facts:
+            fact["operador_inicio_nome"] = fact["operador_fim_nome"] = "Ana"
+            fact["eventos"] = [
+                {**e, "operadores": [{"id": 1, "cracha": "C1", "nome": "Ana"}]}
+                for e in fact["eventos"]
+            ]
+        return _OperatorsDb(facts=facts)
+
+    def test_estimativas_identicas_ao_comportamento_anterior(self):
+        novo_db, antigo_db = self._db(), self._db()
+        novo = StandardTimeService(novo_db, now_func=lambda: NOW).recalculate_estimates()
+        # Comportamento anterior: um único serviço (cache de todas as janelas) e leitura completa.
+        unico = IndustrialAnalyticsService(antigo_db, now_func=lambda: NOW)
+        with mock.patch.object(
+            standard_time_module, "IndustrialAnalyticsService", lambda db, now_func, lean_facts: unico
+        ):
+            antigo = StandardTimeService(antigo_db, now_func=lambda: NOW).recalculate_estimates()
+        self.assertTrue(novo_db.estimados)
+        self.assertEqual(novo_db.estimados, antigo_db.estimados)
+        self.assertEqual(novo, antigo)
+        self.assertTrue(all(call[2] is False for call in novo_db.fact_calls))
+        self.assertTrue(all(call[2] is True for call in antigo_db.fact_calls))
+
+    def test_cada_janela_usa_um_servico_proprio_com_cache_so_dela(self):
+        db = self._db()
+        created = []
+        real = IndustrialAnalyticsService
+
+        def factory(*args, **kwargs):
+            created.append(real(*args, **kwargs))
+            return created[-1]
+
+        with mock.patch.object(standard_time_module, "IndustrialAnalyticsService", factory):
+            StandardTimeService(db, now_func=lambda: NOW).recalculate_estimates()
+        self.assertEqual(len(created), len(db.fact_calls))
+        self.assertGreater(len(created), 1)
+        for service, call in zip(created, db.fact_calls):
+            fact_keys = [k for k in service._cache if k[0] == "facts"]
+            self.assertEqual([(k[1].inicio, k[1].fim) for k in fact_keys], [call[:2]])
+
+    def test_analytics_padrao_continua_lendo_operadores(self):
+        db = self._db()
+        IndustrialAnalyticsService(db, now_func=lambda: NOW).standard_time_samples(
+            AnalyticsFilter(inicio=datetime(2026, 9, 1), fim=datetime(2026, 10, 1))
+        )
+        self.assertEqual([call[2] for call in db.fact_calls], [True])
+
+
 class StandardTimeRecalculationLockTests(unittest.TestCase):
     def setUp(self):
         self.db = _MemoryDb(facts=[_fact(i, seconds=600 + 100 * (i - 1), day_offset=i) for i in range(1, 6)])

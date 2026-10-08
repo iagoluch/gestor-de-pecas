@@ -22,7 +22,9 @@ from app.database.config import load_postgres_config
 from app.database.database import Database
 from app.database.migrations import apply_migrations
 from app.database.schema import SCHEMA_VERSION
+from mes.contracts import AnalyticsFilter
 from mes.domain.standard_time import normalize_key
+from mes.services.industrial_analytics import IndustrialAnalyticsService
 from mes.services.standard_time import StandardTimeRuleError, StandardTimeService
 
 AGORA = datetime(2026, 10, 6, 9, 0)
@@ -250,6 +252,47 @@ class StandardTimePostgresTests(unittest.TestCase):
             [(h["acao"], str(h["vigente_desde"])) for h in historico],
             [("alterado", "2026-10-07 12:00:00"), ("definido", "2026-10-06 12:00:00")],
         )
+
+    def test_leitura_enxuta_de_fatos_so_perde_os_operadores(self):
+        """``include_operators=False`` (recálculo) = leitura completa sem os operadores."""
+
+        for dia in (5, 6):
+            self._apontar_em("OP1", dia)
+        self._exec("INSERT INTO operadores_apontamento (cracha, nome) VALUES ('C1', 'Ana'), ('C2', 'Beto')")
+        self._exec(
+            "UPDATE apontamentos_operacionais SET status = 'Finalizado', quantidade_boa = 5,"
+            " data_fim = data_inicio + interval '1 hour',"
+            " operador_inicio_id = (SELECT id FROM operadores_apontamento WHERE cracha = 'C1'),"
+            " operador_fim_id = (SELECT id FROM operadores_apontamento WHERE cracha = 'C2')"
+        )
+        self._exec(
+            "INSERT INTO eventos_apontamento_operador (apontamento_id, estado, operador, data_hora)"
+            " SELECT id, v.estado, 'Ana', data_inicio + v.delta FROM apontamentos_operacionais"
+            " CROSS JOIN (VALUES ('producao', interval '0'), ('finalizado', interval '1 hour')) v(estado, delta)"
+        )
+        self._exec(
+            "INSERT INTO operadores_evento_apontamento (evento_id, operador_id)"
+            " SELECT e.id, o.id FROM eventos_apontamento_operador e CROSS JOIN operadores_apontamento o"
+        )
+        inicio, fim = datetime(2026, 10, 1), datetime(2026, 10, 31)
+        cheios = self.db.listar_fatos_operacionais_periodo(inicio, fim)
+        enxutos = self.db.listar_fatos_operacionais_periodo(inicio, fim, include_operators=False)
+        self.assertEqual(len(cheios), 2)
+        self.assertTrue(all(len(e["operadores"]) == 2 for f in cheios for e in f["eventos"]))
+        self.assertEqual({f["operador_inicio_nome"] for f in cheios}, {"Ana"})
+
+        def sem_operadores(fato):
+            fato = {**fato, "operador_inicio_nome": None, "operador_fim_nome": None}
+            fato["eventos"] = [{**e, "operadores": []} for e in fato["eventos"]]
+            return fato
+
+        self.assertEqual([sem_operadores(f) for f in cheios], enxutos)
+        # Amostras do recálculo: idênticas com a leitura enxuta.
+        analise = lambda lean: IndustrialAnalyticsService(  # noqa: E731
+            self.db, now_func=lambda: AGORA, lean_facts=lean
+        ).standard_time_samples(AnalyticsFilter(inicio=inicio, fim=fim))
+        self.assertEqual(analise(True), analise(False))
+        self.assertEqual(len(analise(True)), 2)
 
     def test_schema_com_as_tres_tabelas(self):
         self.assertGreaterEqual(SCHEMA_VERSION, 57)

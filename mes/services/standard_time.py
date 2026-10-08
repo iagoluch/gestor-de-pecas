@@ -282,14 +282,19 @@ class StandardTimeService:
         now = now or self._now()
         window_end = datetime.combine(now.date(), time.min)
         window_start = window_end - timedelta(days=int(lookback_days))
-        analytics = IndustrialAnalyticsService(self.db, now_func=lambda: now)
         # Janelas curtas: a consulta de fatos de 180 dias de uma vez estoura o
         # ``statement_timeout`` (30 s) em volume alto. Execução que cruza a
         # fronteira de duas janelas não é amostra (efeito desprezível).
+        # Um serviço por janela: o cache de fatos/timelines morre com ela, e a
+        # memória fica limitada a uma janela. A leitura de fatos é enxuta (sem
+        # operadores por evento, que as amostras não usam).
         samples = []
         chunk_start = window_start
         while chunk_start < window_end:
             chunk_end = min(chunk_start + timedelta(days=CHUNK_DAYS), window_end)
+            analytics = IndustrialAnalyticsService(
+                self.db, now_func=lambda: now, lean_facts=True
+            )
             samples.extend(
                 analytics.standard_time_samples(
                     AnalyticsFilter(inicio=chunk_start, fim=chunk_end)

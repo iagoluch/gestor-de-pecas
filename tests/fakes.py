@@ -2175,7 +2175,7 @@ class FakeDatabase:
 
     def listar_fatos_operacionais_periodo(
         self, inicio, fim, *, setor=None, recurso=None, op=None, operacao=None, produto=None,
-        operador=None,
+        operador=None, include_operators=True,
     ):
         start = normalizar_data_db(inicio)
         end = normalizar_data_db(fim)
