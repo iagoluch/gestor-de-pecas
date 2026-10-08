@@ -290,6 +290,7 @@ class CutService:
                 "O plano não está mais em processo. Atualize a fila.",
                 code="estado_alterado",
             )
+        self._abrir_tarefa_para_destaque(eligible, finished)
         refreshed = next(
             (
                 item for item in self.listar_fila()
@@ -320,6 +321,26 @@ class CutService:
         event_type = "corte_finalizado" if refreshed is None else "corte_nesting_concluido"
         self._record_event(event_type, row, message)
         return CutResult(True, message, data=row)
+
+    def _abrir_tarefa_para_destaque(self, eligible, finished):
+        """Chapa cortada libera a tarefa no Destaque (que lista só ``tarefas``).
+
+        Só o Laser libera Destaque. Sem linha em ``tarefas`` a fila do Destaque
+        nunca enxergaria a tarefa; falha aqui não desfaz o corte já gravado.
+        """
+
+        machine = finished.get("maquina_sigmanest") or self.machine_sigmanest(eligible.get("maquina"))
+        materializar = getattr(self.db, "materializar_tarefa_catalogo", None)
+        if not callable(materializar) or not ManufacturingRules.cut_releases_highlight(machine):
+            return
+        try:
+            if materializar(eligible.get("codigo_tarefa")) is None:
+                logging.warning(
+                    "Tarefa %s não abriu no Destaque: inativa ou sem OPs ativas no catálogo",
+                    eligible.get("codigo_tarefa"),
+                )
+        except Exception:  # noqa: BLE001 - o corte já foi gravado; o Destaque abre a tarefa na consulta
+            logging.exception("Falha ao abrir a tarefa %s para o Destaque", eligible.get("codigo_tarefa"))
 
     def listar_consulta(self, maquina=None, status="Todos", search=None):
         current = self.listar_fila(maquina=maquina)

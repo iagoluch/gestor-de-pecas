@@ -384,6 +384,50 @@ class CutServiceTests(unittest.TestCase):
         self.assertEqual(payload["cutting"][0]["status"], "Aguardando")
 
 
+class CutOpensTaskForHighlightTests(unittest.TestCase):
+    """O Destaque só lista ``tarefas``: a chapa cortada no Laser abre a tarefa."""
+
+    def _service(self, machine="Amada_ensis", fail=False):
+        class CatalogDatabase(FakeDatabase):
+            materializadas = []
+
+            def materializar_tarefa_catalogo(inner_self, codigo):
+                if fail:
+                    raise RuntimeError("catálogo indisponível")
+                inner_self.materializadas.append(codigo)
+                return {"codigo_tarefa": codigo}
+
+        database = CatalogDatabase()
+        database.cut_plans.append(_plan(maquina_sigmanest=machine))
+        return database, CutService(database, "OPERADOR CORTE", cutoff_date="2026-08-01")
+
+    def test_laser_so_abre_a_tarefa_quando_a_chapa_termina(self):
+        database, service = self._service()
+
+        started = service.iniciar("hash-corte-1", "Laser Ensis 3015")
+        self.assertTrue(started.ok)
+        self.assertEqual(database.materializadas, [])
+
+        self.assertTrue(service.finalizar(started.data["id"]).ok)
+        self.assertEqual(database.materializadas, ["T3500"])
+
+    def test_plasma_nao_libera_destaque(self):
+        database, service = self._service(machine="MESSER_XPR_300")
+
+        started = service.iniciar("hash-corte-1", "Plasma TerraBlade 4")
+        self.assertTrue(service.finalizar(started.data["id"]).ok)
+
+        self.assertEqual(database.materializadas, [])
+
+    def test_falha_ao_abrir_a_tarefa_nao_desfaz_o_corte(self):
+        database, service = self._service(fail=True)
+
+        started = service.iniciar("hash-corte-1", "Laser Ensis 3015")
+        finished = service.finalizar(started.data["id"])
+
+        self.assertTrue(finished.ok)
+        self.assertEqual(finished.data["status"], "Finalizado")
+
 
 if __name__ == "__main__":
     unittest.main()
