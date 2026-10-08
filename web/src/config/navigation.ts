@@ -81,6 +81,7 @@ export const managementSections: ManagementSection[] = [
     defaultPath: "/inicio/andon",
     tabs: [
       { label: "Andon", path: "/inicio/andon", screen: "panels-andon" },
+      { label: "Mapa da fábrica", path: "/inicio/mapa-fabrica", screen: "panels-factory-map" },
       // Metas: aba oculta temporariamente a pedido do usuário (01/10/2026).
       // Página e rota seguem existindo (`/inicio/metas`) — para voltar, basta
       // descomentar a linha abaixo.

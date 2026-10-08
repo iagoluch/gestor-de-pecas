@@ -115,6 +115,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/andon" element={<RequireAuth andon><AndonPage /></RequireAuth>} />
+      <Route path="/mapa-fabrica" element={<RequireAuth management><AndonPage mapOnly /></RequireAuth>} />
       <Route
         path="/"
         element={(
@@ -128,6 +129,7 @@ export default function App() {
         <Route path="inicio/setores" element={<HomeSectorsPage />} />
         <Route path="inicio/alertas" element={<HomeAlertsPage />} />
         <Route path="inicio/andon" element={<Navigate to="/andon" replace />} />
+        <Route path="inicio/mapa-fabrica" element={<Navigate to="/mapa-fabrica" replace />} />
         <Route path="inicio/metas" element={<ManagementGoalsPage />} />
         <Route path="inicio/pausas" element={<ManagementPausesPage />} />
         <Route path="inicio/crachas" element={<RequireAdmin><ManagementBadgesPage /></RequireAdmin>} />

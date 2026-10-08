@@ -93,12 +93,13 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(40);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(40);
+    expect(managementRoutes).toHaveLength(41);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(41);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "panels" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Mapa da fábrica", path: "/inicio/mapa-fabrica", sectionId: "panels" }));
     expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Solda" }));
     // Metas: aba oculta temporariamente (01/10/2026); a rota segue montada em
     // App.tsx e a página existe, só saiu da navegação.

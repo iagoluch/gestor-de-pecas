@@ -60,7 +60,8 @@ export function AndonSidebarNav() {
 
   function isCurrentPanelTab(path: string) {
     if (path === location.pathname) return true;
-    return path === "/inicio/andon" && location.pathname === "/andon";
+    return (path === "/inicio/andon" && location.pathname === "/andon")
+      || (path === "/inicio/mapa-fabrica" && location.pathname === "/mapa-fabrica");
   }
 
   return (

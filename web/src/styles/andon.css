@@ -748,6 +748,11 @@ body:has(.andon-page--manager) #root {
   overflow-y: auto;
 }
 
+/* Sub-aba "Mapa da fábrica": viewport fixa; a planta ocupa o que sobra abaixo da faixa de abas. */
+.andon-page--map { display: flex; flex-direction: column; }
+.andon-page--map .andon-content { flex: 1 1 0; height: auto; }
+.andon-page--map .andon-board-section { height: 100%; }
+
 .andon-page--manager {
   height: auto;
   min-height: 100vh;

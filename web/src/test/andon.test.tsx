@@ -240,6 +240,24 @@ describe("Andon Geral Web", () => {
     expect(screen.getByRole("link", { name: "Pausas" })).toBeInTheDocument();
   });
 
+  it("sub-aba Mapa da fábrica abre em página cheia, sempre com a planta e sem rodízio", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return authResponse();
+      if (path.includes("/api/v1/andon")) return new Response(JSON.stringify(snapshot()), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(null, { status: 404 });
+    });
+    const { container } = renderAndon(fetchMock, "/inicio/mapa-fabrica");
+
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Mapa da fábrica/i });
+    expect(container.querySelector(".andon-page--map")).toBeInTheDocument();
+    expect(container.querySelector(".andon-map")).toBeInTheDocument();
+    expect(container.querySelector(".andon-board")).not.toBeInTheDocument();
+    const navRow = container.querySelector(".andon-nav-row") as HTMLElement;
+    expect(within(navRow).getByRole("link", { name: "Mapa da fábrica" })).toHaveClass("page-tab--active");
+    expect(within(navRow).getByRole("link", { name: "Andon" })).not.toHaveClass("page-tab--active");
+  });
+
   it("redireciona a entrada gerencial para a visão geral dedicada", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

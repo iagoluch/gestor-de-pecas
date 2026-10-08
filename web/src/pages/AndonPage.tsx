@@ -287,8 +287,10 @@ function SectorPanel({ sector, elapsed, transitions, highlightAlert = false, onO
 }
 
 const ANDON_TITLE = "Painéis Operacionais — Andon";
+const MAP_TITLE = "Painéis Operacionais — Mapa da fábrica";
 
-export function AndonPage() {
+/** `mapOnly`: sub-aba "Mapa da fábrica" — mesma página cheia do Andon, sempre com a planta e sem rodízio. */
+export function AndonPage({ mapOnly = false }: { mapOnly?: boolean } = {}) {
   useForceLightTheme();
   const { user } = useAuth();
   const query = useApiQuery<AndonSnapshot>("/api/v1/andon", { ignoreLiveTick: true, keepLastSnapshot: true });
@@ -297,24 +299,25 @@ export function AndonPage() {
   const transitions = useResourceTransitions(query.data ?? null);
   const [selectedResourceKey, setSelectedResourceKey] = useState<string | null>(null);
   const isTv = user?.role === "andon";
+  const title = mapOnly ? MAP_TITLE : ANDON_TITLE;
   // Rodízio de setores só na TV dedicada: a visão gerencial continua mostrando
   // o quadro completo, sem trocar de tela sob o gestor.
   const sectorNames = useMemo(() => cycleSectorNames(query.data?.sectors), [query.data?.sectors]);
-  const cycleFocus = useAndonSectorCycle(sectorNames, isTv);
+  const cycleFocus = useAndonSectorCycle(sectorNames, isTv && !mapOnly);
   const focusedCount = query.data?.sectors.find((sector) => sector.name === cycleFocus)?.resources.length ?? 0;
   useFocusFit(cycleFocus && isTv ? `${cycleFocus}:${focusedCount}` : "");
   // O Andon continua sendo o Andon: a única adição da Wave 6D é entrar no ciclo
   // automático da TV, que troca de visão a cada 10 segundos no perfil dedicado.
   useTvRotation("/andon");
   const closeResource = useCallback(() => setSelectedResourceKey(null), []);
-  const pageClass = `andon-page andon-page--single-view ${isTv ? "andon-page--tv" : "andon-page--manager"}`;
+  const pageClass = `andon-page andon-page--single-view ${mapOnly ? "andon-page--map" : isTv ? "andon-page--tv" : "andon-page--manager"}`;
   // O Andon abre em página cheia, fora do menu lateral da gestão. Sem isso,
   // quem chegou aqui pelo menu ficaria sem jeito de voltar pra Tela inicial
   // (ou qualquer outra seção) a não ser pelo "voltar" do navegador (decisão
   // do usuário, 15/09/2026). A TV dedicada (role "andon") nunca vê isso.
   const showPanelsNav = Boolean(user?.management_access);
   // IA-01: mesmo nome da aba do menu ("Painéis Operacionais — Andon").
-  useDocumentTitle(ANDON_TITLE);
+  useDocumentTitle(title);
 
   useEffect(() => {
     if (realtime === "connected") return undefined;
@@ -345,12 +348,12 @@ export function AndonPage() {
   return (
     <main className={pageClass} data-simulation={data.simulation_only ? "true" : undefined}>
       {showPanelsNav ? <AndonSidebarNav /> : null}
-      <h1 className="visually-hidden">{ANDON_TITLE}</h1>
+      <h1 className="visually-hidden">{title}</h1>
       <div className="andon-content">
         <SnapshotStatus error={query.error} updatedAt={query.updatedAt} staleClassName="andon-stale" />
         <section className="andon-board-section" aria-labelledby="andon-resources-title">
           <h2 className="visually-hidden" id="andon-resources-title">Recursos ativos por setor</h2>
-          {sectors.length && isTv && !focusedSector ? <FactoryMap sectors={data.plant_sectors ?? sectors} /> : sectors.length ? (
+          {sectors.length && (mapOnly || (isTv && !focusedSector)) ? <FactoryMap sectors={data.plant_sectors ?? sectors} /> : sectors.length ? (
             <div className={`andon-board${focusedSector ? " andon-board--focus" : ""}`} style={boardStyle}>
               {columns.map((column, index) => (
                 <div
