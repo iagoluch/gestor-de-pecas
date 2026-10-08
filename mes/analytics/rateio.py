@@ -94,21 +94,31 @@ def split_concurrent_time(
     for per_key in by_resource.values():
         for key in per_key:
             result.setdefault(key, 0.0)
-        bounds = sorted({edge for spans in per_key.values() for span in spans for edge in span})
-        for start, end in zip(bounds, bounds[1:]):
-            active = [
-                key for key, spans in per_key.items()
-                if any(s <= start and end <= e for s, e in spans)
-            ]
-            if not active:
-                continue
-            shares = allocate_duration(
-                (end - start).total_seconds(),
-                [str(index) for index in range(len(active))],
-                strategy=strategy,
-            )
-            for index, key in enumerate(active):
-                result[key] += shares[str(index)]
+        order = {key: index for index, key in enumerate(per_key)}
+        # Varredura por eventos: O(E log E) em vez de testar todo trecho contra
+        # todo intervalo. Os intervalos de cada OP já são disjuntos (merge).
+        edges: dict = defaultdict(lambda: ([], []))
+        for key, spans in per_key.items():
+            for span_start, span_end in spans:
+                edges[span_start][0].append(key)
+                edges[span_end][1].append(key)
+        active: set = set()
+        previous = None
+        for moment in sorted(edges):
+            if previous is not None and active:
+                shares = allocate_duration(
+                    (moment - previous).total_seconds(),
+                    [str(index) for index in range(len(active))],
+                    strategy=strategy,
+                )
+                # A ordem de entrada da OP no recurso define a ponta que fecha
+                # a diferença de ponto flutuante, como antes.
+                for index, key in enumerate(sorted(active, key=order.__getitem__)):
+                    result[key] += shares[str(index)]
+            opened, closed = edges[moment]
+            active.difference_update(closed)
+            active.update(opened)
+            previous = moment
     return result
 
 
