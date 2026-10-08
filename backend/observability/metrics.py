@@ -121,6 +121,20 @@ def collect_postgres_metrics(database, *, include_table_counts: bool = True) -> 
             (dbname,),
         )
         blocked = [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT pid, application_name,
+                   EXTRACT(EPOCH FROM (now() - xact_start)) AS duracao_s,
+                   LEFT(REGEXP_REPLACE(query, '\\s+', ' ', 'g'), 200) AS query
+            FROM pg_stat_activity
+            WHERE datname = %s AND state = 'idle in transaction'
+              AND now() - state_change > interval '5 seconds'
+              AND pid <> pg_backend_pid()
+            ORDER BY duracao_s DESC LIMIT 8
+            """,
+            (dbname,),
+        )
+        idle_in_transaction = [dict(row) for row in cursor.fetchall()]
 
         table_counts: dict[str, int] = {}
         if include_table_counts:
@@ -143,6 +157,7 @@ def collect_postgres_metrics(database, *, include_table_counts: bool = True) -> 
         "locks": {key: _numeric(value) for key, value in locks.items()},
         "slow_queries": slow_queries,
         "blocked": blocked,
+        "idle_in_transaction": idle_in_transaction,
         "tables": table_counts,
         "cache_hit_ratio": round(cache_hit, 4) if cache_hit is not None else None,
     }

@@ -6,85 +6,245 @@
 <title>Dev Observatory — Gestor de Peças</title>
 <link rel="stylesheet" href="/dev-observatory/app.css">
 </head>
-<body>
-<header>
-  <div class="topo">
+<body data-ambiente="test">
+<header class="cabecalho">
+  <div class="topbar">
     <div class="marca">
       <h1>Dev Observatory</h1>
-      <span class="rotulo">observabilidade do desenvolvedor · fora da navegação do operador</span>
+      <span class="rotulo">só do desenvolvedor</span>
     </div>
-    <div class="relogios">
-      <div><span class="rotulo">Agora</span><br><b id="relogio">--:--:--</b></div>
-      <div><span class="rotulo">Turno corrente</span><br><b id="turno">—</b></div>
-      <div><label class="rotulo" for="ambiente">Ambiente observado</label><br>
-        <select id="ambiente">
-          <option value="test">TESTE (banco da API)</option>
-          <option value="real">REAL (somente leitura)</option>
-        </select>
-      </div>
-      <div><label class="rotulo" for="intervalo">Atualização</label><br>
-        <select id="intervalo">
-          <option value="5000">5 s</option>
-          <option value="10000" selected>10 s</option>
-          <option value="30000">30 s</option>
-          <option value="0">manual</option>
-        </select>
-      </div>
-      <div class="acoes">
-        <button id="atualizar" type="button">Atualizar agora</button>
-      </div>
+    <div class="relogio" aria-label="Hora do servidor e turno corrente">
+      <b id="relogio">--:--:--</b>
+      <span id="turno" class="rotulo">—</span>
+    </div>
+    <div class="segmentado" role="group" aria-label="Ambiente observado">
+      <button type="button" data-acao="ambiente" data-ambiente="test" aria-pressed="true">TESTE</button>
+      <button type="button" data-acao="ambiente" data-ambiente="real" aria-pressed="false">REAL</button>
+    </div>
+    <div class="controles">
+      <label class="rotulo" for="intervalo">Atualizar a cada</label>
+      <select id="intervalo">
+        <option value="5000">5 s</option>
+        <option value="10000" selected>10 s</option>
+        <option value="30000">30 s</option>
+        <option value="0">manual</option>
+      </select>
+      <button id="atualizar" type="button" data-acao="atualizar">Atualizar</button>
+      <button type="button" data-acao="paleta" aria-keyshortcuts="Control+K" aria-label="Abrir paleta de comandos (Ctrl+K)">Ctrl+K</button>
+      <span id="chip-ia" class="chip-ia">IA: verificando…</span>
     </div>
   </div>
+
+  <div id="faixa-real" class="faixa-real" role="status" hidden>REAL — somente leitura · nenhuma ação de escrita é oferecida neste ambiente</div>
+
+  <nav class="abas" role="tablist" aria-label="Seções do observatório">
+    <button type="button" role="tab" id="aba-geral" data-acao="ir" data-aba="geral" aria-controls="painel-geral" aria-selected="true">Visão geral</button>
+    <button type="button" role="tab" id="aba-erros" data-acao="ir" data-aba="erros" aria-controls="painel-erros" aria-selected="false" tabindex="-1">Erros <span class="contador" id="contador-erros" hidden></span></button>
+    <button type="button" role="tab" id="aba-trafego" data-acao="ir" data-aba="trafego" aria-controls="painel-trafego" aria-selected="false" tabindex="-1">Tráfego</button>
+    <button type="button" role="tab" id="aba-banco" data-acao="ir" data-aba="banco" aria-controls="painel-banco" aria-selected="false" tabindex="-1">Banco <span class="contador" id="contador-banco" hidden></span></button>
+    <button type="button" role="tab" id="aba-postos" data-acao="ir" data-aba="postos" aria-controls="painel-postos" aria-selected="false" tabindex="-1">Postos</button>
+    <button type="button" role="tab" id="aba-relatorios" data-acao="ir" data-aba="relatorios" aria-controls="painel-relatorios" aria-selected="false" tabindex="-1">Relatórios</button>
+    <button type="button" role="tab" id="aba-chat" data-acao="ir" data-aba="chat" aria-controls="painel-chat" aria-selected="false" tabindex="-1">Chat</button>
+  </nav>
+
   <div id="faixa-seguranca" class="faixa">Verificando garantias de somente leitura…</div>
 </header>
 
-<main>
-  <section class="grade">
-    <div class="painel"><h2>API</h2><div class="numeros" id="num-api"></div></div>
-    <div class="painel"><h2>PostgreSQL <span id="banco-alvo" class="tag"></span></h2>
-      <div class="numeros" id="num-banco"></div></div>
-    <div class="painel"><h2>Processo da API</h2><div class="numeros" id="num-processo"></div></div>
-  </section>
-
-  <section>
-    <h2 class="titulo-secao">Telas dos operadores — estado corrente de cada posto
-      <span class="tag" id="viewports-fonte"></span></h2>
-    <div class="postos" id="postos"><div class="vazio">Carregando…</div></div>
-  </section>
-
-  <section class="grade dupla">
+<main id="conteudo">
+  <!-- Visão geral -->
+  <section role="tabpanel" id="painel-geral" data-painel="geral" aria-labelledby="aba-geral">
     <div class="painel">
-      <h2>Erros reais e técnicos <span class="tag">bug do sistema</span></h2>
-      <div class="lista"><table id="erros"></table></div>
+      <h2>Indicadores</h2>
+      <div class="kpis" id="kpis"><div class="vazio">Carregando…</div></div>
     </div>
     <div class="painel">
-      <h2>Bloqueios esperados <span class="tag">regra funcionando</span></h2>
-      <div class="lista"><table id="bloqueios"></table></div>
+      <h2>Precisa de atenção agora <span class="tag" id="atencao-n"></span></h2>
+      <div id="atencao"><div class="vazio">Carregando…</div></div>
+    </div>
+    <div class="grade">
+      <div class="painel"><h2>API</h2><div class="numeros" id="num-api"></div></div>
+      <div class="painel"><h2>Processo da API</h2><div class="numeros" id="num-processo"></div></div>
     </div>
   </section>
 
-  <section class="grade dupla">
+  <!-- Erros (mestre-detalhe) -->
+  <section role="tabpanel" id="painel-erros" data-painel="erros" aria-labelledby="aba-erros" hidden>
     <div class="painel">
-      <h2>Ações e eventos recentes</h2>
-      <div class="lista"><table id="eventos"></table></div>
-    </div>
-    <div class="painel">
-      <h2>Rotas mais lentas · consultas e locks</h2>
-      <div class="lista"><table id="lentidao"></table></div>
+      <h2>Eventos capturados <span class="tag" id="erros-resumo"></span></h2>
+      <div class="barra-filtros">
+        <div class="chips" id="erros-chips" role="group" aria-label="Filtrar por classificação"></div>
+        <div class="busca-linha">
+          <label class="sr" for="busca-erros">Buscar eventos por rota, código ou mensagem</label>
+          <input id="busca-erros" type="search" placeholder="Buscar rota, código, mensagem  ( / )" autocomplete="off" maxlength="120">
+          <label class="check"><input type="checkbox" id="agrupar"> agrupar iguais</label>
+          <button type="button" data-acao="marcar-vistos">Marcar como vistos</button>
+          <button type="button" data-acao="limpar-filtros">Limpar filtros</button>
+        </div>
+      </div>
+      <div class="mestre-detalhe">
+        <ul class="lista-eventos" id="erros-lista" aria-label="Eventos capturados"></ul>
+        <aside class="detalhe" id="erros-detalhe" aria-label="Detalhe do evento" tabindex="-1"></aside>
+      </div>
     </div>
   </section>
 
-  <section class="painel">
-    <h2>Relatórios por turno</h2>
-    <div class="turnos" id="turnos"></div>
-    <div class="relatorios">
-      <div class="lista"><table id="relatorios"></table></div>
-      <pre id="relatorio-conteudo" class="markdown">Selecione um relatório para lê-lo aqui.</pre>
+  <!-- Tráfego -->
+  <section role="tabpanel" id="painel-trafego" data-painel="trafego" aria-labelledby="aba-trafego" hidden>
+    <div class="painel">
+      <h2>Rotas mais lentas <span class="tag" id="limites-latencia"></span></h2>
+      <div class="lista"><table id="tab-lentas"></table></div>
+    </div>
+    <div class="painel">
+      <h2>Tráfego recente</h2>
+      <div class="barra-filtros">
+        <div class="busca-linha">
+          <label class="rotulo" for="filtro-metodo">Método</label>
+          <select id="filtro-metodo">
+            <option value="">todos</option>
+            <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+          </select>
+          <label class="rotulo" for="filtro-status">Status</label>
+          <select id="filtro-status">
+            <option value="">todos</option>
+            <option value="2xx">2xx</option>
+            <option value="3xx">3xx</option>
+            <option value="4xx">4xx</option>
+            <option value="5xx">5xx</option>
+            <option value="lentas">lentas (≥ aviso)</option>
+          </select>
+        </div>
+      </div>
+      <div class="lista alta"><table id="stream"></table></div>
+    </div>
+  </section>
+
+  <!-- Banco -->
+  <section role="tabpanel" id="painel-banco" data-painel="banco" aria-labelledby="aba-banco" hidden>
+    <div class="painel">
+      <h2>PostgreSQL <span id="banco-alvo" class="tag"></span></h2>
+      <div class="numeros" id="num-banco"></div>
+      <p class="nota" id="banco-nota"></p>
+    </div>
+    <div class="painel">
+      <h2>Sessões idle in transaction <span class="tag">seguram lock e vacuum</span></h2>
+      <div class="lista"><table id="tab-idle"></table></div>
+    </div>
+    <div class="painel">
+      <h2>Bloqueios</h2>
+      <div class="lista"><table id="tab-bloqueios"></table></div>
+    </div>
+    <div class="painel">
+      <h2>Consultas lentas</h2>
+      <div class="lista"><table id="tab-queries"></table></div>
+    </div>
+  </section>
+
+  <!-- Postos -->
+  <section role="tabpanel" id="painel-postos" data-painel="postos" aria-labelledby="aba-postos" hidden>
+    <div class="painel">
+      <h2>Telas dos operadores — estado corrente de cada posto <span class="tag" id="viewports-fonte"></span></h2>
+      <div class="barra-filtros">
+        <div class="chips" id="postos-chips" role="group" aria-label="Filtrar por estado do posto"></div>
+        <div class="busca-linha">
+          <label class="sr" for="busca-postos">Buscar posto por nome, setor, OP ou estado</label>
+          <input id="busca-postos" type="search" placeholder="Buscar posto, setor, OP, estado…" autocomplete="off" maxlength="120">
+        </div>
+      </div>
+      <div class="postos" id="postos"><div class="vazio">Carregando…</div></div>
+    </div>
+  </section>
+
+  <!-- Relatórios -->
+  <section role="tabpanel" id="painel-relatorios" data-painel="relatorios" aria-labelledby="aba-relatorios" hidden>
+    <div class="painel">
+      <h2>Relatórios por turno
+        <button type="button" class="principal" data-acao="gerar-relatorio-atual">Gerar relatório do turno atual</button>
+      </h2>
+      <div class="turnos" id="turnos"></div>
+      <div class="relatorios">
+        <div class="lista"><table id="relatorios"></table></div>
+        <div class="leitor">
+          <div class="leitor-acoes">
+            <button type="button" id="relatorio-copiar" data-acao="copiar-relatorio" disabled>Copiar markdown</button>
+          </div>
+          <pre id="relatorio-conteudo" class="markdown">Selecione um relatório para lê-lo aqui.</pre>
+          <div id="ia-relatorio"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chat com a IA -->
+  <section role="tabpanel" id="painel-chat" data-painel="chat" aria-labelledby="aba-chat" hidden>
+    <div class="painel chat">
+      <h2>Chat com a IA <span class="tag" id="chat-modelo" hidden></span>
+        <button type="button" class="mini" id="chat-limpar" data-acao="chat-limpar">Limpar conversa</button>
+      </h2>
+      <p id="chat-aviso-ia" class="chat-aviso" role="status" hidden></p>
+
+      <div class="chat-corpo">
+        <div class="chat-vazio" id="chat-vazio">
+          <p>Pergunte sobre o que o observatório está vendo. Algumas ideias:</p>
+          <div class="chat-sugestoes" role="group" aria-label="Sugestões de pergunta">
+            <button type="button" class="chip" data-acao="chat-sugestao" data-texto="Explique o último erro">Explique o último erro</button>
+            <button type="button" class="chip" data-acao="chat-sugestao" data-texto="Há algum padrão nos erros recentes?">Há algum padrão nos erros recentes?</button>
+            <button type="button" class="chip" data-acao="chat-sugestao" data-texto="O que devo olhar primeiro agora?">O que devo olhar primeiro agora?</button>
+          </div>
+        </div>
+        <div class="chat-lista" id="chat-lista" role="log" aria-live="polite" aria-label="Conversa com a IA" tabindex="0"></div>
+      </div>
+
+      <p id="chat-pensando" class="ia-analisando" role="status" hidden>Pensando… pode levar até 90 s.</p>
+
+      <form class="chat-form" id="chat-form" autocomplete="off">
+        <div class="chat-opcoes">
+          <div class="chat-anexos" id="chat-anexos" role="group" aria-label="Eventos anexados"></div>
+          <button type="button" class="mini" id="chat-anexar-ultimo" data-acao="chat-anexar-ultimo">Anexar último erro</button>
+          <label class="check"><input type="checkbox" id="chat-snapshot" checked> Incluir estado atual do observatório</label>
+        </div>
+        <div class="chat-entrada">
+          <label class="sr" for="chat-texto">Mensagem para a IA</label>
+          <textarea id="chat-texto" rows="2" maxlength="4000" placeholder="Pergunte à IA…  (Enter envia, Shift+Enter quebra linha)"></textarea>
+          <div class="chat-botoes">
+            <button type="button" id="chat-cancelar" data-acao="chat-cancelar" hidden>Cancelar</button>
+            <button type="submit" class="principal" id="chat-enviar">Enviar</button>
+          </div>
+        </div>
+      </form>
+      <p class="ia-aviso chat-nota">A IA só lê e responde; dados sensíveis são removidos antes do envio. Nada é executado.</p>
     </div>
   </section>
 </main>
 
-<div id="aviso" class="aviso" hidden></div>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+<dialog id="paleta" class="dialogo" aria-label="Paleta de comandos">
+  <div class="dialogo-corpo">
+    <input id="paleta-busca" type="text" role="combobox" aria-expanded="true" aria-controls="paleta-lista"
+           aria-autocomplete="list" placeholder="Digite um comando…  (↑ ↓ Enter · Esc fecha)" autocomplete="off">
+    <ul id="paleta-lista" class="paleta-lista" role="listbox" aria-label="Comandos"></ul>
+  </div>
+</dialog>
+
+<dialog id="atalhos" class="dialogo" aria-labelledby="atalhos-titulo">
+  <div class="dialogo-corpo">
+    <h2 id="atalhos-titulo">Atalhos de teclado</h2>
+    <dl class="atalhos">
+      <dt><kbd>Ctrl</kbd>+<kbd>K</kbd></dt><dd>Paleta de comandos</dd>
+      <dt><kbd>?</kbd></dt><dd>Esta ajuda</dd>
+      <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Ir para a aba</dd>
+      <dt><kbd>/</kbd></dt><dd>Buscar (Erros ou Postos)</dd>
+      <dt><kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Próximo / anterior evento (aba Erros)</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Fecha o detalhe, a paleta ou o diálogo</dd>
+    </dl>
+    <div class="dialogo-acoes"><button type="button" data-acao="fechar-dialogo" data-dialogo="atalhos">Fechar</button></div>
+  </div>
+</dialog>
+
+<dialog id="dialogo-encerrar" class="dialogo" aria-labelledby="encerrar-titulo">
+  <div class="dialogo-corpo" id="encerrar-corpo"></div>
+</dialog>
+
 <script src="/dev-observatory/app.js"></script>
 </body>
 </html>

@@ -47,6 +47,12 @@ from mes.domain.manufacturing_rules import OFFICIAL_WORK_WINDOW, OVERTIME_WINDOW
 from tests.fakes import FakeDatabase
 
 
+def quick_fixes_chat_max_turns():
+    from backend.observability import quick_fixes
+
+    return quick_fixes.CHAT_MAX_TURNS
+
+
 class _Cursor:
     def __enter__(self):
         return self
@@ -375,6 +381,109 @@ class DevObservatoryApiTests(unittest.TestCase):
         self.assertEqual(payload["source"], "FrontendBackendFacade.consulta_operacional(vinculo_operacional)")
         self.assertFalse(payload["read_only"])
         self.assertIn("items", payload)
+
+    def _habilitar_ia(self, answer="Causa provável: X."):
+        import dataclasses
+        from types import SimpleNamespace
+
+        sent = []
+
+        class _Provider:
+            configured = True
+            model = "nvidia/fake"
+            profile = SimpleNamespace(name="nvidia")
+
+            async def complete(self, messages, *, tools, request_id=None):
+                sent.append(messages)
+                return SimpleNamespace(content=answer, usage={"total_tokens": 7})
+
+        self.app.state.settings = dataclasses.replace(
+            self.app.state.settings, ai_enabled=True, ai_api_key="chave-de-teste"
+        )
+        self.app.state.ai_provider = _Provider()
+        return sent
+
+    def _evento_com_segredo(self):
+        return self.app.state.dev_observatory.record_request(
+            method="GET", path="/x", route="/x", status=500, latency_ms=5,
+            error_message="falhou token=abc123 na rota", unhandled=True, user="joao",
+        )["sequence"]
+
+    def test_ia_indisponivel_e_informada_sem_derrubar_a_ferramenta(self):
+        self._login_dev_observatory()
+        self.assertFalse(self.client.get("/api/v1/dev-observatory/status").json()["ai"]["available"])
+        resposta = self.client.post(
+            "/api/v1/dev-observatory/ai/diagnose", json={"sequence": 1}, headers=self._dev_csrf()
+        )
+        self.assertEqual(resposta.status_code, 409)
+        self.assertEqual(resposta.json()["code"], "dev_observatory_ai_unavailable")
+
+    def test_diagnostico_por_ia_envia_evidencia_sanitizada_e_exige_csrf(self):
+        sent = self._habilitar_ia()
+        self._login_dev_observatory()
+        sequence = self._evento_com_segredo()
+        url = "/api/v1/dev-observatory/ai/diagnose"
+
+        self.assertEqual(self.client.post(url, json={"sequence": sequence}).status_code, 403)
+        self.assertEqual(self.client.post(url, json={}, headers=self._dev_csrf()).status_code, 422)
+
+        resposta = self.client.post(url, json={"sequence": sequence}, headers=self._dev_csrf())
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["answer"], "Causa provável: X.")
+        texto = " ".join(message["content"] for message in sent[0])
+        self.assertIn("token=<omitido>", texto)
+        self.assertNotIn("abc123", texto)
+        self.assertNotIn("joao", texto)
+
+    def test_chat_com_ia_sanitiza_limita_historico_e_valida_entrada(self):
+        url = "/api/v1/dev-observatory/ai/chat"
+        fala = lambda role, texto: {"role": role, "content": texto}
+        self._login_dev_observatory()
+        # IA desligada -> 409, ferramenta segue de pé
+        indisponivel = self.client.post(url, json={"messages": [fala("user", "oi")]}, headers=self._dev_csrf())
+        self.assertEqual(indisponivel.json()["code"], "dev_observatory_ai_unavailable")
+
+        sent = self._habilitar_ia("Resposta do chat.")
+        sequence = self._evento_com_segredo()
+        corpo = {"messages": [fala("user", "por que falhou? senha=hunter2")], "sequences": [sequence]}
+
+        self.assertEqual(self.client.post(url, json=corpo).status_code, 403)  # sem CSRF
+        ultima_do_assistente = {"messages": [fala("user", "a"), fala("assistant", "b")]}
+        self.assertEqual(self.client.post(url, json=ultima_do_assistente, headers=self._dev_csrf()).status_code, 422)
+        inexistente = {**corpo, "sequences": [999999]}
+        self.assertEqual(self.client.post(url, json=inexistente, headers=self._dev_csrf()).status_code, 404)
+
+        ok = self.client.post(url, json=corpo, headers=self._dev_csrf())
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(ok.json()["answer"], "Resposta do chat.")
+        texto = " ".join(m["content"] for m in sent[0])
+        self.assertIn("token=<omitido>", texto)  # evidência anexada
+        self.assertNotIn("abc123", texto)
+        self.assertNotIn("hunter2", texto)  # fala do usuário também é limpa
+        self.assertNotIn("joao", texto)
+
+        longo = [fala("user" if i % 2 == 0 else "assistant", f"fala {i}") for i in range(30)] + [fala("user", "fim")]
+        self.assertEqual(
+            self.client.post(url, json={"messages": longo[:40]}, headers=self._dev_csrf()).status_code, 200
+        )
+        enviadas = sent[-1]
+        self.assertEqual(len(enviadas), 1 + quick_fixes_chat_max_turns())
+        self.assertEqual(enviadas[-1]["content"], "fim")
+
+    def test_encerrar_sessao_do_banco_so_no_teste(self):
+        self._login_dev_observatory()
+        url = "/api/v1/dev-observatory/actions/terminate-backend"
+        self.assertEqual(self.client.post(url, json={"pid": 4242}).status_code, 403)  # sem CSRF
+        with unittest.mock.patch.object(dev_observatory_router, "_terminate_allowed", return_value=False):
+            bloqueado = self.client.post(url, json={"pid": 4242}, headers=self._dev_csrf())
+        self.assertEqual(bloqueado.status_code, 403)
+        self.assertEqual(bloqueado.json()["code"], "dev_observatory_action_forbidden")
+
+        feito = {"found": True, "terminated": True, "pid": 4242, "state": "idle in transaction", "query": "SELECT 1"}
+        with unittest.mock.patch.object(dev_observatory_router.quick_fixes, "terminate_backend", return_value=feito) as kill:
+            ok = self.client.post(url, json={"pid": 4242}, headers=self._dev_csrf())
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(kill.call_args.args[1], 4242)
 
     def test_real_sem_dsn_recusa_sem_derrubar_a_ferramenta(self):
         self._login_dev_observatory()

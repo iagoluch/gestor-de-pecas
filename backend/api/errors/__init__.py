@@ -112,7 +112,9 @@ def register_error_handlers(app: FastAPI) -> None:
         mark_error(
             request,
             code="validation_error",
-            message="Os dados enviados são inválidos.",
+            # Só o recorder lê este texto: campos e tipo da falha (nunca o valor enviado).
+            message="Os dados enviados são inválidos: "
+            + "; ".join(f"{'.'.join(item['location'])} ({item['type']})" for item in details[:6]),
             exception=exc,
         )
         return JSONResponse(

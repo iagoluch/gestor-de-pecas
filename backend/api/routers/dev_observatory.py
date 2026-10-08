@@ -18,12 +18,14 @@ freio de autenticação na tabela compartilhada de throttling.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime
 from pathlib import Path
 import html
 import hmac
 import logging
 import secrets
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
@@ -50,7 +52,9 @@ from backend.observability.shift_report import (
     shift_windows_for_date,
     write_report,
 )
+from backend.observability import quick_fixes
 from mes.contracts import AnalyticsFilter
+from mes.contracts.ai import AIProviderError
 from mes.services.frontend_facade import FrontendBackendFacade
 
 LOGGER = logging.getLogger(__name__)
@@ -99,6 +103,39 @@ class ReportRequest(BaseModel):
     day: date | None = None
     shift: str = Field(default="turno", max_length=32)
     force: bool = False
+
+
+class DiagnoseRequest(BaseModel):
+    """Pede à IA a leitura de UMA evidência que o servidor já guarda."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sequence: int | None = Field(default=None, ge=1)
+    report: str | None = Field(default=None, max_length=128)
+    question: str | None = Field(default=None, max_length=500)
+
+
+class ChatTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    """Conversa sem estado no servidor: o cliente reenvia as últimas falas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    messages: list[ChatTurn] = Field(min_length=1, max_length=40)
+    sequences: list[int] = Field(default_factory=list, max_length=3)
+    include_snapshot: bool = True
+
+
+class TerminateBackendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pid: int = Field(ge=1)
 
 
 # ---------------------------------------------------------------------------
@@ -334,8 +371,11 @@ def status(request: Request, _user: SessionUser = Depends(require_dev_observator
         "current_shift": window.as_dict() if window is not None else None,
         "summary": recorder.live_summary(),
         "report_dir": str(settings.dev_observatory_report_dir),
+        "ai": _ai_status(request),
+        "quick_actions": {"terminate_backend": _terminate_allowed(settings)},
         "write_policy": {
-            "database_writes": "nenhuma — o observatório persiste apenas em disco",
+            "database_writes": "nenhuma — o observatório persiste apenas em disco; "
+                               "única ação sobre o banco: encerrar sessão travada, só no TESTE",
             "real_access": "somente leitura verificada contra o PostgreSQL",
             "external_integrations": "nenhuma — não envia nada a TOTVS/SigmaNEST",
         },
@@ -464,16 +504,172 @@ def report_content(
     request: Request,
     _user: SessionUser = Depends(require_dev_observatory_user),
 ):
-    settings = request.app.state.settings
-    base = Path(settings.dev_observatory_report_dir).resolve()
+    return PlainTextResponse(
+        _report_file(request, name).read_text(encoding="utf-8"),
+        media_type="text/markdown; charset=utf-8",
+    )
+
+
+def _report_file(request: Request, name: str) -> Path:
+    base = Path(request.app.state.settings.dev_observatory_report_dir).resolve()
     target = (base / name / "report.md").resolve()
     # Travessia de diretório é recusada explicitamente: o nome vem da URL.
     if base not in target.parents or not target.is_file():
         raise AppError("report_not_found", "Relatório não encontrado.", status_code=404)
-    return PlainTextResponse(
-        target.read_text(encoding="utf-8"),
-        media_type="text/markdown; charset=utf-8",
+    return target
+
+
+# ---------------------------------------------------------------------------
+# Ações rápidas (ver backend/observability/quick_fixes.py)
+# ---------------------------------------------------------------------------
+_AI_LOCK = asyncio.Lock()  # uma chamada por vez: o provedor tem cota e é compartilhado
+
+
+def _ai_provider(request: Request):
+    settings = request.app.state.settings
+    provider = getattr(request.app.state, "ai_provider", None)
+    if not (settings.ai_enabled and settings.ai_configured and getattr(provider, "configured", False)):
+        raise AppError(
+            "dev_observatory_ai_unavailable",
+            "A IA não está habilitada nesta instância (GESTOR_AI_ENABLED e chave do provedor).",
+            status_code=409,
+        )
+    return provider
+
+
+def _ai_status(request: Request) -> dict:
+    try:
+        provider = _ai_provider(request)
+    except AppError:
+        return {"available": False, "model": None, "provider": None}
+    return {
+        "available": True,
+        "model": provider.model,
+        "provider": getattr(provider.profile, "name", None),
+    }
+
+
+def _terminate_allowed(settings) -> bool:
+    return str(settings.environment).strip().casefold() not in {"production", "producao", "produção"}
+
+
+@router.post("/ai/diagnose", dependencies=[Depends(_require_dev_observatory_csrf)])
+async def ai_diagnose(
+    payload: DiagnoseRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_dev_observatory_user),
+):
+    """Diagnóstico por IA de um evento (``sequence``) ou relatório (``report``).
+
+    O cliente só aponta *qual* evidência; o texto enviado ao modelo sai do
+    servidor, já sanitizado. Sem tools: a resposta é texto, nunca é executada.
+    """
+
+    if (payload.sequence is None) == (payload.report is None):
+        raise AppError(
+            "dev_observatory_diagnose_target",
+            "Informe exatamente um entre 'sequence' e 'report'.",
+            status_code=422,
+        )
+    recorder = _recorder(request)
+    provider = _ai_provider(request)
+    if payload.sequence is not None:
+        event = next(
+            (item for item in recorder.recent_events(limit=600) if item.get("sequence") == payload.sequence),
+            None,
+        )
+        if event is None:
+            raise AppError("event_not_found", "Evento fora da memória do observatório.", status_code=404)
+        context = quick_fixes.event_context(event)
+    else:
+        text = _report_file(request, payload.report).read_text(encoding="utf-8")
+        context = quick_fixes.report_context(text)
+    async with _AI_LOCK:
+        try:
+            response = await provider.complete(
+                quick_fixes.build_messages(context, payload.question),
+                tools=[],
+                request_id=f"devobs-{payload.sequence or payload.report}",
+            )
+        except AIProviderError as exc:
+            raise AppError(
+                "dev_observatory_ai_failed",
+                exc.user_message,
+                status_code=502,
+            ) from exc
+    return {
+        "answer": (response.content or "").strip(),
+        "model": provider.model,
+        "usage": response.usage,
+        "context_chars": len(context),
+    }
+
+
+@router.post("/ai/chat", dependencies=[Depends(_require_dev_observatory_csrf)])
+async def ai_chat(
+    payload: ChatRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_dev_observatory_user),
+):
+    """Chat livre com a IA sobre erros. Mesmas garantias do diagnóstico:
+    contexto montado e sanitizado no servidor, sem tools, uma chamada por vez."""
+
+    if payload.messages[-1].role != "user":
+        raise AppError("dev_observatory_chat_last_turn", "A última fala precisa ser do usuário.", status_code=422)
+    recorder = _recorder(request)
+    provider = _ai_provider(request)
+    events = recorder.recent_events(limit=600)
+    by_sequence = {item.get("sequence"): item for item in events}
+    evidence = []
+    for sequence in payload.sequences:
+        event = by_sequence.get(sequence)
+        if event is None:
+            raise AppError("event_not_found", "Evento fora da memória do observatório.", status_code=404)
+        evidence.append(quick_fixes.event_context(event))
+    snapshot = (
+        quick_fixes.snapshot_context(recorder.live_summary(), list(reversed(events)))
+        if payload.include_snapshot
+        else None
     )
+    messages = quick_fixes.build_chat_messages([turn.model_dump() for turn in payload.messages], evidence, snapshot)
+    async with _AI_LOCK:
+        try:
+            response = await provider.complete(messages, tools=[], request_id="devobs-chat")
+        except AIProviderError as exc:
+            raise AppError("dev_observatory_ai_failed", exc.user_message, status_code=502) from exc
+    return {
+        "answer": (response.content or "").strip(),
+        "model": provider.model,
+        "usage": response.usage,
+        "context_chars": len(messages[0]["content"]),
+    }
+
+
+@router.post("/actions/terminate-backend", dependencies=[Depends(_require_dev_observatory_csrf)])
+def terminate_backend(
+    payload: TerminateBackendRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_dev_observatory_user),
+):
+    """Encerra uma sessão travada do banco da API. Só no TESTE; nunca no REAL."""
+
+    recorder = _recorder(request)
+    if not _terminate_allowed(request.app.state.settings):
+        raise AppError(
+            "dev_observatory_action_forbidden",
+            "Encerrar sessões do banco é permitido somente no ambiente de teste.",
+            status_code=403,
+        )
+    result = quick_fixes.terminate_backend(_environment_database(request, TEST_ENVIRONMENT), payload.pid)
+    if not result["found"]:
+        raise AppError("backend_not_found", "Sessão não encontrada neste banco.", status_code=404)
+    recorder.record_note(
+        action="dev-observatory/terminate-backend",
+        message=f"Sessão {payload.pid} encerrada pelo desenvolvedor" if result["terminated"]
+        else f"Sessão {payload.pid} não pôde ser encerrada",
+        details={"pid": payload.pid, "state": result["state"], "query": result["query"]},
+    )
+    return result
 
 
 @router.post("/reports", dependencies=[Depends(_require_dev_observatory_csrf)])
