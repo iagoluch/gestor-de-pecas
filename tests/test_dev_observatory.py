@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import unittest.mock
 
 from fastapi.testclient import TestClient
 from psycopg.conninfo import conninfo_to_dict
@@ -324,6 +325,19 @@ class DevObservatoryApiTests(unittest.TestCase):
         self.assertIn("Dev Observatory", pagina.text)
         self.assertEqual(self.client.get("/dev-observatory/app.js").status_code, 200)
         self.assertEqual(self.client.get("/dev-observatory/app.css").status_code, 200)
+
+    def test_pagina_nao_expoe_excecao_bruta_antes_do_login(self):
+        # A9: a página responde antes da autenticação; a exceção de conexão
+        # (host/usuário/banco) vai para o log, não para quem abriu a URL.
+        bruto = 'connection to server at "10.0.0.5", port 5432 failed: user "gestor"'
+        with unittest.mock.patch.object(
+            dev_observatory_router, "_authorize_page", side_effect=RuntimeError(bruto)
+        ), self.assertLogs(dev_observatory_router.LOGGER.name, level="ERROR"):
+            pagina = self.client.get("/dev-observatory")
+        self.assertEqual(pagina.status_code, 503)
+        self.assertNotIn("10.0.0.5", pagina.text)
+        self.assertNotIn("gestor", pagina.text)
+        self.assertIn("Backend indisponível", pagina.text)
 
     def test_captura_classifica_bloqueio_esperado_e_erro_real(self):
         # Duas sessões coexistindo, cada uma com seu cookie: a gerencial só

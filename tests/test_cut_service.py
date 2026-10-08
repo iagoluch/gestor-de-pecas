@@ -2,7 +2,8 @@ from datetime import date, datetime, timedelta
 import unittest
 
 from backend.api.routers.highlight import _task_payload
-from mes.services.cut import CutService
+from app.core.operator_sectors import OPERATOR_SECTORS
+from mes.services.cut import CUT_MACHINE_REVERSE, CutService
 from mes.services.production import ProductionService
 from tests.fakes import FakeDatabase
 
@@ -85,6 +86,28 @@ class CutServiceTests(unittest.TestCase):
             [event["tipo"] for event in self.db.events[-3:]],
             ["corte_iniciado", "corte_nesting_concluido", "corte_finalizado"],
         )
+
+    def test_recursos_do_setor_corte_batem_com_mapa_de_maquinas(self):
+        # finalizar recusa recurso fora do mapa: setor e mapa precisam andar juntos.
+        setor = next(s for s in OPERATOR_SECTORS if s.level == "operador_corte")
+        self.assertEqual(set(setor.resources), set(CUT_MACHINE_REVERSE))
+
+    def test_finalizar_recusa_apontamento_de_outra_maquina(self):
+        # A8: o ID do apontamento vem do cliente; finalizar pelo terminal do
+        # Plasma um nesting em processo no Laser corrompe o apontamento.
+        started = self.service.iniciar("hash-corte-1", "Laser Ensis 3015")
+        self.assertTrue(started.ok)
+
+        foreign = self.service.finalizar(started.data["id"], maquina="Plasma TerraBlade 4")
+
+        self.assertFalse(foreign.ok)
+        self.assertEqual(foreign.code, "estado_alterado")
+        self.assertEqual(self.db.cut_appointments[0]["status"], "Em processo")
+        self.assertIsNone(self.db.cut_appointments[0].get("operador_fim"))
+
+        own = self.service.finalizar(started.data["id"], maquina="Laser Ensis 3015")
+        self.assertTrue(own.ok)
+        self.assertEqual(self.db.cut_appointments[0]["status"], "Finalizado")
 
     def test_nestings_iniciam_do_primeiro_plano_registrado_ate_o_ultimo(self):
         self.db.cut_plans = [

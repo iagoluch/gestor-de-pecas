@@ -245,15 +245,21 @@ class CutService:
         self._record_event("corte_retomado", payload, f"Corte retomado em {machine}.")
         return CutResult(True, "Corte retomado.", data=payload)
 
-    def finalizar(self, apontamento_id):
-        eligible = next(
-            (
-                row for row in self.listar_fila()
-                if int(apontamento_id) in row.get("apontamento_ids", [])
-                and row.get("status") == "Em processo"
-            ),
-            None,
-        )
+    def finalizar(self, apontamento_id, maquina=None):
+        # O ID vem do cliente: com ``maquina`` (o recurso do terminal) a busca
+        # fica restrita à fila daquela máquina, para um terminal não fechar o
+        # nesting de outra. Máquina desconhecida não filtraria nada; recusa.
+        if maquina is not None and self.machine_sigmanest(maquina) is None:
+            eligible = None
+        else:
+            eligible = next(
+                (
+                    row for row in self.listar_fila(maquina)
+                    if int(apontamento_id) in row.get("apontamento_ids", [])
+                    and row.get("status") == "Em processo"
+                ),
+                None,
+            )
         if not eligible:
             return CutResult(
                 False,

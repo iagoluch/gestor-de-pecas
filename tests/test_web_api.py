@@ -730,6 +730,14 @@ class WebApiTests(unittest.TestCase):
             json={"action": "Retomada", "resource": "Laser Ensis 3015"},
         )
         self.assertEqual(resumed.status_code, 200, resumed.text)
+        # A8: o apontamento do Laser não pode ser fechado pelo terminal do Plasma.
+        foreign = self.client.post(
+            "/api/v1/cutting/actions",
+            headers=self.csrf(),
+            json={"action": "Finalizado", "resource": "Plasma TerraBlade 4", "appointment_id": appointment_id},
+        )
+        self.assertEqual(foreign.status_code, 409, foreign.text)
+        self.assertEqual(self.db.cut_appointments[0]["status"], "Em processo")
         with patch("backend.api.routers.cutting.notify_cut_plan_in_background") as aviso:
             finished = self.client.post(
                 "/api/v1/cutting/actions",

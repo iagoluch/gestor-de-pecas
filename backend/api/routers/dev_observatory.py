@@ -22,6 +22,7 @@ from datetime import date, datetime
 from pathlib import Path
 import html
 import hmac
+import logging
 import secrets
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -51,6 +52,8 @@ from backend.observability.shift_report import (
 )
 from mes.contracts import AnalyticsFilter
 from mes.services.frontend_facade import FrontendBackendFacade
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _reject_if_public_host(request: Request) -> None:
@@ -669,8 +672,11 @@ def observatory_page(request: Request):
         if exc.status_code == 401:
             return HTMLResponse(_LOGIN_PAGE, status_code=401)
         return _denied_page(exc.message, exc.status_code)
-    except Exception as exc:
-        return _denied_page(f"Backend indisponível: {exc}", 503)
+    except Exception:
+        # Responde antes do login: o texto da exceção (host/usuário do banco)
+        # fica só no log.
+        LOGGER.exception("Falha ao autorizar a página do Dev Observatory")
+        return _denied_page("Backend indisponível.", 503)
     return _serve("index.html", "text/html; charset=utf-8")
 
 

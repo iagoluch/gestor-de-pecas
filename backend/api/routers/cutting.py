@@ -271,7 +271,7 @@ def action(
             else:
                 raise AppError("cutting_appointment_required", "Não foi possível identificar o nesting em processo.")
         else:
-            result = service.finalizar(payload.appointment_id)
+            result = service.finalizar(payload.appointment_id, maquina=resource)
             telegram_event = (
                 "corte_finalizado"
                 if (result.data or {}).get("status") == "Finalizado"
