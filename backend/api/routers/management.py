@@ -501,15 +501,15 @@ def save_user(
                 "Defina uma senha para o novo usuário.",
                 status_code=422,
             )
-        usuario_id = database.criar_usuario(payload.nome, payload.senha, payload.nivel)
+        usuario_id = database.criar_usuario(
+            payload.nome, payload.senha, payload.nivel, ativo=payload.ativo
+        )
         if usuario_id is None:
             raise AppError(
                 "user_name_taken",
                 "Já existe um usuário com esse nome.",
                 status_code=409,
             )
-        if not payload.ativo:
-            database.ativar_desativar_usuario(usuario_id, False)
     else:
         usuario_id = payload.id
         # Quem salva é sempre um admin ativo; barrar só a própria conta já

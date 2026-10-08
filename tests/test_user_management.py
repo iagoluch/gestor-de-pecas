@@ -101,6 +101,16 @@ class UserManagementApiTests(unittest.TestCase):
         self.assertEqual(item["nivel"], "supervisor")
         self.assertTrue(item["ativo"])
 
+    def test_admin_cria_usuario_ja_inativo_sem_passar_por_ativo(self):
+        self._as(_admin_user())
+        criado = self.client.post(
+            "/api/v1/management/users",
+            json={"nome": "Desligado", "nivel": "supervisor", "ativo": False, "senha": "senha-forte-123"},
+        )
+        self.assertEqual(criado.status_code, 200)
+        self.assertFalse(criado.json()["item"]["ativo"])
+        self.assertIsNone(self.db.autenticar_usuario("Desligado", "senha-forte-123"))
+
     def test_nivel_invalido_e_recusado(self):
         self._as(_admin_user())
         resposta = self.client.post(

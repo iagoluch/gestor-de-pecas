@@ -196,12 +196,12 @@ class FakeDatabase:
             "message_id": int(message_id),
         })
 
-    def criar_usuario(self, nome, senha, nivel="operador_destaque"):
+    def criar_usuario(self, nome, senha, nivel="operador_destaque", ativo=True):
         if self.usuario_existe(nome):
             return None
         user = {
             "id": self._id("users"), "nome": nome, "senha": senha, "nivel": nivel,
-            "ativo": True, "session_version": 0,
+            "ativo": bool(ativo), "session_version": 0,
             "data_criacao": datetime.now().replace(microsecond=0),
         }
         self.users.append(user)

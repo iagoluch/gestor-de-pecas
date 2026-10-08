@@ -418,17 +418,17 @@ class Database(
             f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}$"
         )
 
-    def criar_usuario(self, nome, senha, nivel="operador_destaque"):
+    def criar_usuario(self, nome, senha, nivel="operador_destaque", ativo=True):
         senha_hash = self._hash_senha(senha)  # fora da conexão: o hash é CPU pura
         try:
             with self.connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
                     """
                     INSERT INTO usuarios (nome, senha_hash, nivel, ativo, data_criacao)
-                    VALUES (%s, %s, %s, TRUE, %s)
+                    VALUES (%s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (nome, senha_hash, nivel, self._now()),
+                    (nome, senha_hash, nivel, bool(ativo), self._now()),
                 )
                 return int(cursor.fetchone()["id"])
         except UniqueViolation as exc:

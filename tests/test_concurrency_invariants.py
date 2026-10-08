@@ -139,6 +139,25 @@ class InvariantesDeConcorrenciaTests(unittest.TestCase):
                 [(CANONICO, "producao")],
             )
 
+    def test_mesma_op_nao_inicia_duas_vezes_em_recurso_nao_exclusivo(self):
+        # R1 (08/10/2026): a regra é "uma OP ativa por setor"; quem garante é o
+        # índice único idx_apontamento_ativo_op_setor, sem depender da trava de
+        # recurso exclusivo. Início duplicado da mesma OP deixa 1 linha só.
+        for _ in range(5):
+            self.tearDown()
+            self.setUp()
+            tarefa = self._op("OP-DUP")
+
+            def enfileirar():
+                fila = self.db.enfileirar_apontamento_operacional(
+                    "OP-DUP", "Peça", tarefa, "Corte", ALIAS, "OPERADOR", 1,
+                )
+                return "unique" if fila is None else "enfileirada"
+
+            resultados = _em_paralelo(enfileirar, enfileirar)
+            self.assertEqual(sorted(resultados), ["enfileirada", "unique"])
+            self.assertEqual(len(self._ativos()), 1)
+
     def _enfileirar_solda(self, tarefa, setor, estacao):
         def enfileirar():
             fila = self.db.enfileirar_apontamento_operacional(
