@@ -13,26 +13,28 @@ O objetivo não é criar uma interface "parecida". O objetivo é preservar e rep
 Quando houver dúvida ou conflito, usar esta ordem de precedência:
 
 1. pedido visual explícito do usuário na tarefa atual;
-2. `assets/screens/screens - atuais/*.png` — referência visual oficial vigente;
+2. `assets/screens/capturas_2026-10-08/**/*.png` — referência visual oficial vigente (capturas reais do frontend; índice em `INDICE.md`);
 3. `web/src/styles/tokens.css` — tokens e métricas oficiais vigentes;
 4. `web/src/styles/global.css` — composição, responsividade e estados visuais;
 5. `web/src/components/` e `web/src/pages/` — comportamento dos componentes compartilhados;
 6. `web/src/test/` — contratos automatizados de interface e comportamento;
-7. `assets/screens/screens - legacy/*.png` — somente referência histórica, nunca autoridade quando divergir das telas atuais.
+7. `docs/` e capturas antigas no histórico do git — somente referência histórica, nunca autoridade quando divergir das capturas atuais.
 
-Não usar `legacy` para desfazer uma decisão presente nas telas atuais.
+Não usar material histórico para desfazer uma decisão presente nas capturas atuais.
 
 Se um pedido explícito aprovar uma mudança visual nova, atualizar de forma coerente os tokens, componentes, testes e referências visuais afetadas. Não deixar o sistema com duas definições contraditórias do mesmo padrão.
 
 ### Catálogo visual oficial
 
-O catálogo atual contém 24 telas oficiais em:
+O catálogo atual são as capturas reais do frontend servido (08/10/2026), em:
 
 ```text
-assets/screens/screens - atuais/
+assets/screens/capturas_2026-10-08/
 ```
 
-As 24 imagens têm viewport capturado de `1920 x 1061`.
+Estrutura: `gestao/{normal,manufatura,qualidade}` e `operadores/{dobra-caldeiraria,pintura-fluxo-geral}`. `INDICE.md` lista cada tela, o acesso usado e a origem dos dados; `capturas.json` traz URL, fluxo e dimensões de cada PNG.
+
+As capturas foram feitas em viewport de `1920 x 1080`; páginas longas têm captura completa (altura maior que 1080).
 
 A implementação Web usa como base lógica:
 
@@ -41,14 +43,13 @@ MOCKUP_BASE_WIDTH  = 1920
 MOCKUP_BASE_HEIGHT = 1080
 ```
 
-Essa diferença é intencional: os PNGs representam a área útil capturada da aplicação, enquanto o layout responsivo é calculado sobre a referência lógica de 1920 x 1080.
+Como a captura e a referência lógica têm a mesma escala, as dimensões estruturais oficiais valem direto nas capturas: 327 px para a sidebar e 109 px para o header.
 
 Portanto:
 
-- não alterar `MOCKUP_BASE_WIDTH` ou `MOCKUP_BASE_HEIGHT` para 1920 x 1061 apenas para coincidir com o PNG;
-- ao medir screenshots, considerar o fator de escala do layout;
-- no PNG atual de 1920 x 1061, por exemplo, a sidebar aparece com cerca de 321 px e o header com cerca de 107 px porque `1061 / 1080 ~= 0,9824`;
-- na referência lógica de 1920 x 1080, as dimensões estruturais oficiais continuam sendo 327 px para a sidebar e 109 px para o header.
+- não alterar `MOCKUP_BASE_WIDTH` ou `MOCKUP_BASE_HEIGHT` sem decisão visual explícita;
+- ao medir capturas em outro viewport, considerar o fator de escala do layout;
+- quando o produto mudar de forma aprovada, recapturar a tela afetada e atualizar `INDICE.md` e `capturas.json`.
 
 ### Princípio visual
 
@@ -503,7 +504,11 @@ Os assets oficiais ficam em:
 ```text
 assets/icons/
 assets/branding/
+assets/web/navigation/
+assets/operator_mockup/
 ```
+
+`assets/README.md` lista o que cada pasta contém; só entra em `assets/` o que `web/src/config/assets.ts` importa.
 
 Existe catálogo semântico em `assets` dentro de `web/src/config/assets.ts`.
 
@@ -699,7 +704,7 @@ Não fazer por iniciativa própria:
 - reduzir controles operacionais importantes;
 - mudar cor de status;
 - alterar proporção das máquinas;
-- usar assets `legacy` para substituir assets atuais;
+- usar capturas ou assets históricos para substituir os atuais;
 - criar tema escuro;
 - criar animações que atrasem operação ou modifiquem a leitura do estado;
 - adicionar transparência que reduza contraste;
@@ -709,7 +714,7 @@ Não fazer por iniciativa própria:
 
 Antes de editar código de UI:
 
-1. localizar a tela correspondente em `assets/screens/screens - atuais/`;
+1. localizar a tela correspondente em `assets/screens/capturas_2026-10-08/` (via `INDICE.md`);
 2. abrir e inspecionar visualmente o PNG;
 3. identificar os SVGs/PNGs oficiais usados naquela tela;
 4. ler os tokens em `web/src/styles/tokens.css`;
@@ -766,8 +771,6 @@ python -m unittest discover -s tests
 
 Os testes de design já verificam, entre outros pontos:
 
-- catálogo das telas atuais e legacy;
-- dimensões dos PNGs oficiais;
 - catálogo e validade dos SVGs;
 - branding recortado;
 - organização e dimensões de KPIs;
