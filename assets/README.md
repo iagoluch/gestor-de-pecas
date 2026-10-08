@@ -1,7 +1,7 @@
 # assets/
 
 Só entra aqui o que o frontend importa. Origem canônica: `web/src/config/assets.ts` (estilos em `web/src/styles/`).
-Atualizado em 08/10/2026: 86 arquivos sem referência removidos (cópia em `backups/assets_orfaos_2026-10-08.zip`, local, e no histórico do git).
+Atualizado em 08/10/2026: 86 arquivos sem referência removidos; recuperáveis no histórico do git (commit anterior a `7f64b77`).
 
 | Pasta | O que tem | Usado por |
 | --- | --- | --- |
