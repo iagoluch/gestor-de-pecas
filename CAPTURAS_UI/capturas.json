@@ -1,0 +1,1698 @@
+[
+  {
+    "path": "gestao/normal/01_visao_geral.png",
+    "url": "http://127.0.0.1:8010/inicio/visao-geral",
+    "flow": "visao_geral",
+    "width": 1920,
+    "height": 1613,
+    "bytes": 163250
+  },
+  {
+    "path": "gestao/normal/02_filtros_expandidos.png",
+    "url": "http://127.0.0.1:8010/inicio/visao-geral",
+    "flow": "filtros_expandidos",
+    "width": 1920,
+    "height": 1690,
+    "bytes": 168510
+  },
+  {
+    "path": "gestao/normal/03_explicacao_oee.png",
+    "url": "http://127.0.0.1:8010/inicio/visao-geral",
+    "flow": "explicacao_oee",
+    "width": 1920,
+    "height": 1690,
+    "bytes": 185601
+  },
+  {
+    "path": "gestao/normal/04_inicio_setores.png",
+    "url": "http://127.0.0.1:8010/inicio/setores",
+    "flow": "inicio_setores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 100104
+  },
+  {
+    "path": "gestao/normal/05_inicio_alertas.png",
+    "url": "http://127.0.0.1:8010/inicio/alertas",
+    "flow": "inicio_alertas",
+    "width": 1920,
+    "height": 1344,
+    "bytes": 130809
+  },
+  {
+    "path": "gestao/normal/06_inicio_pausas.png",
+    "url": "http://127.0.0.1:8010/inicio/pausas",
+    "flow": "inicio_pausas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 127631
+  },
+  {
+    "path": "gestao/normal/07_inicio_chamadas.png",
+    "url": "http://127.0.0.1:8010/inicio/chamadas",
+    "flow": "inicio_chamadas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 74788
+  },
+  {
+    "path": "gestao/normal/08_inicio_visao-geral.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "inicio_visao-geral",
+    "width": 1920,
+    "height": 1847,
+    "bytes": 167382
+  },
+  {
+    "path": "gestao/normal/09_inicio_setores.png",
+    "url": "http://127.0.0.1:8011/inicio/setores",
+    "flow": "inicio_setores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 101850
+  },
+  {
+    "path": "gestao/normal/10_inicio_alertas.png",
+    "url": "http://127.0.0.1:8011/inicio/alertas",
+    "flow": "inicio_alertas",
+    "width": 1920,
+    "height": 1454,
+    "bytes": 147183
+  },
+  {
+    "path": "gestao/normal/11_inicio_pausas.png",
+    "url": "http://127.0.0.1:8011/inicio/pausas",
+    "flow": "inicio_pausas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 125491
+  },
+  {
+    "path": "gestao/normal/12_inicio_chamadas.png",
+    "url": "http://127.0.0.1:8011/inicio/chamadas",
+    "flow": "inicio_chamadas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 110411
+  },
+  {
+    "path": "gestao/normal/13_inicio_ia.png",
+    "url": "http://127.0.0.1:8011/inicio/ia",
+    "flow": "inicio_ia",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 67048
+  },
+  {
+    "path": "gestao/normal/14_consulta-operacional_visao-geral.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/visao-geral",
+    "flow": "consulta-operacional_visao-geral",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 101143
+  },
+  {
+    "path": "gestao/normal/15_consulta-operacional_recursos.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/recursos",
+    "flow": "consulta-operacional_recursos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 144279
+  },
+  {
+    "path": "gestao/normal/16_consulta-operacional_ops-em-andamento.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/ops-em-andamento",
+    "flow": "consulta-operacional_ops-em-andamento",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 95860
+  },
+  {
+    "path": "gestao/normal/17_consulta-operacional_tempo-mes.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/tempo-mes",
+    "flow": "consulta-operacional_tempo-mes",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 111803
+  },
+  {
+    "path": "gestao/normal/18_producao_ordens.png",
+    "url": "http://127.0.0.1:8011/producao/ordens",
+    "flow": "producao_ordens",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 105417
+  },
+  {
+    "path": "gestao/normal/19_producao_realizada.png",
+    "url": "http://127.0.0.1:8011/producao/realizada",
+    "flow": "producao_realizada",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 96244
+  },
+  {
+    "path": "gestao/normal/20_producao_planejado-realizado.png",
+    "url": "http://127.0.0.1:8011/producao/planejado-realizado",
+    "flow": "producao_planejado-realizado",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 100877
+  },
+  {
+    "path": "gestao/normal/21_analises_oee.png",
+    "url": "http://127.0.0.1:8011/analises/oee",
+    "flow": "analises_oee",
+    "width": 1920,
+    "height": 1451,
+    "bytes": 139930
+  },
+  {
+    "path": "gestao/normal/22_analises_horas-utilizacao.png",
+    "url": "http://127.0.0.1:8011/analises/horas-utilizacao",
+    "flow": "analises_horas-utilizacao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 119999
+  },
+  {
+    "path": "gestao/normal/23_analises_paradas.png",
+    "url": "http://127.0.0.1:8011/analises/paradas",
+    "flow": "analises_paradas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 96786
+  },
+  {
+    "path": "gestao/normal/24_analises_qualidade.png",
+    "url": "http://127.0.0.1:8011/analises/qualidade",
+    "flow": "analises_qualidade",
+    "width": 1920,
+    "height": 1850,
+    "bytes": 189485
+  },
+  {
+    "path": "gestao/normal/25_analises_tempo-padrao-real.png",
+    "url": "http://127.0.0.1:8011/analises/tempo-padrao-real",
+    "flow": "analises_tempo-padrao-real",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 92222
+  },
+  {
+    "path": "gestao/normal/26_analises_cronoanalise.png",
+    "url": "http://127.0.0.1:8011/analises/cronoanalise",
+    "flow": "analises_cronoanalise",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 93860
+  },
+  {
+    "path": "gestao/normal/27_analises_capacidade-gargalos.png",
+    "url": "http://127.0.0.1:8011/analises/capacidade-gargalos",
+    "flow": "analises_capacidade-gargalos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 125943
+  },
+  {
+    "path": "gestao/normal/28_analises_confiabilidade.png",
+    "url": "http://127.0.0.1:8011/analises/confiabilidade",
+    "flow": "analises_confiabilidade",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 102666
+  },
+  {
+    "path": "gestao/normal/29_auditoria_apontamentos.png",
+    "url": "http://127.0.0.1:8011/auditoria/apontamentos",
+    "flow": "auditoria_apontamentos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 97815
+  },
+  {
+    "path": "gestao/normal/30_auditoria_inconsistencias.png",
+    "url": "http://127.0.0.1:8011/auditoria/inconsistencias",
+    "flow": "auditoria_inconsistencias",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 85117
+  },
+  {
+    "path": "gestao/normal/31_auditoria_confiabilidade.png",
+    "url": "http://127.0.0.1:8011/auditoria/confiabilidade",
+    "flow": "auditoria_confiabilidade",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 100840
+  },
+  {
+    "path": "gestao/normal/32_relatorios_gerencial.png",
+    "url": "http://127.0.0.1:8011/relatorios/gerencial",
+    "flow": "relatorios_gerencial",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104170
+  },
+  {
+    "path": "gestao/normal/33_relatorios_producao.png",
+    "url": "http://127.0.0.1:8011/relatorios/producao",
+    "flow": "relatorios_producao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 129884
+  },
+  {
+    "path": "gestao/normal/34_relatorios_perdas.png",
+    "url": "http://127.0.0.1:8011/relatorios/perdas",
+    "flow": "relatorios_perdas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 85332
+  },
+  {
+    "path": "gestao/normal/35_relatorios_indicadores.png",
+    "url": "http://127.0.0.1:8011/relatorios/indicadores",
+    "flow": "relatorios_indicadores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 103632
+  },
+  {
+    "path": "gestao/normal/36_relatorios_dados-analiticos.png",
+    "url": "http://127.0.0.1:8011/relatorios/dados-analiticos",
+    "flow": "relatorios_dados-analiticos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 94041
+  },
+  {
+    "path": "gestao/normal/37_rastreabilidade_op-produto.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/op-produto",
+    "flow": "rastreabilidade_op-produto",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 71825
+  },
+  {
+    "path": "gestao/normal/38_rastreabilidade_linha-do-tempo.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/linha-do-tempo",
+    "flow": "rastreabilidade_linha-do-tempo",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 71856
+  },
+  {
+    "path": "gestao/normal/39_rastreabilidade_lote-material-nesting.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/lote-material-nesting",
+    "flow": "rastreabilidade_lote-material-nesting",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 91125
+  },
+  {
+    "path": "gestao/normal/40_visao_geral_30_dias.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "visao_geral_30_dias",
+    "width": 1920,
+    "height": 1835,
+    "bytes": 175480
+  },
+  {
+    "path": "gestao/normal/41_filtros_avancados_teste.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "filtros_avancados_teste",
+    "width": 1920,
+    "height": 1912,
+    "bytes": 179833
+  },
+  {
+    "path": "gestao/normal/42_modal_oee_teste.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "modal_oee_teste",
+    "width": 1920,
+    "height": 1912,
+    "bytes": 248265
+  },
+  {
+    "path": "gestao/normal/43_formulario_nova_pausa.png",
+    "url": "http://127.0.0.1:8011/inicio/pausas",
+    "flow": "formulario_nova_pausa",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 142664
+  },
+  {
+    "path": "gestao/normal/44_edicao_pausa.png",
+    "url": "http://127.0.0.1:8011/inicio/pausas",
+    "flow": "edicao_pausa",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 123664
+  },
+  {
+    "path": "gestao/normal/45_menu_acoes_pausa.png",
+    "url": "http://127.0.0.1:8011/inicio/pausas",
+    "flow": "menu_acoes_pausa",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 130584
+  },
+  {
+    "path": "gestao/normal/46_geracao_exportacao_relatorio.png",
+    "url": "http://127.0.0.1:8011/relatorios/gerencial",
+    "flow": "geracao_exportacao_relatorio",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104103
+  },
+  {
+    "path": "gestao/normal/47_painel_notificacoes.png",
+    "url": "http://127.0.0.1:8011/inicio/chamadas",
+    "flow": "painel_notificacoes",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 148815
+  },
+  {
+    "path": "gestao/normal/48_modal_chamar.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "modal_chamar",
+    "width": 1920,
+    "height": 1847,
+    "bytes": 168745
+  },
+  {
+    "path": "gestao/normal/49_analise_setup_subaba.png",
+    "url": "http://127.0.0.1:8011/analises/paradas",
+    "flow": "analise_setup_subaba",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 112050
+  },
+  {
+    "path": "gestao/normal/50_mapa_fabrica.png",
+    "url": "http://127.0.0.1:8011/mapa-fabrica",
+    "flow": "mapa_fabrica",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 119348
+  },
+  {
+    "path": "gestao/manufatura/01_visao_geral_perfil.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "visao_geral_perfil",
+    "width": 1920,
+    "height": 1847,
+    "bytes": 168769
+  },
+  {
+    "path": "gestao/manufatura/02_tempo_padrao.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "tempo_padrao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 165307
+  },
+  {
+    "path": "gestao/manufatura/03_filtro_produto.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "filtro_produto",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 131574
+  },
+  {
+    "path": "gestao/manufatura/04_tempo_manual_preenchido.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "tempo_manual_preenchido",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 138339
+  },
+  {
+    "path": "gestao/manufatura/05_tempo_manual_salvo_teste.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "tempo_manual_salvo_teste",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 128573
+  },
+  {
+    "path": "gestao/manufatura/06_historico_manual.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "historico_manual",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 160484
+  },
+  {
+    "path": "gestao/manufatura/07_menu_manual.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "menu_manual",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 139396
+  },
+  {
+    "path": "gestao/manufatura/08_confirmacao_remover_manual.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "confirmacao_remover_manual",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 161242
+  },
+  {
+    "path": "gestao/manufatura/09_manual_ensaio_removido.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "manual_ensaio_removido",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 136005
+  },
+  {
+    "path": "gestao/manufatura/10_inicio_setores.png",
+    "url": "http://127.0.0.1:8011/inicio/setores",
+    "flow": "inicio_setores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 103097
+  },
+  {
+    "path": "gestao/manufatura/11_inicio_alertas.png",
+    "url": "http://127.0.0.1:8011/inicio/alertas",
+    "flow": "inicio_alertas",
+    "width": 1920,
+    "height": 1454,
+    "bytes": 148482
+  },
+  {
+    "path": "gestao/manufatura/12_inicio_pausas.png",
+    "url": "http://127.0.0.1:8011/inicio/pausas",
+    "flow": "inicio_pausas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 126645
+  },
+  {
+    "path": "gestao/manufatura/13_inicio_chamadas.png",
+    "url": "http://127.0.0.1:8011/inicio/chamadas",
+    "flow": "inicio_chamadas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 111732
+  },
+  {
+    "path": "gestao/manufatura/14_inicio_ia.png",
+    "url": "http://127.0.0.1:8011/inicio/ia",
+    "flow": "inicio_ia",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 67932
+  },
+  {
+    "path": "gestao/manufatura/15_consulta-operacional_visao-geral.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/visao-geral",
+    "flow": "consulta-operacional_visao-geral",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 102156
+  },
+  {
+    "path": "gestao/manufatura/16_consulta-operacional_recursos.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/recursos",
+    "flow": "consulta-operacional_recursos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 145920
+  },
+  {
+    "path": "gestao/manufatura/17_consulta-operacional_ops-em-andamento.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/ops-em-andamento",
+    "flow": "consulta-operacional_ops-em-andamento",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 96763
+  },
+  {
+    "path": "gestao/manufatura/18_consulta-operacional_tempo-mes.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/tempo-mes",
+    "flow": "consulta-operacional_tempo-mes",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 112959
+  },
+  {
+    "path": "gestao/manufatura/19_producao_ordens.png",
+    "url": "http://127.0.0.1:8011/producao/ordens",
+    "flow": "producao_ordens",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 106332
+  },
+  {
+    "path": "gestao/manufatura/20_producao_realizada.png",
+    "url": "http://127.0.0.1:8011/producao/realizada",
+    "flow": "producao_realizada",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 97148
+  },
+  {
+    "path": "gestao/manufatura/21_producao_planejado-realizado.png",
+    "url": "http://127.0.0.1:8011/producao/planejado-realizado",
+    "flow": "producao_planejado-realizado",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 102070
+  },
+  {
+    "path": "gestao/manufatura/22_analises_oee.png",
+    "url": "http://127.0.0.1:8011/analises/oee",
+    "flow": "analises_oee",
+    "width": 1920,
+    "height": 1451,
+    "bytes": 141119
+  },
+  {
+    "path": "gestao/manufatura/23_analises_horas-utilizacao.png",
+    "url": "http://127.0.0.1:8011/analises/horas-utilizacao",
+    "flow": "analises_horas-utilizacao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 120213
+  },
+  {
+    "path": "gestao/manufatura/24_analises_paradas.png",
+    "url": "http://127.0.0.1:8011/analises/paradas",
+    "flow": "analises_paradas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 98013
+  },
+  {
+    "path": "gestao/manufatura/25_analises_qualidade.png",
+    "url": "http://127.0.0.1:8011/analises/qualidade",
+    "flow": "analises_qualidade",
+    "width": 1920,
+    "height": 1850,
+    "bytes": 190772
+  },
+  {
+    "path": "gestao/manufatura/26_analises_tempo-padrao-real.png",
+    "url": "http://127.0.0.1:8011/analises/tempo-padrao-real",
+    "flow": "analises_tempo-padrao-real",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 93397
+  },
+  {
+    "path": "gestao/manufatura/27_analises_cronoanalise.png",
+    "url": "http://127.0.0.1:8011/analises/cronoanalise",
+    "flow": "analises_cronoanalise",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 95065
+  },
+  {
+    "path": "gestao/manufatura/28_analises_capacidade-gargalos.png",
+    "url": "http://127.0.0.1:8011/analises/capacidade-gargalos",
+    "flow": "analises_capacidade-gargalos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 127037
+  },
+  {
+    "path": "gestao/manufatura/29_analises_confiabilidade.png",
+    "url": "http://127.0.0.1:8011/analises/confiabilidade",
+    "flow": "analises_confiabilidade",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 103869
+  },
+  {
+    "path": "gestao/manufatura/30_auditoria_apontamentos.png",
+    "url": "http://127.0.0.1:8011/auditoria/apontamentos",
+    "flow": "auditoria_apontamentos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 99020
+  },
+  {
+    "path": "gestao/manufatura/31_auditoria_inconsistencias.png",
+    "url": "http://127.0.0.1:8011/auditoria/inconsistencias",
+    "flow": "auditoria_inconsistencias",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 86411
+  },
+  {
+    "path": "gestao/manufatura/32_auditoria_confiabilidade.png",
+    "url": "http://127.0.0.1:8011/auditoria/confiabilidade",
+    "flow": "auditoria_confiabilidade",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 102179
+  },
+  {
+    "path": "gestao/manufatura/33_relatorios_gerencial.png",
+    "url": "http://127.0.0.1:8011/relatorios/gerencial",
+    "flow": "relatorios_gerencial",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 105285
+  },
+  {
+    "path": "gestao/manufatura/34_relatorios_producao.png",
+    "url": "http://127.0.0.1:8011/relatorios/producao",
+    "flow": "relatorios_producao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 131012
+  },
+  {
+    "path": "gestao/manufatura/35_relatorios_perdas.png",
+    "url": "http://127.0.0.1:8011/relatorios/perdas",
+    "flow": "relatorios_perdas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 86594
+  },
+  {
+    "path": "gestao/manufatura/36_relatorios_indicadores.png",
+    "url": "http://127.0.0.1:8011/relatorios/indicadores",
+    "flow": "relatorios_indicadores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104154
+  },
+  {
+    "path": "gestao/manufatura/37_relatorios_dados-analiticos.png",
+    "url": "http://127.0.0.1:8011/relatorios/dados-analiticos",
+    "flow": "relatorios_dados-analiticos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 95226
+  },
+  {
+    "path": "gestao/manufatura/38_rastreabilidade_op-produto.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/op-produto",
+    "flow": "rastreabilidade_op-produto",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 72976
+  },
+  {
+    "path": "gestao/manufatura/39_rastreabilidade_linha-do-tempo.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/linha-do-tempo",
+    "flow": "rastreabilidade_linha-do-tempo",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 73004
+  },
+  {
+    "path": "gestao/manufatura/40_rastreabilidade_lote-material-nesting.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/lote-material-nesting",
+    "flow": "rastreabilidade_lote-material-nesting",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 92314
+  },
+  {
+    "path": "gestao/manufatura/41_andon.png",
+    "url": "http://127.0.0.1:8011/andon",
+    "flow": "andon",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 25070
+  },
+  {
+    "path": "gestao/manufatura/42_mapa_fabrica.png",
+    "url": "http://127.0.0.1:8011/mapa-fabrica",
+    "flow": "mapa_fabrica",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 119368
+  },
+  {
+    "path": "gestao/qualidade/01_visao_geral_perfil.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "visao_geral_perfil",
+    "width": 1920,
+    "height": 1847,
+    "bytes": 169220
+  },
+  {
+    "path": "gestao/qualidade/02_cotas_produtos.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "cotas_produtos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 117457
+  },
+  {
+    "path": "gestao/qualidade/03_modal_cadastrar_produto.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "modal_cadastrar_produto",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 130649
+  },
+  {
+    "path": "gestao/qualidade/04_editor_cotas_novo_produto.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "editor_cotas_novo_produto",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 102372
+  },
+  {
+    "path": "gestao/qualidade/05_editor_cotas_multiplas.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "editor_cotas_multiplas",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 116244
+  },
+  {
+    "path": "gestao/qualidade/06_editar_cotas_existentes.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "editar_cotas_existentes",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 125895
+  },
+  {
+    "path": "gestao/qualidade/07_inicio_setores.png",
+    "url": "http://127.0.0.1:8011/inicio/setores",
+    "flow": "inicio_setores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 103193
+  },
+  {
+    "path": "gestao/qualidade/08_inicio_alertas.png",
+    "url": "http://127.0.0.1:8011/inicio/alertas",
+    "flow": "inicio_alertas",
+    "width": 1920,
+    "height": 1454,
+    "bytes": 148525
+  },
+  {
+    "path": "gestao/qualidade/09_inicio_pausas.png",
+    "url": "http://127.0.0.1:8011/inicio/pausas",
+    "flow": "inicio_pausas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 126862
+  },
+  {
+    "path": "gestao/qualidade/10_inicio_chamadas.png",
+    "url": "http://127.0.0.1:8011/inicio/chamadas",
+    "flow": "inicio_chamadas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 111975
+  },
+  {
+    "path": "gestao/qualidade/11_inicio_ia.png",
+    "url": "http://127.0.0.1:8011/inicio/ia",
+    "flow": "inicio_ia",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 68112
+  },
+  {
+    "path": "gestao/qualidade/12_consulta-operacional_visao-geral.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/visao-geral",
+    "flow": "consulta-operacional_visao-geral",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 102504
+  },
+  {
+    "path": "gestao/qualidade/13_consulta-operacional_recursos.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/recursos",
+    "flow": "consulta-operacional_recursos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 146337
+  },
+  {
+    "path": "gestao/qualidade/14_consulta-operacional_ops-em-andamento.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/ops-em-andamento",
+    "flow": "consulta-operacional_ops-em-andamento",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 96834
+  },
+  {
+    "path": "gestao/qualidade/15_consulta-operacional_tempo-mes.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/tempo-mes",
+    "flow": "consulta-operacional_tempo-mes",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 113226
+  },
+  {
+    "path": "gestao/qualidade/16_producao_ordens.png",
+    "url": "http://127.0.0.1:8011/producao/ordens",
+    "flow": "producao_ordens",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 106337
+  },
+  {
+    "path": "gestao/qualidade/17_producao_realizada.png",
+    "url": "http://127.0.0.1:8011/producao/realizada",
+    "flow": "producao_realizada",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 97295
+  },
+  {
+    "path": "gestao/qualidade/18_producao_planejado-realizado.png",
+    "url": "http://127.0.0.1:8011/producao/planejado-realizado",
+    "flow": "producao_planejado-realizado",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 101888
+  },
+  {
+    "path": "gestao/qualidade/19_analises_oee.png",
+    "url": "http://127.0.0.1:8011/analises/oee",
+    "flow": "analises_oee",
+    "width": 1920,
+    "height": 1451,
+    "bytes": 141003
+  },
+  {
+    "path": "gestao/qualidade/20_analises_horas-utilizacao.png",
+    "url": "http://127.0.0.1:8011/analises/horas-utilizacao",
+    "flow": "analises_horas-utilizacao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 120486
+  },
+  {
+    "path": "gestao/qualidade/21_analises_paradas.png",
+    "url": "http://127.0.0.1:8011/analises/paradas",
+    "flow": "analises_paradas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 97860
+  },
+  {
+    "path": "gestao/qualidade/22_analises_qualidade.png",
+    "url": "http://127.0.0.1:8011/analises/qualidade",
+    "flow": "analises_qualidade",
+    "width": 1920,
+    "height": 1850,
+    "bytes": 190645
+  },
+  {
+    "path": "gestao/qualidade/23_analises_tempo-padrao-real.png",
+    "url": "http://127.0.0.1:8011/analises/tempo-padrao-real",
+    "flow": "analises_tempo-padrao-real",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 93297
+  },
+  {
+    "path": "gestao/qualidade/24_analises_cronoanalise.png",
+    "url": "http://127.0.0.1:8011/analises/cronoanalise",
+    "flow": "analises_cronoanalise",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 94972
+  },
+  {
+    "path": "gestao/qualidade/25_analises_capacidade-gargalos.png",
+    "url": "http://127.0.0.1:8011/analises/capacidade-gargalos",
+    "flow": "analises_capacidade-gargalos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 126980
+  },
+  {
+    "path": "gestao/qualidade/26_analises_confiabilidade.png",
+    "url": "http://127.0.0.1:8011/analises/confiabilidade",
+    "flow": "analises_confiabilidade",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 103727
+  },
+  {
+    "path": "gestao/qualidade/27_auditoria_apontamentos.png",
+    "url": "http://127.0.0.1:8011/auditoria/apontamentos",
+    "flow": "auditoria_apontamentos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 98781
+  },
+  {
+    "path": "gestao/qualidade/28_auditoria_inconsistencias.png",
+    "url": "http://127.0.0.1:8011/auditoria/inconsistencias",
+    "flow": "auditoria_inconsistencias",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 86177
+  },
+  {
+    "path": "gestao/qualidade/29_auditoria_confiabilidade.png",
+    "url": "http://127.0.0.1:8011/auditoria/confiabilidade",
+    "flow": "auditoria_confiabilidade",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 102110
+  },
+  {
+    "path": "gestao/qualidade/30_relatorios_gerencial.png",
+    "url": "http://127.0.0.1:8011/relatorios/gerencial",
+    "flow": "relatorios_gerencial",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 105168
+  },
+  {
+    "path": "gestao/qualidade/31_relatorios_producao.png",
+    "url": "http://127.0.0.1:8011/relatorios/producao",
+    "flow": "relatorios_producao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 130915
+  },
+  {
+    "path": "gestao/qualidade/32_relatorios_perdas.png",
+    "url": "http://127.0.0.1:8011/relatorios/perdas",
+    "flow": "relatorios_perdas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 86363
+  },
+  {
+    "path": "gestao/qualidade/33_relatorios_indicadores.png",
+    "url": "http://127.0.0.1:8011/relatorios/indicadores",
+    "flow": "relatorios_indicadores",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104067
+  },
+  {
+    "path": "gestao/qualidade/34_relatorios_dados-analiticos.png",
+    "url": "http://127.0.0.1:8011/relatorios/dados-analiticos",
+    "flow": "relatorios_dados-analiticos",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 95066
+  },
+  {
+    "path": "gestao/qualidade/35_rastreabilidade_op-produto.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/op-produto",
+    "flow": "rastreabilidade_op-produto",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 72924
+  },
+  {
+    "path": "gestao/qualidade/36_rastreabilidade_linha-do-tempo.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/linha-do-tempo",
+    "flow": "rastreabilidade_linha-do-tempo",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 72960
+  },
+  {
+    "path": "gestao/qualidade/37_rastreabilidade_lote-material-nesting.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/lote-material-nesting",
+    "flow": "rastreabilidade_lote-material-nesting",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 92162
+  },
+  {
+    "path": "gestao/qualidade/38_andon.png",
+    "url": "http://127.0.0.1:8011/andon",
+    "flow": "andon",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 25042
+  },
+  {
+    "path": "gestao/qualidade/39_mapa_fabrica.png",
+    "url": "http://127.0.0.1:8011/mapa-fabrica",
+    "flow": "mapa_fabrica",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 119341
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/01_selecao_recurso.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "selecao_recurso",
+    "width": 1920,
+    "height": 1500,
+    "bytes": 233742
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/02_posto_pintura.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "posto_pintura",
+    "width": 1920,
+    "height": 1289,
+    "bytes": 83471
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/03_op_roteiro_carregado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "op_roteiro_carregado",
+    "width": 1920,
+    "height": 1416,
+    "bytes": 94937
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/04_confirmacao_etapa.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "confirmacao_etapa",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 113408
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/05_etapa_pintura_selecionada.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "etapa_pintura_selecionada",
+    "width": 1920,
+    "height": 1416,
+    "bytes": 95562
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/06_modal_iniciar.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "Autorização de exceção operacional: etapa anterior pendente",
+    "width": 1920,
+    "height": 1416,
+    "bytes": 92201
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/07_roteiro_simulado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "roteiro_simulado",
+    "width": 1920,
+    "height": 1416,
+    "bytes": 87173
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/08_apontamento_iniciado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "apontamento_iniciado",
+    "width": 1920,
+    "height": 1463,
+    "bytes": 112979
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/09_fila_expandida.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "fila_expandida",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 150821
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/10_modal_parada.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "modal_parada",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 136609
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/11_busca_motivo_parada.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "busca_motivo_parada",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 76903
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/12_motivo_selecionado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "motivo_selecionado",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 76459
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/13_estado_parado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "estado_parado",
+    "width": 1920,
+    "height": 1529,
+    "bytes": 124753
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/14_retomada.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "retomada",
+    "width": 1920,
+    "height": 1463,
+    "bytes": 116812
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/15_modal_retrabalho.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "modal_retrabalho",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 106433
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/16_estado_retrabalho.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "estado_retrabalho",
+    "width": 1920,
+    "height": 1485,
+    "bytes": 119394
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/17_modal_finalizacao.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "modal_finalizacao",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 152653
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/18_finalizacao_quantidades_operador.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "finalizacao_quantidades_operador",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 90637
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/19_apontamento_finalizado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "apontamento_finalizado",
+    "width": 1920,
+    "height": 1423,
+    "bytes": 102050
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/20_historico_expandido.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "historico_expandido",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 100143
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/21_atividade_sem_op.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "atividade_sem_op",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 90363
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/22_estado_atividade_sem_op.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "estado_atividade_sem_op",
+    "width": 1920,
+    "height": 1358,
+    "bytes": 98609
+  },
+  {
+    "path": "operadores/pintura-fluxo-geral/23_parada_posto_sem_op.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "parada_posto_sem_op",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 125048
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/01_op_dobra_checklist_pendente.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "op_dobra_checklist_pendente",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 61061
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/02_finalizar_bloqueado_antes_setup.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "finalizar_bloqueado_antes_setup",
+    "width": 1920,
+    "height": 1593,
+    "bytes": 115472
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/03_confirmacao_setup.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "confirmacao_setup",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 100746
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/04_checklist_primeira_peca.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "checklist_primeira_peca",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 80299
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/05_cota_fora_tolerancia.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "cota_fora_tolerancia",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 78136
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/06_modal_autorizacao_responsavel.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "modal_autorizacao_responsavel",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 79721
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/07_cracha_responsavel_preenchido.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "cracha_responsavel_preenchido",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 80174
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/08_retrabalho_liberado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "retrabalho_liberado",
+    "width": 1920,
+    "height": 1572,
+    "bytes": 118866
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/09_refugo_primeira_peca_cracha.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "refugo_primeira_peca_cracha",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 85963
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/10_medicoes_conformes.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "medicoes_conformes",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 81424
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/11_primeira_peca_aprovada_estado.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "primeira_peca_aprovada_estado",
+    "width": 1920,
+    "height": 1476,
+    "bytes": 108185
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/12_conclusao_apos_aprovacao.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "conclusao_apos_aprovacao",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 88338
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/13_produto_sem_cotas_editor.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "produto_sem_cotas_editor",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 88544
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/14_cotas_padrao_preenchidas.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "cotas_padrao_preenchidas",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 84024
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/15_template_cadastrado_medicao.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "template_cadastrado_medicao",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 76619
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/16_primeira_peca_conforme_produto_novo.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "primeira_peca_conforme_produto_novo",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 75499
+  },
+  {
+    "path": "operadores/dobra-caldeiraria/17_aprovacao_volta_producao.png",
+    "url": "http://127.0.0.1:8011/operador",
+    "flow": "aprovacao_volta_producao",
+    "width": 1920,
+    "height": 1476,
+    "bytes": 110935
+  },
+  {
+    "path": "gestao/normal/51_andon.png",
+    "url": "http://127.0.0.1:8011/andon",
+    "flow": "andon",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 41735
+  },
+  {
+    "path": "gestao/normal/52_andon_detalhe_recurso.png",
+    "url": "http://127.0.0.1:8011/andon",
+    "flow": "andon_detalhe_recurso",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 79601
+  },
+  {
+    "path": "gestao/normal/53_mapa_hover_recurso.png",
+    "url": "http://127.0.0.1:8011/mapa-fabrica",
+    "flow": "mapa_hover_recurso",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 132397
+  },
+  {
+    "path": "gestao/normal/54_consulta-operacional_recursos_filtros.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/recursos",
+    "flow": "consulta-operacional_recursos_filtros",
+    "width": 1920,
+    "height": 1243,
+    "bytes": 148176
+  },
+  {
+    "path": "gestao/normal/55_consulta-operacional_ops-em-andamento_filtros.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/ops-em-andamento",
+    "flow": "consulta-operacional_ops-em-andamento_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 98230
+  },
+  {
+    "path": "gestao/normal/56_consulta-operacional_tempo-mes_filtros.png",
+    "url": "http://127.0.0.1:8011/consulta-operacional/tempo-mes",
+    "flow": "consulta-operacional_tempo-mes_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 114220
+  },
+  {
+    "path": "gestao/normal/57_producao_ordens_filtros.png",
+    "url": "http://127.0.0.1:8011/producao/ordens",
+    "flow": "producao_ordens_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 122379
+  },
+  {
+    "path": "gestao/normal/58_producao_realizada_filtros.png",
+    "url": "http://127.0.0.1:8011/producao/realizada",
+    "flow": "producao_realizada_filtros",
+    "width": 1920,
+    "height": 1259,
+    "bytes": 115811
+  },
+  {
+    "path": "gestao/normal/59_producao_planejado-realizado_filtros.png",
+    "url": "http://127.0.0.1:8011/producao/planejado-realizado",
+    "flow": "producao_planejado-realizado_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 117388
+  },
+  {
+    "path": "gestao/normal/60_analises_oee_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/oee",
+    "flow": "analises_oee_filtros",
+    "width": 1920,
+    "height": 1519,
+    "bytes": 136929
+  },
+  {
+    "path": "gestao/normal/61_analises_horas-utilizacao_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/horas-utilizacao",
+    "flow": "analises_horas-utilizacao_filtros",
+    "width": 1920,
+    "height": 1259,
+    "bytes": 122497
+  },
+  {
+    "path": "gestao/normal/62_analises_paradas_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/paradas",
+    "flow": "analises_paradas_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104812
+  },
+  {
+    "path": "gestao/normal/63_analises_qualidade_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/qualidade",
+    "flow": "analises_qualidade_filtros",
+    "width": 1920,
+    "height": 2053,
+    "bytes": 211606
+  },
+  {
+    "path": "gestao/normal/64_analises_tempo-padrao-real_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/tempo-padrao-real",
+    "flow": "analises_tempo-padrao-real_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 110975
+  },
+  {
+    "path": "gestao/normal/65_analises_cronoanalise_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/cronoanalise",
+    "flow": "analises_cronoanalise_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 109023
+  },
+  {
+    "path": "gestao/normal/66_analises_capacidade-gargalos_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/capacidade-gargalos",
+    "flow": "analises_capacidade-gargalos_filtros",
+    "width": 1920,
+    "height": 1246,
+    "bytes": 129797
+  },
+  {
+    "path": "gestao/normal/67_analises_confiabilidade_filtros.png",
+    "url": "http://127.0.0.1:8011/analises/confiabilidade",
+    "flow": "analises_confiabilidade_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 106039
+  },
+  {
+    "path": "gestao/normal/68_auditoria_apontamentos_filtros.png",
+    "url": "http://127.0.0.1:8011/auditoria/apontamentos",
+    "flow": "auditoria_apontamentos_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 118339
+  },
+  {
+    "path": "gestao/normal/69_auditoria_inconsistencias_filtros.png",
+    "url": "http://127.0.0.1:8011/auditoria/inconsistencias",
+    "flow": "auditoria_inconsistencias_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 120112
+  },
+  {
+    "path": "gestao/normal/70_auditoria_confiabilidade_filtros.png",
+    "url": "http://127.0.0.1:8011/auditoria/confiabilidade",
+    "flow": "auditoria_confiabilidade_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104381
+  },
+  {
+    "path": "gestao/normal/71_relatorios_gerencial_filtros.png",
+    "url": "http://127.0.0.1:8011/relatorios/gerencial",
+    "flow": "relatorios_gerencial_filtros",
+    "width": 1920,
+    "height": 1223,
+    "bytes": 102394
+  },
+  {
+    "path": "gestao/normal/72_relatorios_producao_filtros.png",
+    "url": "http://127.0.0.1:8011/relatorios/producao",
+    "flow": "relatorios_producao_filtros",
+    "width": 1920,
+    "height": 1223,
+    "bytes": 129319
+  },
+  {
+    "path": "gestao/normal/73_relatorios_perdas_filtros.png",
+    "url": "http://127.0.0.1:8011/relatorios/perdas",
+    "flow": "relatorios_perdas_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 87321
+  },
+  {
+    "path": "gestao/normal/74_relatorios_indicadores_filtros.png",
+    "url": "http://127.0.0.1:8011/relatorios/indicadores",
+    "flow": "relatorios_indicadores_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 104015
+  },
+  {
+    "path": "gestao/normal/75_relatorios_dados-analiticos_filtros.png",
+    "url": "http://127.0.0.1:8011/relatorios/dados-analiticos",
+    "flow": "relatorios_dados-analiticos_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 105600
+  },
+  {
+    "path": "gestao/normal/76_rastreabilidade_lote-material-nesting_filtros.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/lote-material-nesting",
+    "flow": "rastreabilidade_lote-material-nesting_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 92521
+  },
+  {
+    "path": "gestao/normal/77_ordens_periodo_com_dados.png",
+    "url": "http://127.0.0.1:8011/producao/ordens",
+    "flow": "ordens_periodo_com_dados",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 148015
+  },
+  {
+    "path": "gestao/normal/78_rastreabilidade_op_detalhada.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/op-produto?op=UI-CAPTURA-PINTURA",
+    "flow": "rastreabilidade_op_detalhada",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 90734
+  },
+  {
+    "path": "gestao/normal/79_linha_tempo_eventos_op.png",
+    "url": "http://127.0.0.1:8011/rastreabilidade/linha-do-tempo?op=UI-CAPTURA-PINTURA",
+    "flow": "linha_tempo_eventos_op",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 149838
+  },
+  {
+    "path": "gestao/normal/80_qualidade_com_primeiras_pecas.png",
+    "url": "http://127.0.0.1:8011/analises/qualidade",
+    "flow": "qualidade_com_primeiras_pecas",
+    "width": 1920,
+    "height": 2084,
+    "bytes": 216133
+  },
+  {
+    "path": "gestao/normal/81_tema_escuro.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "tema_escuro",
+    "width": 1920,
+    "height": 1838,
+    "bytes": 151764
+  },
+  {
+    "path": "gestao/normal/82_navegacao_recolhida.png",
+    "url": "http://127.0.0.1:8011/inicio/visao-geral",
+    "flow": "navegacao_recolhida",
+    "width": 1920,
+    "height": 1838,
+    "bytes": 138319
+  },
+  {
+    "path": "gestao/manufatura/43_produto_simulado_filtros.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "produto_simulado_filtros",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 95802
+  },
+  {
+    "path": "gestao/manufatura/44_recalculo_estimativas_em_execucao.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "recalculo_estimativas_em_execucao",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 95421
+  },
+  {
+    "path": "gestao/manufatura/45_recalculo_status.png",
+    "url": "http://127.0.0.1:8011/manufatura/tempo-padrao",
+    "flow": "recalculo_status",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 101661
+  },
+  {
+    "path": "gestao/qualidade/40_filtro_produto_cotas.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "filtro_produto_cotas",
+    "width": 1920,
+    "height": 1193,
+    "bytes": 82720
+  },
+  {
+    "path": "gestao/qualidade/41_editar_template_simulado.png",
+    "url": "http://127.0.0.1:8011/qualidade/cotas",
+    "flow": "editar_template_simulado",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 92544
+  },
+  {
+    "path": "gestao/normal/83_ia_simulada_disponivel.png",
+    "url": "http://127.0.0.1:8012/inicio/ia",
+    "flow": "ia_simulada_disponivel",
+    "width": 1920,
+    "height": 1164,
+    "bytes": 83945
+  },
+  {
+    "path": "gestao/normal/84_ia_consulta_sugerida.png",
+    "url": "http://127.0.0.1:8012/inicio/ia",
+    "flow": "ia_consulta_sugerida",
+    "width": 1920,
+    "height": 1164,
+    "bytes": 86046
+  },
+  {
+    "path": "gestao/normal/85_ia_resposta_simulada.png",
+    "url": "http://127.0.0.1:8012/inicio/ia",
+    "flow": "ia_resposta_simulada",
+    "width": 1920,
+    "height": 1164,
+    "bytes": 86025
+  },
+  {
+    "path": "gestao/normal/86_ia_confirmacao_exclusao.png",
+    "url": "http://127.0.0.1:8012/inicio/ia",
+    "flow": "ia_confirmacao_exclusao",
+    "width": 1920,
+    "height": 1080,
+    "bytes": 108472
+  }
+]

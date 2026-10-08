@@ -1,0 +1,1243 @@
+/* Andon dedicado: composição densa, estável e sem rolagem para gestão à vista. */
+html:has(.andon-page--single-view),
+body:has(.andon-page--single-view),
+body:has(.andon-page--single-view) #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.andon-page {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.andon-content {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow: hidden;
+}
+
+.andon-stale {
+  position: fixed;
+  z-index: 30;
+  top: 9px;
+  right: 10px;
+  max-width: 510px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--warning-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.andon-board-section,
+.andon-board {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/*
+ * Duas colunas independentes substituem o quadrante 2x2. Cada coluna calcula a
+ * própria distribuição vertical: o painel de topo ocupa a altura exigida pelo
+ * conteúdo e o painel seguinte assume todo o restante. Nenhuma linha é forçada
+ * a `1fr 1fr`, portanto Corte e Pintura deixam de roubar altura de Solda e
+ * Caldeiraria.
+ */
+.andon-board {
+  --andon-column-count: 2;
+  --andon-board-gap: 10px;
+  --andon-card-height: 140px;
+  --andon-cards-gap: 6px;
+  --andon-group-width: 250px;
+  --andon-panel-chrome: 100px;
+  display: grid;
+  grid-template-columns: repeat(var(--andon-column-count, 2), minmax(0, 1fr));
+  gap: var(--andon-board-gap);
+}
+
+.andon-board__column {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--andon-board-gap);
+}
+
+/*
+ * Painel de topo: exatamente a altura que a demanda ativa exige. Sem
+ * apontamento na Usinagem a Caldeiraria encolhe junto; com cinco máquinas
+ * simultâneas ela cresce, e é isso que reserva o espaço — a estrutura, não uma
+ * altura fixa guardada à toa.
+ */
+.andon-board__column > .andon-sector-panel {
+  flex: 0 1 auto;
+}
+
+/* Painel de baixo: absorve todo o restante da coluna. */
+.andon-board__column > .andon-sector-panel:last-child {
+  flex: 1 1 auto;
+}
+
+/*
+ * `--andon-panel-rows` traduz a reserva de capacidade do painel em linhas de
+ * cartão: a altura mínima acompanha o padrão do cartão da faixa atual, sem
+ * nenhuma altura mágica calibrada para uma resolução.
+ */
+.andon-sector-panel {
+  --andon-panel-rows: 1;
+  min-width: 0;
+  min-height: calc(
+    var(--andon-panel-chrome, 100px)
+    + var(--andon-panel-rows) * var(--andon-card-height, 140px)
+    + (var(--andon-panel-rows) - 1) * var(--andon-cards-gap, 6px)
+  );
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.andon-sector-panel__header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 13px;
+  color: #fff;
+  background: var(--sidebar);
+}
+
+.andon-sector-panel__header > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.andon-sector-panel__header img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.andon-sector-panel__header h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 16px;
+  letter-spacing: .035em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.andon-sector-panel__header > strong {
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: .025em;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.andon-sector-panel__header > strong span { font-variant-numeric: tabular-nums; }
+
+.andon-sector-panel__empty {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--muted);
+  background: var(--surface-alt);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.andon-sector-panel__groups {
+  --andon-group-count: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--andon-group-count), minmax(0, 1fr));
+  align-items: stretch;
+  gap: 7px;
+  padding: 7px;
+  overflow: hidden;
+}
+
+/* Flex em coluna, e não `grid-template-rows: auto 1fr`: painéis de grupo único
+ * omitem o cabeçalho do grupo, e a coluna implícita fazia a área de cartões
+ * cair na faixa de conteúdo em vez de ocupar o restante do painel. */
+.andon-resource-group {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.andon-resource-group__cards { flex: 1 1 auto; }
+
+/* Paineis com um quadro por estacao distribuem os quadros pela largura e
+ * quebram em novas linhas, em vez de espremer uma coluna por recurso. */
+.andon-sector-panel[data-group-flow="wrap"] .andon-sector-panel__groups {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--andon-group-width, 250px)), 1fr));
+  grid-auto-rows: min-content;
+  align-content: start;
+}
+
+.andon-resource-group__header {
+  min-width: 0;
+  flex: 0 0 auto;
+  min-height: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface);
+}
+
+.andon-resource-group__header h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  letter-spacing: .025em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.andon-resource-group__header span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/*
+ * Todo cartão do quadro tem a mesma altura: `minmax(0, var(--andon-card-height))`
+ * fixa o padrão e, sob pressão extrema, deixa a linha encolher em vez de
+ * recortar o conteúdo. A altura é um token por faixa de resolução — nunca por
+ * setor — para que nenhum recurso apareça maior que o outro.
+ */
+.andon-resource-group__cards {
+  --andon-card-width: 240px;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--andon-card-width)), 1fr));
+  grid-auto-rows: minmax(0, var(--andon-card-height, 140px));
+  align-content: start;
+  gap: 6px;
+  padding: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.andon-sector-panel[data-density="medium"] .andon-resource-group__cards {
+  --andon-card-width: 210px;
+}
+
+.andon-sector-panel[data-density="high"] .andon-resource-group__cards {
+  --andon-card-width: 190px;
+  gap: 4px;
+  padding: 4px;
+}
+
+.andon-card {
+  --state-color: var(--muted);
+  --state-soft: var(--surface-alt);
+  --state-on-color: var(--text);
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  /* impeccable-disable-next-line side-tab -- faixa de estado HMI (cor muda com o estado; o texto do estado está no card) */
+  border-left: 3px solid var(--state-color);
+  border-radius: 7px;
+  background: var(--surface);
+  animation: andon-card-update 360ms cubic-bezier(.2, .8, .2, 1) both;
+  container-type: inline-size;
+}
+
+.andon-card--producao { --state-color: var(--accent); --state-soft: var(--accent-soft); }
+.andon-card--parada { --state-color: var(--danger); --state-soft: var(--danger-soft); }
+/* Parada planejada e amarela; nao planejada, vermelha. A classificacao vem do backend. */
+.andon-card--parada[data-stop-classification="planejada"] { --state-color: var(--warning); --state-soft: var(--warning-soft); }
+.andon-card--setup { --state-color: var(--state-setup); --state-soft: var(--state-setup-soft); }
+.andon-card--retrabalho { --state-color: var(--state-rework); --state-soft: var(--state-rework-soft); --state-on-color: #fff; }
+.andon-card--atividade_sem_op { --state-color: var(--teal); --state-soft: var(--surface-alt); }
+.andon-card--desconhecido { --state-color: var(--muted); --state-soft: var(--surface-alt); }
+/* Sem demanda não é parada nem ociosidade dentro do turno: cor neutra própria,
+ * fora da escala verde/âmbar/vermelho que significa desempenho. */
+.andon-card--sem_demanda { --state-color: var(--muted); --state-soft: var(--surface-alt); }
+.andon-card--sem_demanda { border-style: dashed; }
+
+.andon-card__header {
+  min-width: 0;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.andon-card__identity {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.andon-card__identity > strong,
+.andon-card__identity > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.andon-card__identity > strong { color: var(--text); font-size: 13px; }
+.andon-card__identity > span { display: none; color: var(--muted); font-size: 9px; }
+
+.andon-card__state {
+  min-width: 0;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.andon-card__state > span {
+  min-width: 0;
+  max-width: 138px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 5px;
+  border: 1px solid var(--state-color);
+  border: 1px solid color-mix(in srgb, var(--state-color) 55%, var(--border));
+  border-radius: 5px;
+  color: var(--text);
+  color: color-mix(in srgb, var(--state-color) 68%, var(--text));
+  background: var(--state-soft);
+  font-size: 9px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.andon-card__state > span i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--state-color);
+}
+
+.andon-card__state > strong { flex: 0 0 auto; color: var(--text); font-size: 9px; }
+
+.andon-card__indicators {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+}
+
+.andon-card__oee {
+  --andon-oee: 0%;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-content: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text);
+  background: conic-gradient(var(--primary) var(--andon-oee), var(--divider) 0);
+  isolation: isolate;
+  text-align: center;
+  cursor: pointer;
+}
+
+.andon-card__oee::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.andon-card[data-active="true"] .andon-card__oee::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid transparent;
+  border-top-color: var(--primary);
+  border-right-color: transparent;
+  border-right-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: 50%;
+  animation: andon-oee-active 2.2s linear infinite;
+}
+
+.andon-card__oee span { color: var(--muted); font-size: 8px; font-weight: 700; line-height: 1; }
+.andon-card__oee strong { margin-top: 2px; font-size: 11px; line-height: 1; }
+.andon-card__oee:hover strong { color: var(--primary); }
+.andon-card__oee:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.andon-card__metrics {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0;
+}
+
+.andon-card__metric {
+  min-width: 0;
+  display: grid;
+  gap: 0;
+  padding: 4px 2px;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  background: var(--surface-alt);
+}
+
+.andon-card__metric > div:first-child {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1;
+  text-align: center;
+}
+
+.andon-card__metric strong { color: var(--text); font-size: 11px; }
+
+.andon-card__operation {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr);
+  align-items: center;
+  gap: 2px 6px;
+  margin-top: 0;
+  padding: 5px 6px 6px;
+  border-top: 1px solid var(--divider);
+}
+
+.andon-card__operation > div { min-width: 0; display: flex; align-items: baseline; gap: 4px; }
+.andon-card__operation span { flex: 0 0 auto; color: var(--muted); font-size: 8px; font-weight: 700; text-transform: uppercase; }
+.andon-card__operation strong {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  font-size: 10px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.andon-card__operation small { grid-column: 1 / -1; color: var(--primary); font-size: 8px; font-weight: 700; line-height: 1.1; }
+
+.andon-card__activity {
+  align-self: end;
+  overflow: hidden;
+  padding: 4px 7px 6px;
+  border-top: 1px solid var(--divider);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.andon-empty { width: 100%; height: 100%; display: grid; place-items: center; }
+
+@keyframes andon-oee-active {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes andon-card-update {
+  0% { opacity: .45; transform: translateY(4px) scale(.975); }
+  70% { opacity: 1; transform: translateY(-1px) scale(1.006); }
+  100% { opacity: 1; transform: none; }
+}
+
+/*
+ * Duas leituras distintas e discretas: um recurso que entra no Andon desliza
+ * para o lugar; um recurso que já estava e mudou de estado pulsa uma vez na cor
+ * do novo estado. O anel é `inset` porque o grid dos cartões recorta o que
+ * transborda.
+ */
+@keyframes andon-card-enter {
+  0% { opacity: 0; transform: translateY(10px) scale(.965); }
+  60% { opacity: 1; transform: translateY(-2px) scale(1.008); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes andon-card-refresh {
+  0% { box-shadow: inset 0 0 0 0 transparent; background: var(--surface); }
+  22% {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--state-color) 62%, transparent);
+    background: color-mix(in srgb, var(--state-color) 9%, var(--surface));
+  }
+  100% { box-shadow: inset 0 0 0 0 transparent; background: var(--surface); }
+}
+
+.andon-card[data-transition="enter"] {
+  animation: andon-card-enter 520ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.andon-card[data-transition="update"] {
+  animation: andon-card-refresh 1100ms cubic-bezier(.25, .8, .3, 1) both;
+}
+
+/*
+ * A folha global ainda contém o layout legado do Andon para Full HD. Estas
+ * regras deliberadamente mais específicas mantêm a visão geral nova como
+ * autoridade visual sem alterar as demais telas do Gestor.
+ */
+@media (min-width: 1700px) and (min-height: 900px) {
+  .andon-page--single-view .andon-content {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .andon-page--single-view .andon-board {
+    grid-template-columns: repeat(var(--andon-column-count, 2), minmax(0, 1fr));
+    grid-auto-rows: unset;
+    gap: var(--andon-board-gap);
+  }
+
+  .andon-page--single-view .andon-card {
+    min-height: 0;
+    height: auto;
+  }
+
+  .andon-page--single-view .andon-sector-panel[data-density="normal"] .andon-resource-group__cards {
+    --andon-card-width: 250px;
+  }
+
+  .andon-page--single-view .andon-sector-panel[data-density="medium"] .andon-resource-group__cards {
+    --andon-card-width: 220px;
+  }
+
+  .andon-page--single-view .andon-sector-panel[data-density="high"] .andon-resource-group__cards {
+    --andon-card-width: 205px;
+  }
+
+  .andon-page--single-view .andon-card__header {
+    min-height: 30px;
+    align-items: center;
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text);
+    background: var(--surface);
+  }
+  .andon-page--single-view .andon-card__identity > strong { color: var(--text); font-size: 13px; }
+
+  .andon-page--single-view .andon-card__state {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .andon-page--single-view .andon-card__state > span {
+    gap: 4px;
+    padding: 2px 5px;
+    border-color: color-mix(in srgb, var(--state-color) 55%, var(--border));
+    color: var(--text);
+    color: color-mix(in srgb, var(--state-color) 68%, var(--text));
+    background: var(--state-soft);
+    font-size: 10px;
+  }
+
+  .andon-page--single-view .andon-card__state > span i {
+    width: 6px;
+    height: 6px;
+    background: var(--state-color);
+  }
+
+  .andon-page--single-view .andon-card__state > strong {
+    color: var(--text);
+    font-size: 11px;
+  }
+
+  .andon-page--single-view .andon-card__indicators {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 6px;
+    padding: 5px 6px;
+  }
+
+  .andon-page--single-view .andon-card__oee {
+    width: 44px;
+    height: 44px;
+    background: conic-gradient(var(--primary) var(--andon-oee), var(--divider) 0);
+  }
+
+  .andon-page--single-view .andon-card__oee span { font-size: 8px; }
+  .andon-page--single-view .andon-card__oee strong { font-size: 11px; }
+  .andon-page--single-view .andon-card__metric { padding: 4px 2px; }
+  .andon-page--single-view .andon-card__metric > div:first-child { font-size: 8px; }
+  .andon-page--single-view .andon-card__metric strong { font-size: 11px; }
+
+  .andon-page--single-view .andon-card__operation {
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr);
+    gap: 2px 6px;
+    padding: 5px 6px 6px;
+  }
+
+  .andon-page--single-view .andon-card__operation > div {
+    display: flex;
+    grid-template-columns: none;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .andon-page--single-view .andon-card__operation span { font-size: 8px; }
+  .andon-page--single-view .andon-card__operation strong { font-size: 10px; }
+  .andon-page--single-view .andon-card__operation small {
+    grid-column: 1 / -1;
+    font-size: 8px;
+  }
+}
+
+@media (max-height: 960px) and (min-height: 801px) {
+  .andon-page--single-view .andon-content { padding: 8px 10px 10px; }
+  .andon-page--single-view .andon-board {
+    --andon-board-gap: 8px;
+    --andon-card-height: 128px;
+    --andon-cards-gap: 5px;
+    --andon-group-width: 220px;
+    --andon-panel-chrome: 88px;
+  }
+  .andon-page--single-view .andon-sector-panel { grid-template-rows: 38px minmax(0, 1fr); }
+  .andon-page--single-view .andon-sector-panel__header img { width: 22px; height: 22px; }
+  .andon-page--single-view .andon-sector-panel__header h2 { font-size: 15px; }
+  .andon-page--single-view .andon-sector-panel__groups { gap: 6px; padding: 6px; }
+  .andon-page--single-view .andon-resource-group__header { min-height: 26px; padding: 3px 6px; }
+  .andon-page--single-view .andon-resource-group__header h3 { font-size: 10px; }
+  .andon-page--single-view .andon-resource-group__cards { --andon-card-width: 220px; gap: 5px; padding: 5px; }
+  .andon-page--single-view .andon-sector-panel[data-density="medium"] .andon-resource-group__cards { --andon-card-width: 198px; }
+  .andon-page--single-view .andon-sector-panel[data-density="high"] .andon-resource-group__cards { --andon-card-width: 182px; }
+  .andon-page--single-view .andon-card__header { min-height: 27px; padding: 2px 5px; }
+  .andon-page--single-view .andon-card__identity > strong { font-size: 12px; }
+  .andon-page--single-view .andon-card__indicators { grid-template-columns: 38px minmax(0, 1fr); gap: 5px; padding: 4px 5px; }
+  .andon-page--single-view .andon-card__oee { width: 36px; height: 36px; }
+  .andon-page--single-view .andon-card__oee span { font-size: 7px; }
+  .andon-page--single-view .andon-card__oee strong { font-size: 10px; }
+  .andon-page--single-view .andon-card__metric { padding: 3px 2px; }
+  .andon-page--single-view .andon-card__metric > div:first-child { font-size: 7px; }
+  .andon-page--single-view .andon-card__metric strong { font-size: 10px; }
+  .andon-page--single-view .andon-card__operation { gap: 1px 6px; padding: 3px 5px 4px; }
+  .andon-page--single-view .andon-card__operation small { font-size: 7px; line-height: 1; }
+  /* Unico recuo consentido nesta faixa: o produto usa uma linha. Nenhum campo
+   * deixa de ser exibido. */
+  .andon-page--single-view .andon-card__operation strong { -webkit-line-clamp: 1; }
+}
+
+@media (max-height: 800px) {
+  .andon-content { padding: 7px 8px 8px; }
+  .andon-board {
+    --andon-board-gap: 7px;
+    --andon-card-height: 94px;
+    --andon-cards-gap: 4px;
+    --andon-group-width: 190px;
+    --andon-panel-chrome: 82px;
+  }
+  .andon-sector-panel { grid-template-rows: 37px minmax(0, 1fr); }
+  .andon-sector-panel__header { padding-left: 9px; padding-right: 9px; }
+  .andon-sector-panel__header img { width: 21px; height: 21px; }
+  .andon-sector-panel__header h2 { font-size: 14px; }
+  .andon-sector-panel__header > strong { font-size: 8px; }
+  .andon-sector-panel__groups { gap: 5px; padding: 5px; }
+  .andon-resource-group__header { min-height: 25px; padding: 3px 5px; }
+  .andon-resource-group__header h3 { font-size: 9px; }
+  .andon-resource-group__header span { font-size: 9px; }
+  .andon-resource-group__cards { --andon-card-width: 190px; gap: 4px; padding: 4px; }
+  .andon-sector-panel[data-density="medium"] .andon-resource-group__cards { --andon-card-width: 174px; }
+  .andon-sector-panel[data-density="high"] .andon-resource-group__cards { --andon-card-width: 158px; }
+  .andon-card__header { min-height: 24px; padding: 2px 5px; }
+  .andon-card__identity > strong { font-size: 10px; }
+  .andon-card__identity > span,
+  .andon-card__state > span,
+  .andon-card__state > strong { font-size: 7px; }
+  .andon-card__state > span { max-width: 112px; padding: 2px 4px; }
+  .andon-card__indicators { grid-template-columns: 32px minmax(0, 1fr); gap: 4px; padding: 3px 5px; }
+  .andon-card__oee { width: 30px; height: 30px; }
+  .andon-card__oee span { font-size: 6px; }
+  .andon-card__oee strong { font-size: 8px; }
+  .andon-card__metric { padding: 2px 1px; }
+  .andon-card__metric > div:first-child { font-size: 6px; }
+  .andon-card__metric strong { font-size: 8px; }
+  .andon-card__operation { grid-template-columns: minmax(62px, .7fr) minmax(0, 1.3fr); gap: 2px 6px; padding: 3px 5px 4px; }
+  .andon-card__operation span,
+  .andon-card__operation small { font-size: 6px; }
+  .andon-card__operation strong,
+  .andon-card__activity { font-size: 7px; }
+  .andon-card__operation strong { -webkit-line-clamp: 1; }
+}
+
+@container (max-width: 330px) {
+  .andon-card__operation {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: 3px;
+  }
+
+  .andon-card__operation > div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .andon-card__operation small { grid-column: 1; }
+}
+
+@media (max-width: 1100px) {
+  .andon-sector-panel__header > strong { font-size: 0; }
+  .andon-sector-panel__header > strong span { font-size: 8px; }
+  .andon-resource-group__header span { display: none; }
+}
+
+/*
+ * O perfil dedicado do Andon mantém a composição de TV sem rolagem. Perfis
+ * gerenciais podem rolar quando a carga real exceder o espaço, preservando
+ * cada informação em vez de recortar o último card.
+ */
+html:has(.andon-page--manager),
+body:has(.andon-page--manager),
+body:has(.andon-page--manager) #root {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Sub-aba "Mapa da fábrica": viewport fixa; a planta ocupa o que sobra abaixo da faixa de abas. */
+.andon-page--map { display: flex; flex-direction: column; }
+.andon-page--map .andon-content { flex: 1 1 0; height: auto; }
+.andon-page--map .andon-board-section { height: 100%; }
+
+.andon-page--manager {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+.andon-page--manager .andon-content,
+.andon-page--manager .andon-board-section,
+.andon-page--manager .andon-board {
+  height: auto;
+  overflow: visible;
+}
+
+.andon-page--manager .andon-board {
+  align-items: start;
+}
+
+/* No perfil gerencial a coluna cresce com o conteúdo: cada painel usa a altura
+ * que precisa e a página rola, em vez de disputar uma viewport fixa. */
+.andon-page--manager .andon-board__column {
+  height: auto;
+}
+
+.andon-page--manager .andon-board__column > .andon-sector-panel,
+.andon-page--manager .andon-board__column > .andon-sector-panel:last-child,
+.andon-page--manager .andon-board__column > .andon-sector-panel:only-child {
+  flex: 0 0 auto;
+}
+
+.andon-page--manager .andon-sector-panel__groups,
+.andon-page--manager .andon-resource-group,
+.andon-page--manager .andon-resource-group__cards {
+  overflow: visible;
+}
+
+.andon-page--manager .andon-resource-group__cards { align-content: start; }
+.andon-page--manager .andon-card { max-height: none; }
+
+/* TV 50\" em 2K/4K: cresce com a resolução, sem aplicar zoom de screenshot. */
+/* TV 50" em 2K/4K: cresce com a resolucao, sem aplicar zoom de screenshot. A
+ * escala respeita a mesma reserva de capacidade — cinco maquinas de Usinagem
+ * dentro da Caldeiraria — em vez de ampliar ate estourar a viewport. */
+@media (min-width: 2500px) and (min-height: 1300px) {
+  .andon-page--tv .andon-content { padding: 16px 20px 20px; }
+  .andon-page--tv .andon-board {
+    --andon-board-gap: 16px;
+    --andon-card-height: 180px;
+    --andon-cards-gap: 10px;
+    --andon-group-width: 410px;
+    --andon-panel-chrome: 132px;
+  }
+  .andon-page--tv .andon-sector-panel { grid-template-rows: 56px minmax(0, 1fr); border-radius: 14px; }
+  .andon-page--tv .andon-sector-panel__header { padding-left: 20px; padding-right: 20px; }
+  .andon-page--tv .andon-sector-panel__header img { width: 34px; height: 34px; }
+  .andon-page--tv .andon-sector-panel__header h2 { font-size: 23px; }
+  .andon-page--tv .andon-sector-panel__header > strong { font-size: 14px; }
+  .andon-page--tv .andon-sector-panel__groups { gap: 10px; padding: 10px; }
+  .andon-page--tv .andon-resource-group__header { min-height: 38px; padding: 6px 12px; }
+  .andon-page--tv .andon-resource-group__header h3 { font-size: 16px; }
+  .andon-page--tv .andon-resource-group__header span { font-size: 11px; }
+  .andon-page--tv .andon-resource-group__cards { gap: 10px; padding: 8px; --andon-card-width: 390px; }
+  .andon-page--tv .andon-sector-panel[data-density="medium"] .andon-resource-group__cards { --andon-card-width: 340px; }
+  .andon-page--tv .andon-sector-panel[data-density="high"] .andon-resource-group__cards { --andon-card-width: 310px; }
+  /* impeccable-disable-next-line side-tab -- faixa de estado HMI engrossada para leitura à distância na TV */
+  .andon-page--tv .andon-card { border-left-width: 5px; border-radius: 11px; }
+  .andon-page--tv .andon-card__header { min-height: 40px; padding: 5px 10px; }
+  .andon-page--tv .andon-card__identity > strong { font-size: 18px; }
+  .andon-page--tv .andon-card__state > span { max-width: 220px; padding: 4px 8px; font-size: 13px; }
+  .andon-page--tv .andon-card__state > strong { font-size: 13px; }
+  .andon-page--tv .andon-card__indicators { grid-template-columns: 66px minmax(0, 1fr); gap: 10px; padding: 8px 10px; }
+  .andon-page--tv .andon-card__oee { width: 62px; height: 62px; }
+  .andon-page--tv .andon-card__oee span { font-size: 10px; }
+  .andon-page--tv .andon-card__oee strong { font-size: 15px; }
+  .andon-page--tv .andon-card__metric { padding: 6px 4px; }
+  .andon-page--tv .andon-card__metric > div:first-child { font-size: 10px; }
+  .andon-page--tv .andon-card__metric strong { font-size: 15px; }
+  .andon-page--tv .andon-card__operation { gap: 3px 10px; padding: 7px 10px 8px; }
+  .andon-page--tv .andon-card__operation span { font-size: 10px; }
+  .andon-page--tv .andon-card__operation strong { font-size: 13px; }
+  .andon-page--tv .andon-card__operation small { font-size: 10px; }
+  .andon-page--tv .andon-card__activity { padding: 6px 10px 8px; font-size: 13px; }
+  .andon-page--tv .andon-sector-panel__empty { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .andon-card,
+  .andon-card[data-transition="enter"],
+  .andon-card[data-transition="update"],
+  .andon-card[data-active="true"] .andon-card__oee::after { animation: none; }
+}
+
+/*
+ * Leitura à distância (AN-01/02/03). Fica no fim da folha para governar, em
+ * todas as faixas de resolução, só o que carrega o estado: nome, estado e
+ * cronômetro. As fontes escalam com a largura do próprio cartão (`cqi`; o
+ * `.andon-card` é container), então 1920 e 2560 crescem juntos sem um
+ * tamanho por breakpoint.
+ * - Cabeçalho em duas linhas: nome + cronômetro; o motivo ganha linha própria
+ *   e quebra em vez de ser cortado — abrevia-se o código, nunca a causa.
+ * - Parada é o único estado que vira superfície cheia: vermelho quando não
+ *   planejada, âmbar quando planejada (classificação vinda do backend). O
+ *   escalonamento por tempo não é inventado aqui: não há limiar definido no MES.
+ */
+.andon-page--single-view .andon-card__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1px 8px;
+  padding: 4px 8px 5px;
+}
+
+.andon-page--single-view .andon-card__state { display: contents; }
+
+.andon-page--single-view .andon-card__identity > strong {
+  font-size: clamp(12px, 6.2cqi, 26px);
+  line-height: 1.2;
+}
+
+.andon-page--single-view .andon-card__state > strong {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: clamp(12px, 6.8cqi, 30px);
+  line-height: 1.15;
+}
+
+.andon-page--single-view .andon-card__state > span {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: start;
+  max-width: 100%;
+  overflow: visible;
+  padding: 1px 6px;
+  font-size: clamp(10px, 4.6cqi, 20px);
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.andon-page--single-view .andon-card__state > span i {
+  width: .55em;
+  height: .55em;
+  flex-basis: .55em;
+}
+
+.andon-card--parada { --state-fill: var(--fill-stopped); --state-ink: var(--fill-ink); }
+.andon-card--parada[data-stop-classification="planejada"] { --state-fill: var(--fill-waiting); --state-ink: var(--fill-ink-dark); }
+
+.andon-page--single-view .andon-card--parada {
+  border-color: var(--state-fill);
+  border-width: 2px 2px 2px 6px;
+  background: var(--state-soft);
+}
+
+.andon-page--single-view .andon-card--parada .andon-card__header {
+  border-bottom-color: transparent;
+  color: var(--state-ink);
+  background: var(--state-fill);
+}
+
+.andon-page--single-view .andon-card--parada .andon-card__identity > strong,
+.andon-page--single-view .andon-card--parada .andon-card__state > strong,
+.andon-page--single-view .andon-card--parada .andon-card__state > span { color: var(--state-ink); }
+
+.andon-page--single-view .andon-card--parada .andon-card__state > span {
+  padding-left: 0; padding-right: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.andon-page--single-view .andon-card--parada .andon-card__state > span i { background: var(--state-ink); }
+
+
+/*
+ * TV: rodízio de setores e balões de notificação. Nada daqui vale para a visão
+ * gerencial (`.andon-page--manager`), que segue mostrando o quadro completo.
+ */
+
+/* Visão geral da TV: parada destaca o painel, mas nunca fixa o rodízio. */
+.andon-page--tv .andon-sector-panel[data-alert="danger"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 55%, transparent);
+}
+
+.andon-page--tv .andon-sector-panel[data-alert="warning"] {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 55%, transparent);
+}
+
+.andon-sector-panel__alert {
+  margin-right: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--danger);
+  font-style: normal;
+}
+
+.andon-sector-panel[data-alert="warning"] .andon-sector-panel__alert {
+  color: var(--fill-ink-dark);
+  background: var(--warning);
+}
+
+/*
+ * Setor em foco: ocupa a tela toda e a tipografia acompanha a largura da
+ * viewport. `--u` é a unidade do foco (1920 px = ~1,7 px; 3840 px = ~3,5 px) e
+ * cresce quando o setor tem poucos recursos. Toda fonte abaixo vale >= 9u, ou
+ * seja, >= 15 px em 1080p.
+ */
+.andon-page--tv .andon-board--focus {
+  --andon-column-count: 1;
+  --u: max(1.4px, .09vw);
+}
+
+.andon-page--tv .andon-board--focus .andon-sector-panel[data-density="normal"] { --u: max(1.6px, .115vw); }
+.andon-page--tv .andon-board--focus .andon-sector-panel[data-density="medium"] { --u: max(1.5px, .1vw); }
+
+.andon-page--tv .andon-board--focus .andon-sector-panel {
+  --andon-card-height: calc(var(--u) * 172);
+  min-height: 0;
+  grid-template-rows: calc(var(--u) * 30) minmax(0, 1fr);
+  border-radius: calc(var(--u) * 8);
+}
+
+.andon-page--tv .andon-board--focus .andon-sector-panel__header { padding-left: calc(var(--u) * 14); padding-right: calc(var(--u) * 14); }
+.andon-page--tv .andon-board--focus .andon-sector-panel__header img { width: calc(var(--u) * 20); height: calc(var(--u) * 20); }
+.andon-page--tv .andon-board--focus .andon-sector-panel__header h2 { font-size: calc(var(--u) * 18); }
+.andon-page--tv .andon-board--focus .andon-sector-panel__header > strong { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-sector-panel__empty { font-size: calc(var(--u) * 14); }
+.andon-page--tv .andon-board--focus .andon-sector-panel__groups { gap: calc(var(--u) * 8); padding: calc(var(--u) * 8); }
+.andon-page--tv .andon-board--focus .andon-resource-group__header { min-height: calc(var(--u) * 24); padding: calc(var(--u) * 4) calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-resource-group__header h3 { font-size: calc(var(--u) * 11); }
+.andon-page--tv .andon-board--focus .andon-resource-group__header span { font-size: calc(var(--u) * 9); }
+
+.andon-page--tv .andon-board--focus .andon-sector-panel[data-density] .andon-resource-group__cards {
+  --andon-card-width: calc(var(--u) * 176);
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 8);
+}
+
+/*
+ * Prioridade de leitura de longe: OEE, OP e Produto (maiores), depois o nome do
+ * recurso (sempre numa linha só, inteiro; `--name-fit` encolhe a fonte só do nome
+ * que não coube, ver useFocusFit) e por último o estado.
+ */
+.andon-page--tv .andon-board--focus .andon-card__header { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 2); padding: calc(var(--u) * 4) calc(var(--u) * 8) calc(var(--u) * 5); }
+.andon-page--tv .andon-board--focus .andon-card__identity > strong { overflow: visible; text-overflow: clip; font-size: calc(var(--u) * 14 * var(--name-fit, 1)); line-height: 1.15; }
+.andon-page--tv .andon-board--focus .andon-card__state { justify-content: space-between; }
+.andon-page--tv .andon-board--focus .andon-card__state > span { max-width: none; grid-column: 1 / span 2; }
+.andon-page--tv .andon-board--focus .andon-card__state > strong { font-size: calc(var(--u) * 12); }
+.andon-page--tv .andon-board--focus .andon-card__state > span { padding: calc(var(--u) * 1) calc(var(--u) * 6); font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__indicators { gap: calc(var(--u) * 6); padding: calc(var(--u) * 6) calc(var(--u) * 6); }
+.andon-page--tv .andon-board--focus .andon-card__oee span { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__metrics { gap: calc(var(--u) * 3); }
+.andon-page--tv .andon-board--focus .andon-card__metric { padding: calc(var(--u) * 4) calc(var(--u) * 1); }
+.andon-page--tv .andon-board--focus .andon-card__metric > div:first-child { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__metric strong { font-size: calc(var(--u) * 10.5); white-space: nowrap; }
+.andon-page--tv .andon-board--focus .andon-card__operation { grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 3); padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 7); }
+.andon-page--tv .andon-board--focus .andon-card__operation span { font-size: calc(var(--u) * 10); }
+.andon-page--tv .andon-board--focus .andon-card__operation strong { font-size: calc(var(--u) * 14); white-space: normal; -webkit-line-clamp: 2; }
+.andon-page--tv .andon-board--focus .andon-card__operation small { font-size: calc(var(--u) * 10); }
+/* Produto: descrição em até 2 linhas na largura toda (sem o rótulo); código sem espaço ("SRF004001001") quebra em vez de virar reticências. */
+.andon-page--tv .andon-board--focus .andon-card__product > span { display: none; }
+.andon-page--tv .andon-board--focus .andon-card__operation > .andon-card__product > strong { margin-left: 0; font-size: calc(var(--u) * 12); line-height: 1.1; overflow-wrap: break-word; word-wrap: break-word; }
+.andon-page--tv .andon-board--focus .andon-card__activity { padding: calc(var(--u) * 6) calc(var(--u) * 8); font-size: calc(var(--u) * 10); }
+
+/* Chrome 79 da TV não aplica `gap` em flexbox: o espaço entre rótulo e valor vem de margem. */
+.andon-page--tv .andon-board--focus .andon-card__state { gap: 0; }
+.andon-page--tv .andon-board--focus .andon-card__state > span { gap: 0; }
+.andon-page--tv .andon-board--focus .andon-card__state > span i { width: calc(var(--u) * 6); height: calc(var(--u) * 6); flex-basis: calc(var(--u) * 6); margin-right: calc(var(--u) * 5); }
+.andon-page--tv .andon-board--focus .andon-card__operation > div { gap: 0; }
+.andon-page--tv .andon-board--focus .andon-card__operation > div > strong { margin-left: calc(var(--u) * 6); }
+
+/* Anel do OEE: o miolo e a fonte acompanham `--u`, senão "100%" estoura o círculo. */
+.andon-page--tv .andon-board--focus .andon-card__indicators { grid-template-columns: calc(var(--u) * 48) minmax(0, 1fr); }
+.andon-page--tv .andon-board--focus .andon-card__oee { width: calc(var(--u) * 48); height: calc(var(--u) * 48); }
+.andon-page--tv .andon-board--focus .andon-card__oee::before { top: calc(var(--u) * 4); right: calc(var(--u) * 4); bottom: calc(var(--u) * 4); left: calc(var(--u) * 4); }
+.andon-page--tv .andon-board--focus .andon-card__oee strong { margin-top: calc(var(--u) * 1); font-size: calc(var(--u) * 11); white-space: nowrap; }
+
+/*
+ * Balões de mudança de estado, canto superior esquerdo. As cores repetem as do
+ * cartão (mesmos tokens de `.andon-card--*`). Sem animação por padrão; ela só
+ * entra para quem não pediu movimento reduzido.
+ */
+.andon-toasts {
+  position: fixed;
+  z-index: 40;
+  top: max(10px, .8vw);
+  left: max(10px, .8vw);
+  width: clamp(300px, 24vw, 900px);
+  display: grid;
+  gap: max(8px, .5vw);
+  font-size: max(15px, .85vw);
+  pointer-events: none;
+}
+
+.andon-toast {
+  --state-color: var(--muted);
+  --state-soft: var(--surface-alt);
+  display: grid;
+  gap: .25em;
+  padding: .6em .8em .7em;
+  border: 2px solid var(--state-color);
+  /* impeccable-disable-next-line side-tab -- faixa de estado HMI, mesma do cartão do Andon */
+  border-left-width: .4em;
+  border-radius: .6em;
+  color: var(--text);
+  background: var(--state-soft);
+  box-shadow: 0 .3em 1em rgba(0, 0, 0, .25);
+}
+
+.andon-toast--producao { --state-color: var(--accent); --state-soft: var(--accent-soft); }
+.andon-toast--parada { --state-color: var(--danger); --state-soft: var(--danger-soft); --state-fill: var(--fill-stopped); --state-ink: var(--fill-ink); }
+.andon-toast--parada[data-stop-classification="planejada"] { --state-color: var(--warning); --state-soft: var(--warning-soft); --state-fill: var(--fill-waiting); --state-ink: var(--fill-ink-dark); }
+.andon-toast--setup { --state-color: var(--state-setup); --state-soft: var(--state-setup-soft); }
+.andon-toast--retrabalho { --state-color: var(--state-rework); --state-soft: var(--state-rework-soft); }
+.andon-toast--atividade_sem_op { --state-color: var(--teal); }
+.andon-toast--fila { --state-color: var(--muted); }
+
+.andon-toast--parada {
+  border-color: var(--state-fill);
+  color: var(--state-ink);
+  background: var(--state-fill);
+}
+
+.andon-toast__header {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .6em;
+}
+
+.andon-toast__header strong { min-width: 0; overflow: hidden; font-size: 1.2em; text-overflow: ellipsis; white-space: nowrap; }
+.andon-toast__header span { flex: 0 0 auto; font-size: .9em; font-weight: 700; text-transform: uppercase; opacity: .85; }
+
+.andon-toast__state {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: .45em;
+  color: var(--text);
+  color: color-mix(in srgb, var(--state-color) 68%, var(--text));
+  font-size: 1.15em;
+  font-weight: 800;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.andon-toast--parada .andon-toast__state { color: var(--state-ink); }
+.andon-toast__state i { width: .6em; height: .6em; flex: 0 0 .6em; border-radius: 50%; background: currentColor; }
+.andon-toast__detail { margin: 0; font-size: .95em; font-weight: 600; overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .andon-toast { animation: andon-toast-in 260ms cubic-bezier(.2, .8, .2, 1) both; }
+}
+
+@keyframes andon-toast-in {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+ * Navegadores sem `gap` em flexbox (Chrome < 84, caso da TV LG webOS com Chrome 79):
+ * o espaçamento vira margem. `aspect-ratio` chegou depois do `gap`, então o bloco
+ * só vale onde o `gap` não existe e, nos demais, no máximo duplica uma folga.
+ * Cabeçalho do cartão e `.andon-card__state` ficam de fora: no Andon são grid/contents.
+ */
+@supports not (aspect-ratio: 1 / 1) {
+  .andon-board__column > * + * { margin-top: var(--andon-board-gap); }
+  .andon-sector-panel__header > * + * { margin-left: 12px; }
+  .andon-sector-panel__header > div > * + * { margin-left: 9px; }
+  .andon-resource-group__header > * + * { margin-left: 6px; }
+  .andon-card__state > span > i { margin-right: .45em; }
+  .andon-card__operation > div > span { margin-right: .5em; }
+  .andon-toast__header > * + * { margin-left: .6em; }
+  .andon-toast__state > i { margin-right: .45em; }
+}
+
+/* Cartão parado: rótulos cinza sobre o fundo rosado não se leem de longe; usa a cor do texto. */
+.andon-page--tv .andon-board--focus .andon-card--parada .andon-card__oee span,
+.andon-page--tv .andon-board--focus .andon-card--parada .andon-card__metric > div:first-child,
+.andon-page--tv .andon-board--focus .andon-card--parada .andon-card__operation span { color: var(--text); }
+.andon-page--tv .andon-board--focus .andon-card__header { column-gap: calc(var(--u) * 10); }
+
+/* Mapa da fábrica (visão geral da TV): a planta baixa como SVG, uma pastilha por recurso.
+   Chrome 79: sem gap em flex (margens), sem color-mix, só tokens do sistema. */
+.andon-map {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.andon-map__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7vw 1.2vw;
+  color: #fff;
+  background: var(--sidebar);
+}
+.andon-map__header h2 { margin: 0; font-size: clamp(14px, 1.15vw, 44px); letter-spacing: 0.08em; text-transform: uppercase; }
+.andon-map__header span { font-size: clamp(11px, 0.9vw, 34px); color: var(--sidebar-text); }
+.andon-map__plan { display: block; flex: 1 1 0; width: 100%; min-height: 0; }
+.andon-map__structure { fill: none; stroke: var(--border-strong); stroke-width: 2; }
+.andon-map__structure--strong { stroke: var(--text); stroke-width: 4; }
+.andon-map__structure--thin { stroke-width: 1.5; stroke: var(--muted); }
+.andon-map__structure--shaded { fill: var(--surface-alt); }
+.andon-map__area { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+.andon-map__hatch-bg { fill: var(--surface-alt); }
+.andon-map__hatch-line { stroke: var(--border-strong); stroke-width: 2; }
+.andon-map__area--idle { fill: url(#andon-map-hatch); }
+.andon-map__label { font-size: 24px; font-weight: 800; letter-spacing: 0.02em; fill: var(--text); }
+.andon-map__tile rect { fill: var(--fill-neutral); stroke: none; }
+.andon-map__tile text { font-size: 15px; font-weight: 800; fill: var(--fill-ink); }
+.andon-map__tile--producao rect, .andon-map__swatch--producao { background: var(--fill-producing); fill: var(--fill-producing); }
+.andon-map__tile--setup rect, .andon-map__swatch--setup { background: var(--fill-setup); fill: var(--fill-setup); }
+.andon-map__tile--parada rect, .andon-map__swatch--parada { background: var(--fill-stopped); fill: var(--fill-stopped); }
+.andon-map__tile--parada_planejada rect, .andon-map__swatch--parada_planejada { background: var(--fill-waiting); fill: var(--fill-waiting); }
+.andon-map__tile--parada_planejada text, .andon-map__tile--atividade_sem_op text { fill: var(--fill-ink-dark); }
+.andon-map__tile--retrabalho rect, .andon-map__swatch--retrabalho { background: var(--fill-rework); fill: var(--fill-rework); }
+.andon-map__tile--atividade_sem_op rect, .andon-map__swatch--atividade_sem_op { background: var(--teal); fill: var(--teal); }
+.andon-map__tile--sem_demanda rect, .andon-map__swatch--sem_demanda { background: var(--border); fill: var(--border); }
+.andon-map__tile--sem_demanda text { fill: var(--fill-ink-dark); }
+.andon-map__legend {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7vw 1.2vw 0.8vw;
+  border-top: 1px solid var(--border);
+  font-size: clamp(14px, 1.3vw, 48px);
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-alt);
+}
+.andon-map__legend-item { display: inline-flex; align-items: center; margin: 0.2vw 1.2vw; white-space: nowrap; }
+.andon-map__swatch {
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  margin-right: 0.5em;
+  border: 2px solid transparent;
+  border-radius: 3px;
+}
+.andon-map__swatch--idle { border: 1.5px solid var(--border-strong); background: repeating-linear-gradient(45deg, var(--surface-alt) 0, var(--surface-alt) 0.17em, var(--muted) 0.17em, var(--muted) 0.3em); }
+.andon-map__unplaced { margin-left: auto; color: var(--fill-stopped); }
+
+/* Hover da gestão: cartão com OEE e apontamento do recurso (a TV não usa). */
+.andon-map__tile--hover { cursor: pointer; }
+.andon-map__tile--hover:hover rect { stroke: var(--text); stroke-width: 3; }
+.andon-map__card {
+  position: absolute;
+  z-index: 5;
+  width: 280px;
+  max-width: 45%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+  pointer-events: none;
+}
+.andon-map__card h3 { margin: 0 0 2px; font-size: 14px; }
+.andon-map__card h3 small { color: var(--muted); font-weight: 600; margin-left: 4px; }
+.andon-map__card p { margin: 2px 0; }
+.andon-map__card-state { font-weight: 700; }
+.andon-map__card-detail { color: var(--muted); }
+.andon-map__card dl { margin: 6px 0 0; }
+.andon-map__card dl > div { display: flex; justify-content: space-between; margin: 2px 0; }
+.andon-map__card dt { color: var(--muted); margin-right: 8px; }
+.andon-map__card dd { margin: 0; font-weight: 700; text-align: right; word-break: break-word; }
+.andon-map__card-metrics { padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.andon-map__swatch--sem_demanda { border-color: var(--border-strong); }
