@@ -39,7 +39,7 @@ export function OperatorShell({
       <header className={`operator-topbar ${resource ? "operator-topbar--with-machine" : ""}`}>
         <h1 className="visually-hidden">{pageTitle}</h1>
         <div className="operator-topbar__brand">
-          <img src={assets.operator.logo} alt="Gestor de Peças" />
+          <img src={assets.logo} alt="Gestor de Peças" />
           <small className="operator-topbar__credit">Powered by Iago Luchtenberg</small>
         </div>
         <div className="operator-topbar__clock"><img src={assets.clock} alt="" /><SystemClock /></div>

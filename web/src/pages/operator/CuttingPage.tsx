@@ -290,7 +290,7 @@ export function CuttingPage({ resource }: { resource: string }) {
           {!stopped ? <button type="button" className="button operator-danger" disabled={busy} onClick={() => setStopOpen(true)}>Registrar parada</button> : null}
           {/* Sem plano em processo o Início do posto é a atividade diária. */}
           {activityInProgress ? <button type="button" className="button button--primary" disabled={busy} onClick={() => setActivityPrompt("Finalizado")}>Finalizar atividade</button> : null}
-          {!stopped && !activityInProgress && !active ? <button type="button" className="button" disabled={busy} onClick={() => setActivityPrompt("Início")}>Iniciar atividade</button> : null}
+          {!stopped && !activityInProgress && !active ? <button type="button" className="button operator-go" disabled={busy} onClick={() => setActivityPrompt("Início")}>Iniciar atividade</button> : null}
           {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>{planoTemRepeticao(activePlan) ? "Finalizar nesting" : "Finalizar plano"}</button> : null}
         </div>
       </div>

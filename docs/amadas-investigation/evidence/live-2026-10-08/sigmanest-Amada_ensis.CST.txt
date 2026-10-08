@@ -1,0 +1,55 @@
+; Costing for mm units
+; Variable	            Description             Units
+; Name
+;--------------------------------------------------------------------------------------
+; #1  [weight]         = True weight of part                 [mass/part]
+; #2  [rectWeight]     = Rectanglar weight 	                [mass/part]
+; #3  [MatCost]        = Material Cost			[amount/mass]
+; #4  [scrap]          = scrap of nesting [(weight of plate consumed-true weight of part)/plate consumed]
+; #5  [PierceTime]     = Piercing time (sec)                 [time]
+; #6  [NestedCutTime]  = Cutting Time  (sec)                 [time]
+; #7  [TravelTime]     = Rapid time    (sec)                 [time]
+; #8  [TotalTime]      = Total Time    (sec) (Piercing+Cutting+Rapid)[time]
+; #9  [CutLength]      = Cutting length                      [length]  (mm)
+; #10 [TravelLength]   = Rapid length                        [length]  (mm)
+; #11 [TotalLength]    = Total Length (Cutting + rapid)      [length]  (mm)
+; #12 [PierceCount]    = Number of pierces                   [number of pierces per part]
+; #13 [NumParts]       = Total number of parts               [total for nesting task including multi-torch parts]
+; #14 [NumMasterParts] = Number of master Parts              [master vs slave in multi-torch, "green"]
+; #15 [PartArea]       = Part Area      (mm^2)
+; #16 [PartRectArea]   = Part Rectangular Area (mm^2)
+; #17 [PartOutSideArea]= Part Area Excluding internal contours (mm^2)
+; #18 [OutSideWeight]  = Weight of part excluding internal contours
+; #101-#110 [CostParam1-CostParam10]               = Table values (for a given machine, material grade and thickness)
+; #201-#210 [MachineCostParam1-MachineCostParam10] = Table values (Machine)
+; #301-#310 [GlobalCostParam1-GlobalCostParam10]   = Table values (Global)
+; -------------------------------------------------------------------------------------
+;
+;
+200 : Cost Model    = 2
+210 : Part Min Cost = 0
+; True Minimum Cost assuming zero scrap
+; -------------------------------------------------------------------------------------
+100 : Material Cost = (#1*#3)
+101 : Cutting Cost  = (#201*#9)+(#202*#8)+(#203*#12)
+102 : Material Cost = ([weight]*[MatCost])
+103 : Cutting Cost  = ([MachineCostParam1]*[CutLength])+([MachineCostParam2]*[TotalTime])+([MachineCostParam3]*[PierceCount])
+;
+; Rectangular Cost
+; -------------------------------------------------------------------------------------
+110 : Material Cost = (#2*#3)
+111 : Cutting Cost  = (#201*#9)+(#202*#8)+(#203*#12)
+112 : Material Cost = ([rectWeight]*[MatCost])
+113 : Cutting Cost  = ([MachineCostParam1]*[CutLength])+([MachineCostParam2]*[TotalTime])+([MachineCostParam3]*[PierceCount])
+;
+; Nested Cost
+; -------------------------------------------------------------------------------------
+120 : Material Cost = #3*(#1/(1-#4))
+121 : Cutting Cost  = ((#201*#13*#9)+(#202*#8*#14)+(#203*#12*#13))/(#13)
+122 : Material Cost = [MatCost]*([weight]/(1-[scrap]))
+123 : Cutting Cost  = (([MachineCostParam1]*[NumParts]*[CutLength])+([MachineCostParam2]*[TotalTime]*[NumMasterParts])+([MachineCostParam3]*[PierceCount]*[NumParts]))/([NumParts])
+;
+;
+;
+;
+

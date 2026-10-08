@@ -1,0 +1,10 @@
+[
+  {
+    "File": "TB_ParameterExplorer_V3.03.01_20260821_GTS01-PRO06.px3",
+    "HeaderHex": "50-4B-03-04-14-00-00-00-00-00-ED-43-15-5D-00-00"
+  },
+  {
+    "File": "TB_ProductionDesigner_V3.03.01_20260821_GTS01-PRO06.PD",
+    "HeaderHex": "50-00-44-00-42-00-41-00-43-00-4B-00-55-00-50-00"
+  }
+]

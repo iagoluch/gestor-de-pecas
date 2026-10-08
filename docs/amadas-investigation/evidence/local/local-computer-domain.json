@@ -1,0 +1,7 @@
+{
+  "PartOfDomain": true,
+  "Name": "GTS04-LOG01",
+  "Date": "2026-10-08",
+  "Source": "Get-CimInstance Win32_ComputerSystem, local read",
+  "Domain": "gtsdobrasil.com.br"
+}

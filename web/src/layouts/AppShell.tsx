@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ChamadaButton } from "../components/ChamadaButton";
 import { ChamadaSino } from "../components/ChamadaSino";
+import { CommandPalette } from "../components/CommandPalette";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -34,6 +35,20 @@ export function AppShell({ children }: PropsWithChildren) {
   // volta ao botão de menu (AX-05). No desktop `open` nunca liga.
   useDialogFocus(drawerRef, open, () => setOpen(false));
   const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role));
+  const section = sections.find((item) => isSectionActive(item, location.pathname));
+  const tab = section?.tabs.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((value) => !value);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     try {
@@ -67,14 +82,6 @@ export function AppShell({ children }: PropsWithChildren) {
           <img src={assets.logo} alt="Gestor de Peças" />
           <button type="button" className="sidebar__close" onClick={() => setOpen(false)} aria-label="Fechar navegação">×</button>
         </div>
-        <div className="profile-card">
-          <img src={assets.profile} alt="" />
-          <div>
-            <strong>Olá,</strong>
-            <span>{user?.name ?? "Usuário"}</span>
-          </div>
-          <ChamadaSino />
-        </div>
         <nav className="sidebar__nav" aria-label="Navegação gerencial">
           {sections.map((item) => {
             const active = isSectionActive(item, location.pathname);
@@ -93,22 +100,33 @@ export function AppShell({ children }: PropsWithChildren) {
           })}
         </nav>
         <div className="sidebar__footer">
-          <div className="status-card">
-            <div className="status-card__clock">
-              <img src={assets.clock} alt="" aria-hidden="true" />
-              <div>
-                <SystemClock />
-              </div>
-            </div>
-          </div>
-          <div className="sidebar__quick-actions">
-            <ThemeToggle compact />
-            <LogoutButton compact />
-          </div>
           <small className="sidebar__credit">Desenvolvido por:<br />Iago Luchtenberg da Silva</small>
         </div>
       </aside>
-      <main id="conteudo" tabIndex={-1} className="app-content">{children ?? <Outlet />}</main>
+      <div className="app-main">
+        <header className="topbar">
+          <div className="topbar__crumb" aria-label="Você está em">
+            <span>Gestão</span>
+            {section ? <><span aria-hidden="true">/</span><span>{section.label}</span></> : null}
+            {tab ? <><span aria-hidden="true">/</span><b>{tab.label}</b></> : null}
+          </div>
+          <button type="button" className="topbar__search" onClick={() => setPaletteOpen(true)} aria-label="Ir para qualquer tela (Ctrl K)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+            <span>Ir para qualquer tela…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <div className="topbar__clock" aria-label="Horário do sistema"><i aria-hidden="true" /><SystemClock /></div>
+          <ThemeToggle compact />
+          <ChamadaSino />
+          <div className="topbar__user">
+            <img src={assets.profile} alt="" />
+            <span>{user?.name ?? "Usuário"}</span>
+            <LogoutButton compact />
+          </div>
+        </header>
+        <main id="conteudo" tabIndex={-1} className="app-content">{children ?? <Outlet />}</main>
+      </div>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} />
       <ChamadaButton variant="gestao" />
     </div>
   );

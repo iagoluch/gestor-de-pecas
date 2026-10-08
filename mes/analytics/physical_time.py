@@ -95,6 +95,7 @@ def consolidate_physical_time(
     by_sector = defaultdict(lambda: defaultdict(float))
     stop_totals = defaultdict(lambda: defaultdict(float))
     by_resource_stop = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    by_sector_stop = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
     physical_seconds = 0.0
     overlap_seconds = 0.0
     conflict_seconds = 0.0
@@ -110,6 +111,9 @@ def consolidate_physical_time(
         if segment.stop_classification is not None:
             stop_totals[segment.category][segment.stop_classification] += seconds
             by_resource_stop[segment.resource][segment.category][
+                segment.stop_classification
+            ] += seconds
+            by_sector_stop[segment.sector][segment.category][
                 segment.stop_classification
             ] += seconds
         if segment.category is EventCategory.OUT_OF_SHIFT:
@@ -148,6 +152,12 @@ def consolidate_physical_time(
                 category: dict(value) for category, value in categories.items()
             }
             for resource, categories in by_resource_stop.items()
+        },
+        "by_sector_stop_classification": {
+            sector: {
+                category: dict(value) for category, value in categories.items()
+            }
+            for sector, categories in by_sector_stop.items()
         },
         "physical_seconds": physical_seconds,
         "raw_attributed_seconds": raw_attributed,

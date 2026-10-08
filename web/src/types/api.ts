@@ -476,6 +476,7 @@ export interface ManagementOverview {
   };
   kpi_time_bases: Record<string, number>;
   sectors: SectorSummary[];
+  sector_kpis?: Array<{ setor: string; metrics: Record<string, MetricValue> }>;
   time_composition: {
     items: TimeCompositionItem[];
     resource_count?: number;
@@ -486,4 +487,25 @@ export interface ManagementOverview {
   data_quality: Record<string, unknown>;
   insights: ManagementInsights;
   simulation?: SimulationSummary | null;
+}
+
+/** Série da Visão Geral (`/management/overview/trend`): mesmos números do OEE canônico, quebrados por intervalo. */
+export interface OverviewTrendPoint {
+  period_start: string;
+  period_end: string;
+  production: { good: number; scrap: number; rework: number };
+  kpis: Record<"oee" | "availability" | "performance" | "ftt", MetricValue>;
+  hours: Record<string, number>;
+  planned_quantity: number | null;
+  sectors: Array<{ setor: string; producao_boa: number }>;
+}
+
+export interface OverviewTrend {
+  bucket_days: number;
+  availability: Availability;
+  reason?: string | null;
+  points: OverviewTrendPoint[];
+  previous: { period_start: string; period_end: string; production: OverviewTrendPoint["production"]; kpis: OverviewTrendPoint["kpis"] } | null;
+  sector_summary: Array<{ setor: string; oee: MetricValue | null; resources_total: number; resources_with_production: number }>;
+  recent_events: Array<{ resource: string; sector: string | null; state: string; at: string }>;
 }

@@ -1,0 +1,26 @@
+[
+  {
+    "Name": "Backup_Software_AMADA",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-08-21T08:30:58.3963907-03:00"
+  },
+  {
+    "Name": "V120.fel",
+    "Mode": "-a---",
+    "Length": 1728,
+    "LastWriteTime": "2026-09-21T15:11:40.6312398-03:00"
+  },
+  {
+    "Name": "V80.dxf",
+    "Mode": "-a---",
+    "Length": 5249,
+    "LastWriteTime": "2026-09-24T08:38:18.0297268-03:00"
+  },
+  {
+    "Name": "V80.fel",
+    "Mode": "-a---",
+    "Length": 1625,
+    "LastWriteTime": "2026-09-24T08:37:47.827631-03:00"
+  }
+]

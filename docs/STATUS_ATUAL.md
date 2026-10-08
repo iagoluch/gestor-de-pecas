@@ -969,3 +969,23 @@ ensaio de restauração do TESTE (§2.33). Resultado final do pytest após
   destacadas explicitamente nesses relatórios e resumidas na seção 3 acima.
 - Não apagar `_quarentena_revisar/` sem o usuário confirmar — nada nela é
   referenciado, mas a decisão de apagar é dele.
+
+### Investigação AMADA somente leitura — 08/10/2026
+
+- FATO: investigação em `docs/amadas-investigation/` (11 documentos, fontes PT/EN/JA e evidências sanitizadas). PC de software AMADA `GTS01-PRO06.gtsdobrasil.com.br` resolvido em `10.10.3.22`; TCP/445 e enumeração SMB comprovados. Backups VPSS V3.03.01 de 21/08/2026 e programa DNK de Laser legíveis em `\\192.168.0.218\Arquivos`.
+- FATO: backup Parameter Explorer cadastra ENSIS3015AJ/AMNC 3i, HG2204/AMNC_3i e EGB1303E/AMNC_4ie. Identidades MES: LASER1, DOBRA2 e DOBRA3; DOBRA1 é Gasparini. Cadastro offline não comprova conexão operacional; `ID_OSC_NAME=ENSIS2000` no CAM exige conferir perfil versus Laser física informada como 12 kW.
+- FATO: XMLs offline referenciam CommandLogCsvUpload/FTPSending/HDVCBox, mas IP do box está vazio e coleta aparece não registrada. AMADA/Fujitsu documentam OPC UA/MTConnect no produto VCBox; existência/ativação local, direção, endpoint e tags não foram comprovadas.
+- DECISÃO DE ESCOPO: não implementar integração antes de obter amostra operacional e semântica reais; nenhuma escrita em CNC, infraestrutura ou banco, nenhuma captura ou varredura geral OT. Contador/golpe não equivale a peça boa nem fim de programa a fim de OP.
+- PENDENTE: consulta legítima da configuração ativa no PC AMADA/telas AMNC para identificar CNC/VCBox/export existente; usuário não tem IP/URL no momento. Menor PoC operacional: uma máquina, estado/programa/contador/timestamp, leitura comparativa sem alimentar timeline/outbox. Procedimentos e impactos em `docs/amadas-investigation/10-proximo-teste.md`.
+
+### Avanço AMADA / SigmaNEST — 08/10/2026, leitura atual
+
+- FATO: CSVs eReport gerados às 11:20 de hoje foram lidos diretamente no share 192.168.0.218: T3687, programas 9379–9381, cinco linhas OP/peça; quantidades arranjadas 105 + 120. Leitor pontual validado em JSON, sem banco/API/MES.
+- FATO: `.pst` configura segunda saída em NESTING LASER; hash igual do 9381 comprova as duas cópias. `.pas` gera TT com variável de planejamento e grava complete_code=2/contadores zero como constantes no SCH. Não são execução/produção real.
+- FATO: agendador remoto negou acesso; HTTP80 e WinRM falharam. IP CNC/VCBox continua desconhecido. G92 igual não prova uso atual do perfil AMADA de 2100 W; documento 12 corrigido. Evidências e resultado: `docs/amadas-investigation/13-leitura-atual-sigmanest.md`.
+
+### Limite de autorização informado pelo usuário — 08/10/2026
+
+FATO INFORMADO PELO USUÁRIO: não possui autorização para entrar no PC GTS01-PRO06. A autorização de descoberta somente leitura não autoriza login remoto. A janela local de configuração RDP foi aberta com `/edit`, sem conexão automática; não houve login remoto pelo agente. Não solicitar novamente que o usuário entre, não iniciar RDP, não usar credenciais alternativas e não alterar permissões/WinRM.
+
+PENDENTE: a TI ou o responsável autorizado pelo PC deve fornecer somente os endereços atuais de CNC/VCBox/vSDD e a pasta de uma exportação operacional existente, sem senhas. Alternativamente, pode disponibilizar uma amostra operacional sanitizada em um compartilhamento já autorizado. Leituras de arquivos atualmente acessíveis continuam dentro do escopo original; dados CNC em tempo real ainda não foram obtidos.

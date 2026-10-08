@@ -58,6 +58,15 @@ def overview(
     return facade.inicio(filters)
 
 
+@router.get("/overview/trend")
+def overview_trend(
+    filters: AnalyticsFilter = Depends(analytics_filter),
+    _user: SessionUser = Depends(require_management_user),
+    facade=Depends(get_frontend_facade),
+):
+    return facade.inicio_tendencia(filters)
+
+
 @router.get("/sectors")
 def sectors(
     filters: AnalyticsFilter = Depends(analytics_filter),

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
 import { ManagementInsightDrawer } from "../components/ManagementInsightDrawer";
 import { MetricCard } from "../components/MetricCard";
@@ -7,7 +8,7 @@ import { PageFrame } from "../components/PageFrame";
 import { SectionCard } from "../components/SectionCard";
 import { useManagementFilters } from "../filters/FilterContext";
 import { useApiQuery } from "../hooks/useApiQuery";
-import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue } from "../types/api";
+import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
 import { displayName, displayText, formatHours } from "../utils/format";
 import { humanizeSystemState } from "../utils/systemState";
 
@@ -21,10 +22,52 @@ function hours(seconds: number) {
   return `${(seconds / 3600).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`;
 }
 
+/** Variação contra o período anterior: diferença simples entre dois valores que o backend já calculou. */
+const hasReading = (metric: MetricValue) => metric.availability === "disponivel" || metric.availability === "parcial";
+
+function kpiTrend(current: MetricValue, previous?: MetricValue): { text: string; up: boolean } | undefined {
+  if (current.value === null || !hasReading(current) || !previous || previous.value === null || !hasReading(previous)) return undefined;
+  const diff = current.value - previous.value;
+  return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pp`, up: diff >= 0 };
+}
+
+function quantityTrend(current: number, previous?: number): { text: string; up: boolean } | undefined {
+  if (previous === undefined || previous <= 0) return undefined;
+  const diff = ((current - previous) / previous) * 100;
+  return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, up: diff >= 0 };
+}
+
+const TIME_COLORS = ["var(--accent)", "var(--primary)", "var(--warning)", "var(--danger)", "var(--purple)", "var(--teal)", "var(--muted)"];
+const SERIES_COLORS = { oee: "var(--purple)", availability: "var(--accent)", performance: "var(--warning)", ftt: "var(--teal)", good: "var(--primary)" };
+
+function dayLabel(point: OverviewTrendPoint) {
+  const [, month, day] = point.period_start.slice(0, 10).split("-");
+  return `${day}/${month}`;
+}
+
+function ago(iso: string) {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 60) return `há ${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  return h < 24 ? `há ${h} h` : `há ${Math.floor(h / 24)} d`;
+}
+
+function eventColor(state: string) {
+  const text = state.toLowerCase();
+  if (text.includes("par")) return "var(--danger)";
+  if (text.includes("setup")) return "var(--teal)";
+  if (text.includes("retrab")) return "var(--purple)";
+  if (text.includes("prod")) return "var(--accent)";
+  return "var(--primary)";
+}
+
 export function ManagementOverviewPage() {
   const filters = useManagementFilters();
   const navigate = useNavigate();
   const query = useApiQuery<ManagementOverview>(`/api/v1/management/overview?${filters.query}`);
+  // Série para gráficos/sparklines: opcional — se falhar ou demorar, a página inteira continua igual.
+  const trendQuery = useApiQuery<OverviewTrend>(`/api/v1/management/overview/trend?${filters.query}`, { ignoreLiveTick: true });
+  const trend = trendQuery.data && Array.isArray(trendQuery.data.points) && trendQuery.data.availability !== "sem_registros" ? trendQuery.data : null;
   const [selectedKpi, setSelectedKpi] = useState<KpiExplanation | null>(null);
   const closeInsight = useCallback(() => {
     setSelectedKpi(null);
@@ -64,6 +107,18 @@ export function ManagementOverviewPage() {
   // GE-13: sem fonte de metas o backend avisa em `limitations`; o card diz isso
   // em vez de deixar o percentual solto. Com metas, o desvio vira exceção.
   const targetNote = insights.limitations.some((item) => item.code === "kpi_targets_not_configured") ? "Sem meta definida" : undefined;
+  const kpiCards = [
+    { key: "oee", label: "OEE", accent: "purple" },
+    { key: "availability", label: "Disponibilidade", accent: "success" },
+    { key: "performance", label: "Performance", accent: "warning" },
+    { key: "ftt", label: "FTT / Qualidade", accent: "teal" },
+  ] as const;
+  const sparkOf = (pick: (point: OverviewTrendPoint) => number | null, color: string) => (trend && trend.points.length > 1 ? <Sparkline values={trend.points.map(pick)} color={color} /> : null);
+  const plannedSeries = trend && trend.points.length > 1 && trend.points.every((point) => point.planned_quantity !== null) ? trend.points.map((point) => point.planned_quantity) : null;
+  const sectorSummary = new Map((trend?.sector_summary ?? []).map((item) => [item.setor, item]));
+  // Período ainda em andamento (ex.: "Hoje" às 10h): comparar peças com o período anterior inteiro daria queda falsa.
+  const lastPoint = trend?.points[trend.points.length - 1];
+  const periodOpen = lastPoint ? new Date(lastPoint.period_end).getTime() > Date.now() : false;
   const quantityText = (value: number) => hasQuantityRecords ? value.toLocaleString("pt-BR") : humanizeSystemState("sem_registros");
   return (
     <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
@@ -73,11 +128,23 @@ export function ManagementOverviewPage() {
             value={quantityText(data.production.good)}
             detail={data.production.reason ?? "Peças boas; refugo e retrabalho permanecem separados."}
             availability={data.production.availability}
+            trend={trend && hasQuantityRecords && !periodOpen ? quantityTrend(data.production.good, trend.previous?.production.good) : undefined}
+            spark={hasQuantityRecords ? sparkOf((point) => point.production.good, SERIES_COLORS.good) : null}
           />
-          <MetricCard label="OEE" value={metricText(kpis.oee)} detail={kpis.oee.reason ?? targetNote} accent="purple" availability={kpis.oee.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.oee)} />
-          <MetricCard label="Disponibilidade" value={metricText(kpis.availability)} detail={kpis.availability.reason ?? targetNote} accent="success" availability={kpis.availability.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.availability)} />
-          <MetricCard label="Performance" value={metricText(kpis.performance)} detail={kpis.performance.reason ?? targetNote} accent="warning" availability={kpis.performance.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.performance)} />
-          <MetricCard label="FTT / Qualidade" value={metricText(kpis.ftt)} detail={kpis.ftt.reason ?? targetNote} accent="teal" availability={kpis.ftt.availability} actionLabel="Entender" onClick={() => setSelectedKpi(insights.kpi_explanations.ftt)} />
+          {kpiCards.map((card) => (
+            <MetricCard
+              key={card.key}
+              label={card.label}
+              value={metricText(kpis[card.key])}
+              detail={kpis[card.key].reason ?? targetNote}
+              accent={card.accent}
+              availability={kpis[card.key].availability}
+              actionLabel="Entender"
+              onClick={() => setSelectedKpi(insights.kpi_explanations[card.key])}
+              trend={trend ? kpiTrend(kpis[card.key], trend.previous?.kpis[card.key]) : undefined}
+              spark={kpis[card.key].value !== null && kpis[card.key].value !== undefined ? sparkOf((point) => point.kpis[card.key].value, SERIES_COLORS[card.key]) : null}
+            />
+          ))}
         </div>
         {simulation ? (
           <div className="metric-grid metric-grid--six simulation-metrics">
@@ -89,7 +156,42 @@ export function ManagementOverviewPage() {
             <MetricCard label="AE" value={metricText(simulation.metrics.ae)} detail="Eficiência global efetiva" />
           </div>
         ) : null}
-        <div className="management-insight-grid">
+        <div className="overview-grid">
+          <SectionCard
+            title="Planejado × realizado — acumulado"
+            className="overview-grid__chart"
+            navigation={{ label: "Abrir Produção: Planejado versus Realizado", onNavigate: () => navigateTo("/producao/planejado-realizado") }}
+          >
+            {trend && trend.points.length > 1 ? (
+              <>
+                <div className="chart-key">
+                  <span><i style={{ "--c": SERIES_COLORS.good } as React.CSSProperties} />Realizado (peças boas)</span>
+                  {plannedSeries ? <span><i style={{ "--c": "var(--muted)" } as React.CSSProperties} />Planejado</span> : null}
+                </div>
+                <LineChart
+                  labels={trend.points.map(dayLabel)}
+                  series={[
+                    ...(plannedSeries ? [{ name: "Planejado", color: "var(--muted)", values: plannedSeries, dashed: true }] : []),
+                    { name: "Realizado", color: SERIES_COLORS.good, values: trend.points.map((point) => point.production.good) },
+                  ]}
+                />
+                {plannedSeries ? null : <p className="chart-note">Planejado indisponível: depende do contrato de planejamento confirmado com o Protheus.</p>}
+              </>
+            ) : null}
+            {simulation ? (
+              <div className="plan-actual-summary">
+                <div><span>Quantidade planejada</span><strong>{simulation.planned_quantity.toLocaleString("pt-BR")} peças</strong></div>
+                <div><span>Quantidade boa realizada</span><strong>{simulation.actual_quantity.toLocaleString("pt-BR")} peças</strong></div>
+                <div><span>Diferença</span><strong>{simulation.difference_quantity.toLocaleString("pt-BR")} peças</strong></div>
+                <div className="plan-actual-summary__progress"><i style={{ width: `${Math.min(100, simulation.attainment_percentage ?? 0)}%` }} /></div>
+              </div>
+            ) : trend && trend.points.length > 1 ? null : (
+              <EmptyState
+                title="Dados insuficientes"
+                detail="O planejamento corporativo ainda não possui contrato confirmado para esta consolidação."
+              />
+            )}
+          </SectionCard>
           <SectionCard
             title="O que precisa de atenção"
             className="management-attention-card"
@@ -122,6 +224,32 @@ export function ManagementOverviewPage() {
               </ul>
             )}
           </SectionCard>
+        </div>
+        <div className="management-insight-grid management-insight-grid--three">
+          <SectionCard
+            title="Composição do tempo"
+            navigation={{ label: "Abrir Consulta Operacional: Tempo MES", onNavigate: () => navigateTo("/consulta-operacional/tempo-mes") }}
+          >
+            {data.time_composition.availability === "sem_registros" ? (
+              <EmptyState state={data.time_composition.availability} />
+            ) : (
+              <div className="time-composition">
+                {(data.time_composition.resource_count ?? 0) > 1 ? (
+                  <p className="time-composition__note">
+                    Total somado em {data.time_composition.resource_count} recursos · média por recurso na legenda
+                  </p>
+                ) : null}
+                <StackBar
+                  parts={data.time_composition.items.map((item, index) => ({
+                    name: item.label,
+                    value: item.seconds,
+                    color: TIME_COLORS[index % TIME_COLORS.length],
+                    text: (data.time_composition.resource_count ?? 0) > 1 && item.average_seconds != null ? `${hours(item.seconds)} · média ${hours(item.average_seconds)}` : hours(item.seconds),
+                  }))}
+                />
+              </div>
+            )}
+          </SectionCard>
           <SectionCard
             title="Maiores perdas"
             navigation={{ label: "Abrir análise das maiores perdas", onNavigate: () => navigateTo("/analises/paradas") }}
@@ -139,6 +267,65 @@ export function ManagementOverviewPage() {
               </ol>
             )}
           </SectionCard>
+          <SectionCard title="Agora na fábrica">
+            {!trend || trend.recent_events.length === 0 ? <EmptyState title="Sem eventos recentes" detail="Mudanças de estado dos recursos aparecem aqui." /> : (
+              <ul className="feed">
+                {trend.recent_events.slice(0, 8).map((event, index) => (
+                  <li key={`${event.resource}-${event.at}`} style={{ animationDelay: `${index * 60}ms` }}>
+                    <span className="feed__dot" style={{ "--c": eventColor(event.state) } as React.CSSProperties} aria-hidden="true">{displayName(event.resource).slice(0, 2)}</span>
+                    <span><strong>{displayName(event.resource)}</strong> · {displayText(event.state)}</span>
+                    <span className="feed__time">{ago(event.at)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        </div>
+        <div className="overview-grid overview-grid--single">
+          <SectionCard
+            title="Setores — leitura rápida"
+            className="overview-grid__table"
+            navigation={{ label: "Abrir Consulta Operacional: Recursos", onNavigate: () => navigateTo("/consulta-operacional/recursos") }}
+          >
+            {data.sectors.length === 0 ? <EmptyState /> : (
+              <div className="table-scroll">
+                <table>
+                  <thead><tr><th>Setor</th>{trend ? <th>OEE</th> : null}{trend ? <th>Recursos produzindo</th> : null}<th>Produção boa</th><th>Refugo</th><th>Retrabalho</th><th>OPs</th><th>Tempo produtivo</th>{trend ? <th>Tendência</th> : null}</tr></thead>
+                  <tbody>
+                    {data.sectors.map((sector) => {
+                      const summary = sectorSummary.get(sector.setor);
+                      const oee = data.sector_kpis?.find((item) => item.setor === sector.setor)?.metrics.oee?.value ?? null;
+                      return (
+                        <tr key={sector.setor}>
+                          <th>{displayName(sector.setor)}</th>
+                          {trend ? (
+                            <td>
+                              {oee === null ? "—" : (
+                                <span className="sector-oee"><span><i style={{ "--w": `${Math.min(100, oee)}%`, "--c": "var(--purple)" } as React.CSSProperties} /></span><b>{oee.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b></span>
+                              )}
+                            </td>
+                          ) : null}
+                          {trend ? <td>{summary && summary.resources_total > 0 ? `${summary.resources_with_production} de ${summary.resources_total}` : "—"}</td> : null}
+                          <td>{quantityText(sector.producao_boa)}</td>
+                          <td>{quantityText(sector.refugo)}</td>
+                          <td>{quantityText(sector.retrabalho)}</td>
+                          <td>{sector.ops}</td>
+                          <td>{hours(sector.tempo_produtivo_segundos)}</td>
+                          {trend ? (
+                            <td className="sector-spark">
+                              <Sparkline values={trend.points.map((point) => point.sectors.find((item) => item.setor === sector.setor)?.producao_boa ?? null)} color="var(--primary)" />
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+        </div>
+        <div className="management-insight-grid management-insight-grid--two">
           <SectionCard
             title="Recursos com maior impacto"
             navigation={{ label: "Abrir análise dos recursos com maior impacto", onNavigate: () => navigateTo("/analises/paradas") }}
@@ -158,82 +345,6 @@ export function ManagementOverviewPage() {
                   </li>
                 ))}
               </ol>
-            )}
-          </SectionCard>
-        </div>
-        <div className="overview-grid">
-          <SectionCard
-            title="Planejado × realizado — acumulado"
-            className="overview-grid__chart"
-            navigation={{ label: "Abrir Produção: Planejado versus Realizado", onNavigate: () => navigateTo("/producao/planejado-realizado") }}
-          >
-            {simulation ? (
-              <div className="plan-actual-summary">
-                <div><span>Quantidade planejada</span><strong>{simulation.planned_quantity.toLocaleString("pt-BR")} peças</strong></div>
-                <div><span>Quantidade boa realizada</span><strong>{simulation.actual_quantity.toLocaleString("pt-BR")} peças</strong></div>
-                <div><span>Diferença</span><strong>{simulation.difference_quantity.toLocaleString("pt-BR")} peças</strong></div>
-                <div className="plan-actual-summary__progress"><i style={{ width: `${Math.min(100, simulation.attainment_percentage ?? 0)}%` }} /></div>
-              </div>
-            ) : (
-              <EmptyState
-                title="Dados insuficientes"
-                detail="O planejamento corporativo ainda não possui contrato confirmado para esta consolidação."
-              />
-            )}
-          </SectionCard>
-          <SectionCard
-            title="Composição do tempo"
-            navigation={{ label: "Abrir Consulta Operacional: Tempo MES", onNavigate: () => navigateTo("/consulta-operacional/tempo-mes") }}
-          >
-            {data.time_composition.availability === "sem_registros" ? (
-              <EmptyState state={data.time_composition.availability} />
-            ) : (
-              <div className="time-composition">
-                {(data.time_composition.resource_count ?? 0) > 1 ? (
-                  <p className="time-composition__note">
-                    Total somado em {data.time_composition.resource_count} recursos · média por recurso ao lado
-                  </p>
-                ) : null}
-                {data.time_composition.items.map((item) => (
-                  <div key={item.source_field}>
-                    <span>{item.label}</span>
-                    <strong>
-                      {hours(item.seconds)}
-                      {(data.time_composition.resource_count ?? 0) > 1 && item.average_seconds != null ? (
-                        <small> · média {hours(item.average_seconds)}</small>
-                      ) : null}
-                    </strong>
-                    <div><i style={{ width: `${item.percentage ?? 0}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </div>
-        <div className="overview-grid overview-grid--bottom">
-          <SectionCard
-            title="Setores — leitura rápida"
-            className="overview-grid__table"
-            navigation={{ label: "Abrir Consulta Operacional: Recursos", onNavigate: () => navigateTo("/consulta-operacional/recursos") }}
-          >
-            {data.sectors.length === 0 ? <EmptyState /> : (
-              <div className="table-scroll">
-                <table>
-                  <thead><tr><th>Setor</th><th>Produção boa</th><th>Refugo</th><th>Retrabalho</th><th>OPs</th><th>Tempo produtivo</th></tr></thead>
-                  <tbody>
-                    {data.sectors.map((sector) => (
-                      <tr key={sector.setor}>
-                        <th>{displayName(sector.setor)}</th>
-                        <td>{quantityText(sector.producao_boa)}</td>
-                        <td>{quantityText(sector.refugo)}</td>
-                        <td>{quantityText(sector.retrabalho)}</td>
-                        <td>{sector.ops}</td>
-                        <td>{hours(sector.tempo_produtivo_segundos)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             )}
           </SectionCard>
           <SectionCard

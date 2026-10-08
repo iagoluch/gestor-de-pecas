@@ -1,0 +1,26 @@
+[
+  {
+    "Registry": "MA-L",
+    "Assignment": "00090F",
+    "Organization Name": "Fortinet, Inc.",
+    "Organization Address": "1090 Kifer Road Sunnyvale CA US 94086 "
+  },
+  {
+    "Registry": "MA-L",
+    "Assignment": "00155D",
+    "Organization Name": "Microsoft Corporation",
+    "Organization Address": "One Microsoft Way Redmond WA US 98052-8300 "
+  },
+  {
+    "Registry": "MA-L",
+    "Assignment": "B07B25",
+    "Organization Name": "Dell Inc.",
+    "Organization Address": "One Dell Way Round Rock TX US 78682 "
+  },
+  {
+    "Registry": "MA-L",
+    "Assignment": "443192",
+    "Organization Name": "Hewlett Packard",
+    "Organization Address": "11445 Compaq Center Drive Houston  US 77070 "
+  }
+]

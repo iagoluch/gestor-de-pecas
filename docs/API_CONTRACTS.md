@@ -27,7 +27,8 @@ Base local: `/api/v1`. Especificação navegável: `/api/docs`. OpenAPI: `/api/o
 
 | Método | Rota | Uso |
 |---|---|---|
-| `GET` | `/management/overview` | produção, KPIs, tempo, setores e auditoria |
+| `GET` | `/management/overview` | produção, KPIs, tempo, setores e auditoria; `sector_kpis[]` traz o OEE de cada setor (`metrics`, `kpi_time_bases`) pelo mesmo `calculate_oee` aplicado às bases do setor |
+| `GET` | `/management/overview/trend` | série por intervalo, período anterior, resumo por setor (`sector_summary[].oee` = `sector_kpis[].metrics.oee`, `null` sem leitura) e eventos recentes (mesmo OEE canônico) |
 | `GET` | `/management/sectors` | consolidação por setor |
 | `GET` | `/management/alerts` | alertas e confiabilidade |
 

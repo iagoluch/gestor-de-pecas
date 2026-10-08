@@ -710,11 +710,13 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     }
   }
 
+  const cardsGate = cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error && !cards.data ? <ErrorState error={cards.error} onRetry={cards.reload} /> : null;
+
   return (
     <section className="operator-workbench">
-      <StationStateBanner state={resourceState} />
       <div className="operator-workbench__top">
         <div className="operator-workbench__main">
+      <StationStateBanner state={resourceState} timer />
       <form className="operator-op-form" onSubmit={loadOperations}>
         <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
         <button type="submit">Carregar roteiro</button>
@@ -777,6 +779,15 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
             : `${canSetup ? "Aponte o Setup" : "Inicie a produção e depois aponte o Setup"} para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada.`}
         </p>
       ) : null}
+      {feedback.text ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
+      {cardsGate ?? (
+        <>
+          {cards.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
+          <div className="operator-card-columns">
+            <CardSection title="Produção" items={cards.data?.production ?? []} emptyTitle="Nenhuma OP em produção" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} />
+          </div>
+        </>
+      )}
         </div>
         <aside className="operator-workbench__aside" aria-label="Contexto da peça">
           <DrawingCard
@@ -785,19 +796,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
             data={drawing.data}
             onOpen={() => setDialog({ kind: "drawing" })}
           />
-        </aside>
-      </div>
-      {feedback.text ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
-      {cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error && !cards.data ? <ErrorState error={cards.error} onRetry={cards.reload} /> : (
-        <>
-          {cards.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
           <div className="operator-card-columns">
-            <CardSection title="Produção" items={cards.data?.production ?? []} emptyTitle="Nenhuma OP em produção" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} />
-            <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />
+            {cardsGate ? null : <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />}
             <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
           </div>
-        </>
-      )}
+        </aside>
+      </div>
 
       {dialog?.kind === "route" ? (
         <RouteStepDialog

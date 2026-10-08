@@ -1,0 +1,26 @@
+[
+  {
+    "Query": "GTS01-PRO06.gtsdobrasil.com.br",
+    "Name": "GTS01-PRO06.gtsdobrasil.com.br",
+    "Type": "A",
+    "IPAddress": "10.10.3.22",
+    "NameHost": null,
+    "Error": null
+  },
+  {
+    "Query": "192.168.0.218",
+    "Name": "218.0.168.192.in-addr.arpa",
+    "Type": "PTR",
+    "IPAddress": null,
+    "NameHost": "gts-neri.gtsdobrasil.com.br",
+    "Error": null
+  },
+  {
+    "Query": "192.168.0.210",
+    "Name": "210.0.168.192.in-addr.arpa",
+    "Type": "PTR",
+    "IPAddress": null,
+    "NameHost": "SVR-FS.gtsdobrasil.com.br",
+    "Error": null
+  }
+]

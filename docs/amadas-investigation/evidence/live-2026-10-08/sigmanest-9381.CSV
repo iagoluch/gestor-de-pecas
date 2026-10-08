@@ -1,0 +1,9 @@
+Chapa
+Tarefa;T3687;Maquina;Amada_ensis;Espessura;9.53;Material;ASTM A572;
+Layout;3;Programa;9381;Repeticoes;3x;Tempo;00:55:42;Cod_Chapa;S173;Sucata;44.0061125618089%;
+Peso_Sucata;424.900087635708kg;Peso_Chapa;1009.94444864564kg;
+Programador;[OMITTED];Comprimento;3000;Largura;1500;Data_Criacao;08/10/2026 11:20:20;
+Descricao;;
+Ordens
+OS;PCMOPD01001;Peca;PPM008001021;Quant_Requerida;120;Quant_Arranjada;111;Peso_Liquido;4.87;Peso_Bruto;5.68695923137326;Tempo_Unitario;00:01:30;
+

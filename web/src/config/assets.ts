@@ -14,7 +14,6 @@ import dev from "../../../assets/web/navigation/dev.svg";
 import search from "../../../assets/icons/Pesquisa.svg";
 import clock from "../../../assets/icons/Relógio.svg";
 import trash from "../../../assets/icons/Lixeira.svg";
-import operatorLogo from "../../../assets/operator_mockup/logo_operator.png";
 import operatorProfile from "../../../assets/operator_mockup/profile_operator_transparent.png";
 import navDestaque from "../../../assets/operator_mockup/nav_destaque_transparent.png";
 import navDobra from "../../../assets/operator_mockup/nav_dobra_transparent.png";
@@ -69,7 +68,6 @@ export const assets = {
   clock,
   trash,
   operator: {
-    logo: operatorLogo,
     profile: operatorProfile,
     navigation: { Destaque: navDestaque, Dobra: navDobra, Usinagem: navUsinagem, Serra: navSerra, Corte: navCorte, Pintura: navPintura, Solda: navSolda, Qualidade: navQualidade,
       // Wave 6F — os cinco setores que substituíram a antiga "Solda"

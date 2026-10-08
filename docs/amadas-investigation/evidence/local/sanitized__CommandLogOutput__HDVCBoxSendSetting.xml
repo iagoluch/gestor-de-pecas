@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FTP>
+  <IsSendVCBox>true</IsSendVCBox>
+  <CentOSIPadress>
+  </CentOSIPadress>
+  <SendTime>0001/01/01 12:00:00</SendTime>
+  <Account>[OMITTED]</Account>
+  <PassWord>[OMITTED]</PassWord>
+  <SendToFolderPath>
+  </SendToFolderPath>
+</FTP>

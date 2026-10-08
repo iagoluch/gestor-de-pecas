@@ -1,0 +1,9 @@
+{
+  "Date": "2026-10-08T11:35:01.1400197-03:00",
+  "HostName": "GTS01-PRO06",
+  "Address": "10.10.3.22",
+  "Class": "Win32_Service",
+  "Mutation": false,
+  "Success": false,
+  "Error": "O cliente não conseguiu se conectar ao destino especificado na solicitação. Verifique se o serviço está em execução no destino e se está aceitando solicitações. Consulte os registros e a documentação do serviço WS-Management em execução no destino, comumente IIS ou WinRM. Se o destino estiver no serviço WinRM, execute o seguinte comando no destino para analisar e configurar o serviço WinRM: \"winrm quickconfig\"."
+}

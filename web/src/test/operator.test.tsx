@@ -1311,4 +1311,12 @@ describe("StationStateBanner", () => {
     rerender(<StationStateBanner state={{ categoria: "fila", motivo: "Recurso sem demanda" }} />);
     expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/^Aguardando OP/);
   });
+
+  it("cronômetro só aparece com a prop timer e data_inicio válida", () => {
+    const inicio = new Date(Date.now() - 65_000).toISOString();
+    const { container, rerender } = render(<StationStateBanner state={{ categoria: "producao", data_inicio: inicio }} />);
+    expect(container.querySelector(".station-state__timer")).toBeNull();
+    rerender(<StationStateBanner state={{ categoria: "producao", data_inicio: inicio }} timer />);
+    expect(container.querySelector(".station-state__timer")?.textContent).toMatch(/^00:01:0\d$/);
+  });
 });

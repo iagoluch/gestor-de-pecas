@@ -295,6 +295,11 @@ class FrontendBackendFacade:
             payload["insights"] = self.management_insights.build(filters, overview=payload)
         return payload
 
+    def inicio_tendencia(self, filters: AnalyticsFilter):
+        """Série, período anterior e resumo por setor da Visão Geral (somente leitura)."""
+
+        return self.management.get_overview_trend(filters)
+
     @staticmethod
     def _sector_highlights(sectors):
         """Seleciona extremos gerenciais sem recalcular grandezas industriais."""

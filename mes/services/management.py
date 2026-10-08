@@ -8,6 +8,7 @@ não pode ser calculada. Isso evita que o frontend Web interprete
 import math
 from collections import defaultdict
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -30,6 +31,19 @@ from mes.domain.standard_time import (
 
 class ManagementService:
     _MAX_OEE_EVOLUTION_POINTS = 31
+    _TREND_RECENT_EVENTS_LIMIT = 8
+    # Mesmo piso da validação de período da API: antes disso não há histórico.
+    _MIN_PERIOD_YEAR = 2000
+    _TREND_KPI_KEYS = ("oee", "availability", "performance", "ftt")
+    _TREND_HOURS_KEYS = (
+        "production_seconds",
+        "setup_seconds",
+        "downtime_seconds",
+        "rework_seconds",
+        "activity_without_op_seconds",
+        "no_demand_seconds",
+        "out_of_shift_seconds",
+    )
 
     def __init__(self, db, now_func=None, simulation_mode=False):
         self.db = db
@@ -59,7 +73,18 @@ class ManagementService:
         good_with_estimated_standard = 0
         resources = set()
         ops = set()
-        sectors = defaultdict(lambda: {"good": 0, "scrap": 0, "rework": 0, "seconds": defaultdict(float), "ops": set()})
+        # Mesmas entradas do calculador canônico, agregadas por setor, para que
+        # o OEE do setor saia de ``calculate_oee`` e não de uma fórmula paralela.
+        sectors = defaultdict(lambda: {
+            "good": 0,
+            "scrap": 0,
+            "rework": 0,
+            "seconds": defaultdict(float),
+            "ops": set(),
+            "standard_run_seconds": 0.0,
+            "good_without_standard": 0,
+            "planned_downtime_seconds": 0.0,
+        })
         resource_inputs = defaultdict(lambda: {
             "resource": None,
             "sector": None,
@@ -132,11 +157,13 @@ class ManagementService:
             row_bucket = resource_bucket(resource, sector) if resource else None
             if standard_unit_seconds is None:
                 good_without_standard += row_good
+                bucket["good_without_standard"] += row_good
                 if row_bucket is not None:
                     row_bucket["good_without_standard"] += row_good
             else:
                 row_standard_run_seconds = max(0.0, float(standard_unit_seconds)) * row_good
                 standard_run_seconds += row_standard_run_seconds
+                bucket["standard_run_seconds"] += row_standard_run_seconds
                 if row_bucket is not None:
                     row_bucket["standard_run_seconds"] += row_standard_run_seconds
             if view_unit_seconds is None:
@@ -233,6 +260,7 @@ class ManagementService:
             ops.add(op)
             bucket = sectors["Corte"]
             bucket["good"] += qty
+            bucket["good_without_standard"] += qty
             bucket["ops"].add(op)
             resource_input = resource_bucket(row.get("maquina"), "Corte")
             if resource_input is not None:
@@ -300,8 +328,13 @@ class ManagementService:
             for resource, categories in physical["by_resource_stop_classification"].items()
         }
 
+        # Recurso que só tem estado (sem apontamento nem quantidade) também
+        # pertence a um setor: vem dos segmentos físicos que o formaram.
+        sector_of_resource = {}
+        for segment in physical_inputs:
+            sector_of_resource.setdefault(segment.resource, segment.sector)
         for resource, category_totals in physical["by_resource"].items():
-            bucket = resource_bucket(resource)
+            bucket = resource_bucket(resource, sector_of_resource.get(resource))
             if bucket is None:
                 continue
             for category, seconds in category_totals.items():
@@ -316,6 +349,10 @@ class ManagementService:
             bucket = sectors[sector]
             for category, seconds in category_totals.items():
                 bucket["seconds"][category] += seconds
+        for sector, categories in physical["by_sector_stop_classification"].items():
+            sectors[sector]["planned_downtime_seconds"] += float(
+                categories.get(EventCategory.DOWNTIME, {}).get(StopClassification.PLANNED, 0.0)
+            )
         if cutting_without_interval_seconds:
             sectors["Corte"]["seconds"][EventCategory.PRODUCTION] += cutting_without_interval_seconds
 
@@ -498,6 +535,32 @@ class ManagementService:
                 "policy": "canonical_oee",
             }
 
+        # OEE por setor: mesmo calculador e mesma política do consolidado
+        # (SOMA_DE_BASES_SEM_DEMANDA_SEGREGADO), aplicados às bases do setor. A
+        # soma das bases dos setores reproduz as bases do total.
+        sector_kpis = []
+        for sector, bucket in sorted(sectors.items(), key=lambda item: item[0].casefold()):
+            sector_calculation = calculate_oee(
+                seconds_by_category=oee_seconds_by_category(
+                    bucket["seconds"],
+                    planned_downtime_seconds=bucket["planned_downtime_seconds"],
+                ),
+                good_quantity=bucket["good"],
+                scrap_quantity=bucket["scrap"],
+                rework_quantity=bucket["rework"],
+                standard_run_seconds=bucket["standard_run_seconds"],
+                good_without_standard_quantity=bucket["good_without_standard"],
+            )
+            sector_kpis.append({
+                "setor": sector,
+                "metrics": sector_calculation.metrics_dict(),
+                "kpi_time_bases": dict(sector_calculation.time_bases),
+                "kpi_calculation": sector_calculation.trace_dict(),
+                "pecas_boas_sem_tempo_padrao": bucket["good_without_standard"],
+                "parada_planejada_segundos": bucket["planned_downtime_seconds"],
+                "calculation_policy": "canonical_oee",
+            })
+
         sector_rows = []
         for sector, bucket in sorted(sectors.items()):
             sector_rows.append({
@@ -622,6 +685,7 @@ class ManagementService:
             "kpis_estendidos": extended_metrics,
             "kpi_losses_breakdown": losses_breakdown,
             "resource_kpis": resource_kpis,
+            "sector_kpis": sector_kpis,
             "sectors": sector_rows,
             "cutting": {
                 "nestings": len(nesting_rows),
@@ -716,6 +780,30 @@ class ManagementService:
             cursor = boundary
         return bounds
 
+    @staticmethod
+    def _series_availability(available_points: int, total_buckets: int) -> tuple[str, Optional[str]]:
+        """Disponibilidade de uma série por intervalos (evolução e tendência)."""
+
+        missing_points = total_buckets - available_points
+        if available_points >= 2:
+            if missing_points == 0:
+                return DataAvailability.AVAILABLE.value, None
+            return (
+                DataAvailability.PARTIAL.value,
+                f"Série parcial: {available_points} de {total_buckets} períodos "
+                "possuem dados suficientes para o OEE.",
+            )
+        if available_points == 1:
+            return (
+                DataAvailability.INSUFFICIENT_DATA.value,
+                "Apenas um período possui OEE calculável; são necessários pelo "
+                "menos dois pontos para exibir a evolução.",
+            )
+        return (
+            DataAvailability.INSUFFICIENT_DATA.value,
+            "Dados insuficientes para exibir a evolução do OEE no período selecionado.",
+        )
+
     def get_oee_evolution(self, filters: AnalyticsFilter) -> dict:
         """Monta a série temporal consumindo o mesmo OEE canônico do resumo.
 
@@ -763,29 +851,7 @@ class ManagementService:
 
         available_points = len(points)
         missing_points = total_buckets - available_points
-        if available_points >= 2:
-            availability = (
-                DataAvailability.AVAILABLE.value
-                if missing_points == 0
-                else DataAvailability.PARTIAL.value
-            )
-            reason = (
-                None
-                if missing_points == 0
-                else (
-                    f"Série parcial: {available_points} de {total_buckets} períodos "
-                    "possuem dados suficientes para o OEE."
-                )
-            )
-        elif available_points == 1:
-            availability = DataAvailability.INSUFFICIENT_DATA.value
-            reason = (
-                "Apenas um período possui OEE calculável; são necessários pelo "
-                "menos dois pontos para exibir a evolução."
-            )
-        else:
-            availability = DataAvailability.INSUFFICIENT_DATA.value
-            reason = "Dados insuficientes para exibir a evolução do OEE no período selecionado."
+        availability, reason = self._series_availability(available_points, total_buckets)
 
         return {
             "points": points,
@@ -797,6 +863,202 @@ class ManagementService:
             "missing_points": missing_points,
             "calculation_policy": "canonical_oee",
         }
+
+    def get_overview_trend(self, filters: AnalyticsFilter) -> dict:
+        """Projeção de tendência da Visão Geral: pontos, período anterior e setores.
+
+        Não existe fórmula aqui. Cada ponto, o período anterior e o período
+        inteiro vêm de ``get_overview`` (OEE canônico); este método apenas
+        recorta os campos e organiza a série. Todas as leituras compartilham uma
+        única janela pré-carregada que cobre também o período anterior.
+        """
+
+        bucket_days = self._bucket_days(filters)
+        bounds = self._bucket_bounds(filters)
+        previous_bounds = self._previous_period(filters)
+        window = (
+            replace(filters, inicio=previous_bounds[0])
+            if previous_bounds is not None
+            else filters
+        )
+
+        with self._janela_prefetch(window, periodos=bounds):
+            overviews = [
+                self.get_overview(replace(filters, inicio=inicio, fim=fim))
+                for inicio, fim in bounds
+            ]
+            whole = self.get_overview(filters)
+            previous = (
+                self.get_overview(
+                    replace(filters, inicio=previous_bounds[0], fim=previous_bounds[1])
+                )
+                if previous_bounds is not None
+                else None
+            )
+
+        points = [
+            {
+                "period_start": inicio.isoformat(),
+                "period_end": fim.isoformat(),
+                **self._trend_production_and_kpis(overview),
+                "hours": {
+                    key: (overview.get("hours") or {}).get(key)
+                    for key in self._TREND_HOURS_KEYS
+                },
+                "planned_quantity": self._trend_planned_quantity(overview),
+                "sectors": [
+                    {
+                        "setor": row.get("setor"),
+                        "producao_boa": int(row.get("producao_boa") or 0),
+                    }
+                    for row in overview.get("sectors") or []
+                ],
+            }
+            for (inicio, fim), overview in zip(bounds, overviews)
+        ]
+
+        available_points = sum(
+            1 for point in points if point["kpis"]["oee"].get("value") is not None
+        )
+        availability, reason = self._series_availability(available_points, len(points))
+        if available_points == 0 and self._overview_has_no_records(whole):
+            availability = DataAvailability.NO_RECORDS.value
+            reason = (
+                "Nenhum registro de produção ou tempo foi encontrado para o "
+                "período e os filtros informados."
+            )
+
+        return {
+            "bucket_days": bucket_days,
+            "availability": availability,
+            "reason": reason,
+            "points": points,
+            "previous": (
+                {
+                    "period_start": previous_bounds[0].isoformat(),
+                    "period_end": previous_bounds[1].isoformat(),
+                    **self._trend_production_and_kpis(previous),
+                }
+                if previous is not None
+                else None
+            ),
+            "sector_summary": self._trend_sector_summary(whole),
+            "recent_events": self._load_recent_state_events(filters),
+            "calculation_policy": "canonical_oee",
+        }
+
+    def _previous_period(self, filters: AnalyticsFilter) -> Optional[tuple[datetime, datetime]]:
+        """Período imediatamente anterior, de mesma duração (``None`` se inválido).
+
+        O fim recua um microssegundo, a mesma convenção de ``_bucket_bounds``,
+        para que um evento exatamente em ``filters.inicio`` não conte nos dois.
+        """
+
+        duration = filters.fim - filters.inicio
+        try:
+            previous_start = filters.inicio - duration
+        except OverflowError:
+            return None
+        previous_end = filters.inicio - timedelta(microseconds=1)
+        if previous_start.year < self._MIN_PERIOD_YEAR or previous_end <= previous_start:
+            return None
+        return previous_start, previous_end
+
+    @classmethod
+    def _trend_production_and_kpis(cls, overview: dict) -> dict:
+        production = overview.get("production") or {}
+        kpis = overview.get("kpis") or {}
+        return {
+            "production": {
+                key: int(production.get(key) or 0) for key in ("good", "scrap", "rework")
+            },
+            "kpis": {key: dict(kpis.get(key) or {}) for key in cls._TREND_KPI_KEYS},
+        }
+
+    @staticmethod
+    def _trend_planned_quantity(overview: dict) -> Optional[int]:
+        # Plano só existe na simulação; em produção real nada é inferido.
+        simulation = overview.get("simulation")
+        if not simulation or simulation.get("planned_quantity") is None:
+            return None
+        return int(simulation["planned_quantity"])
+
+    @staticmethod
+    def _overview_has_no_records(overview: dict) -> bool:
+        production = overview.get("production") or {}
+        hours = overview.get("hours") or {}
+        return (
+            production.get("availability") == DataAvailability.NO_RECORDS.value
+            and not float(hours.get("measured_seconds") or 0.0)
+        )
+
+    @staticmethod
+    def _trend_sector_summary(overview: dict) -> list[dict]:
+        """Recursos e OEE por setor a partir das bases já calculadas do período inteiro.
+
+        O OEE vem pronto de ``overview["sector_kpis"]`` (calculador canônico
+        aplicado às bases do setor). Setor sem leitura publicada fica ``None``;
+        nada é recalculado aqui.
+        """
+
+        sector_oee = {
+            str(item.get("setor") or "").strip() or "Não informado": (
+                (item.get("metrics") or {}).get("oee")
+            )
+            for item in overview.get("sector_kpis") or []
+        }
+        sectors: dict[str, dict] = {}
+        for row in overview.get("sectors") or []:
+            name = str(row.get("setor") or "").strip() or "Não informado"
+            sectors.setdefault(name, {"resources_total": 0, "resources_with_production": 0})
+        for resource in overview.get("resource_kpis") or []:
+            name = str(resource.get("sector") or "").strip() or "Não informado"
+            bucket = sectors.setdefault(
+                name, {"resources_total": 0, "resources_with_production": 0}
+            )
+            bucket["resources_total"] += 1
+            produced = float(
+                (resource.get("kpi_time_bases") or {}).get("productive_gross_seconds") or 0.0
+            )
+            if produced > 0:
+                bucket["resources_with_production"] += 1
+        return [
+            {
+                "setor": name,
+                "oee": dict(sector_oee[name]) if sector_oee.get(name) else None,
+                **counts,
+            }
+            for name, counts in sorted(sectors.items(), key=lambda item: item[0].casefold())
+        ]
+
+    def _load_recent_state_events(self, filters: AnalyticsFilter) -> list[dict]:
+        """Estados de recurso ainda vigentes que começaram dentro do período.
+
+        Usa a consulta barata já existente de estados abertos (uma linha por
+        recurso); não há leitura de histórico de transições.
+        """
+
+        loader = getattr(self.db, "listar_estados_recurso_atuais", None)
+        if not callable(loader):
+            return []
+        events = []
+        for row in loader(
+            setor=filters.setor, recurso=filters.recurso, reference_time=filters.fim
+        ) or []:
+            started = _dt(row.get("data_inicio"))
+            if started is None or started < filters.inicio or started > filters.fim:
+                continue
+            events.append({
+                "resource": row.get("recurso"),
+                "sector": row.get("tipo_setor"),
+                "state": row.get("status_nome") or row.get("categoria"),
+                "at": started,
+            })
+        events.sort(key=lambda item: (item["at"], str(item["resource"] or "")), reverse=True)
+        return [
+            {**item, "at": item["at"].isoformat()}
+            for item in events[: self._TREND_RECENT_EVENTS_LIMIT]
+        ]
 
     @staticmethod
     def _cutting_filters_supported(filters: AnalyticsFilter) -> bool:
@@ -851,9 +1113,23 @@ class ManagementService:
         )
         return True, list(rows or [])
 
+    def _prefetch_memo(self, key, compute):
+        """Leituras que não dependem do sub-período são feitas uma vez por janela."""
+
+        prefetch = getattr(self, "_prefetch", None)
+        if prefetch is None:
+            return compute()
+        if key not in prefetch.memo:
+            prefetch.memo[key] = compute()
+        return prefetch.memo[key]
+
     def _load_open_issues(self):
         loader = getattr(self.db, "listar_inconsistencias_dados", None)
-        return list(loader(somente_abertas=True) or []) if callable(loader) else []
+        if not callable(loader):
+            return []
+        return self._prefetch_memo(
+            "open_issues", lambda: list(loader(somente_abertas=True) or [])
+        )
 
     def _load_operational_facts(self, filters):
         prefetch = getattr(self, "_prefetch", None)
@@ -943,7 +1219,12 @@ class ManagementService:
 
     def _has_calendar_configuration(self, filters):
         checker = getattr(self.db, "possui_calendario_produtivo", None)
-        return bool(checker(filters.setor, filters.recurso)) if callable(checker) else False
+        if not callable(checker):
+            return False
+        return self._prefetch_memo(
+            ("calendar", filters.setor, filters.recurso),
+            lambda: bool(checker(filters.setor, filters.recurso)),
+        )
 
 
 class _JanelaPrefetch:
@@ -955,6 +1236,7 @@ class _JanelaPrefetch:
     """
 
     def __init__(self, *, facts, quantity_available, quantity_events, state_available, state_rows, agora, janela=None):
+        self.memo = {}
         self._facts = list(facts or [])
         self._quantity_available = bool(quantity_available)
         self._quantity_events = list(quantity_events or [])

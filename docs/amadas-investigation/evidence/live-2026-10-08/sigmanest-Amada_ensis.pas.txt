@@ -1,0 +1,2291 @@
+unit Amada_FO_Baseline;
+	
+const
+	CNCVersion						= 2;  //1=160iL 2=AMNC 
+	DisplaySmallEntitiesError		= true;
+	EnableRestart                	= false;
+	FlyingPiercingENum				= 8;
+	FlyingPiercingMinLength			= 0.3;
+	VapoOn_Code 					= 'E10|M103';
+	PierceVapoOn_Code 				= 'M96_P100';
+	Force_M103_On_SfondaVeloce   	= false;
+	FlameOnNoPierce_Code 			= 'M103';
+	FlameOff_Code 					= 'M104';
+	LimitDown_Sub  			    	= 2;
+	LimitUp_Sub    			    	= 99;
+	LimitDown_NoSub  		    	= 1;
+	LimitUp_NoSub    		    	= 1;
+	ClampX1                       	= 175;
+	ClampX2                       	= 698;
+	ClampX3                       	= 1750;
+	ClampX4                       	= 2275;
+	ClampY1                       	= 5000;
+    // 175,698,1750,2275
+	ClampSize                    	= 164;   
+	DoPurgeOnGasChange				= false;	// ancora da testare dopo l'aggiunta di questa variabile FLAG - 03-02-2016
+	PurgeAzotoString             	= 'G00Z70.|G31P4T100|G04X10.|G00Z150.|G31P0T0';
+	PurgeOssigenoString          	= 'G00Z70.|G31P1T70|G04X10.|G00Z150.|G31P0T0';
+	EnableM01                    	= false;
+	CounterType                  	= 'PART';  // N for PROFILE or PART
+	HeadDownRapidFeed            	= 'F239999'; // usata su testa bassa G01D0Fxxx
+	SaveSubFolders					= false;
+	SaveNCPath2                  	= true;
+	SaveNCPath3                  	= false;
+	SaveNCPath4                  	= false;
+	WritePar						= false;
+	M105Perc						= 50;
+	M105MinLeadinLength				= 0.3;
+	FlyPiercing_M105				= 2; 	// 1 = FlyPiercing; 2 = M105
+	FlashCutEnabled					= true;
+	BedLength						= 3070;
+	BedWidth						= 1550;
+	PunchPointType					= 0;	// 0 = Punch Point; 1 = Cross
+	CrossDim						= 2;	// Cross dimension when PunchPointType = 1
+	AutoDoublePass					= true; // Richiama in automatico INOX2P anzich� INOXP. Da impostare su Fibra
+	AddLineCounter					= false; // Su Ensis oltre a N9999 provoca problemi. Disattivare
+	FlashCutE						= '7';
+	DisplayMissingNCFilletError		= false;
+	EnableG121Clear					= false;  // Cancella precedente lettura 3 punti (su macchine nuove tipo Ensis viene fatto di default dal controllo in fase di caricamento del programma)
+	WriteOVar						= false;	 // Scrive O"nomeProgramma" in testa al file NC (non pi� necessario su ultime macchine tipo Ensis)
+	UseFlashCutEForFlyCut			= true;
+	WritePercOnStartOfFile			= true;
+	WritePercOnEndOfFile			= true;
+	WriteClampsInfo					= true;
+    AlwaysGenerateJobFile			= true;		//Attivare per generare il JOB anche per le task con un singolo nesting all'interno
+    SCHMachineName					= 'FOLAJ';	//Da impostare con il nome macchina corretto per la creazione del file .SCH
+	MoveSCHFile						= false;		//Da attivare se serve che il file .SCH venga spostato dalla procedura MoveNCFile
+	WriteAmncPartRecognition		= true;
+    
+   
+var
+	modalE 							: integer;
+	currentmodale 					: integer;
+	Premodale 						: integer;
+	SfondaVeloce 					: boolean;
+	ECode,PreECode					: string;
+	NumIcona 						: integer;
+	NCounter 						: integer;
+	MainProgramId,SubProgramId 		: integer;
+	FeedAdjustment 					: double;
+	ProfileNumber 					: integer;
+	PreProfileType 					: integer;
+	NewPart 						: integer;
+	PartCompleted 					: boolean;
+	ThereWasAStopBeforeFlameOff 	: boolean;
+	SubProgramsError 				: boolean;
+	NanoTab							: boolean;
+	FlameOn_Code 					: string;
+	Diagonal_Tolerance  			: real;
+	MinimoRapido 					: integer;
+	KerfErrorsList 					: TStringList;
+	LengthToCheck 					: double;
+	OVSX1, OVSY1, OVSX2, OVSY2 		: double;
+	UseSubPrograms 					: boolean;
+	LimitDown, LimitUp 				: integer;
+	ProgramCuttingTime 				: string;
+	EndOfSub 						: boolean;
+	ErrorList						: TStringList;
+	FlashCutList 					: TStringList;
+	VapoPresent						: boolean;
+	OutputFlashCutVar				: boolean;
+	FilletDone						: boolean;
+	VBFilePath						: string;
+	TaskProgramsList				: TStringList;
+    espessura : String;
+    
+    
+    
+//*******************************************************************************	
+procedure GetNewLookupID(PNCD: TNCData; aCutQuality: integer; aToolNumber: integer; aThickness: double; aContourArea: double; aHasHDX: boolean);
+var
+    cCutQuality, cToolNumber		: integer;
+    cThickness, cContourArea		: double;
+    cHasHDX							: boolean;
+	foo1, foo2, foo3, foo4, foo5	: variant;
+begin
+    if (PostObj.DoingTime) then exit;
+    { Save current state of parameters }
+    cCutQuality := PostObj.CutQuality;
+    cToolNumber := PostObj.ToolNumber;
+    cThickness := PostObj.Thickness;
+    cContourArea := PostObj.ContourArea;
+    cHasHDX := PostObj.HasHDX;
+    // Set object properties with new parameters
+    if (aCutQuality <> 0) then PNCD.CutQuality := aCutQuality;
+    if (aToolNumber <> 0) then PNCD.ProcessNum := aToolNumber;
+    if (aThickness <> 0) then PNCD.PlateThickness := aThickness;
+    if (aContourArea <> 0) then PNCD.ContourArea := aContourArea;
+    if (aHasHDX <> false) then PNCD.HasHDX := aHasHDX;
+    //PNCD.LookupID := PostObj.GetLookupID(PNCD.CutQuality,PNCD.ProcessNum,PNCD.PlateThickness,PNCD.ContourArea,PNCD.HasHDX,nil,nil,nil,nil,nil);				// DreamScript
+    PNCD.LookupID := PostObj.GetLookupID(PNCD.CutQuality,PNCD.ProcessNum,PNCD.PlateThickness,PNCD.ContourArea,PNCD.HasHDX,foo1, foo2, foo3, foo4, foo5);	// TMS
+    { Reset the lookup properties to there original state }
+    //PostObj.GetLookupID(cCutQuality,cToolNumber,cThickness,cContourArea,cHasHDX,nil,nil,nil,nil,nil);			// DreamScript
+    PostObj.GetLookupID(cCutQuality,cToolNumber,cThickness,cContourArea,cHasHDX,foo1, foo2, foo3, foo4, foo5);	// TMS
+end;
+
+//*******************************************************************************
+function GetCoeffAng(CurrX, CurrY, NextX, NextY : double; GCodeType : integer) : double;
+var
+	tmpCoeff : double;
+begin
+    if (PostObj.DoingTime) then exit;
+	tmpCoeff := 0;
+	CurrX := StrToFloat(FormatFloat('0.00',CurrX));
+	CurrY := StrToFloat(FormatFloat('0.00',CurrY));
+	NextX := StrToFloat(FormatFloat('0.00',NextX));
+	NextY := StrToFloat(FormatFloat('0.00',NextY));
+	case GCodeType of
+		1: begin
+			tmpCoeff := arctan((NextY-CurrY)/(NextX-CurrX));
+			tmpCoeff := tmpCoeff*180;
+			tmpCoeff := tmpCoeff/Pi;
+			if (NextX>CurrX) then begin
+				if (NextY=CurrY) then begin
+					result := 0;
+				end else begin
+					if (NextY>CurrY) then begin
+						//Do nothing
+					end else begin
+						tmpCoeff:=tmpCoeff+360;
+					end;
+					result := tmpCoeff;
+				end;
+			end else begin
+				if (NextX=CurrX) then begin
+					if (NextY>CurrY) then begin
+						tmpCoeff := 90;
+					end else begin
+						tmpCoeff := 270;
+					end;
+					result := tmpCoeff;
+				end else begin
+					if (NextY=CurrY) then begin
+						result := 180;
+					end else begin
+						if (NextY>CurrY) then begin
+							tmpCoeff:=tmpCoeff+180;
+						end else begin
+							tmpCoeff:=tmpCoeff+180;
+						end;
+						result := tmpCoeff;
+					end;
+				end;
+			end;
+		end;
+		2: begin
+			tmpCoeff := arctan(-((NextY-CurrY)/(NextX-CurrX)));
+			tmpCoeff := tmpCoeff*180;
+			tmpCoeff := tmpCoeff/Pi;
+			if (NextX>CurrX) then begin
+				if (NextY=CurrY) then begin
+					result := 270;
+				end else begin
+					if (NextY>CurrY) then begin
+						tmpCoeff := tmpCoeff+360;
+					end else begin
+						tmpCoeff := tmpCoeff+180;
+					end;
+					result := tmpCoeff;
+				end;
+			end else begin
+				if (NextX=CurrX) then begin
+					if (NextY>CurrY) then begin
+						result := 0;
+					end else begin
+						result := 180;
+					end;
+				end else begin
+					if (NextY=CurrY) then begin
+						result := 90;
+					end else begin
+						if (NextY>CurrY) then begin
+							//Do nothing
+						end else begin
+							tmpCoeff:=tmpCoeff+180;
+						end;
+						result := tmpCoeff;
+					end;
+				end;				
+			end;
+		end;
+		3: begin
+			tmpCoeff := arctan(-((NextY-CurrY)/(NextX-CurrX)));
+			tmpCoeff := tmpCoeff*180;
+			tmpCoeff := tmpCoeff/Pi;
+			if (NextX>CurrX) then begin
+				if (NextY=CurrY) then begin
+					result := 90;
+				end else begin
+					if (NextY>CurrY) then begin
+						tmpCoeff := tmpCoeff+180;
+					end else begin
+						//Do nothing
+					end;
+					result := tmpCoeff;
+				end;
+			end else begin
+				if (NextX=CurrX) then begin
+					if (NextY>CurrY) then begin
+						result := 180;
+					end else begin
+						result := 0;
+					end;
+				end else begin
+					if (NextY=CurrY) then begin
+						result := 270;
+					end else begin
+						if (NextY>CurrY) then begin
+							tmpCoeff:=tmpCoeff+180;
+						end else begin
+							tmpCoeff:=tmpCoeff+360;
+						end;
+						result := tmpCoeff;
+					end;
+				end;				
+			end;
+		end;
+	end;
+end;
+
+//************************************************************************************************************************
+function LetterKomAndTrim(BaseString, Symbol: string) : string;
+var
+	i 			: integer;
+	KomRes		: string;
+	NewString 	: string;
+begin
+	if (PostObj.DoingTime) then exit;
+	KomRes := [' ',' '];
+	i := Pos(Symbol, BaseString);
+	if i = 0 then begin
+		NewString := BaseString;
+		BaseString := '';
+	end else begin
+		NewString := copy(BaseString, 1, i - 1);
+		delete(BaseString, 1, i);
+	end;
+	NewString := Trim(NewString);
+	KomRes[0] := BaseString;
+	KomRes[1] := NewString;
+	result := KomRes;
+end;
+//******************************************************************************
+procedure CreateJobTempFile;
+var 
+	s 		: string;
+	fName 	: string;
+begin
+	VBFilePath := PostObj.NCPath+PostObj.TaskName+'_.VB';
+	if (PostObj.DoingTime) then exit;
+	if (PostObj.PostingMode=2) then begin   //serve?
+		if (PostObj.CurrentLayOutNum=1) and ((PostObj.TotalNumOfLayOuts>1) or (AlwaysGenerateJobFile)) then begin
+			TaskProgramsList := TStringList.Create;
+            TaskProgramsList.SaveToFile(VBFilePath);
+			TaskProgramsList.Free;
+		end;//if (PostObj.PostingMode=2) and (PostObj.CurrentLayOutNum=1)
+		if (FileExists(VBFilePath)) then begin
+			TaskProgramsList := TStringList.Create;	 
+			TaskProgramsList.LoadFromFile(VBFilePath);
+			fName := PostObj.GetVariable('#1');
+			//if (ProgramNameType=1) then fName := PostObj.TaskName + '_' + fName;
+			S := PostObj.TaskName + ',' + fName + ',' + inttostr(PostObj.NumSheets) + ',' + floattostr(PostObj.Thickness) + ',' + PostObj.Material;
+            TaskProgramsList.Add(S);
+            TaskProgramsList.SaveToFile(VBFilePath);
+			TaskProgramsList.Free;
+		end;
+	end;
+end;
+
+//************************************************************************************************************************
+function isValidDouble(ss: string): boolean;
+var
+	i	: integer;
+begin
+	if (PostObj.DoingTime) then exit;
+	result := false;
+	ss := trim(ss);
+	if length(ss) > 0 then begin
+		ss := StringReplace(ss,'0','',1); //1=rfReplaceAll 2=rfIgnoreCase
+		ss := StringReplace(ss,'1','',1);
+		ss := StringReplace(ss,'2','',1);
+		ss := StringReplace(ss,'3','',1);
+		ss := StringReplace(ss,'4','',1);
+		ss := StringReplace(ss,'5','',1);
+		ss := StringReplace(ss,'6','',1);
+		ss := StringReplace(ss,'7','',1);
+		ss := StringReplace(ss,'8','',1);
+		ss := StringReplace(ss,'9','',1);
+		if (Trim(ss)<>'') and (Trim(ss)<>'.') and (Trim(ss)<>'-') and (Trim(ss)<>'-.') then begin
+			exit;
+		end;
+	end else begin
+		exit;
+	end;
+	result := true;
+end;
+
+//************************************************************************************************************************
+function LaserDestructFlameOff : boolean;
+const 
+	DebugFlameOff = false;
+var 
+	pNCData    	: TNCData;
+	pNCLine		: TNCLine;
+begin
+	if (PostObj.DoingTime) then exit;
+	result := false;
+	if (PostObj.ActiveNCPos>0) then begin
+		pNCData := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos-1);
+		if (pNCData.EntLength = PostObj.EntLength) and (PostObj.EntLength<=5) then begin //sicurezza di 5mm max
+			if (DebugFlameOff) then PostObj.AddToNCFile('stessa lunghezza');
+			if (pNCData.ClassName='TNCLine') then begin
+				pNCLine := pNCData;
+				if (DebugFlameOff) then PostObj.AddToNCFile('linea');
+				if (DebugFlameOff) then PostObj.AddToNCFile('pNCLine.Xstart='+floattostr(pNCLine.Xstart));
+				if (DebugFlameOff) then PostObj.AddToNCFile('pNCLine.Ystart='+floattostr(pNCLine.Ystart));
+				if (DebugFlameOff) then PostObj.AddToNCFile('PostObj.X='+floattostr(PostObj.X));
+				if (DebugFlameOff) then PostObj.AddToNCFile('PostObj.Y='+floattostr(PostObj.Y));
+				if (pNCLine.Xstart=PostObj.X) and (pNCLine.Ystart=PostObj.Y) then result := true;
+			end;
+		end;
+	end;
+end;
+
+//************************************************************************************************************************
+function ReadPSTLineVal(lineNum : string) : string;
+var
+    pstFile		: TStringlist;
+    i			: integer;
+	pos			: integer;
+    pstLine		: string;
+	variable	: string;
+	value 		: string;
+	num 		: string;
+begin
+	if (PostObj.DoingTime) then exit;
+    Result := '';
+	num := lineNum;
+    { Load PST file }
+    pstFile := TStringlist.Create;
+    pstFile.LoadFromFile(PostObj.PSTfilename);
+    { Parse through PST file }
+    for i := 0 to pstFile.Count - 1 do begin
+        pstLine := Trim(pstFile[i]);
+        { Skip commented lines }
+        if (AnsiPos(';', pstLine) = 1) then continue;
+        { Find lines that contain values }
+        pos := AnsiPos(':', pstLine);		
+        if (pos > 0) then begin
+            variable := Trim(Copy(pstLine, 1, pos - 1)); // everything left of the colon
+            value := Copy(pstLine, pos + 1, Length(pstLine) - pos); // everything right of the colon
+            { Find required line }			
+            if (variable = num) or (variable = num + '.') or (variable = num + '.0') then begin
+                pos := AnsiPos('=', value);
+				
+                { everything right of the equals }
+                if (pos > 0) then value := Copy(value, pos + 1, Length(value) - pos);
+                { Remove comments }
+                pos := AnsiPos(';', value);
+                if (pos > 0) then value := Copy(value, 1, pos - 1);
+                { Return line value }
+                Result := Trim(value);
+                break;
+            end;
+        end;
+    end;
+    pstFile.Free;
+end;
+
+//************************************************************************************************************************
+function SubProgramsEnabled : boolean;
+begin
+	if (PostObj.DoingTime) then exit;
+	result := (ReadPSTLineVal('129') = '1');
+end;
+
+//************************************************************************************************************************
+procedure ManageOVS;
+var
+	i         		: integer;
+	PNCD      		: TNCData;
+	PNCPunchPoint	: TNCPunchPoint;
+begin
+	if (PostObj.DoingTime) then exit;
+	OVSX1 := 0;
+	OVSY1 := 0;
+	OVSX2 := 0;
+	OVSY2 := 0;
+	for i := 0 To PostObj.NCDataObjList.Count-1 do begin
+		PNCD := PostObj.NCDataObjList.At_Object(i);
+		if (PNCD.ProcessNum = 7) then begin
+			if (ANSIUPPERCASE(PNCD.ToolName) = 'OVS') then begin
+				if (ANSIUPPERCASE(PNCD.ClassName)='TNCPUNCHPOINT') then begin
+					PNCPunchPoint := PNCD;
+					if (OVSX1=0) and (OVSY1=0) then begin
+						OVSX1 := PNCPunchPoint.xValAbs;
+						OVSY1 := PNCPunchPoint.yValAbs;
+					end else begin
+						if (PNCPunchPoint.xValAbs=OVSX1) and (PNCPunchPoint.yValAbs=OVSY1) then begin
+							//non fa nulla. a volte con la punzonatura singola SigmaNEST crea due colpi uno esattamente sopra all'altro,
+							//questa if serve a evitare di registrare due OVS con identiche coordinate
+						end else begin
+							OVSX2 := PNCPunchPoint.xValAbs;
+							OVSY2 := PNCPunchPoint.yValAbs;
+						end;
+					end;
+				end;
+				PNCD.Ignore := true;
+			end;
+		end;
+	end;
+	if (PostObj.PromptOpt2=4) then begin
+		if (OVSX1=0) then OVSX1 := StrToFloat(InputBox('SigmaNEST','Primo colpo utensile OVS non trovato. Quota X1?','100'));
+		if (OVSY1=0) then OVSY1 := StrToFloat(InputBox('SigmaNEST','Primo colpo utensile OVS non trovato. Quota Y1?','100'));
+		if (OVSX2=0) then OVSX2 := StrToFloat(InputBox('SigmaNEST','Secondo colpo utensile OVS non trovato. Quota X2?','100'));
+		if (OVSY2=0) then OVSY2 := StrToFloat(InputBox('SigmaNEST','Secondo colpo utensile OVS non trovato. Quota Y2?','100'));
+	end;
+end;   
+
+//************************************************************************************************************************
+procedure CalcFeedAdjustment;
+begin
+	if (PostObj.DoingTime) then exit;
+	FeedAdjustment := 1;
+	if (pos('GRPALMG',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPALMG_LEGA',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPEZ',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPFE',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPINOX430',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPINOXN',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+		if (PostObj.Thickness>=0.5)   then FeedAdjustment := 1.00;
+		if (PostObj.Thickness>=0.8)   then FeedAdjustment := 1.00;
+		if (PostObj.Thickness>=1.0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPINOXO',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPINOXP',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+		if (PostObj.Thickness>=0.5)   then FeedAdjustment := 1.00;
+		if (PostObj.Thickness>=0.8)   then FeedAdjustment := 1.00;
+		if (PostObj.Thickness>=1.5)   then FeedAdjustment := 1.00;
+	end;
+	if (pos('GRPZINC',PostObj.MatGroup)>0) then begin 
+		if (PostObj.Thickness>=0)   then FeedAdjustment := 1.00;
+	end;
+end;	
+
+//************************************************************************************************************************
+procedure Initialize;
+var
+	PNCD	: TNCData;
+	i		: integer;
+begin
+	if (PostObj.DoingTime) then exit;
+	UseSubPrograms := SubProgramsEnabled;
+	if (UseSubPrograms) then begin
+		LimitDown := LimitDown_Sub;
+		LimitUp := LimitUp_Sub;
+	end else begin
+		LimitDown := LimitDown_NoSub;
+		LimitUp := LimitUp_NoSub;  
+	end;   
+	modalE := 0;
+	premodale:= 0;
+	SfondaVeloce := false;
+	SubProgramsError := false;
+	NumIcona := 0;
+	NCounter := 10;
+	ProfileNumber := 1;
+	PreProfileType := 0;
+	NewPart := 0;
+	SubProgramId := 0;
+	CalcFeedAdjustment;
+	CreateJobTempFile;
+	PartCompleted := false;
+	ThereWasAStopBeforeFlameOff := false;
+	NanoTab := False;
+	DecimalSeparator := '.';
+	FlameOn_Code := 'M103';
+	Diagonal_Tolerance  := 3;
+	MinimoRapido := 150;
+	KerfErrorsList := TStringList.Create;
+	if (FlashCutEnabled) then FlashCutList := TStringList.Create;
+	if (isValidDouble(PostObj.GetVariable('#254'))) then LengthToCheck := StrToFloat(PostObj.GetVariable('#254')) else LengthToCheck:=0;  
+	ProgramCuttingTime := '';
+	EndOfSub := false;
+	VapoPresent := false;
+	OutputFlashCutVar := false;
+	ErrorList := TStringList.Create;
+	ErrorList.Sorted := true;
+	ErrorList.Duplicates := dupIgnore;
+	for i := 0 To PostObj.NCDataObjList.Count-1 do 
+    begin
+        PNCD := PostObj.NCDataObjList.At_Object(i);
+        if (PNCD.EntSubAttr=30) then begin
+            GetNewLookupID(PNCD,5,0,0,0,0);
+        end;
+		if (PNCD.Vaporizing) then begin
+			VapoPresent := true;
+		end;
+    end;
+	FilletDone := false;
+end; 
+
+
+procedure Chespessura;
+
+begin
+  if (PostObj.Thickness > 0) and ( PostObj.Thickness  <= 0.4) then begin
+    espessura := 'M21';
+  end;
+    if (PostObj.Thickness > 0.4) and ( PostObj.Thickness  < 0.6) then begin
+    espessura := 'M22';
+  end;
+    if (PostObj.Thickness > 0.6) and ( PostObj.Thickness  <= 0.9) then begin
+    espessura := 'M23';
+  end;
+    if (PostObj.Thickness > 0.9) and ( PostObj.Thickness  <= 1.3) then begin
+    espessura := 'M24';
+  end;
+    if (PostObj.Thickness > 1.3) and ( PostObj.Thickness  <= 1.8) then begin
+    espessura := 'M25';
+  end;
+  if (PostObj.Thickness > 1.8) and ( PostObj.Thickness  <= 2.4) then begin
+    espessura := 'M26';
+  end;
+   if (PostObj.Thickness >2.4) and ( PostObj.Thickness  <= 3.2) then begin
+    espessura := 'M27';
+  end;
+    if (PostObj.Thickness > 3.2) and ( PostObj.Thickness  <= 4.2) then begin
+    espessura := 'M28';
+  end;
+   if (PostObj.Thickness >4.2) and ( PostObj.Thickness  < 6.2) then begin
+    espessura := 'M29';
+  end;
+    if (PostObj.Thickness >6.2) then begin
+    espessura := 'M20';
+  end;
+ 
+	
+end;
+
+
+
+
+//************************************************************************************************************************
+procedure CheckMinLength;
+var
+	PNCD	: TNCData;
+begin
+	if (PostObj.DoingTime) then exit;
+	PNCD := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos);
+	if (PNCD.IsNCFillet) then FilletDone := true;
+	if (PostObj.CutterComp=0) then exit; //esce con (1) kerf in PC (2) kerf in CNC ma taglio di tipo NO KERF
+	if (PostObj.EntityLength < LengthToCheck) then KerfErrorsList.Add('Ente di dimensione ' + FormatFloat('0.00',PostObj.EntityLength) + 'mm alle coordinate ' + FormatFloat('0.00',PostObj.XVal+PostObj.SubDeltaX) + ';' + FormatFloat('0.00',PostObj.YVal+PostObj.SubDeltaY));
+end;
+
+//************************************************************************************************************************
+procedure DisplayErrors;
+var
+	i              : integer;
+	ErrorMessage   : string;
+begin
+	if (PostObj.DoingTime) then exit;
+	if ((not FilletDone) and (DisplayMissingNCFilletError)) then begin
+		ErrorList.Add('Attenzione! Non sono presenti spigoli raccordati.');
+	end;
+	if (not DisplaySmallEntitiesError) then begin
+		KerfErrorsList.Free;
+	end else begin
+		if (KerfErrorsList.Count>0) then begin
+			if (MessageDlg('Sono stati riscontrati enti pi� piccoli del valore di compensazione, che potrebbero generare fermi macchina durante il taglio del programma ' + PostObj.GetVariable('#1') + '.' + #13#10#13#10 +
+						   'Vuoi visualizzare un elenco completo di tali enti?',mtWarning,3,0)=6) then
+			begin
+				ErrorMessage := '';
+				for i := 0 to KerfErrorsList.Count-1 do ErrorMessage := ErrorMessage + KerfErrorsList[i] + #13#10;
+				MessageDlg(ErrorMessage,mtWarning,0,0);
+			end;
+		end;
+		KerfErrorsList.Free;
+	end;
+	if (SubProgramsError) then begin
+		ErrorMessage := 'Attenzione! Il controllo AMNC non supporta pi� di 99 sottoprogrammi. Il programma "' + PostObj.GetVariable('#1') + '" ne utilizza ' + IntToStr(SubProgramId) + '. La macchina non sar� in grado di eseguire il programma correttamente. E'' necessario modificare il programma riducendo il numero dei sottoprogrammi in esso contenuti.';
+		MessageDlg(ErrorMessage,mtError,0,0);
+	end;
+	if (ErrorList.Count > 0) then begin
+		ErrorMessage := '';
+		for i := 0 to ErrorList.Count - 1 do begin
+			ErrorMessage := ErrorMessage + ErrorList[i] + #13#10;
+		end;
+		ShowMessage(ErrorMessage);
+	end;
+	ErrorList.Free;
+	if not (PostObj.DoingTime) then begin
+		if FlashCutEnabled then FlashCutList.Free;
+	end;
+end; 
+
+//************************************************************************************************************************
+function GetPreEntityProcessNum : integer;
+var 
+	pNCData	: TNCData;
+begin
+	if (PostObj.DoingTime) then exit;
+	result := 0;
+	if (PostObj.ActiveNCPos>0) then begin
+		pNCData := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos-1);
+		result := pNCData.ProcessNum;
+	end;
+end;
+
+//************************************************************************************************************************
+procedure SheetSizesForTower;
+var
+	WKString	: string;
+	YYYY		: string;
+	MM			: string;
+	DD			: string;
+	HH			: string;
+	NN 			: string;
+begin
+	if (PostObj.DoingTime) then exit;
+    PostObj.AddToNCFile('(PR#1)'); // Obsoleto e non guardato da nessuna Amada secondo Emanuele
+    PostObj.AddToNCFile('(MCEnsis3015AJ    )');
+    PostObj.AddToNCFile('(TREnsis3015AJ)');
+    PostObj.AddToNCFile('(MN 239)');
+    PostObj.AddToNCFile('(MA#104   )');
+[OMITTED]
+	WKString := '(WK';
+	if (PostObj.Thickness < 10) then begin
+		WKString := WKString + '    ' + FormatFloat('0.00',PostObj.Thickness) + 'T';
+	end else begin
+		WKString := WKString + '    ' + FormatFloat('0.0',PostObj.Thickness) + 'T';
+	end;
+	if (PostObj.SheetLength < 100) then begin
+		WKString := WKString + '   ' + FormatFloat('0.00',PostObj.SheetLength)+ 'X';
+	end else begin
+		if (PostObj.SheetLength < 1000) then begin
+			WKString := WKString + '  ' + FormatFloat('0.00',PostObj.SheetLength)+ 'X';
+		end else begin
+			WKString := WKString + ' ' + FormatFloat('0.00',PostObj.SheetLength)+ 'X';
+		end;
+	end;
+	if (PostObj.SheetWidth < 100) then begin
+		WKString := WKString + '   ' + FormatFloat('0.00',PostObj.SheetWidth)+ ')';
+	end else begin
+		if (PostObj.SheetWidth < 1000) then begin
+			WKString := WKString + '  ' + FormatFloat('0.00',PostObj.SheetWidth)+ ')';
+		end else begin
+			WKString := WKString + ' ' + FormatFloat('0.00',PostObj.SheetWidth)+ ')';
+		end;
+	end;
+	PostObj.AddToNCFile(WKString);	
+	//PostObj.AddToNCFile('(CL/    0.00     0.00     0.00     0.00)');
+    DateTimeToString(YYYY, 'yyyy', Now);
+    DateTimeToString(MM, 'mm', Now);
+    DateTimeToString(DD, 'dd', Now);
+    DateTimeToString(HH, 'hh', Now);
+    DateTimeToString(NN, 'nn', Now);
+    PostObj.AddToNCFile('(TT[REPLACE1])'); 
+    PostObj.AddToNCFile('(CRY' + YYYY + 'M' + MM + 'D' + DD + ')'); 
+end; 
+
+//************************************************************************************************************************
+procedure HeaderTime;
+begin
+	if (PostObj.DoingTime) then exit;
+	PostObj.ReplaceVal := ProgramCuttingTime;
+end;
+
+//************************************************************************************************************************
+function FormatPartName : string;
+var 
+	s	: string;
+begin
+	if (PostObj.DoingTime) then exit;
+	s := StringReplace(PostObj.GetVariable('#188'), '(', '-', 0);
+	result := StringReplace(s, ')', '-', 0);
+end;
+
+//************************************************************************************************************************
+procedure DatiIcona;
+begin
+	//if (PostObj.DoingTime) then exit;
+	NumIcona := NumIcona + 1;
+	if (WriteAmncPartRecognition) then begin
+		PostObj.AddToNCFile('(--' + IntToStr(NumIcona) + '--N--' + FormatPartName + '--)');
+	end;
+	//PostObj.AddToNCFile('(ICONA: ' + FormatPartName + '_N:' + IntToStr(NumIcona) + ')');
+	PostObj.AddToNCFile('(ICONA:)');
+	IF NumIcona = 1 THEN
+	   //PostObj.AddToNCFile('GO N1');
+	PostObj.AddToNCFile('N' + IntToStr(NumIcona));  
+	NewPart := 1;
+end;
+
+//************************************************************************************************************************
+procedure FineIcona;
+begin
+	if (PostObj.DoingTime) then exit;
+	PartCompleted := true;
+end;
+
+//************************************************************************************************************************
+procedure FanucCounter;
+var
+	CounterFilePath   : string;
+	CounterFile       : TStringList;
+	CounterInt        : integer;
+begin
+	if (PostObj.DoingTime) then exit;
+	CounterFilePath:=ChangeFileExt(PostObj.PSTFileName,'.dat');
+	CounterFile := TStringList.Create;
+	if (FileExists(CounterFilePath)=false) then begin
+		CounterFile.Add(IntToStr(LimitDown));
+		CounterFile.SaveToFile(CounterFilePath);
+	end;
+	CounterFile.LoadFromFile(CounterFilePath);
+	if (CounterFile.Count<>1) then begin
+		CounterFile.Clear;
+		CounterFile.Add(IntToStr(LimitDown));
+	end;
+	if (IsInteger(CounterFile[0])=false) then begin
+		CounterFile.Clear;
+		CounterFile.Add(IntToStr(LimitDown));
+	end;	
+	CounterInt := StrToInt(CounterFile[0]);
+	if (CounterInt<LimitDown) then CounterInt := LimitDown;
+	if (CounterInt>LimitUp) then CounterInt := LimitDown;
+	MainProgramId := CounterInt;
+	if (UseSubPrograms) then while (MainProgramId<1000) do MainProgramId:=MainProgramId*10;
+	Inc(CounterInt);
+	CounterFile.Clear;
+	CounterFile.Add(IntToStr(CounterInt));
+	CounterFile.SaveToFile(CounterFilePath);
+	CounterFile.Free;
+end;
+
+//************************************************************************************************************************
+procedure ScriviPAR;
+var
+	PARFile	: TStringList;
+	i		: integer;
+begin
+	if (PostObj.DoingTime) then exit;
+	PARFile := TStringList.Create;
+	PARFile.LoadFromFile(ChangeFileExt(PostObj.PSTfilename,'.SNPAR'));
+	for i := 0 to PARFile.count-1 do begin
+		PARFile[i] := StringReplace(PARFile[i], '{DIMX}', FormatFloat('0.#',PostObj.SheetLength), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{DIMY}', FormatFloat('0.#',PostObj.SheetWidth), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{THICKNESS}', FormatFloat('0.#',PostObj.Thickness), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{MATCODE}', '', 2);
+		PARFile[i] := StringReplace(PARFile[i], '{MATNAME}', PostObj.Material, 2);
+		PARFile[i] := StringReplace(PARFile[i], '{MATDESCR}', PostObj.Material, 2);
+		PARFile[i] := StringReplace(PARFile[i], '{DATE}', FormatDateTime('ddddd', Date), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{TIME}', FormatDateTime('tt', Time), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{PRGNAME}', PostObj.GetVariable('#1'), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{SHEETAREA}', FormatFloat('0.#',PostObj.SheetArea/1000000), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{SHEETWEIGHT}', FormatFloat('0.00',PostObj.SheetWeight), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{CUTTINGTIME}', IntToStr(Int(StrToFloat(PostObj.GetVariable('#60:1:2')))), 2);
+		PARFile[i] := StringReplace(PARFile[i], '{CLAMPX1}', PostObj.ClampX1, 2);
+		PARFile[i] := StringReplace(PARFile[i], '{CLAMPX2}', PostObj.ClampX2, 2);
+		PARFile[i] := StringReplace(PARFile[i], '{CLAMPX3}', PostObj.ClampX3, 2);
+	end;
+	PARFile.SaveToFile(ChangeFileExt(PostObj.NCFilename,'.PAR'));
+	if (SaveNCPath2) and (PostObj.SaveNCFile2=1) then PARFile.SaveToFile(PostObj.NCPath2 + ChangeFileExt(ExtractFileName(PostObj.NCFilename), '.PAR'));
+	if (SaveNCPath3) and (PostObj.SaveNCFile3=1) then PARFile.SaveToFile(PostObj.NCPath3 + ChangeFileExt(ExtractFileName(PostObj.NCFilename), '.PAR'));
+	if (SaveNCPath4) and (PostObj.SaveNCFile4=1) then PARFile.SaveToFile(PostObj.NCPath4 + ChangeFileExt(ExtractFileName(PostObj.NCFilename), '.PAR'));
+	PARFile.Free;
+end;
+
+//************************************************************************************************************************
+procedure MoveNCFile;
+var
+	OldFile			: string;
+	OldFileSCH		: string;
+	NewFile			: string;
+	NewFileSCH		: string;
+	NewFile1		: string;
+	NewFile2		: string;
+	CopierPath		: string;
+	Copier			: string;
+	LastPost 		: TextFile;
+	TaskNameTrm 	: string;
+	TaskFileName 	: string;
+Begin
+	if ((PostObj.DoingTime) or (PostObj.SinglePartProgram)) then exit;
+	TaskNameTrm := Trim(PostObj.TaskName);
+	if SaveSubFolders then begin
+		//Primo percorso NC
+		TaskFileName := ExtractFilePath(PostObj.NCFileName) + PostObj.GetVariable('#9') + '.SCH';
+		CopierPath := ChangeFileExt(PostObj.NCFilename,'.BAT');
+		OldFile := ExtractFilePath(PostObj.NCFileName) + PostObj.GetVariable('#1');
+		NewFile := ExtractFilePath(PostObj.NCFileName) + TaskNameTrm + '\' + PostObj.GetVariable('#1');
+		OldFileSCH := ExtractFilePath(PostObj.NCFileName) + PostObj.GetVariable('#9');
+		NewFileSCH := ExtractFilePath(PostObj.NCFileName) + TaskNameTrm + '\' + PostObj.GetVariable('#9');
+		NewFile1 := ExtractFilePath(PostObj.GetVariable('#1')); //;'\\server\fo-m2\nc\' + '\' + PostObj.GetVariable('#1');  
+		NewFile2 := ExtractFilePath(PostObj.GetVariable('#1')); //;'\\server\f1-nt\NC\' + '\' + PostObj.GetVariable('#1');  
+		AssignFile (Copier, CopierPath);
+		Rewrite (Copier);
+		// prima copia
+		if (PostObj.CurrentLayOutNum = 1) then
+			WriteLn (Copier, 'rd "' + ExtractFilePath(PostObj.NCFileName) + TaskNameTrm + '" /s/q');
+		WriteLn (Copier, 'md "' + ExtractFilePath(PostObj.NCFileName) + TaskNameTrm + '"');
+		WriteLn (Copier, 'copy "' + OldFile + '.NC" "' + NewFile + '.NC" /Y');
+		if WritePar then WriteLn (Copier, 'copy "' + OldFile + '.PAR" "' + NewFile + '.PAR" /Y');
+		if MoveSCHFile and fileexists(TaskFileName) then WriteLn (Copier, 'copy "' + OldFileSCH + '.SCH" "' + NewFileSCH + '.SCH" /Y');
+		if (PostObj.PromptOpt5=2) or (PostObj.PromptOpt5=4) then WriteLn (Copier, 'copy "' + OldFile + '.NC" "' + NewFile1 + '.NC" /Y');
+		if (PostObj.PromptOpt5=3) or (PostObj.PromptOpt5=4) then WriteLn (Copier, 'copy "' + OldFile + '.NC" "' + NewFile2 + '.NC" /Y');
+		CloseFile (Copier);
+		WinExecAndWait(ExtractFilePath(CopierPath),ExtractFileName(CopierPath),'',0);
+		// cancella files originali
+		DeleteFile(OldFile + '.NC');
+		if WritePar then DeleteFile(OldFile + '.PAR');
+		DeleteFile(CopierPath);
+		//Secondo percorso NC
+		if (PostObj.SaveNCFile2=1) and (SaveNCPath2) then begin
+			if not DirectoryExists(PostObj.NCPATH2) then ForceDirectories(PostObj.NCPATH2);
+			CopierPath := ChangeFileExt(PostObj.NCPATH2,'.BAT');
+			OldFile := PostObj.NCPATH2 + PostObj.GetVariable('#1');
+			NewFile := PostObj.NCPATH2 + TaskNameTrm + '\' + PostObj.GetVariable('#1');
+			OldFileSCH := ExtractFilePath(PostObj.NCFileName) + PostObj.GetVariable('#9');
+			NewFileSCH := PostObj.NCPATH2 + TaskNameTrm + '\' + PostObj.GetVariable('#9');			
+			AssignFile (Copier, CopierPath);
+			Rewrite (Copier);
+			// prima copia
+			if (PostObj.CurrentLayOutNum = 1) then
+				WriteLn (Copier, 'rd "' + PostObj.NCPATH2 + TaskNameTrm + '" /s/q');
+			WriteLn (Copier, 'md "' + PostObj.NCPATH2 + TaskNameTrm + '"');
+			WriteLn (Copier, 'copy "' + OldFile + '.NC" "' + NewFile + '.NC" /Y');
+			if WritePar then WriteLn (Copier, 'copy "' + OldFile + '.PAR" "' + NewFile + '.PAR" /Y');
+			if MoveSCHFile and fileexists(TaskFileName) then WriteLn (Copier, 'copy "' + OldFileSCH + '.SCH" "' + NewFileSCH + '.SCH" /Y');
+			CloseFile (Copier);
+			WinExecAndWait(ExtractFilePath(CopierPath),ExtractFileName(CopierPath),'',0);
+			// cancella files originali
+			DeleteFile(OldFile + '.NC');
+			if WritePar then DeleteFile(OldFile + '.PAR');
+			if MoveSCHFile and fileexists(TaskFileName) then DeleteFile(OldFileSCH + '.PAR');
+			DeleteFile(CopierPath);
+		end;
+		//Terzo percorso NC
+		if (PostObj.SaveNCFile3=1) and (SaveNCPath3) then begin
+			if not DirectoryExists(PostObj.NCPATH3) then ForceDirectories(PostObj.NCPATH3);
+			CopierPath := ChangeFileExt(PostObj.NCPATH3,'.BAT');
+			OldFile := PostObj.NCPATH3 + PostObj.GetVariable('#1');
+			NewFile := PostObj.NCPATH3 + TaskNameTrm + '\' + PostObj.GetVariable('#1');  
+			OldFileSCH := ExtractFilePath(PostObj.NCFileName) + PostObj.GetVariable('#9');
+			NewFileSCH := PostObj.NCPATH3 + TaskNameTrm + '\' + PostObj.GetVariable('#9');
+			AssignFile (Copier, CopierPath);
+			Rewrite (Copier);
+			// prima copia
+			if (PostObj.CurrentLayOutNum = 1) then
+				WriteLn (Copier, 'rd "' + PostObj.NCPATH3 + TaskNameTrm + '" /s/q');		
+			WriteLn (Copier, 'md "' + PostObj.NCPATH3 + TaskNameTrm + '"');
+			WriteLn (Copier, 'copy "' + OldFile + '.NC" "' + NewFile + '.NC" /Y');
+			if WritePar then WriteLn (Copier, 'copy "' + OldFile + '.PAR" "' + NewFile + '.PAR" /Y');
+			if MoveSCHFile and fileexists(TaskFileName) then WriteLn (Copier, 'copy "' + OldFileSCH + '.SCH" "' + NewFileSCH + '.SCH" /Y');
+			CloseFile (Copier);
+			WinExecAndWait(ExtractFilePath(CopierPath),ExtractFileName(CopierPath),'',0);
+			// cancella files originali
+			DeleteFile(OldFile + '.NC');
+			if WritePar then DeleteFile(OldFile + '.PAR');
+			if MoveSCHFile and fileexists(TaskFileName) then DeleteFile(OldFileSCH + '.SCH');
+			DeleteFile(CopierPath);
+		end;
+		//Quarto percorso NC
+		if (PostObj.SaveNCFile4=1) and (SaveNCPath4) then begin
+			if not DirectoryExists(PostObj.NCPATH4) then ForceDirectories(PostObj.NCPATH4);
+			CopierPath := ChangeFileExt(PostObj.NCPATH4,'.BAT');
+			OldFile := PostObj.NCPATH4 + PostObj.GetVariable('#1');
+			NewFile := PostObj.NCPATH4 + TaskNameTrm + '\' + PostObj.GetVariable('#1');  
+			OldFileSCH := ExtractFilePath(PostObj.NCFileName) + PostObj.GetVariable('#9');
+			NewFileSCH := PostObj.NCPATH4 + TaskNameTrm + '\' + PostObj.GetVariable('#9');
+			AssignFile (Copier, CopierPath);
+			Rewrite (Copier);
+			// prima copia
+			if (PostObj.CurrentLayOutNum = 1) then
+				WriteLn (Copier, 'rd "' + PostObj.NCPATH4 + TaskNameTrm + '" /s/q');	
+			WriteLn (Copier, 'md "' + PostObj.NCPATH4 + TaskNameTrm + '"');
+			WriteLn (Copier, 'copy "' + OldFile + '.NC" "' + NewFile + '.NC" /Y');
+			if WritePar then WriteLn (Copier, 'copy "' + OldFile + '.PAR" "' + NewFile + '.PAR" /Y');
+			if MoveSCHFile and fileexists(TaskFileName) then WriteLn (Copier, 'copy "' + OldFileSCH + '.SCH" "' + NewFileSCH + '.SCH" /Y');
+			CloseFile (Copier);
+			WinExecAndWait(ExtractFilePath(CopierPath),ExtractFileName(CopierPath),'',0);
+			// cancella files originali
+			DeleteFile(OldFile + '.NC');
+			if WritePar then DeleteFile(OldFile + '.PAR');
+			if MoveSCHFile and fileexists(TaskFileName) then DeleteFile(OldFileSCH + '.SCH');
+			DeleteFile(CopierPath);
+		end;
+		if MoveSCHFile and fileexists(TaskFileName) then DeleteFile(OldFileSCH + '.SCH');
+	end;
+end;
+
+//************************************************************************************************************************
+procedure Profilo;
+begin
+	if (PostObj.DoingTime) then exit;
+    if (AddLineCounter) and ((NewPart = 1) or ((PostObj.EntSubAttr <> 5) and (PostObj.EntSubAttr <> 23) and (PreProfileType <> 23))) then begin
+		PostObj.AddToNCFile('N' + IntToStr(ProfileNumber));
+		Inc(ProfileNumber);
+    end;
+	PreProfileType := PostObj.EntSubAttr;
+	NewPart := 0;
+end;
+
+//************************************************************************************************************************
+//procedure CheckTabRapid;
+//var 
+//	pNCData    : TNCData;
+//begin
+//	if (PostObj.EntSubAttr<>5) then exit; //exit on non-tabrapids
+//	if (PostObj.ActiveNCPos >= PostObj.NCDataObjList.Count) then exit; //exit at end of list
+//	pNCData := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos+1);
+//	// IM - 06-05-2015 - Rimuovo controllo attacchi_mancanti come da specifiche METALDESI.
+//	//if (pNCData.EntSubAttr<>6) then ErrorMessage :=  ErrorMessage + 'Micro senza attacco alle coordinate ' + FormatFloat('0.00',PostObj.X) + '; ' + FormatFloat('0.00',PostObj.Y) + #13#10;
+//end;
+
+//************************************************************************************************************************
+procedure FixCuttingTime;
+begin
+	if (PostObj.DoingTime) then exit;
+	if (PostObj.G_Code=1) or (PostObj.G_Code=2) or (PostObj.G_Code=3) then PostObj.FeedRate := PostObj.FeedRate*FeedAdjustment;
+end;
+
+//************************************************************************************************************************
+procedure RemoveProcess5;
+var
+	i 		: integer;
+	PNCD	: TNCData;
+begin
+	if (PostObj.DoingTime) then exit;
+	for i := 0 to PostObj.NCDataObjList.Count - 1 do begin
+		PNCD := PostObj.NCDataObjList.At_Object(i);
+		if ((PNCD.ClassName = 'TNCLine') or (PNCD.ClassName = 'TNCArc') or (PNCD.ClassName = 'TNCPoint') or (PNCD.ClassName = 'TNCDrillPoint')) then begin
+			if (PNCD.ProcessNum=5) and (PNCD.Vaporizing) then PNCD.Ignore := true;
+		end;
+	end;
+end;	
+
+//************************************************************************************************************************
+function isValidInteger(ss: string): boolean;
+var
+	i : integer;
+begin
+	if (PostObj.DoingTime) then exit;
+	result := false;
+	ss := trim(ss);
+	if length(ss) > 0 then begin
+		for i := 1 to length(ss) do begin
+			if (ss[i] < '0') or (ss[i] > '9') then exit;
+		end;
+	end else Exit;
+	result := true;
+end;
+
+//************************************************************************************************************************
+procedure EdgeDetectionMacro;
+const
+    ClampTolerance = 5;
+var
+	i	: string;
+	j	: string;
+	q	: string;
+	a	: double;
+	b	: double;
+	c	: double;  
+begin
+	if ((PostObj.DoingTime) or (PostObj.SinglePartProgram)) then exit;
+	case PostObj.PromptOpt2 of
+		1,2,3,4,5 : begin
+			a := (PostObj.SheetLength * 0.15);
+			b := (PostObj.SheetLength * 0.8);
+			c := (PostObj.SheetWidth * 0.7);
+		end;
+		6 : begin
+			a := (PostObj.SheetWidth * 0.15);
+			b := (PostObj.SheetLength * 0.5);
+			c := (PostObj.SheetLength * 0.8);
+		end;
+		7 : begin
+			a := (PostObj.SheetWidth * 0.15);
+			b := (PostObj.SheetWidth * 0.7);
+			c := (PostObj.SheetLength * 0.5);
+		end;
+	end;
+	
+	if (isValidInteger(PostObj.GetVariable('#251'))) then begin
+        case PostObj.PromptOpt2 of
+            1,2,3,4,5 : if (StrToInt(PostObj.GetVariable('#251'))<=PostObj.SheetLength) and (StrToInt(PostObj.GetVariable('#251'))>=0) then a := StrToInt(PostObj.GetVariable('#251'));
+            6,7 :     if (StrToInt(PostObj.GetVariable('#251'))<=PostObj.SheetWidth) and (StrToInt(PostObj.GetVariable('#251'))>=0) then a := StrToInt(PostObj.GetVariable('#251'));
+        end;
+    end;
+    
+	if (isValidInteger(PostObj.GetVariable('#252'))) then begin
+        case PostObj.PromptOpt2 of
+            1,2,3,4,5,6 : if (StrToInt(PostObj.GetVariable('#252'))<=PostObj.SheetLength) and (StrToInt(PostObj.GetVariable('#252'))>=0) then b := StrToInt(PostObj.GetVariable('#252'));
+            7 :         if (StrToInt(PostObj.GetVariable('#252'))<=PostObj.SheetWidth) and (StrToInt(PostObj.GetVariable('#252'))>=0) then b := StrToInt(PostObj.GetVariable('#252'));
+        end;
+    end;
+	if (isValidInteger(PostObj.GetVariable('#253'))) then begin
+        case PostObj.PromptOpt2 of
+            1,2,3,4,5 : if (StrToInt(PostObj.GetVariable('#253'))<=PostObj.SheetWidth) and (StrToInt(PostObj.GetVariable('#253'))>=0) then c := StrToInt(PostObj.GetVariable('#253'));	
+            6,7 :     if (StrToInt(PostObj.GetVariable('#253'))<=PostObj.SheetLength) and (StrToInt(PostObj.GetVariable('#253'))>=0) then c := StrToInt(PostObj.GetVariable('#253'));	
+        end;
+    end;
+	{ClampX1                       	= 175;
+	ClampX2                       	= 698;
+	ClampX3                       	= 1750;
+	ClampX4                       	= 2275;
+	ClampY1                       	= 5000;}
+  
+    
+ 
+	if (PostObj.PromptOpt2=2) or (PostObj.PromptOpt2=3) or (PostObj.PromptOpt2=4) then begin
+		if (a > (ClampX1-(ClampSize/2))) and (a < (ClampX1+(ClampSize/2))) then a := ClampX1+(ClampSize/2)-ClampTolerance;
+		if (a > (ClampX2-(ClampSize/2))) and (a < (ClampX2+(ClampSize/2))) then a := ClampX2+(ClampSize/2)-ClampTolerance;	
+		if (a > (ClampX3-(ClampSize/2))) and (a < (ClampX3+(ClampSize/2))) then a := ClampX3-(ClampSize/2)-ClampTolerance;	
+		if (a > (ClampX4-(ClampSize/2))) and (a < (ClampX4+(ClampSize/2))) then a := ClampX4-(ClampSize/2)-ClampTolerance;	
+        
+		if (b > (ClampX1-(ClampSize/2))) and (b < (ClampX1+(ClampSize/2))) then b := ClampX1+(ClampSize/2)-ClampTolerance;
+		if (b > (ClampX2-(ClampSize/2))) and (b < (ClampX2+(ClampSize/2))) then b := ClampX2+(ClampSize/2)-ClampTolerance;	
+		if (b > (ClampX3-(ClampSize/2))) and (b < (ClampX3+(ClampSize/2))) then b := ClampX3-(ClampSize/2)-ClampTolerance;	
+		if (b > (ClampX4-(ClampSize/2))) and (b < (ClampX4+(ClampSize/2))) then b := ClampX4-(ClampSize/2)-ClampTolerance;
+        
+		if (c > (ClampY1-(ClampSize/2))) and (c < (ClampY1+(ClampSize/2))) then c := ClampY1-(ClampSize/2)-ClampTolerance;		
+	end;
+	
+	i := 'I'+FormatFloat('00.0_',a);
+	j := 'J'+FormatFloat('00.0_',b);
+	q := 'Q'+FormatFloat('00.0_',c);
+	
+	case PostObj.PromptOpt2 of
+		1 : begin
+			//do nothing
+		end;
+		2 : begin //g121
+			if (EnableRestart) and (UseSubPrograms=false) then PostObj.AddToNCFile('M96 P8098');
+			PostObj.AddToNCFile('G121_L2_A1_X0._Y20._'+i+j+q+'B0.0 C0.0 H50 Z100. D60.');
+		end;
+		3 : begin //g121m1
+			if (EnableRestart) and (UseSubPrograms=false) then PostObj.AddToNCFile('M96 P8098');
+			PostObj.AddToNCFile('G121_L2_A4_X#18_Y#19_'+i+j+q+'H50 Z100. D60.');
+		end;
+		4 : begin //g121m1
+			if (EnableRestart) and (UseSubPrograms=false) then PostObj.AddToNCFile('M96 P8098');
+			PostObj.AddToNCFile('G121_L2_A1_X0._Y0._'+i+j+q+'H50 Z100. D60. M1');
+		end;
+		5 : begin //ovsg140
+			PostObj.AddToNCFile('G140 I'+FormatFloat('0.##',OVSX1)+' J'+FormatFloat('0.##',OVSY1)+' Q'+FormatFloat('0.##',OVSX2)+' K'+FormatFloat('0.##',OVSY2)+' A1');
+		end;	
+		6 : begin //ovsg141k1
+			PostObj.AddToNCFile('G141 A3 '+i+j+q+' K1');
+		end;
+		7 : begin //ovsg141k2
+			PostObj.AddToNCFile('G141 A3 '+i+j+q+' K2');
+		end;
+	end;	
+end;
+
+//************************************************************************************************************************
+procedure CheckNanoTab;
+begin
+	if (PostObj.DoingTime) then exit;
+	if (PostObj.EntSubAttr = 14) And (PostObj.OutSide_Inside = 1) then begin
+		PostObj.AddToNCFile('E7');
+		premodalE := 0;
+		NanoTab := True;
+	end else begin
+		NanoTab := False;
+	end;	
+end;
+
+//************************************************************************************************************************
+procedure Add_E_Value;															// E management
+var
+	var102			: string;
+	NewX			: real;
+	NewY			: real;
+	AngoloRad		: real;
+	AttaccoCorto	: real;
+begin
+	if (PostObj.DoingTime) then exit;
+	if ((PostObj.Vaporizing) or (PostObj.ToolNumber = 5)) then exit;
+	if PostObj.toolnumber < 16  then begin	   // To include also etching and marking
+		var102 := PostObj.GetVariable('#102');
+		case PostObj.ToolNumber of														// E Forced by the process
+			1 : var102 := '1';
+			2 : var102 := '2';
+			3 : var102 := '3';
+			6 : var102 := '4';
+			9 : var102 := '5';
+			12 : var102 := '6';
+			13 : var102 := '7';
+			14 : var102 := '8';
+			15 : var102 := '9';
+                     
+		end;	
+		if (PostObj.ToolNumber=4) then begin											// only for laser	  
+			// Fly Piercing
+			if (PostObj.PromptOpt6=2) and (FlyPiercing_M105 = 1) then begin				// Flying pierce ALWAYS ON by prompt option
+				if (PostObj.EntType=1) and (SfondaVeloce = True) then begin			    // on leadin and only on head down fast pierce
+					var102 := FlyingPiercingENum;										// forced Flying Pierce
+				end;
+			end;
+			if isValidDouble(PostObj.GetVariable('#109')) then AttaccoCorto := strtofloat(PostObj.GetVariable('#109')) else AttaccoCorto := FlyingPiercingMinLength;		 
+			if ((PostObj.PromptOpt6=1) and (FlyPiercing_M105 = 1) and (AttaccoCorto>0)) then begin		    	// Flying pierce auto management by prompt option
+				if (PostObj.preg_Code=0) and (PostObj.EntType=1) and (SfondaVeloce = True) then begin			// on leadin and only on head down fast pierce
+					if (PostObj.EntityLength > (AttaccoCorto+FlyingPiercingMinLength)) then begin					// if leadin is long enough to be broken
+						if AttaccoCorto = 0 then AttaccoCorto := 0.75;					// default just in case
+						AngoloRad := DegtoRad(PostObj.LineAngle); //(pi / 180 * PostObj.LineAngle);
+						NewX := PostObj.PreX + (AttaccoCorto * cos(AngoloRad));
+						NewY := PostObj.PreY + (AttaccoCorto * sin(AngoloRad));
+						PostObj.AddToNCFile('E' + inttostr(FlyingPiercingENum) + '|G01X' + formatfloat('0.00',NewX) + 'Y' + formatfloat('0.00',NewY));  			   
+					end else begin																// leadin too short -> ALL in E8
+						var102 := FlyingPiercingENum;
+					end;	
+				end;
+			end;	  
+		end;	
+		if (PostObj.ToolNumber=5) then var102 := '9';										// special case forced for customer ???
+		if (var102 <> '') then begin
+			currentmodalE := StrToInt(var102);
+		end;
+		if ((OutputFlashCutVar) or ((UseFlashCutEForFlyCut) and (PostObj.EntSubAttr = 27))) then begin
+			var102 := FlashCutE;
+		end;
+		if (premodalE <> currentmodalE) then begin
+			PostObj.Var8 := 'E' + var102;
+			premodalE := currentmodalE;
+		end else begin
+			PostObj.Var8 := '';
+		end;
+	end else begin
+		premodalE := 0;
+	end;
+end;
+
+//************************************************************************************************************************
+procedure VapoOn;
+begin
+	if (PostObj.DoingTime) then exit;
+	PostObj.AddToNCFile(VapoOn_Code);
+end;
+
+//************************************************************************************************************************
+procedure FlameOnNoPierce;
+begin
+	if (PostObj.DoingTime) then exit;
+	if SfondaVeloce = True then begin       // non scrivo M103
+		if (Force_M103_On_SfondaVeloce) and (PostObj.Thickness > 1.5) then PostObj.AddToNCFile(FlameOnNoPierce_Code);               
+	end else begin
+		if (PostObj.ToolNumber=5) then begin
+			PostObj.AddToNCFile(VapoOn_Code);				//	force M103A0
+		end else begin
+			PostObj.AddToNCFile(FlameOnNoPierce_Code);						//	force M103
+		end;
+	end;
+end;
+
+//************************************************************************************************************************
+procedure FlameOn;
+var 
+	NewX			: double;
+	NewY			: double;
+	AngoloRad		: double;
+	AttaccoCorto	: double;
+begin
+	if (PostObj.DoingTime) then exit;
+    if (PostObj.PromptOpt4 = 1) or (PostObj.ToolNumber=10) then 
+        FlameOn_Code := PostObj.GetVariable('#103') //	beam on from TEC
+    else
+        FlameOn_Code := 'M103'; // beam on default
+        
+    //if (PostObj.PromptOpt4 = 1) then FlameOn_Code := PostObj.GetVariable('#103');	//	beam on from TEC
+    if (PostObj.ToolNumber < 16) then begin     // LASER
+        if (PostObj.PromptOpt3 = 1) then begin                                //        vaporize before piercing
+			premodalE := 0;
+			PostObj.AddToNCFile(PierceVapoOn_Code);
+			PostObj.AddToNCFile('[VAR8]');
+        end;	
+        if SfondaVeloce = True then begin       // non scrivo M103
+			if (Force_M103_On_SfondaVeloce) and (PostObj.Thickness > 1.5) then PostObj.AddToNCFile(FlameOn_Code);               
+		end else begin
+			if (PostObj.ToolNumber=5) then begin
+				PostObj.AddToNCFile(VapoOn_Code);				//	force M103A0
+			end else begin
+				PostObj.AddToNCFile(FlameOn_Code);						//	force M103
+			end;
+        end;
+    end;
+	if (PostObj.ToolNumber = 11) then begin							// on etching always M103 because there is no G01
+		PostObj.AddToNCFile(FlameOn_Code);	
+	end;   
+	// M105
+	if (FlyPiercing_M105 = 2) then begin
+		if ((PostObj.preg_Code = 0) and (PostObj.EntType = 1) and (PostObj.GetVariable('#114') = '1')) then begin // on leadin and only on head down fast pierce	
+			if (PostObj.EntityLength > M105MinLeadinLength) then begin // if leadin is long enough to be broken
+				AttaccoCorto := PostObj.EntityLength * M105Perc / 100;
+				if AttaccoCorto = 0 then AttaccoCorto := 0.75; // default just in case
+				AngoloRad := DegtoRad(PostObj.LineAngle); //(pi / 180 * PostObj.LineAngle);
+				NewX := PostObj.PreX + (AttaccoCorto * cos(AngoloRad));
+				NewY := PostObj.PreY + (AttaccoCorto * sin(AngoloRad));
+				// PostObj.AddToNCFile('E' + PostObj.GetVariable('#102')); // + '|G01X' + formatfloat('0.00',NewX) + 'Y' + formatfloat('0.00',NewY);
+				PostObj.AddToNCFile('M105,X' + formatfloat('0.00', NewX) + ',Y' + formatfloat('0.00', NewY));
+			end;
+		end;
+	end;
+end;
+
+//************************************************************************************************************************
+procedure Purge;
+var
+	ProcessParamString		: string;
+	swap 					: string;
+	KomRes					: string;
+begin
+	if (PostObj.DoingTime) then exit;
+	if (DoPurgeOnGasChange = false) then exit;
+    if (PostObj.ToolNumber=10) or (PostObj.ToolNumber=11) then begin
+		PostObj.AddToNCFile(PurgeAzotoString);
+	end else begin
+		swap:=PostObj.ProcessParam;
+		KomRes := [' ', ' '];
+		KomRes := LetterKomAndTrim(swap,'|');	// 1st cutt cond
+		KomRes := LetterKomAndTrim(KomRes[0],'|');	// 2nd cutt cond
+		if (KomRes[1]='O2') then begin
+			PostObj.AddToNCFile(PurgeOssigenoString);
+		end; //se invece taglio in AZOTO non serve fare codesto Purge
+	end;
+end;
+
+//************************************************************************************************************************
+procedure FlameOff;
+var
+	ZPos 		: string;
+	Speciale	: integer;
+	M01			: string;
+begin
+	if (PostObj.DoingTime) then exit;
+	ZPos := '';
+	Speciale := 0;
+	M01 := '';
+	// Manage head-up when changing process
+	if (GetPreEntityProcessNum <> PostObj.ToolNumber) then begin
+		PostObj.HeadDown:=false;
+		SfondaVeloce := False;
+	end;
+	if (EndOfSub) then begin
+		PostObj.HeadDown := false;
+		if EnableM01 then M01 := '_M01';
+		EndOfSub := false;
+	end;
+	if (PartCompleted) then begin
+		PostObj.HeadDown := false;
+		if (PostObj.WritingSub<>2) then begin
+			if EnableM01 then M01 := '_M01';
+		end;
+		PartCompleted := false;
+	end;
+	if (PostObj.ToolNumber > 4) and (PostObj.ToolNumber < 10) then begin
+		if (PostObj.SideAttr = 0) then begin
+			Speciale := 1;
+		end;
+	end;
+	if (PostObj.EntSubAttr=27) and (PostObj.EntLength<30) then begin //atSub_FlyCut
+		PostObj.HeadDown:=true;
+	end;
+	if (GetPreEntityProcessNum=10) and (PostObj.ToolNumber=10) and (PostObj.EntLength<30) then begin
+		PostObj.HeadDown := true;
+		SfondaVeloce := True;
+	end else begin
+		if (PostObj.PromptOpt3=1) then begin
+			PostObj.HeadDown := False;
+			Speciale := 0;
+		end;
+		if (PostObj.HeadDown = True) and (Speciale = 0) then begin                // se il prossimo movimento � in testa bassa
+			case PostObj.PromptOpt1 of
+				'1','4': begin
+					SfondaVeloce := True;
+				end;                                                 
+				'2': begin	
+					if (PostObj.EntSubAttr=27) then begin //atSub_FlyCut
+						SfondaVeloce := True;
+					end else begin
+						if not (ThereWasAStopBeforeFlameOff) then begin
+							if EnableM01 then begin
+								PostObj.AddToNCFile(FlameOff_Code+M01);                 //Beam OFF Head down
+							end else begin
+								PostObj.AddToNCFile(FlameOff_Code);
+							end;	
+						end;
+						SfondaVeloce := False;
+					end;
+				end;
+				'3':begin			
+					if (PostObj.EntSubAttr=27) then begin //atSub_FlyCut
+						SfondaVeloce := True;
+					end else begin
+						ZPos := 'Z'+PostObj.GetVariable('#105');   //Beam OFF Head down
+						PostObj.AddToNCFile(FlameOff_Code+ZPos);         			
+						SfondaVeloce := False;                     			
+					end;						
+				end;
+			end;   // end case		
+		end else begin                                                 // testa alta
+			if not (ThereWasAStopBeforeFlameOff) then begin
+				if EnableM01 then begin
+					PostObj.AddToNCFile(FlameOff_Code+M01); //+ZPos); //beam off head up
+				end else begin
+					PostObj.AddToNCFile(FlameOff_Code);
+				end;
+			end;
+			SfondaVeloce := False;
+		end;
+	end;
+	ThereWasAStopBeforeFlameOff := false;
+end;
+
+//************************************************************************************************************************
+procedure ForceFlameOffOnEtchings;
+var 
+	pNCData    : TNCData;
+begin
+	if (PostObj.DoingTime) then exit;
+	if (PostObj.ActiveNCPos > 0) then begin
+		pNCData := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos-1);
+		if (pncdata.classname = 'TNCDrillPoint') and (pncdata.processnum=11) then FlameOff;
+	end;   
+end;
+
+//************************************************************************************************************************
+procedure AddM00;
+var 
+	pNCData    : TNCData;
+begin
+	if (PostObj.DoingTime) then exit;
+	if (PostObj.ActiveNCPos = 0) then exit;
+	pNCData := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos-1);
+	case pNCData.EntSubAttr of
+		11 : begin //crop
+		end;                       
+		12 : begin //scrap cut
+		end;
+		4  : begin //prepierce
+		end;
+		else begin //everything else
+			PostObj.AddToNCFile('M104|M00_(ISPEZIONE_ICONA)');
+			ThereWasAStopBeforeFlameOff := true;      
+		end;
+	end;
+end;
+
+//*******************************************************************************
+function AddZeroToLeft(aNumber : double; ResLength : integer) : string;
+var
+	i 		: integer;
+	strNum 	: string;
+	resVal	: string;
+begin
+	strNum := FormatFloat('0.00',aNumber);
+	resVal := strNum;
+	for i := length(strNum) to ResLength - 1 do begin
+		resVal := '0'+resVal;
+	end;
+	result := resVal;
+end;
+
+//*******************************************************************************
+procedure OutputFlashCut;
+var
+	i : integer;
+	tmpString  : string;
+	tmpString2 : string;
+	KomRes : string;
+    NextPNCD : TNCData;
+begin
+    if (PostObj.ActiveNCPos+1<=PostObj.NCDataObjList.Count-1) then begin
+        NextPNCD := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos+1);
+        if (NextPNCD.EntSubAttr=27) and (NextPNCD.Ignore) and (FlashCutEnabled) and (FlashCutList.Count > 0) then begin
+            for i:=0 to FlashCutList.Count-1 do begin
+                KomRes := [' ', ' '];
+                tmpString := FlashCutList[i];
+                KomRes := LetterKomAndTrim(tmpString,';');
+                tmpString := KomRes[0];
+                tmpString2 := KomRes[1];
+                if (PostObj.ActiveNCPos+1=StrToInt(tmpString2)) then begin
+					OutputFlashCutVar := true;
+                    PostObj.AddToNCFile('[VAR8]');
+                    KomRes := LetterKomAndTrim(tmpString,';');
+                    tmpString := KomRes[0];
+                    tmpString2 := KomRes[1];
+                    PostObj.AddToNCFile(tmpString2);
+                    KomRes := LetterKomAndTrim(tmpString,';');
+                    tmpString := KomRes[0];
+                    tmpString2 := KomRes[1];
+                    PostObj.AddToNCFile(tmpString2);
+                    KomRes := LetterKomAndTrim(tmpString,';');
+                    tmpString := KomRes[0];
+                    tmpString2 := KomRes[1];
+                    PostObj.AddToNCFile(tmpString2);
+					OutputFlashCutVar := false;
+                    exit;
+                end;
+            end;
+        end;
+    end;
+end;
+//*******************************************************************************
+procedure ProcessFlashCut(FlashStart,FlashEnd : integer);
+var
+	MinX,MinY,MaxX,MaxY		: double;
+	XDim, YDim				: double;
+	FlameOffXDim			: double;
+	FlameOffYDim			: double;
+	PNCD					: TNCData;
+    i,j                     : integer;
+	IndexList				: TStringList;
+	XDimList				: TStringList;
+	YDimList				: TStringList;
+	XCoorList				: TStringList;
+	YCoorList				: TStringList;
+	tmpFlameOffXDim			: double;
+	tmpFlameOffYDim			: double;
+	pNCLine					: TNCLine;
+begin
+	if PostObj.doingTime then exit;
+	XDim:=0;
+	YDim:=0;
+	IndexList := TStringList.Create;
+	XDimList := TStringList.Create;
+	YDimList := TStringList.Create;
+	XCoorList := TStringList.Create;
+	YCoorList := TStringList.Create;
+	XCoorList.Sorted := true;
+	YCoorList.Sorted := true;
+	XCoorList.Duplicates := dupIgnore;
+	YCoorList.Duplicates := dupIgnore;
+	for i := FlashStart to FlashEnd-1 do begin
+		PNCD := PostObj.NCDataObjList.At_Object(i);
+        IndexList.Add(IntToStr(i));
+        if (PNCD.GCode = 1) and (PNCD.ClassName='TNCLine') then begin
+            if (PNCD.CutterComp=0) then begin
+                IndexList.Clear;
+                XDimList.Clear;
+                YDimList.Clear;
+                XCoorList.Clear;
+                YCoorList.Clear;
+                FlashCutList.Clear;
+                exit;
+            end;
+            pNCLine := PNCD;
+            if (abs(pNCLine.xStart - pNCLine.xValAbs)>0.01) and (abs(pNCLine.yStart - pNCLine.yValAbs)<0.01) then begin
+                if (XDim = 0) then begin
+                    XCoorList.Add(AddZeroToLeft(pNCLine.xStart,10));
+                    YCoorList.Add(AddZeroToLeft(pNCLine.yStart,10));
+                end;
+                XDim := XDim + sqrt(((pNCLine.xValAbs-pNCLine.xStart)*(pNCLine.xValAbs-pNCLine.xStart))+((pNCLine.yValAbs-pNCLine.yStart)*(pNCLine.yValAbs-pNCLine.yStart)));
+                if (YDim <> 0) then begin 
+                    XCoorList.Add(AddZeroToLeft(pNCLine.xStart,10));
+                    YCoorList.Add(AddZeroToLeft(pNCLine.yStart,10));
+                    YDimList.Add(FormatFloat('0.00',YDim));
+                    YDim := 0;
+                end;
+            end;
+            if (abs(pNCLine.xStart - pNCLine.xValAbs)<0.01) and (abs(pNCLine.yStart - pNCLine.yValAbs)>0.01) then begin
+                if YDim = 0 then begin
+                    XCoorList.Add(AddZeroToLeft(pNCLine.xStart,10));
+                    YCoorList.Add(AddZeroToLeft(pNCLine.yStart,10));
+                end;
+                YDim := YDim + sqrt(((pNCLine.xValAbs-pNCLine.xStart)*(pNCLine.xValAbs-pNCLine.xStart))+((pNCLine.yValAbs-pNCLine.yStart)*(pNCLine.yValAbs-pNCLine.yStart)));
+                if XDim <> 0 then begin 
+                    XCoorList.Add(AddZeroToLeft(pNCLine.xStart,10));
+                    YCoorList.Add(AddZeroToLeft(pNCLine.yStart,10));
+                    XDimList.Add(FormatFloat('0.00',XDim));
+                    XDim := 0;
+                end;
+            end;
+            if (abs(pNCLine.xStart - pNCLine.xValAbs)>0.01) and (abs(pNCLine.yStart - pNCLine.yValAbs)>0.01) then begin
+                exit;
+            end;
+        end;
+        if (PNCD.GCode = 0) then begin
+            if (PNCD.ClassName='TNCLine') then begin
+                if (XDim <> 0) and (YDim = 0) then begin 
+                    PNCD := PostObj.NCDataObjList.At_Object(i-1);
+                    pNCLine := PNCD;
+                    XCoorList.Add(AddZeroToLeft(pNCLine.xValAbs,10));
+                    YCoorList.Add(AddZeroToLeft(pNCLine.yValAbs,10));
+                    XDimList.Add(FormatFloat('0.00',XDim));					
+                end;
+                if (YDim <> 0) and (XDim = 0) then begin
+                    PNCD := PostObj.NCDataObjList.At_Object(i-1);
+                    pNCLine := PNCD;
+                    XCoorList.Add(AddZeroToLeft(pNCLine.xValAbs,10));
+                    YCoorList.Add(AddZeroToLeft(pNCLine.yValAbs,10));
+                    YDimList.Add(FormatFloat('0.00',YDim));					
+                end;
+                XDim := 0;
+                YDim := 0;
+            end;
+        end;
+	end;	
+    //Inc(i);
+    if (XDim <> 0) and (YDim = 0) then begin 
+        PNCD := PostObj.NCDataObjList.At_Object(i-1);
+        if (PNCD.ClassName='TNCLine') then begin
+            pNCLine := PNCD;
+            XCoorList.Add(AddZeroToLeft(pNCLine.xValAbs,10));
+            YCoorList.Add(AddZeroToLeft(pNCLine.yValAbs,10));
+            XDimList.Add(FormatFloat('0.00',XDim));
+        end;
+    end;
+    if (YDim <> 0) and (XDim = 0) then begin
+        PNCD := PostObj.NCDataObjList.At_Object(i-1);
+        if (PNCD.ClassName='TNCLine') then begin
+            pNCLine := PNCD;
+            XCoorList.Add(AddZeroToLeft(pNCLine.xValAbs,10));
+            YCoorList.Add(AddZeroToLeft(pNCLine.yValAbs,10));
+            YDimList.Add(FormatFloat('0.00',YDim));
+        end;				
+    end;
+    XDim := 0;
+    YDim := 0;
+    if IndexList.Count > 0 then begin
+        MinX := 9999999;
+        MinY := 9999999;
+        MaxX := 0;
+        MaxY := 0;
+        //ciclo per trovare X e Y min e max della griglia. 
+        for j := 1 to IndexList.Count - 1 do begin
+            PNCD := PostObj.NCDataObjList.At_Object(StrToInt(IndexList[j]));
+            if (PNCD.ClassName = 'TNCLine') then begin
+                pNCLine := PNCD;
+                if MinX > pNCLine.xStart then MinX := pNCLine.xStart; 
+                if MinY > pNCLine.yStart then MinY := pNCLine.yStart; 
+                if MaxX < pNCLine.xValAbs then MaxX := pNCLine.xValAbs;
+                if MaxY < pNCLine.yValAbs then MaxY := pNCLine.yValAbs;
+            end else begin
+                IndexList.Clear;
+                XDimList.Clear;
+                YDimList.Clear;
+                XCoorList.Clear;
+                YCoorList.Clear;
+                break;
+            end;
+        end; 
+        //Controllo che tutti gli enti orizzontali siano di dimensione uguale
+        for j := 1 to XDimList.Count -1 do begin
+            if XDimList[j] <> XDimList[j-1] then begin
+                IndexList.Clear;
+                XDimList.Clear;
+                YDimList.Clear;
+                XCoorList.Clear;
+                YCoorList.Clear;
+                break;
+            end;
+        end;
+        //Controllo che tutti gli enti verticali siano di dimensione uguale
+        for j := 1 to YDimList.Count -1 do begin
+            if YDimList[j] <> YDimList[j-1] then begin
+                IndexList.Clear;
+                XDimList.Clear;
+                YDimList.Clear;
+                XCoorList.Clear;
+                YCoorList.Clear;
+                break;
+            end;
+        end;
+        if (((XCoorList.Count/2)*YCoorList.Count)<>XDimList.Count) then begin
+            IndexList.Clear;
+            XDimList.Clear;
+            YDimList.Clear;
+            XCoorList.Clear;
+            YCoorList.Clear;
+        end;
+        if (((YCoorList.Count/2)*XCoorList.Count)<>YDimList.Count) then begin
+            IndexList.Clear;
+            XDimList.Clear;
+            YDimList.Clear;
+            XCoorList.Clear;
+            YCoorList.Clear;
+        end;
+        FlameOffXDim:=0;
+        for j := 1 to XCoorList.Count - 1 do begin
+            if (Abs(StrToFloat(FormatFloat('0.00',Abs((StrToFloat(Trim(XCoorList[j])))-(StrToFloat(Trim(XCoorList[j-1]))))))-StrToFloat(XDimList[0]))>0.01) then begin
+                if FlameOffXDim=0 then begin
+                    FlameOffXDim := StrToFloat(FormatFloat('0.00',Abs((StrToFloat(Trim(XCoorList[j])))-(StrToFloat(Trim(XCoorList[j-1]))))));
+                end else begin
+                    if (Abs(StrToFloat(FormatFloat('0.00',Abs((StrToFloat(Trim(XCoorList[j])))-(StrToFloat(Trim(XCoorList[j-1]))))))-FlameOffXDim)>0.01) then begin
+                        IndexList.Clear;
+                        XDimList.Clear;
+                        YDimList.Clear;
+                        XCoorList.Clear;
+                        YCoorList.Clear;
+                        break;
+                    end;
+                end;
+            end;
+        end;				
+        FlameOffYDim:=0;
+        for j := 1 to YCoorList.Count - 1 do begin
+            if (Abs(StrToFloat(FormatFloat('0.00',Abs((StrToFloat(Trim(YCoorList[j])))-(StrToFloat(Trim(YCoorList[j-1]))))))-StrToFloat(YDimList[0]))>0.01) then begin
+                if FlameOffYDim=0 then begin
+                    FlameOffYDim := StrToFloat(FormatFloat('0.00',Abs((StrToFloat(Trim(YCoorList[j])))-(StrToFloat(Trim(YCoorList[j-1]))))));
+                end else begin
+                    if (Abs(StrToFloat(FormatFloat('0.00',Abs((StrToFloat(Trim(YCoorList[j])))-(StrToFloat(Trim(YCoorList[j-1]))))))-FlameOffYDim)>0.01) then begin
+                        IndexList.Clear;
+                        XDimList.Clear;
+                        YDimList.Clear;
+                        XCoorList.Clear;
+                        YCoorList.Clear;
+                        break;
+                    end;
+                end;
+            end;
+        end;				
+        if IndexList.Count > 0 then begin
+            tmpFlameOffXDim := 0;
+            tmpFlameOffYDim := 0;
+            tmpFlameOffXDim	:= MaxX-MinX;
+            tmpFlameOffXDim := (tmpFlameOffXDim-(StrToFloat(XDimList[0])*(XCoorList.Count/2)))/((XCoorList.Count/2)-1);
+            tmpFlameOffYDim	:= MaxY-MinY;
+            tmpFlameOffYDim := (tmpFlameOffYDim-(StrToFloat(YDimList[0])*(YCoorList.Count/2)))/((YCoorList.Count/2)-1);	
+            if (FlameOffXDim=0) and (FormatFloat('0.00',tmpFlameOffXDim)=FormatFloat('0.00',StrToFloat(XDimList[0]))) then FlameOffXDim := tmpFlameOffXDim;
+            if (FlameOffYDim=0) and (FormatFloat('0.00',tmpFlameOffYDim)=FormatFloat('0.00',StrToFloat(YDimList[0]))) then FlameOffYDim := tmpFlameOffYDim;
+            if StrToFloat(XDimList[0])>=StrToFloat(YDimList[0]) then begin	
+                FlashCutList.Add(IndexList[0]+';'+
+                                 'G111 I'+XDimList[0]+' J'+YDimList[0]+';'+
+                                 'G136 X'+FormatFloat('0.00',MinX+(StrToFloat(XDimList[0])/2))+
+                                 ' Y'+FormatFloat('0.00',MinY+(StrToFloat(YDimList[0])/2))+
+                                 ' I'+FormatFloat('0.00',(FlameOffXDim+StrToFloat(XDimList[0])))+
+                                 ' J'+FormatFloat('0.00',(FlameOffYDim+StrToFloat(YDimList[0])))+
+                                 ' P'+IntToStr((XCoorList.Count/2)-1)+
+                                 ' K'+IntToStr((YCoorList.Count/2)-1)+
+                                 ' Q0. L1;M104');
+            end else begin
+                FlashCutList.Add(IndexList[0]+';'+
+                                 'G111 I'+YDimList[0]+' J'+XDimList[0]+' K90.'+';'+
+                                 'G136 X'+FormatFloat('0.00',MaxX-(StrToFloat(XDimList[0])/2))+
+                                 ' Y'+FormatFloat('0.00',MinY+(StrToFloat(YDimList[0])/2))+
+                                 ' I'+FormatFloat('0.00',(FlameOffYDim+StrToFloat(YDimList[0])))+
+                                 ' J'+FormatFloat('0.00',(FlameOffXDim+StrToFloat(XDimList[0])))+
+                                 ' P'+IntToStr((YCoorList.Count/2)-1)+
+                                 ' K'+IntToStr((XCoorList.Count/2)-1)+
+                                 ' Q90. L1;M104');
+            end;
+            //Disabilito tutti gli oggetti del fly cut tranne il primo
+            PNCD := PostObj.NCDataObjList.At_Object(StrToInt(IndexList[0]));
+            GetNewLookupID(PNCD,5,0,0,0,0);
+            for j := 1 to IndexList.Count - 1 do begin
+                PNCD := PostObj.NCDataObjList.At_Object(StrToInt(IndexList[j]));
+                PNCD.Ignore := true;
+            end;
+        end;
+        IndexList.Clear;
+        XDimList.Clear;
+        YDimList.Clear;
+        XCoorList.Clear;
+        YCoorList.Clear;
+    end;   
+	IndexList.Free;
+	XDimList.Free;
+	YDimList.Free;
+	XCoorList.Free;
+	YCoorList.Free;
+end;
+
+//*******************************************************************************
+//procedure RecognizeFlashCut; //ByBreaks
+//const
+//    DebugFC                                 = true;
+//var
+//	GridMinX,GridMinY,GridMaxX,GridMaxY		: double;
+//    NumOfSteps                              : integer;
+//	i,j,IndexToSkip			                : integer;
+//	PNCD,PrePNCD    		                : TNCData;
+//begin
+//	if (PostObj.doingTime) then exit;
+//    if (DebugFC) then PostObj.AddToNCFile('procedure started');
+//    IndexToSkip := 0;
+//	for i := 1 to PostObj.NCDataObjList.Count - 1 do begin
+//        if (i<=IndexToSkip) then continue; //used to skip to the end of a previously recognized flash cut group
+//		PrePNCD := PostObj.NCDataObjList.At_Object(i-1);
+//		PNCD := PostObj.NCDataObjList.At_Object(i);
+//        if (PNCD.ClassName = 'TNCLine') and (PNCD.EntSubAttr=27) and (PrePNCD.EntSubAttr<>27) then begin
+//            NumOfSteps := 0;
+//            GridMinX := PNCD.xStart;
+//            GridMinY := PNCD.yStart;
+//            GridMaxX := PNCD.xStart;
+//            GridMaxY := PNCD.yStart;
+//            if (DebugFC) then PostObj.AddToNCFile('----------flash cut start found at i='+inttostr(i)+#13#10+
+//                                                  'GridMinX='+floattostr(GridMinX)+#13#10+
+//                                                  'GridMinY='+floattostr(GridMinY)+#13#10+
+//                                                  'GridMaxX='+floattostr(GridMaxX)+#13#10+
+//                                                  'GridMaxY='+floattostr(GridMaxY)+#13#10+
+//                                                  'NumOfSteps='+inttostr(NumOfSteps));
+//            for j := i+1 to PostObj.NCDataObjList.Count - 1 do begin
+//                PNCD := PostObj.NCDataObjList.At_Object(j);
+//                if (PNCD.EntSubAttr=27) then begin
+//                    if (DebugFC) then PostObj.AddToNCFile('flash cut entity at j='+inttostr(j));                       
+//                    if (PNCD.xValAbs<GridMinX) then GridMinX := PNCD.xValAbs;
+//                    if (PNCD.yValAbs<GridMinY) then GridMinY := PNCD.yValAbs;
+//                    if (PNCD.xValAbs>GridMaxX) then GridMaxX := PNCD.xValAbs;
+//                    if (PNCD.yValAbs>GridMaxY) then GridMaxY := PNCD.yValAbs;
+//                end else begin
+//                    if (DebugFC) then PostObj.AddToNCFile('regular entity at j='+inttostr(j));
+//                    if ((PNCD.xStart=GridMinX) and (PNCD.yStart=GridMinY)) or       //reached the min vertex
+//                       ((PNCD.xStart=GridMaxX) and (PNCD.yStart=GridMaxY)) then     //reached the max vertex
+//                    begin
+//                        if (DebugFC) then PostObj.AddToNCFile('-----added a STEP at j='+inttostr(j)+#13#10+
+//                                                              'GridMinX='+floattostr(GridMinX)+#13#10+
+//                                                              'GridMinY='+floattostr(GridMinY)+#13#10+
+//                                                              'GridMaxX='+floattostr(GridMaxX)+#13#10+
+//                                                              'GridMaxY='+floattostr(GridMaxY));
+//                        Inc(NumOfSteps);
+//                        if (NumOfSteps=4) then begin
+//                            if (DebugFC) then PostObj.AddToNCFile('----------second pass reached----------'+#13#10+
+//                                                                  'flash cut starts at i='+inttostr(i)+#13#10+
+//                                                                  'flash cut ends at j='+inttostr(j)+#13#10+
+//                                                                  'GridMinX='+floattostr(GridMinX)+#13#10+
+//                                                                  'GridMinY='+floattostr(GridMinY)+#13#10+
+//                                                                  'GridMaxX='+floattostr(GridMaxX)+#13#10+
+//                                                                  'GridMaxY='+floattostr(GridMaxY));
+//                            ProcessFlashCut(i,j);
+//                            IndexToSkip := j;
+//                            break;
+//                        end;
+//                    end;
+//                end;
+//            end;
+//        end;
+//    end;
+//end;
+
+//*******************************************************************************
+procedure RecognizeFlashCut;
+const
+    DebugFC                                 = false;
+var
+	GridMinX,GridMinY,GridMaxX,GridMaxY		: double;
+    NumOfSteps                              : integer;
+    //step 0 happens when the flash cut path starts
+    //step 1 happens when the path goes from horizontal to vertical (or vice versa) without turning off the laser
+    //step 2 happens when the path gets back to its original starting point
+    //step 3 happens when the path reaches the farthest x and y position from the starting point, which have been recognized and stored before step 1 took place
+	i,j,IndexToSkip			                : integer;
+	PNCD,PrePNCD,NextPNCD                   : TNCData;
+	NCLine, PreNCLine						: TNCLine;
+	PrePNCDAng, PNCDAng						: double;
+begin
+	if (PostObj.doingTime) then exit;
+    if (DebugFC) then PostObj.AddToNCFile('procedure started');
+    IndexToSkip := 0;
+	for i := 1 to PostObj.NCDataObjList.Count - 2 do begin
+        if (i<=IndexToSkip) then continue; //used to skip to the end of a previously recognized flash cut group
+		PrePNCD := PostObj.NCDataObjList.At_Object(i-1);
+		PNCD := PostObj.NCDataObjList.At_Object(i);
+        NextPNCD := PostObj.NCDataObjList.At_Object(i+1);
+        if (PNCD.ClassName = 'TNCLine') and (PNCD.EntSubAttr=27) and (PrePNCD.EntSubAttr<>27) then begin            
+			NCLine := PNCD;
+			NumOfSteps := 0;
+            GridMinX := NCLine.xStart;
+            GridMinY := NCLine.yStart;
+            GridMaxX := NCLine.xStart;
+            GridMaxY := NCLine.yStart;
+            if (DebugFC) then PostObj.AddToNCFile('------------------flash cut start found at i='+inttostr(i)+#13#10+
+                                                  'GridMinX='+floattostr(GridMinX)+#13#10+
+                                                  'GridMinY='+floattostr(GridMinY)+#13#10+
+                                                  'GridMaxX='+floattostr(GridMaxX)+#13#10+
+                                                  'GridMaxY='+floattostr(GridMaxY)+#13#10+
+                                                  'NumOfSteps='+inttostr(NumOfSteps)+#13#10+
+												  'GCode='+IntToStr(NCLine.GCode));
+            for j := i+1 to PostObj.NCDataObjList.Count - 1 do begin
+                PrePNCD := PostObj.NCDataObjList.At_Object(j-1);
+                PNCD := PostObj.NCDataObjList.At_Object(j);
+				if (PNCD.ClassName = 'TNCLine') then begin
+					PreNCLine := PrePNCD;
+					NCLine := PNCD;
+					if (PNCD.EntSubAttr=27) then begin
+						PrePNCDAng := GetCoeffAng(PreNCLine.xStart, PreNCLine.yStart, PreNCLine.xValAbs, PreNCLine.yValAbs, 1);
+						PNCDAng := GetCoeffAng(NCLine.xStart, NCLine.yStart, NCLine.xValAbs, NCLine.yValAbs, 1);
+						if (DebugFC) then PostObj.AddToNCFile('flash cut entity at j='+inttostr(j)+#13#10+
+															'PrePNCDAng='+floattostr(PrePNCDAng)+#13#10+
+															'PNCDAng='+floattostr(PNCDAng)+#13#10+
+															'PrePNCD.GCode='+IntToStr(PrePNCD.GCode)+#13#10+
+															'PNCD.GCode='+IntToStr(PNCD.GCode)+#13#10);                       
+						if (NCLine.xStart<GridMinX) then GridMinX := NCLine.xStart;
+						if (NCLine.yStart<GridMinY) then GridMinY := NCLine.yStart;
+						if (NCLine.xStart>GridMaxX) then GridMaxX := NCLine.xStart;
+						if (NCLine.yStart>GridMaxY) then GridMaxY := NCLine.yStart;
+						if (NCLine.xValAbs<GridMinX) then GridMinX := NCLine.xValAbs;
+						if (NCLine.yValAbs<GridMinY) then GridMinY := NCLine.yValAbs;
+						if (NCLine.xValAbs>GridMaxX) then GridMaxX := NCLine.xValAbs;
+						if (NCLine.yValAbs>GridMaxY) then GridMaxY := NCLine.yValAbs;
+						
+						if (PrePNCD.EntSubAttr=27) and (PNCD.EntSubAttr=27) and (PrePNCD.GCode=1) and (PNCD.GCode=1) and (PNCDAng<>PrePNCDAng) and (NumOfSteps=0) then begin
+							if (DebugFC) then PostObj.AddToNCFile('-----moving to STEP 1 at j='+inttostr(j));
+							//step 1 happens when the path goes from horizontal to vertical (or vice versa) without turning off the laser
+							NumOfSteps := 1; 
+						end;
+					end else begin
+						if (DebugFC) then PostObj.AddToNCFile('regular entity at j='+inttostr(j));
+						if (NumOfSteps>0) and                                           //alread moved for horizontal to vertical (or vice versa)
+						   ((NCLine.xStart=GridMinX) and (NCLine.yStart=GridMinY) or       //reached the min vertex
+						    (NCLine.xStart=GridMinX) and (NCLine.yStart=GridMaxY) or
+						    (NCLine.xStart=GridMaxX) and (NCLine.yStart=GridMinY) or       //reached the min vertex
+						    (NCLine.xStart=GridMaxX) and (NCLine.yStart=GridMaxY)) then     //reached the max vertex
+						begin
+							if (DebugFC) then PostObj.AddToNCFile('-----added a STEP at j='+inttostr(j)+#13#10+
+																'GridMinX='+floattostr(GridMinX)+#13#10+
+																'GridMinY='+floattostr(GridMinY)+#13#10+
+																'GridMaxX='+floattostr(GridMaxX)+#13#10+
+																'GridMaxY='+floattostr(GridMaxY)+#13#10);
+							//step 2 happens when the path gets back to its original starting point
+							//step 3 happens when the path reaches the farthest x and y position from the starting point, which have been recognized and stored before step 1 took place
+							Inc(NumOfSteps);
+							if (NumOfSteps=3) then begin
+								if (DebugFC) then PostObj.AddToNCFile('----------second pass reached----------'+#13#10+
+																	'flash cut starts at i='+inttostr(i)+#13#10+
+																	'flash cut ends at j='+inttostr(j)+#13#10+
+																	'GridMinX='+floattostr(GridMinX)+#13#10+
+																	'GridMinY='+floattostr(GridMinY)+#13#10+
+																	'GridMaxX='+floattostr(GridMaxX)+#13#10+
+																	'GridMaxY='+floattostr(GridMaxY)+#13#10);
+								ProcessFlashCut(i,j);
+								IndexToSkip := j;
+								break;
+							end;
+						end;
+					end;
+				end;
+            end;
+        end;
+    end;
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_Call_Sub;
+begin
+	if (PostObj.DoingTime) then exit;
+	PostObj.AddToNCFile('[LINE_NUM]_G90_G93,X' + FormatFloat('0.00', StrToFloat(PostObj.GetVariable('#14'))) + 'Y' + FormatFloat('0.00', StrToFloat(PostObj.GetVariable('#15'))));
+	case CNCVersion of
+		1 : PostObj.AddToNCFile('M96_P'+IntToStr(MainProgramId+PostObj.SubPrgNo));
+		2 : PostObj.AddToNCFile('M96_P'+IntToStr(PostObj.SubPrgNo + LimitDown_Sub - 1));
+		//2 : PostObj.AddToNCFile('M96_P'+IntToStr(PostObj.SubPrgNo));
+	end;  
+	PostObj.AddToNCFile('G90 G93 X0. Y0.');
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_Start_Of_Sub;
+const 
+	debug = false;
+begin
+	if (PostObj.DoingTime) then exit;
+	PostObj.AddToNCFile('[EMPTY_LINE]');
+	if debug then begin
+		PostObj.AddToNCFile('----- DEBUG -----');
+		PostObj.AddToNCFile('SubNum = ' + IntToStr(PostObj.SubPrgNo));
+		PostObj.AddToNCFile('CalcSubNum = ' + IntToStr(PostObj.SubPrgNo + LimitDown_Sub - 1));
+		PostObj.AddToNCFile('--- END DEBUG ---');
+	end;
+	case CNCVersion of
+		1 : PostObj.AddToNCFile('O'+IntToStr(MainProgramId+PostObj.SubPrgNo)+ ' (SUB OF '+IntToStr(MainProgramId)+' / ' + FormatPartName + ')');
+		2 : PostObj.AddToNCFile('O'+IntToStr(PostObj.SubPrgNo + LimitDown_Sub - 1)+ ' (SUB OF '+IntToStr(MainProgramId)+' / ' + FormatPartName + ')');
+		//2 : PostObj.AddToNCFile('O'+IntToStr(PostObj.SubPrgNo)+ ' (SUB OF '+IntToStr(MainProgramId)+' / [PARTNAME])');
+	end;
+	SubProgramId := PostObj.SubPrgNo;
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_Start_Of_File;
+var
+	M102Table	: string;
+begin
+	if (PostObj.doingTime) then exit;
+	Initialize;
+	RemoveProcess5;
+	if WritePar then ScriviPAR;
+	FanucCounter;
+	if (WritePercOnStartOfFile) then begin
+		PostObj.AddToNCFile('%');
+	end;
+	if (WriteOVar) then begin
+		PostObj.AddToNCFile('O'+IntToStr(MainProgramId)+'(#1)'); // Obsoleto e non pi� guardato secondo Amada
+	end;
+	case CNCVersion of
+		1 : begin
+			PostObj.AddToNCFile('(MATERIAL #25)');
+			PostObj.AddToNCFile('(ESPESSURA #2)');
+			PostObj.AddToNCFile('(DIMENSOES #18 x #19)');
+			PostObj.AddToNCFile('(TAREFA #9, PROGRAMA #1)');
+			if (WriteClampsInfo) then begin
+				PostObj.AddToNCFile('(PINZE ' + FormatFloat('0.00', ClampX1) + ' ' + FormatFloat('0.00', ClampX2) + ')');
+				PostObj.AddToNCFile('(PINZE ' + FormatFloat('0.00', ClampX3) + ' ' + FormatFloat('0.00', ClampX4) + ')');				
+			end;
+			//PostObj.AddToNCFile(TASK #9) #31  #36;
+		end;
+		2 : begin 
+			SheetSizesForTower;
+		end;
+	end;
+	M102Table := PostObj.GetVariable('#104');
+	if ((AutoDoublePass) and (VapoPresent)) then begin
+		M102Table := StringReplace(M102Table, 'INOXP', 'INOX2P', 1);
+	end;
+    
+    PostObj.AddToNCFile('M102(' + M102Table + ')');		// load file TEC
+	if (not PostObj.SinglePartProgram) then begin
+		if (PostObj.PromptOpt7 = 1) then begin
+			// Do nothing
+		end else if (PostObj.PromptOpt7 = 2) then begin
+			PostObj.AddToNCFile('M33');	// Macchina con torre quindi M33. Se solo con cambio pallet allora ci vuole /M707 a discrezione del cliente se volerlo barrato. - Michele
+		end else begin
+        
+            Chespessura;
+            PostObj.AddToNCFile(espessura);
+        
+			PostObj.AddToNCFile('M33');	// Macchina con torre quindi M33. Se solo con cambio pallet allora ci vuole /M707 a discrezione del cliente se volerlo barrato. - Michele
+		end;
+	end;
+	
+	if (PostObj.SinglePartProgram) then begin
+		PostObj.AddToNCFile('G90_G92_X3070.0_Y1550.0');
+	end else begin
+		// Se non ho il misura lamiera attivo, forzo il fatto che l'operatore faccia lo zero in macchina
+		if (PostObj.PromptOpt2 = 1) then begin
+			PostObj.AddToNCFile('G90_G92_X3070.0_Y1550.0');
+		end else begin
+			PostObj.AddToNCFile('G90_G92_X' + FormatFloat('0.00', BedLength) + '_Y' + Formatfloat('0.00', BedWidth));					
+		end;
+       
+	end;
+	//PostObj.AddToNCFile('G130'); 										//Porta la testa alle origini se all'inizio programma non � a zero 
+	if (PostObj.GetVariable('#106')<>'') then PostObj.AddToNCFile('M96_#106');
+	if (EnableG121Clear) then begin
+		PostObj.AddToNCFile('G149');
+	end;
+	EdgeDetectionMacro;
+	PostObj.AddToNCFile('M100');
+        PostObj.AddToNCFile('G93_X0.0_Y0.0');//Inserido emerson	
+	if (EnableRestart) and (UseSubPrograms=false) then PostObj.AddToNCFile('GOTO"#"892');
+	// laser mode ON
+	//PostObj.AddToNCFile('GOTO"#895"');									//Modifica per poter inserire da quale sottoprogramma ripartire direttamente nel CN. Utilizzabile solo con POST a SUB. - Michele
+	if (FlashCutEnabled) and (not UseSubPrograms) then RecognizeFlashCut;
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_End_Of_Prg;
+begin
+	if (PostObj.DoingTime) then exit;
+	FineIcona; 
+	PostObj.AddToNCFile('[FLAME]');
+	PostObj.AddToNCFile('[KERF]');   //;exep(Amada_FO_Baseline.pas,MettoKerf)
+	PostObj.AddToNCFile('M101');
+	if (EnableRestart) and (UseSubPrograms=false) then PostObj.AddToNCFile('M96 P8099');
+	if (not PostObj.SinglePartProgram) then begin
+		if (PostObj.PromptOpt7 = 1) then begin
+            PostObj.AddToNCFile('G50');
+			// Do nothing
+		end if (PostObj.PromptOpt7 = 2) then begin
+			PostObj.AddToNCFile('G50');       //Macchina con torre quindi in coda ci vuole G10. Se solo con cambio pallet ci vuole G50 - Michele
+		end else begin
+             if (PostObj.PromptOpt7 = 3) then PostObj.AddToNCFile('G10');       //Macchina con torre ``quindi in coda ci vuole G10. Se solo con cambio pallet ci vuole G50 - Michele
+		end;
+	end else begin
+		PostObj.AddToNCFile('G50');
+		PostObj.AddToNCFile('M30');
+	end;
+	ForceFlameOffOnEtchings;
+end;
+
+//************************************************************************************************************************
+procedure FixFanucCounter;
+var
+    Hours,Minutes,Seconds,time 	: string;
+	KomRes						: string;
+begin
+	if (PostObj.DoingTime) then exit;
+    if (UseSubPrograms) and (SubProgramId>100) then begin
+        case CNCVersion of
+			1 : begin
+				while (SubProgramId>100) and (SubProgramId mod 100 <> 0) do begin
+					SubProgramId := SubProgramId - 100;
+					FanucCounter;
+				end;
+			end;
+			2 : begin
+				//non si pu� fare niente. la macchina ne accetta al massimo 99
+				SubProgramsError := true;
+			end;
+		end;
+	end;
+    time := PostObj.GetVariable('#60');
+    KomRes := [' ', ' '];
+	KomRes := LetterKomAndTrim(time,':');
+	time := KomRes[0];
+	Hours := KomRes[1];
+    KomRes := LetterKomAndTrim(time,':');
+	time := KomRes[0];
+	Minutes := KomRes[1];
+    KomRes := LetterKomAndTrim(time,':');
+	time := KomRes[0];
+	Seconds := KomRes[1];
+    ProgramCuttingTime := Hours+'H'+Minutes+'M'+Seconds+'S';
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_Flame_Off_Move;
+var
+	D1, d2, d3, d4, d5, d6	: double;
+    dx, dy 					: double;
+    Diagonal 				: boolean;
+begin
+	if (PostObj.DoingTime) then exit;	
+    D1 := sqr((PostObj.x - PostObj.prex));
+    D2 := sqr(PostObj.Y - PostObj.preY);
+    D3 := sqrt (d1 + d2);
+    Diagonal := True;
+    DX := abs(PostObj.X - PostObj.Prex);
+    DY := abs(PostObj.Y - PostObj.Prey);
+    if  (DX < Diagonal_tolerance) or (DY < Diagonal_tolerance) then Diagonal := False;     
+    PostObj.AddToNCFile('[PART_END]');
+    ForceFlameOffOnEtchings;
+    if not (LaserDestructFlameOff) then PostObj.AddToNCFile('[FLAME]');
+    PostObj.AddToNCFile('[KERF]');  // ;exep(Amada_FO_Baseline.pas,MettoKerf)
+    PostObj.AddToNCFile('[OFFSET_OFF]');
+    PostObj.AddToNCFile('[OFFSET_ON]');
+    if (EnableRestart) and (UseSubPrograms=false) then PostObj.AddToNCFile('"#"892="#"892+1');
+	if not (UseSubPrograms) then begin
+		if (CounterType='PROFILE') then begin
+			Profilo;
+		end else begin
+			if (CounterType='PART') then begin
+				PostObj.AddToNCFile('[PART_BEGIN]');  	// N per ogni icona	
+			end;
+		end;
+	end;
+    if (PostObj.HeadDown = False) then begin
+        if SfondaVeloce = true then begin
+            if not (ThereWasAStopBeforeFlameOff) then PostObj.AddToNCFile(FlameOff_Code);
+            SfondaVeloce := False;
+        end;
+    end;
+    premodalE := 0;        //DB 12-10-2010 : Tolta E modale sul rapido per evitare problemi con gestione ripartenze con blocchi N   
+    ThereWasAStopBeforeFlameOff := false;
+    //PostObj.AddToNCFile('N'+IntToStr(NCounter)+' G00,[X],[Y]');
+    if (PostObj.PromptOpt1=4) and (PostObj.HeadDown) and (PostObj.ToolNumber<>5) and (PostObj.ToolNumber<>10) and (PostObj.ToolNumber<>11) then begin
+		PostObj.AddToNCFile('G01,Q0,'+HeadDownRapidFeed+',[X],[Y]');
+    end else begin
+		PostObj.AddToNCFile('G00,[X],[Y]');
+    end;
+    Inc(NCounter);
+    //CheckTabRapid;
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_End_Of_Sub;
+begin
+	if (PostObj.DoingTime) then exit;
+	PostObj.AddToNCFile('[KERF]');
+	EndOfSub := true;
+	FlameOff;	
+	PostObj.AddToNCFile('M97');
+end;
+
+//************************************************************************************************************************
+procedure WriteLine;
+var 
+	PNCD 	: TNCData;
+	PNCLine : TNCLine;
+	i : integer;
+	tmpString  : string;
+	tmpString2 : string;
+	KomRes : string;
+    NextPNCD : TNCData;
+begin
+	FixCuttingTime;
+	if (PostObj.DoingTime) then exit;	
+    if (PostObj.ActiveNCPos+1<=PostObj.NCDataObjList.Count-1) then begin
+		PNCD := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos);
+        NextPNCD := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos+1);
+        if (PNCD.EntSubAttr=27) {and (NextPNCD.Ignore)} and (FlashCutEnabled) and (FlashCutList.Count > 0) then begin
+            for i:=0 to FlashCutList.Count-1 do begin
+                KomRes := [' ', ' '];
+                tmpString := FlashCutList[i];
+                KomRes := LetterKomAndTrim(tmpString,';');
+                tmpString := KomRes[0];
+                tmpString2 := KomRes[1];
+                if (PostObj.ActiveNCPos=StrToInt(tmpString2)) then begin
+                    PostObj.AddToNCFile('[VAR8]');
+                    KomRes := LetterKomAndTrim(tmpString,';');
+                    tmpString := KomRes[0];
+                    tmpString2 := KomRes[1];
+                    PostObj.AddToNCFile(tmpString2);
+                    KomRes := LetterKomAndTrim(tmpString,';');
+                    tmpString := KomRes[0];
+                    tmpString2 := KomRes[1];
+                    PostObj.AddToNCFile(tmpString2);
+                    KomRes := LetterKomAndTrim(tmpString,';');
+                    tmpString := KomRes[0];
+                    tmpString2 := KomRes[1];
+                    //PostObj.AddToNCFile(tmpString2);
+                    exit;
+                end;
+            end;
+        end;
+    end;
+	PostObj.AddToNCFile('[VAR8]');
+	if (PostObj.ToolNumber <> 10) then begin
+		PostObj.AddToNCFile('[KERF]');
+		PostObj.AddToNCFile('[FLAME]');
+	end;
+	PostObj.AddToNCFile('[OFFSET_OFF]');
+	PostObj.AddToNCFile('[OFFSET_ON]');
+	if (PostObj.ToolNumber = 10) then begin
+		PostObj.AddToNCFile('[VAR8]');
+		PostObj.AddToNCFile('[FLAME]');
+	end else begin
+		CheckNanoTab;	
+	end;
+	PNCD := PostObj.NCDataObjList.At_Object(PostObj.ActiveNCPos);
+	if ((PNCD.ClassName = 'TNCLine') and (not PostObj.SinglePartProgram)) then begin
+		PNCLine := PNCD;
+		if (FormatFloat('0.00', PNCLine.xValAbs) = '0.00') and (FormatFloat('0.00', PNCLine.yValAbs) = '0.00') then begin
+			ErrorList.Add('Attenzione! E'' stato programmato un G01 a coordinate (0;0).' + #13#10 + 'La generazione del file NC � stata annullata');
+			PostObj.CriticalError := true;
+		end;
+	end;
+	PostObj.AddToNCFile('[G],[X],[Y]');
+	if (PostObj.ToolNumber <> 10) then CheckMinLength;
+end;
+
+//************************************************************************************************************************
+procedure PunchPoint;
+begin
+	PostObj.AddToNCFile('E5');
+	PostObj.AddToNCFile('M103');
+	if (PunchPointType = 1) then begin
+		PostObj.AddtoNCFile('G01,X' + FormatFloat('0.00', PostObj.X+CrossDim) + ',[Y]');
+		PostObj.AddtoNCFile('G01,[X],Y' + FormatFloat('0.00', PostObj.Y+CrossDim));
+		PostObj.AddtoNCFile('G01,[X],Y' + FormatFloat('0.00', PostObj.Y-CrossDim));
+		PostObj.AddtoNCFile('G01,X' + FormatFloat('0.00', PostObj.X-CrossDim) + ',[Y]');
+		PostObj.AddtoNCFile('G01,[X],[Y]');
+	end;
+end;
+
+//************************************************************************************************************************
+procedure WriteArc;
+begin
+	FixCuttingTime;
+	if (PostObj.DoingTime) then exit;
+	PostObj.AddToNCFile('[VAR8]');
+	if (PostObj.ToolNumber <> 10) then begin
+		PostObj.AddToNCFile('[KERF]');
+		PostObj.AddToNCFile('[FLAME]');
+	end;
+	PostObj.AddToNCFile('[OFFSET_OFF]');
+	PostObj.AddToNCFile('[OFFSET_ON]');
+	if (PostObj.ToolNumber = 10) then begin
+		PostObj.AddToNCFile('[VAR8]');
+		PostObj.AddToNCFile('[FLAME]');
+	end;
+	if ((PostObj.ToolNumber <> 5) and (PostObj.ToolNumber <> 10)) then CheckNanoTab;
+	if (PostObj.CircleSweepAngle > 1) then begin
+		PostObj.AddToNCFile('[G],[X],[Y],[I],[J]');
+	end else begin
+		PostObj.AddToNCFile('G01,[X],[Y]');
+	end;
+	if (PostObj.ToolNumber <> 10) then CheckMinLength;
+end;
+
+//************************************************************************************************************************
+procedure Amada_FO_End_Of_File;
+begin
+	if (PostObj.DoingTime) then exit;
+	if (WritePercOnEndOfFile) then begin
+		PostObj.AddToNCFile('%');
+	end;
+end;
+
+//******************************************************************************
+procedure CreateSCHList;
+var
+	Listone 						: TStringList;
+	StringList1 					: TStringList;
+	s, NomeTask, NomePRG, Quante	: string;	
+	Materiale, Spessore				: string;
+	i								: integer;
+begin
+	if (PostObj.DoingTime) or (PostObj.CriticalError) then exit;
+    //check conditions
+    if (PostObj.SysOption5=1) and
+       (PostObj.PostingMode=2) and
+       ((PostObj.TotalNumOfLayOuts>1) or (AlwaysGenerateJobFile)) and
+       (PostObj.CurrentLayOutNum=PostObj.TotalNumOfLayOuts) then
+    begin
+       //ok
+    end else begin
+       exit;
+    end;
+	
+    StringList1 := TStringList.Create;
+    Listone := TStringList.Create;
+    StringList1.Clear;
+
+    //write header
+	Listone.Add('<schedule_info MachineName='+'"'+SCHMachineName+'">');
+	//write body
+    StringList1.LoadFromFile(VBFilePath);
+    for i := 0 to StringList1.count-1 do begin
+		s := stringlist1[i];
+		kom(s,NomeTask);
+		kom(s,NomePrg);
+		kom(s,Quante);
+		kom(s,Spessore);
+		kom(s,Materiale);
+		Listone.Add('  <parts_info>');
+		Listone.Add('    <server_name>');
+		Listone.Add('    </server_name>');
+		Listone.Add('    <folder_name>');
+		Listone.Add('    </folder_name>');
+		Listone.Add('    <parts_name>'+NomePrg+'</parts_name>');
+		Listone.Add('    <product_quantity>'+Quante+'</product_quantity>');
+		Listone.Add('    <reception_quantity>0</reception_quantity>');
+		Listone.Add('    <rejection_quantity>0</rejection_quantity>');
+		Listone.Add('    <complete_code>2</complete_code>');
+		Listone.Add('    <thickness>'+Spessore+'</thickness>');
+		Listone.Add('    <material_name>'+Materiale+'</material_name>');
+		Listone.Add('    <punch_number>0</punch_number>');
+		Listone.Add('    <die_number>0</die_number>');
+		Listone.Add('    <utilization>100</utilization>');
+		Listone.Add('  </parts_info>');
+	end;
+	Listone.Add('</schedule_info>');
+	DeleteFile(VBFilePath);
+	Listone.SaveToFile(IncludeTrailingBackSlash(IncludeTrailingBackSlash(PostObj.NCPath))+PostObj.TaskName+'.SCH');
+	Listone.Free;
+    StringList1.Free;
+end;   
+
+//******************************************************************************
+procedure EndOfProgramProcedures;
+begin	
+	CreateSCHList;
+	MoveNCFile;
+end;
+
+

@@ -1,0 +1,51 @@
+<schedule_info MachineName="FOLAJ">
+  <parts_info>
+    <server_name>
+    </server_name>
+    <folder_name>
+    </folder_name>
+    <parts_name>9379</parts_name>
+    <product_quantity>2</product_quantity>
+    <reception_quantity>0</reception_quantity>
+    <rejection_quantity>0</rejection_quantity>
+    <complete_code>2</complete_code>
+    <thickness>9.53</thickness>
+    <material_name>ASTM A572</material_name>
+    <punch_number>0</punch_number>
+    <die_number>0</die_number>
+    <utilization>100</utilization>
+  </parts_info>
+  <parts_info>
+    <server_name>
+    </server_name>
+    <folder_name>
+    </folder_name>
+    <parts_name>9380</parts_name>
+    <product_quantity>1</product_quantity>
+    <reception_quantity>0</reception_quantity>
+    <rejection_quantity>0</rejection_quantity>
+    <complete_code>2</complete_code>
+    <thickness>9.53</thickness>
+    <material_name>ASTM A572</material_name>
+    <punch_number>0</punch_number>
+    <die_number>0</die_number>
+    <utilization>100</utilization>
+  </parts_info>
+  <parts_info>
+    <server_name>
+    </server_name>
+    <folder_name>
+    </folder_name>
+    <parts_name>9381</parts_name>
+    <product_quantity>3</product_quantity>
+    <reception_quantity>0</reception_quantity>
+    <rejection_quantity>0</rejection_quantity>
+    <complete_code>2</complete_code>
+    <thickness>9.53</thickness>
+    <material_name>ASTM A572</material_name>
+    <punch_number>0</punch_number>
+    <die_number>0</die_number>
+    <utilization>100</utilization>
+  </parts_info>
+</schedule_info>
+

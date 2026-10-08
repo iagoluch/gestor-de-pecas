@@ -1,0 +1,11 @@
+Recursos compartilhados em \\GTS01-PRO06
+
+
+
+Nome do compartilhamento  Tipo   Usado como  Coment�rio  
+
+-------------------------------------------------------------------------------
+Users                     Disco                          
+Comando conclu�do com �xito.
+
+

@@ -371,6 +371,9 @@ class WebApiTests(unittest.TestCase):
         response = self.client.get("/api/v1/management/overview")
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["code"], "management_access_denied")
+        trend = self.client.get("/api/v1/management/overview/trend")
+        self.assertEqual(trend.status_code, 403)
+        self.assertEqual(trend.json()["code"], "management_access_denied")
 
     def test_sessao_operador_expoe_somente_setor_e_recursos_do_perfil(self):
         response = self.login_operator()
@@ -1472,6 +1475,7 @@ class WebApiTests(unittest.TestCase):
             "/api/v1/auth/login",
             "/api/v1/andon",
             "/api/v1/management/overview",
+            "/api/v1/management/overview/trend",
             "/api/v1/management/insights",
             "/api/v1/management/kpis/{kpi_key}/explanation",
             "/api/v1/operator/context",
@@ -1557,12 +1561,14 @@ class WebApiTests(unittest.TestCase):
         self.assertFalse(login.json()["operator_access"])
         self.assertEqual(self.client.get("/api/v1/andon").status_code, 200)
         self.assertEqual(self.client.get("/api/v1/management/overview").status_code, 403)
+        self.assertEqual(self.client.get("/api/v1/management/overview/trend").status_code, 403)
         self.assertEqual(self.client.get("/api/v1/operator/context").status_code, 403)
 
     def test_todas_as_telas_gerenciais_possuem_endpoint_funcional(self):
         self.login_manager()
         paths = (
             "/api/v1/management/overview",
+            "/api/v1/management/overview/trend",
             "/api/v1/andon",
             "/api/v1/management/sectors",
             "/api/v1/management/alerts",

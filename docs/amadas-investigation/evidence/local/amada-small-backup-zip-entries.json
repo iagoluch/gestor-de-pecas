@@ -1,0 +1,536 @@
+[
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "CommandLogOutput/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "CommandLogOutput/CommandLogCollectToolSetting.xml",
+    "Length": 322,
+    "CompressedLength": 201
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "CommandLogOutput/CommandLogUploadTaskSetting.xml",
+    "Length": 3822,
+    "CompressedLength": 985
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "CommandLogOutput/FtpSendHDVCBoxTaskSetting.xml",
+    "Length": 3800,
+    "CompressedLength": 991
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "CommandLogOutput/HDVCBoxSendSetting.xml",
+    "Length": 295,
+    "CompressedLength": 202
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "Customization.xml",
+    "Length": 375,
+    "CompressedLength": 197
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "DataExplorer/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "DataExplorer/ComponentDialogSetting.xml",
+    "Length": 6162,
+    "CompressedLength": 825
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "DataExplorer/DataExplorerSetting.xml",
+    "Length": 1036,
+    "CompressedLength": 365
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "DataExplorer/Settings/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "DataExplorer/Settings/ColumnSettingList.xml",
+    "Length": 36618,
+    "CompressedLength": 1468
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "DataExplorer/Settings/SimpleSearchSettingHistory.xml",
+    "Length": 80127,
+    "CompressedLength": 1627
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupMANIFEST",
+    "Length": 5,
+    "CompressedLength": 5
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/ApplicationList_Backup.xml",
+    "Length": 5760,
+    "CompressedLength": 924
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/ApplicationList_Restore.xml",
+    "Length": 7147,
+    "CompressedLength": 987
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/BackupRelation.xml",
+    "Length": 607,
+    "CompressedLength": 312
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/BackupSettings.xml",
+    "Length": 2713,
+    "CompressedLength": 950
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/ErrorMessage.xml",
+    "Length": 5673,
+    "CompressedLength": 945
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/History.xml",
+    "Length": 53893,
+    "CompressedLength": 2016
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "TotalBackupSettings/InitialStart.tbs",
+    "Length": 3,
+    "CompressedLength": 3
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/administrador/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/administrador/Common/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/administrador/Common/Customization.xml",
+    "Length": 210,
+    "CompressedLength": 139
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/administrador/vCAM3i_Main/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/administrador/vCAM3i_Main/Customization.xml",
+    "Length": 1573,
+    "CompressedLength": 476
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/administrador/vCAM3i_Main/QuickAccessToolbar.xml",
+    "Length": 309,
+    "CompressedLength": 177
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/CALDEIRARIA/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/CALDEIRARIA/Common/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/CALDEIRARIA/Common/Customization.xml",
+    "Length": 210,
+    "CompressedLength": 139
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/CALDEIRARIA/ParameterExplorer/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/CALDEIRARIA/ParameterExplorer/Customization.xml",
+    "Length": 1601,
+    "CompressedLength": 495
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/CALDEIRARIA/ParameterExplorer/QuickAccessToolbar.xml",
+    "Length": 309,
+    "CompressedLength": 177
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/Common/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/Common/Customization.xml",
+    "Length": 210,
+    "CompressedLength": 139
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/DataExplorer/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/DataExplorer/Customization.xml",
+    "Length": 1571,
+    "CompressedLength": 473
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/DataExplorer/QuickAccessToolbar.xml",
+    "Length": 309,
+    "CompressedLength": 177
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/ParameterExplorer/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/ParameterExplorer/Customization.xml",
+    "Length": 1571,
+    "CompressedLength": 472
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/ParameterExplorer/QuickAccessToolbar.xml",
+    "Length": 309,
+    "CompressedLength": 177
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/ProductionDesigner/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/ProductionDesigner/Customization.xml",
+    "Length": 1594,
+    "CompressedLength": 488
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/ProductionDesigner/QuickAccessToolbar.xml",
+    "Length": 4463,
+    "CompressedLength": 538
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/vCAM3i_Main/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/vCAM3i_Main/Customization.xml",
+    "Length": 1570,
+    "CompressedLength": 473
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "UserFolders/caldeiraria.dobra/vCAM3i_Main/QuickAccessToolbar.xml",
+    "Length": 309,
+    "CompressedLength": 177
+  },
+  {
+    "Archive": "TB_CommonSettings_V3.03.01_20260821_GTS01-PRO06.vtb",
+    "Entry": "vCAM3iImportOptionSettings.xml",
+    "Length": 3006,
+    "CompressedLength": 938
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/DefineMaterialToLaserMaterial.zip",
+    "Length": 576,
+    "CompressedLength": 251
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main_BEND.zip",
+    "Length": 573890,
+    "CompressedLength": 433176
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vReport.zip",
+    "Length": 597,
+    "CompressedLength": 331
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/AMADA3i/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/AMADA3i/BendCommonSettings/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/AMADA3i/BendCommonSettings/BendCamBaseConfig.xml",
+    "Length": 303,
+    "CompressedLength": 179
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/AMADA3i/BendCommonSettings/BendCommonSet.xml",
+    "Length": 4817,
+    "CompressedLength": 1345
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/AMADA3i/BendCommonSettings/UIConfig.xml",
+    "Length": 4258,
+    "CompressedLength": 857
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/assign_mac.xml",
+    "Length": 6024,
+    "CompressedLength": 259
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/@DefineMaterialToLaserMaterial/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/@DefineMaterialToLaserMaterial/LC3015F1NT.csv",
+    "Length": 96,
+    "CompressedLength": 66
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/BendingKindsPriority.xml",
+    "Length": 534,
+    "CompressedLength": 211
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/BlankOptionSetting.xml",
+    "Length": 1171,
+    "CompressedLength": 434
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/CombinedCondition.xml",
+    "Length": 260,
+    "CompressedLength": 154
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/CsvSetting.xml",
+    "Length": 394,
+    "CompressedLength": 206
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/ExternalApplicationSetting.xml",
+    "Length": 394,
+    "CompressedLength": 170
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/OpenCsvView.xml",
+    "Length": 169,
+    "CompressedLength": 123
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/PlannerBase.xml",
+    "Length": 269,
+    "CompressedLength": 151
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/PlannerBlank.xml",
+    "Length": 518,
+    "CompressedLength": 239
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/PropertyDialog.xml",
+    "Length": 162,
+    "CompressedLength": 120
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/SearchCondition.xml",
+    "Length": 194,
+    "CompressedLength": 126
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/SelectSheetDialog.xml",
+    "Length": 1190,
+    "CompressedLength": 369
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/administrador/SetSheetSize.xml",
+    "Length": 736,
+    "CompressedLength": 224
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/",
+    "Length": 0,
+    "CompressedLength": 0
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/BendingKindsPriority.xml",
+    "Length": 534,
+    "CompressedLength": 211
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/BlankOptionSetting.xml",
+    "Length": 1171,
+    "CompressedLength": 434
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/CombinedCondition.xml",
+    "Length": 260,
+    "CompressedLength": 154
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/CsvSetting.xml",
+    "Length": 394,
+    "CompressedLength": 206
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/ExternalApplicationSetting.xml",
+    "Length": 394,
+    "CompressedLength": 170
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/OpenCsvView.xml",
+    "Length": 169,
+    "CompressedLength": 123
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/PlannerBase.xml",
+    "Length": 266,
+    "CompressedLength": 146
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/PlannerBlank.xml",
+    "Length": 518,
+    "CompressedLength": 239
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/PropertyDialog.xml",
+    "Length": 162,
+    "CompressedLength": 120
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/SearchCondition.xml",
+    "Length": 194,
+    "CompressedLength": 126
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/SelectSheetDialog.xml",
+    "Length": 1190,
+    "CompressedLength": 369
+  },
+  {
+    "Archive": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06.abex",
+    "Entry": "TB_ABEPlanner_V3.03.01_20260821_GTS01-PRO06/vCAM3i_Main/caldeiraria.dobra/SetSheetSize.xml",
+    "Length": 736,
+    "CompressedLength": 224
+  }
+]

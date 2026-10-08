@@ -30,7 +30,7 @@ function ResourceSelection({ context, onSelect }: { context: OperatorContext; on
     );
   }
   return (
-    <section className="operator-selection">
+    <section className={`operator-selection ${context.resources.length <= 3 ? "operator-selection--few" : ""}`}>
       <div className="operator-selection__heading"><h2>Selecione o recurso</h2><p>Acesse somente o posto em que a execução será registrada.</p></div>
       {context.resources.length === 0 ? <EmptyState title="Nenhum posto configurado para este setor" detail="Os recursos deste setor ainda não foram cadastrados. Procure a liderança antes de apontar." /> : (
         <div className="operator-resource-grid">

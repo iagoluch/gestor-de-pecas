@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Availability } from "../types/api";
 import { systemStateSentence } from "../utils/systemState";
 
@@ -11,6 +12,9 @@ interface MetricCardProps {
   onClick?: () => void;
   actionLabel?: string;
   ariaLabel?: string;
+  /** Variação contra o período anterior (já formatada pelo chamador; `up` só pinta verde/vermelho). */
+  trend?: { text: string; up: boolean };
+  spark?: ReactNode;
 }
 
 export function MetricCard({
@@ -23,6 +27,8 @@ export function MetricCard({
   onClick,
   actionLabel,
   ariaLabel,
+  trend,
+  spark,
 }: MetricCardProps) {
   // `data-availability` continua sendo o estado técnico (é gancho de estilo).
   // O texto que o usuário lê vem da camada central de humanização.
@@ -34,7 +40,9 @@ export function MetricCard({
         {delta ? <small>{delta}</small> : actionLabel ? <small className="metric-card__action">{actionLabel}</small> : null}
       </div>
       <strong className="metric-card__value">{value}</strong>
+      {trend ? <span className={`metric-card__trend metric-card__trend--${trend.up ? "up" : "down"}`}>{trend.up ? "▲" : "▼"} {trend.text}</span> : null}
       {detail ? <span className="metric-card__detail">{detail}</span> : null}
+      {spark}
     </>
   );
   if (onClick) {

@@ -1,0 +1,8 @@
+{
+  "Target": "10.10.3.22",
+  "Port": 445,
+  "TimeoutMs": 2000,
+  "Purpose": "Known AMADA PC SMB reachability",
+  "Connected": true,
+  "Error": null
+}

@@ -1,0 +1,168 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<MACHINE_REGISTRATION xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <REFIX_DATE>2026/08/12/16/21</REFIX_DATE>
+  <NAME_BASE>HG-2204-N-N-A-1-0-A</NAME_BASE>
+  <NAME_DISPLAY>HG-2204</NAME_DISPLAY>
+  <TYPE>HG</TYPE>
+  <MODEL>2204</MODEL>
+  <COMMENT>
+  </COMMENT>
+  <NC_NAME>AMNC_3i</NC_NAME>
+  <LONG_STROKE>FALSE</LONG_STROKE>
+  <HI_BODY>FALSE</HI_BODY>
+  <ATC>FALSE</ATC>
+  <PUNCH_REVERSAL_UNIT>FALSE</PUNCH_REVERSAL_UNIT>
+  <SLIDE_FOOT>TRUE</SLIDE_FOOT>
+  <WORK_NAVI>FALSE</WORK_NAVI>
+  <SET_BI_TYPE>1</SET_BI_TYPE>
+  <SET_BI_COUNT>1</SET_BI_COUNT>
+  <SET_SAFEGUARD>1</SET_SAFEGUARD>
+  <SET_SF_EQUIPMENT>0</SET_SF_EQUIPMENT>
+  <MACHINE_CAPABILITY_CHANGE_INFOMATION>
+    <SIGNIFICANT_HEIGHT>520.000000000</SIGNIFICANT_HEIGHT>
+    <L_AXIS_MOVE_RANGE_MAX>701.000000000</L_AXIS_MOVE_RANGE_MAX>
+  </MACHINE_CAPABILITY_CHANGE_INFOMATION>
+  <PHL_SET_INFOMATION>
+    <TYPE>AMADA</TYPE>
+    <NAME>750101</NAME>
+    <KUSABI_SET>FALSE</KUSABI_SET>
+    <CS_CLAMP_SET>TRUE</CS_CLAMP_SET>
+    <COMBIN_SET>FALSE</COMBIN_SET>
+    <CLAMP_AT_CENTER>TRUE</CLAMP_AT_CENTER>
+    <CLAMP_PITCH>200.000000000</CLAMP_PITCH>
+    <MIN_CLEARANCE_BETWEEN_PHL>0.000000000</MIN_CLEARANCE_BETWEEN_PHL>
+    <COUNT>21</COUNT>
+    <LOCATION data_count="21">
+      <DATA index="1" value="75.000000000" />
+      <DATA index="2" value="275.000000000" />
+      <DATA index="3" value="475.000000000" />
+      <DATA index="4" value="675.000000000" />
+      <DATA index="5" value="875.000000000" />
+      <DATA index="6" value="1075.000000000" />
+      <DATA index="7" value="1275.000000000" />
+      <DATA index="8" value="1475.000000000" />
+      <DATA index="9" value="1675.000000000" />
+      <DATA index="10" value="1875.000000000" />
+      <DATA index="11" value="2075.000000000" />
+      <DATA index="12" value="2275.000000000" />
+      <DATA index="13" value="2475.000000000" />
+      <DATA index="14" value="2675.000000000" />
+      <DATA index="15" value="2875.000000000" />
+      <DATA index="16" value="3075.000000000" />
+      <DATA index="17" value="3275.000000000" />
+      <DATA index="18" value="3475.000000000" />
+      <DATA index="19" value="3675.000000000" />
+      <DATA index="20" value="3875.000000000" />
+      <DATA index="21" value="4075.000000000" />
+    </LOCATION>
+    <LENGTH data_count="21">
+      <DATA index="1" value="150.000000000" />
+      <DATA index="2" value="150.000000000" />
+      <DATA index="3" value="150.000000000" />
+      <DATA index="4" value="150.000000000" />
+      <DATA index="5" value="150.000000000" />
+      <DATA index="6" value="150.000000000" />
+      <DATA index="7" value="150.000000000" />
+      <DATA index="8" value="150.000000000" />
+      <DATA index="9" value="150.000000000" />
+      <DATA index="10" value="150.000000000" />
+      <DATA index="11" value="150.000000000" />
+      <DATA index="12" value="150.000000000" />
+      <DATA index="13" value="150.000000000" />
+      <DATA index="14" value="150.000000000" />
+      <DATA index="15" value="150.000000000" />
+      <DATA index="16" value="150.000000000" />
+      <DATA index="17" value="150.000000000" />
+      <DATA index="18" value="150.000000000" />
+      <DATA index="19" value="150.000000000" />
+      <DATA index="20" value="150.000000000" />
+      <DATA index="21" value="150.000000000" />
+    </LENGTH>
+  </PHL_SET_INFOMATION>
+  <GAGE_SET_INFOMATION block_count="2">
+    <BLOCK block_no="1">
+      <NAME>31825</NAME>
+      <L-SHIFT>TRUE</L-SHIFT>
+      <HEAVY_BG>FALSE</HEAVY_BG>
+      <HFP_BG>FALSE</HFP_BG>
+      <FINGER_LENGTH>170.000000000</FINGER_LENGTH>
+      <FINGER_HEIGHT>15.000000000</FINGER_HEIGHT>
+      <FINGER_WIDTH>110.000000000</FINGER_WIDTH>
+    </BLOCK>
+    <BLOCK block_no="2">
+      <NAME>31825</NAME>
+      <L-SHIFT>TRUE</L-SHIFT>
+      <HEAVY_BG>FALSE</HEAVY_BG>
+      <HFP_BG>FALSE</HFP_BG>
+      <FINGER_LENGTH>170.000000000</FINGER_LENGTH>
+      <FINGER_HEIGHT>15.000000000</FINGER_HEIGHT>
+      <FINGER_WIDTH>110.000000000</FINGER_WIDTH>
+    </BLOCK>
+    <FINGERS_MIN_DISTANCE>7.000000000</FINGERS_MIN_DISTANCE>
+    <GAGE_HEIGHT_RANGE>
+      <MIN>37.500000000</MIN>
+      <MAX>287.500000000</MAX>
+    </GAGE_HEIGHT_RANGE>
+    <GAGE_SPAN_RANGE>
+      <MIN>-1775.900000</MIN>
+      <MAX>1775.900000</MAX>
+    </GAGE_SPAN_RANGE>
+    <GAGE_DEPTH_RANGE>
+      <MIN>2.010000</MIN>
+      <MAX>701.000000</MAX>
+    </GAGE_DEPTH_RANGE>
+  </GAGE_SET_INFOMATION>
+  <DHL_DBK_SET_INFOMATION>
+    <SET>TRUE</SET>
+    <TYPE>2</TYPE>
+    <NAME_DHL>081502</NAME_DHL>
+    <NAME_DBK>
+    </NAME_DBK>
+    <COUNT>2</COUNT>
+    <LOCATION data_count="2">
+      <DATA index="1" value="25.000000000" />
+      <DATA index="2" value="2150.000000000" />
+    </LOCATION>
+    <LENGTH data_count="2">
+      <DATA index="1" value="2125.000000000" />
+      <DATA index="2" value="2125.000000000" />
+    </LENGTH>
+  </DHL_DBK_SET_INFOMATION>
+  <FRONT_SUPPORT_SET_INFOMATION block_count="4">
+    <BLOCK block_no="1">
+      <SET>FALSE</SET>
+      <NAME_TABLE>
+      </NAME_TABLE>
+      <NAME_SLIDER>
+      </NAME_SLIDER>
+    </BLOCK>
+    <BLOCK block_no="2">
+      <SET>FALSE</SET>
+      <NAME_TABLE>
+      </NAME_TABLE>
+      <NAME_SLIDER>
+      </NAME_SLIDER>
+    </BLOCK>
+    <BLOCK block_no="3">
+      <SET>FALSE</SET>
+      <NAME_TABLE>
+      </NAME_TABLE>
+      <NAME_SLIDER>
+      </NAME_SLIDER>
+    </BLOCK>
+    <BLOCK block_no="4">
+      <SET>FALSE</SET>
+      <NAME_TABLE>
+      </NAME_TABLE>
+      <NAME_SLIDER>
+      </NAME_SLIDER>
+    </BLOCK>
+    <FRONT_SUPPORT_LIMIT_MOVE_RANGE>
+      <MIN>-61.000000</MIN>
+      <MAX>191.000000</MAX>
+    </FRONT_SUPPORT_LIMIT_MOVE_RANGE>
+  </FRONT_SUPPORT_SET_INFOMATION>
+  <MANEGEMENT_SET_INFOMATION>
+    <TOOL_LAYOUT_MANEGEMENT_SET>FALSE</TOOL_LAYOUT_MANEGEMENT_SET>
+  </MANEGEMENT_SET_INFOMATION>
+</MACHINE_REGISTRATION>

@@ -1,0 +1,30 @@
+[
+  {
+    "Path": "Z:\\SIGMANEST\\SNDATA_serv\\Post\\Amada_ensis.pst",
+    "Exists": true,
+    "Bytes": 73113,
+    "Modified": "2026-08-12T17:24:48.1690477-03:00",
+    "Signature": "name        : WINDOWS POST\r\npstfile     : Amada_ensis.pst\r\npsttype     : snpost3.dll\r\nScriptEngine : 3\r\ntype        : STANDARD\r\n\r\nPostID      : {A9A49D86-599E-42A8-A390-A08C3D71B8A6}\r\nPostRevID   : {00000000-0000-0000-0000-000000000000}\r\nCustomer    : \r\nMa"
+  },
+  {
+    "Path": "Z:\\NESTING LASER\\9379.DNK",
+    "Exists": true,
+    "Bytes": 64505,
+    "Modified": "2026-10-08T11:20:19.3977768-03:00",
+    "Signature": null
+  },
+  {
+    "Path": "Z:\\NESTING LASER\\9380.DNK",
+    "Exists": true,
+    "Bytes": 68340,
+    "Modified": "2026-10-08T11:20:20.1249993-03:00",
+    "Signature": null
+  },
+  {
+    "Path": "Z:\\NESTING LASER\\9381.DNK",
+    "Exists": true,
+    "Bytes": 86138,
+    "Modified": "2026-10-08T11:20:20.8345447-03:00",
+    "Signature": null
+  }
+]

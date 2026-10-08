@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DataExplorerSetting xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <LastSelectedTabPage>PartsPage</LastSelectedTabPage>
+  <LastSelectedFolder>\\GTS01-PRO06\Components\Máquinas AMADA\HG2204</LastSelectedFolder>
+  <SinglePageFilterDefinition>&lt;ColumnFilters&gt;&lt;ColumnFilter ColumnIndex="2" ColumnName="IsExcludeFilter"&gt;&lt;ConditionFilter AndConditions="True"&gt;&lt;Condition Operator="Equals" Parameter="False" /&gt;&lt;/ConditionFilter&gt;&lt;/ColumnFilter&gt;&lt;/ColumnFilters&gt;</SinglePageFilterDefinition>
+  <AssyPageFilterDefinition>&lt;ColumnFilters /&gt;</AssyPageFilterDefinition>
+  <PartsPageFilterDefinition>&lt;ColumnFilters&gt;&lt;ColumnFilter ColumnIndex="2" ColumnName="IsExcludeFilter"&gt;&lt;ConditionFilter AndConditions="True"&gt;&lt;Condition Operator="Equals" Parameter="False" /&gt;&lt;/ConditionFilter&gt;&lt;/ColumnFilter&gt;&lt;/ColumnFilters&gt;</PartsPageFilterDefinition>
+</DataExplorerSetting>

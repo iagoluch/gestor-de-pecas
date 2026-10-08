@@ -1,0 +1,100 @@
+[
+  {
+    "Branch": "Immediate",
+    "Name": "20250130_090850Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2025-01-30T09:09:36.349292-03:00"
+  },
+  {
+    "Branch": "Immediate",
+    "Name": "20250801_140930",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2025-08-01T14:09:57.3140512-03:00"
+  },
+  {
+    "Branch": "Immediate",
+    "Name": "20251001_134002Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2025-10-01T13:42:16.6511928-03:00"
+  },
+  {
+    "Branch": "Immediate",
+    "Name": "20260325_083451Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-03-25T08:38:08.492596-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260529Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-05-29T08:34:35.847935-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260612Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-06-12T08:34:03.2743811-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260619Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-06-19T08:34:18.610107-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260626Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-06-26T08:34:09.835695-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260703Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-07-03T08:34:32.7017658-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260710Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-07-10T08:34:14.0811794-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260724Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-07-24T08:34:36.9654828-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260731Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-07-31T08:34:48.3705481-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260807Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-08-07T08:34:53.0967553-03:00"
+  },
+  {
+    "Branch": "Schedule",
+    "Name": "20260821Full",
+    "Mode": "d----",
+    "Length": null,
+    "LastWriteTime": "2026-08-21T08:35:31.4140908-03:00"
+  }
+]

@@ -45,12 +45,20 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
+      <aside className="login-brand" aria-hidden="true">
+        <img className="login-brand__logo" src={assets.logo} alt="" />
+        <div className="login-brand__copy">
+          <ul>
+            <li>Apontamento do chão de fábrica em tempo real</li>
+            <li>OEE, qualidade e paradas por setor</li>
+            <li>Integração com Protheus e SigmaNEST</li>
+          </ul>
+        </div>
+        <small>Powered by Iago Luchtenberg</small>
+      </aside>
       <section className="login-card">
         <img className="login-card__logo" src={assets.logo} alt="Gestor de Peças" />
-        <div>
-          <p>Gestão industrial e execução real</p>
-          <h1>Entrar no Gestor</h1>
-        </div>
+        <h1 className="visually-hidden">Entrar no Gestor</h1>
         <form noValidate onSubmit={submit} onInput={limparCampoInvalido}>
           <label>
             Usuário
@@ -62,9 +70,7 @@ export function LoginPage() {
           </label>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button type="submit" disabled={submitting}>{submitting ? "Entrando…" : "Entrar"}</button>
-        </form>
-        <small>Use o mesmo usuário do Gestor de Peças.</small>
-      </section>
+        </form>      </section>
     </main>
   );
 }

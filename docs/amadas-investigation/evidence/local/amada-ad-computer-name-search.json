@@ -1,0 +1,12 @@
+{
+  "Server": "192.168.0.201",
+  "Success": true,
+  "Limit": 50,
+  "Items": [
+    {
+      "Name": "GTS01-PRO06",
+      "DNSHostName": "GTS01-PRO06.gtsdobrasil.com.br",
+      "OperatingSystem": "Windows 11 Pro for Workstations"
+    }
+  ]
+}

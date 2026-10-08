@@ -1,0 +1,16 @@
+{
+  "Date": "2026-10-08T11:30:57.1176325-03:00",
+  "Server": "192.168.0.201",
+  "Filter": "dnsNode name AMADA/ENSIS/VCBox/VFACT/HG2204/EGB1303",
+  "ResultCount": 2,
+  "Results": [
+    {
+      "Partition": "DC=ForestDnsZones,DC=gtsdobrasil,DC=com,DC=br",
+      "Error": "Exception calling \"FindAll\" with \"0\" argument(s): \"O atributo ou valor do serviço de diretório especificado não existe.\""
+    },
+    {
+      "Partition": "DC=DomainDnsZones,DC=gtsdobrasil,DC=com,DC=br",
+      "Error": "Exception calling \"FindAll\" with \"0\" argument(s): \"O atributo ou valor do serviço de diretório especificado não existe.\""
+    }
+  ]
+}
