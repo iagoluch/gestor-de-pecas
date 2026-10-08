@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import os
 import threading
+import time
 import unittest
 from uuid import uuid4
 
@@ -360,7 +361,12 @@ class InvariantesDeConcorrenciaTests(unittest.TestCase):
             with psycopg.connect(self.admin_dsn, autocommit=True) as connection:
                 connection.execute("SELECT pg_terminate_backend(%s)", (pid,))
 
-            self.assertTrue(reserva.hold(self.db))
+            # pg_terminate_backend só sinaliza: o backend solta o lock um instante
+            # depois (falha imediata medida em ~1/300); o laço real tenta de novo no ciclo seguinte.
+            prazo = time.monotonic() + 5
+            while not reserva.hold(self.db) and time.monotonic() < prazo:
+                time.sleep(0.02)
+            self.assertTrue(reserva._held)
             self.assertFalse(lider.hold(self.db))
         finally:
             primeiro.release()
