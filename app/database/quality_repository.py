@@ -376,8 +376,14 @@ class QualityRepositoryMixin:
         usuario_nome="",
         agora: datetime | None = None,
         nova_revisao=False,
+        somente_criar=False,
     ):
         """Cria ou substitui o conjunto de cotas do produto de forma atômica.
+
+        Com ``somente_criar`` a gravação nunca altera um template existente:
+        o ``ON CONFLICT DO NOTHING`` decide no banco, sem janela entre checar e
+        gravar, e a função devolve ``None`` (nada foi escrito, nem as cotas).
+        É o caminho de quem não tem permissão de edição.
 
         Cota removida é **inativada**, nunca apagada: inspeções históricas
         continuam apontando para a linha original, e o snapshot gravado na peça
@@ -386,6 +392,31 @@ class QualityRepositoryMixin:
 
         produto = str(produto_codigo or "").strip()
         instante = agora or datetime.now().replace(microsecond=0)
+        on_conflict = (
+            "ON CONFLICT ON CONSTRAINT uq_qualidade_template_produto DO NOTHING"
+            if somente_criar
+            else """ON CONFLICT ON CONSTRAINT uq_qualidade_template_produto DO UPDATE SET
+                    produto_descricao = COALESCE(
+                        EXCLUDED.produto_descricao,
+                        qualidade_templates_produto.produto_descricao
+                    ),
+                    revisao = qualidade_templates_produto.revisao + CASE WHEN %s THEN 1 ELSE 0 END,
+                    atualizado_por = EXCLUDED.atualizado_por,
+                    atualizado_por_nome = EXCLUDED.atualizado_por_nome,
+                    atualizado_em = EXCLUDED.atualizado_em"""
+        )
+        parametros = [
+            produto,
+            str(produto_descricao or "").strip() or None,
+            usuario_id,
+            str(usuario_nome or "").strip() or "Operador",
+            usuario_id,
+            str(usuario_nome or "").strip() or "Operador",
+            instante,
+            instante,
+        ]
+        if not somente_criar:
+            parametros.append(bool(nova_revisao))
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -394,30 +425,17 @@ class QualityRepositoryMixin:
                     criado_por, criado_por_nome, atualizado_por,
                     atualizado_por_nome, criado_em, atualizado_em
                 ) VALUES (%s, %s, 1, TRUE, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT ON CONSTRAINT uq_qualidade_template_produto DO UPDATE SET
-                    produto_descricao = COALESCE(
-                        EXCLUDED.produto_descricao,
-                        qualidade_templates_produto.produto_descricao
-                    ),
-                    revisao = qualidade_templates_produto.revisao + CASE WHEN %s THEN 1 ELSE 0 END,
-                    atualizado_por = EXCLUDED.atualizado_por,
-                    atualizado_por_nome = EXCLUDED.atualizado_por_nome,
-                    atualizado_em = EXCLUDED.atualizado_em
+                """ + on_conflict + """
                 RETURNING *
                 """,
-                (
-                    produto,
-                    str(produto_descricao or "").strip() or None,
-                    usuario_id,
-                    str(usuario_nome or "").strip() or "Operador",
-                    usuario_id,
-                    str(usuario_nome or "").strip() or "Operador",
-                    instante,
-                    instante,
-                    bool(nova_revisao),
-                ),
+                parametros,
             )
-            template = dict(cursor.fetchone())
+            criado = cursor.fetchone()
+            if criado is None:
+                # DO NOTHING sem linha de retorno: outro operador já cadastrou o
+                # template (ou o fez entre a checagem do serviço e este INSERT).
+                return None
+            template = dict(criado)
             informadas = []
             for ordem, cota in enumerate(cotas or (), start=1):
                 sequencia = int(cota.get("sequencia") or ordem)

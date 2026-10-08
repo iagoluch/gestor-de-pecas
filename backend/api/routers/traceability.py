@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi import Path as ApiPath
 
 from backend.api.dependencies.auth import require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/traceability", tags=["Rastreabilidade"])
 
 @router.get("/orders/{op}")
 def trace_order(
-    op: str,
+    op: str = ApiPath(max_length=80),
     _user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
 ):

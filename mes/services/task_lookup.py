@@ -50,8 +50,8 @@ class TarefaLookupService:
                     False,
                     codigo,
                     "catalogo_local",
-                    message=f"Falha ao consultar o catálogo local: {exc}",
-                    error=str(exc),
+                    message="Falha ao consultar o catálogo local.",
+                    error=type(exc).__name__,
                 )
             if tarefa:
                 return TaskLookupResult(

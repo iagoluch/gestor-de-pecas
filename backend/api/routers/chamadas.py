@@ -5,7 +5,7 @@ numa tela própria dentro do sistema — nunca pelo Dev Observatory, que é
 somente leitura de propósito. Motivo e comentário são sempre obrigatórios.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from backend.api.database import get_database
 from backend.api.dependencies.auth import (
@@ -93,8 +93,8 @@ def contato_padrao_gestao(
 
 @router.get("/contatos")
 def buscar_contatos(
-    q: str | None = None,
-    setor: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    setor: str | None = Query(default=None, max_length=120),
     _user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):

@@ -952,6 +952,62 @@ class QualityPostgresTests(unittest.TestCase):
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
+    def test_corrida_de_primeiro_cadastro_sem_permissao_nao_sobrescreve_o_template(self):
+        """Dois operadores cadastrando o mesmo produto: o segundo não pode vencer."""
+
+        produto = "PROD-CORRIDA"
+        primeiro = QualityInspectionService(self.db, "OPERADOR A")
+        segundo = QualityInspectionService(self.db, "OPERADOR B")
+        criado = primeiro.definir_template(produto, _cotas("125,0 ± 0,5", "80,0 ± 0,5"))
+        self.assertTrue(criado.ok, criado.message)
+
+        # O segundo operador checou "não existe" antes de o primeiro commitar:
+        # a leitura do serviço fica velha e só o INSERT atômico impede a perda.
+        original = self.db.buscar_template_qualidade
+        self.db.buscar_template_qualidade = lambda *_a, **_k: None
+        try:
+            recusa = segundo.definir_template(produto, _cotas("999,0 ± 9,9"))
+        finally:
+            self.db.buscar_template_qualidade = original
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "qualidade_template_protegido")
+
+        salvo = self.db.buscar_template_qualidade(produto)
+        self.assertEqual(salvo["revisao"], 1)
+        self.assertEqual(salvo["criado_por_nome"], "OPERADOR A")
+        self.assertEqual(salvo["atualizado_por_nome"], "OPERADOR A")
+        self.assertEqual(
+            [(c["sequencia"], c["padrao"]) for c in salvo["cotas"]],
+            [(1, "125,0 ± 0,5"), (2, "80,0 ± 0,5")],
+        )
+
+        # Quem tem permissão continua atualizando (DO UPDATE, nova revisão).
+        supervisor = QualityInspectionService(self.db, "SUPERVISOR", nivel="supervisor")
+        alterado = supervisor.definir_template(
+            produto, _cotas("130,0 ± 0,5"), pode_editar=True
+        )
+        self.assertTrue(alterado.ok, alterado.message)
+        self.assertEqual(alterado.data["revisao"], 2)
+        self.assertEqual(
+            [c["padrao"] for c in alterado.data["cotas"]], ["130,0 ± 0,5"]
+        )
+
+    def test_repositorio_somente_criar_nao_toca_template_nem_cotas_existentes(self):
+        produto = "PROD-SOMENTE-CRIAR"
+        cotas = [{"sequencia": 1, "padrao": "10,0", "unidade": "mm"}]
+        criado = self.db.salvar_template_qualidade(produto, cotas, somente_criar=True)
+        self.assertIsNotNone(criado)
+        repetido = self.db.salvar_template_qualidade(
+            produto,
+            [{"sequencia": 1, "padrao": "99,0", "unidade": "mm"}],
+            usuario_nome="Intruso",
+            somente_criar=True,
+        )
+        self.assertIsNone(repetido)
+        salvo = self.db.buscar_template_qualidade(produto)
+        self.assertEqual([c["padrao"] for c in salvo["cotas"]], ["10,0"])
+        self.assertNotEqual(salvo["atualizado_por_nome"], "Intruso")
+
     def _concluir_roteiro(self):
         # A outbox nasce ligada neste schema (ver setUp), o que ativa a
         # duração mínima de 60s entre Início e Finalizado (A680HORA). O

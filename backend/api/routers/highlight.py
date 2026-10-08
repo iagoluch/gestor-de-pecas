@@ -1,8 +1,10 @@
 """Fluxo operacional de Destaque por tarefa."""
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import Path as ApiPath
 
 from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, require_operator_user
@@ -193,7 +195,7 @@ def queue(
 
 @router.get("/tasks/{task_code}")
 def task(
-    task_code: str,
+    task_code: Annotated[str, ApiPath(max_length=80)],
     request: Request,
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),

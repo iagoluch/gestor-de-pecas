@@ -609,11 +609,7 @@ class QualityInspectionService:
             # Depois de salvo, o template é padrão do produto. Alterá-lo mudaria
             # o critério de aceitação da peça, então a permissão é validada aqui
             # e não apenas escondendo o botão no React.
-            return _fail(
-                "qualidade_template_protegido",
-                "As cotas padrão deste produto já estão cadastradas. "
-                "Somente Supervisor, Líder ou Qualidade pode alterá-las.",
-            )
+            return self._template_protegido()
         normalizadas, erro = self._normalizar_cotas_template(cotas)
         if erro is not None:
             return erro
@@ -625,12 +621,25 @@ class QualityInspectionService:
             usuario_nome=self.operador,
             agora=self._now(),
             nova_revisao=existente is not None,
+            # Sem permissão, a gravação só pode criar: a checagem acima não é
+            # atômica e dois operadores podem cadastrar o mesmo produto juntos.
+            somente_criar=not pode_editar,
         )
+        if template is None:
+            return self._template_protegido()
         return QualityResult(
             True,
             "Cotas padrão salvas para o produto." if existente is None
             else "Cotas padrão atualizadas.",
             data=template_publico(template),
+        )
+
+    @staticmethod
+    def _template_protegido():
+        return _fail(
+            "qualidade_template_protegido",
+            "As cotas padrão deste produto já estão cadastradas. "
+            "Somente Supervisor, Líder ou Qualidade pode alterá-las.",
         )
 
     @staticmethod

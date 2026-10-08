@@ -1,7 +1,7 @@
 from datetime import time
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class ErrorResponse(BaseModel):
@@ -136,7 +136,9 @@ class ChamadaContatoRequest(BaseModel):
     # Setores em que este contato aparece no dropdown de chamada do operador.
     # Vazio = aparece em todos os setores (comportamento anterior, sem
     # configuração por setor).
-    setores: list[str] = Field(default_factory=list)
+    setores: list[Annotated[str, StringConstraints(max_length=80)]] = Field(
+        default_factory=list, max_length=20
+    )
 
 
 class ChamadaRequest(BaseModel):

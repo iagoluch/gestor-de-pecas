@@ -1,6 +1,8 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Path as ApiPath
 
 from app.core.permissions import USER_LEVELS
 from app.database.errors import PauseOrderConflictError
@@ -263,7 +265,7 @@ def save_productive_calendar(
     dependencies=[Depends(require_csrf)],
 )
 def save_productive_shift(
-    calendario_codigo: str,
+    calendario_codigo: Annotated[str, ApiPath(max_length=60)],
     payload: ProductiveShiftRequest,
     request: Request,
     _user: SessionUser = Depends(require_admin_user),
@@ -439,9 +441,9 @@ def _notify_telegram_chat(request: Request, chat_id: str, text: str) -> bool:
 # ---------------------------------------------------------------------------
 @router.get("/internal-alerts")
 def internal_alerts(
-    recipient: str | None = None,
-    alert_type: str | None = None,
-    op: str | None = None,
+    recipient: str | None = Query(default=None, max_length=120),
+    alert_type: str | None = Query(default=None, max_length=120),
+    op: str | None = Query(default=None, max_length=80),
     pending_only: bool = False,
     _user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
@@ -532,8 +534,8 @@ def save_user(
 
 @router.get("/first-pieces")
 def first_pieces(
-    sector: str | None = None,
-    status: str | None = None,
+    sector: str | None = Query(default=None, max_length=120),
+    status: str | None = Query(default=None, max_length=120),
     blocked_only: bool = False,
     _user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
@@ -621,9 +623,9 @@ def set_manual_standard_time(
 
 @router.delete("/standard-times/manual", dependencies=[Depends(require_csrf)])
 def delete_manual_standard_time(
-    produto_codigo: str,
-    numero_operacao: str,
-    codigo_recurso: str,
+    produto_codigo: str = Query(max_length=80),
+    numero_operacao: str = Query(max_length=40),
+    codigo_recurso: str = Query(max_length=80),
     user: SessionUser = Depends(require_tempo_padrao_user),
     database=Depends(get_database),
 ):
@@ -643,9 +645,9 @@ def delete_manual_standard_time(
 
 @router.get("/standard-times/manual/history")
 def manual_standard_time_history(
-    produto_codigo: str,
-    numero_operacao: str,
-    codigo_recurso: str,
+    produto_codigo: str = Query(max_length=80),
+    numero_operacao: str = Query(max_length=40),
+    codigo_recurso: str = Query(max_length=80),
     _user: SessionUser = Depends(require_tempo_padrao_user),
     database=Depends(get_database),
 ):

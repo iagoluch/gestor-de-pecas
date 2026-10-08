@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi import Path as ApiPath
 from fastapi.responses import FileResponse
 
 from app.core.operator_sectors import WELDING_OPEN_PICKER_SECTORS, WELDING_SECTOR_NAMES
@@ -159,7 +161,7 @@ def _provisioning(request: Request, database) -> OrderProvisioningService:
 @router.get("/operations/{op}")
 def operations(
     request: Request,
-    op: str,
+    op: Annotated[str, ApiPath(max_length=80)],
     resource: str | None = Query(default=None, min_length=1, max_length=120),
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
@@ -195,7 +197,7 @@ def operations(
 @router.post("/operations/{op}/sync", dependencies=[Depends(require_csrf)])
 def provision_operation_order(
     request: Request,
-    op: str,
+    op: Annotated[str, ApiPath(max_length=80)],
     resource: str | None = Query(default=None, min_length=1, max_length=120),
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),

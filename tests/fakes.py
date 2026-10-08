@@ -2742,7 +2742,7 @@ class FakeDatabase:
 
     def salvar_template_qualidade(
         self, produto_codigo, cotas, *, produto_descricao=None, usuario_id=None,
-        usuario_nome="", agora=None, nova_revisao=False,
+        usuario_nome="", agora=None, nova_revisao=False, somente_criar=False,
     ):
         produto = str(produto_codigo or "").strip()
         instante = agora or datetime.now().replace(microsecond=0)
@@ -2750,6 +2750,8 @@ class FakeDatabase:
             (row for row in self.quality_templates if row["produto_codigo"] == produto),
             None,
         )
+        if template is not None and somente_criar:
+            return None
         if template is None:
             template = {
                 "id": self._id("quality_template"),

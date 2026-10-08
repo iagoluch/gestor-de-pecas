@@ -14,8 +14,10 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Path as ApiPath
 from fastapi.responses import FileResponse
 
 from app.core.permissions import (
@@ -215,7 +217,7 @@ def finish_inspection(
 @router.get("/templates/{produto}")
 def template(
     request: Request,
-    produto: str,
+    produto: Annotated[str, ApiPath(max_length=60)],
     user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
