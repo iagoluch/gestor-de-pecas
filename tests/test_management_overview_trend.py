@@ -403,9 +403,12 @@ class OverviewTrendRecentEventsTests(unittest.TestCase):
 
         self.assertEqual(len(events), 8)
         self.assertEqual(events[0], {
-            "resource": "R9", "sector": "Dobra", "state": "producao",
+            "resource": "R9", "resource_name": "R9", "sector": "Dobra", "state": "producao",
             "at": datetime(2026, 8, 20, 8, 9).isoformat(),
         })
+        # Código com nome oficial publica o nome limpo, sem alterar a identidade.
+        torno = _service(_EventsRepo([self._row("TORNOC", datetime(2026, 8, 20, 8, 0))])).get_overview_trend(filters)["recent_events"]
+        self.assertEqual((torno[0]["resource"], torno[0]["resource_name"]), ("TORNOC", "Torno Mecânico"))
         self.assertNotIn("FORA", [e["resource"] for e in events])
         self.assertEqual(
             [e["at"] for e in events], sorted((e["at"] for e in events), reverse=True)
