@@ -132,6 +132,7 @@ class ChamadaRepositoryMixin:
         solicitante_nivel,
         solicitante_cracha=None,
         solicitante_email=None,
+        prioridade="Média",
     ):
         """Grava a chamada com o retrato do contato no momento da chamada.
 
@@ -158,9 +159,10 @@ class ChamadaRepositoryMixin:
                 """
                 INSERT INTO chamadas (
                     contato_id, contato_nome, contato_funcao, motivo, comentario,
-                    solicitante_nome, solicitante_nivel, solicitante_cracha, solicitante_email
+                    solicitante_nome, solicitante_nivel, solicitante_cracha, solicitante_email,
+                    prioridade
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -173,6 +175,7 @@ class ChamadaRepositoryMixin:
                     str(solicitante_nivel or "").strip(),
                     str(solicitante_cracha or "").strip() or None,
                     str(solicitante_email or "").strip() or None,
+                    str(prioridade or "").strip() or "Média",
                 ),
             )
             resultado = dict(cursor.fetchone())

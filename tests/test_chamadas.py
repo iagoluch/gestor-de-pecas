@@ -23,7 +23,7 @@ from backend.api.dependencies.auth import (
 )
 from backend.api.database import get_database
 from backend.api.main import create_app
-from backend.api.routers.chamadas import MOTIVOS
+from backend.api.routers.chamadas import MOTIVOS, MOTIVOS_GESTAO, PRIORIDADES
 from backend.api.schemas.auth import SessionUser
 from mes.integrations.notifications.telegram import TelegramSendResult
 
@@ -275,6 +275,7 @@ class _FakeChamadaDatabase:
         solicitante_nivel,
         solicitante_cracha=None,
         solicitante_email=None,
+        prioridade="Média",
     ):
         contato = self.contatos.get(contato_id)
         if contato is None or not contato["ativo"]:
@@ -288,6 +289,7 @@ class _FakeChamadaDatabase:
             "contato_nome": contato["nome"],
             "contato_funcao": contato["funcao"],
             "motivo": motivo,
+            "prioridade": prioridade,
             "comentario": comentario,
             "solicitante_nome": solicitante_nome,
             "solicitante_nivel": solicitante_nivel,
@@ -406,7 +408,9 @@ class ChamadaApiTests(unittest.TestCase):
                 self.assertEqual(resposta.json()["items"][0]["nome"], "Fulano")
 
                 motivos = self.client.get("/api/v1/chamadas/motivos")
-                self.assertEqual(motivos.json()["items"], list(MOTIVOS))
+                esperado = MOTIVOS_GESTAO if user.management_access else MOTIVOS
+                self.assertEqual(motivos.json()["items"], list(esperado))
+                self.assertEqual(motivos.json()["prioridades"], list(PRIORIDADES))
 
     def test_criar_chamada_sem_telegram_configurado_registra_mas_nao_envia(self):
         # Canal ligado, mas sem token/chat: distinto de "desligado" (flag).
@@ -436,6 +440,44 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertEqual(corpo["item"]["contato_nome"], "Fulano")
         self.assertEqual(corpo["item"]["solicitante_cracha"], "0042")
         self.assertEqual(corpo["item"]["solicitante_nome"], "Maria Operadora")
+
+    def test_gestao_registra_prioridade_e_motivo_de_sistema(self):
+        self._as(_management_user())
+        corpo = {
+            "contato_id": 1, "motivo": "Erro no sistema", "comentario": "Tela travou",
+            "solicitante_nome_manual": "Fulana Gestora", "solicitante_email": "f@x.com",
+        }
+        resposta = self.client.post("/api/v1/chamadas", json={**corpo, "prioridade": "Urgente"})
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(self.db.chamadas[-1]["prioridade"], "Urgente")
+        # Sem informar, cai em "Média".
+        resposta = self.client.post("/api/v1/chamadas", json=corpo)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(self.db.chamadas[-1]["prioridade"], "Média")
+
+    def test_prioridade_invalida_e_motivo_de_sistema_para_operador_sao_recusados(self):
+        self._as(_management_user())
+        resposta = self.client.post(
+            "/api/v1/chamadas",
+            json={
+                "contato_id": 1, "motivo": "Manutenção", "comentario": "x", "prioridade": "Crítica",
+                "solicitante_nome_manual": "Fulana", "solicitante_email": "f@x.com",
+            },
+        )
+        self.assertEqual(resposta.status_code, 422)
+        self.assertEqual(resposta.json()["code"], "chamada_prioridade_invalida")
+
+        self._as(_operator_user())
+        resposta = self.client.post(
+            "/api/v1/chamadas",
+            json={
+                "contato_id": 1, "motivo": "Erro no sistema", "comentario": "x",
+                "solicitante_cracha": "0042",
+            },
+        )
+        self.assertEqual(resposta.status_code, 422)
+        self.assertEqual(resposta.json()["code"], "chamada_motivo_invalido")
+        self.assertEqual(self.db.chamadas, [])
 
     def test_operador_sem_cracha_e_recusado(self):
         self._as(_operator_user())

@@ -38,6 +38,29 @@ MOTIVOS = (
     "Outro",
 )
 
+# Gestão enxerga também o que dá errado no sistema, não só o chão de fábrica
+# (decisão do usuário, 09/10/2026).
+MOTIVOS_GESTAO = (
+    "Manutenção",
+    "Qualidade",
+    "Falta de material",
+    "Ferramental",
+    "Programação de produção",
+    "Segurança",
+    "Erro no sistema",
+    "Dado incorreto no sistema",
+    "Falha de integração (TOTVS/SigmaNEST)",
+    "Acesso ou permissão",
+    "Dúvida de uso do sistema",
+    "Outro",
+)
+
+PRIORIDADES = ("Baixa", "Média", "Alta", "Urgente")
+
+
+def _motivos_para(user: SessionUser) -> tuple[str, ...]:
+    return MOTIVOS_GESTAO if user.management_access else MOTIVOS
+
 
 def _contexto_do_posto(user: SessionUser, database, recurso) -> dict:
     """Máquina e OP em andamento de onde a chamada partiu.
@@ -77,8 +100,8 @@ def _publica(chamada: dict) -> dict:
 
 
 @router.get("/motivos")
-def listar_motivos(_user: SessionUser = Depends(get_current_user)):
-    return {"items": list(MOTIVOS)}
+def listar_motivos(user: SessionUser = Depends(get_current_user)):
+    return {"items": list(_motivos_para(user)), "prioridades": list(PRIORIDADES)}
 
 
 @router.get("/contato-padrao-gestao")
@@ -124,10 +147,16 @@ def criar_chamada(
     user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
-    if payload.motivo not in MOTIVOS:
+    if payload.motivo not in _motivos_para(user):
         raise AppError(
             "chamada_motivo_invalido",
             "Selecione um motivo da lista.",
+            status_code=422,
+        )
+    if payload.prioridade not in PRIORIDADES:
+        raise AppError(
+            "chamada_prioridade_invalida",
+            "Selecione uma prioridade da lista.",
             status_code=422,
         )
 
@@ -182,6 +211,7 @@ def criar_chamada(
         chamada = database.registrar_chamada(
             contato_id=payload.contato_id,
             motivo=payload.motivo,
+            prioridade=payload.prioridade,
             comentario=payload.comentario,
             solicitante_nome=solicitante_nome,
             solicitante_nivel=user.role,

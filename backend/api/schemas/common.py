@@ -157,6 +157,8 @@ class ChamadaRequest(BaseModel):
     contato_id: int
     motivo: str = Field(min_length=1, max_length=60)
     comentario: str = Field(min_length=1, max_length=500)
+    #: Lista fechada validada no endpoint; o posto do operador não envia e fica "Média".
+    prioridade: str = Field(default="Média", max_length=20)
     #: Posto de onde a chamada partiu. A OP/peça em andamento não vem da tela:
     #: o endpoint resolve pelo apontamento ativo desta máquina.
     recurso: str | None = Field(default=None, max_length=120)

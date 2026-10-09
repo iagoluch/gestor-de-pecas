@@ -2515,6 +2515,15 @@ TEMPO_PADRAO_VIGENCIA_STATEMENTS = (
     "ALTER TABLE tempo_padrao_estimado ALTER COLUMN vigente_desde SET NOT NULL",
 )
 
+# Migration 58 — prioridade da chamada (Baixa/Média/Alta/Urgente), validada no
+# endpoint. Linhas antigas ficam "Média". Aditiva, sem lock longo.
+# Rollback: ALTER TABLE chamadas DROP COLUMN prioridade;
+# DELETE FROM schema_migrations WHERE version = 58; e voltar SCHEMA_VERSION a 57.
+CHAMADA_PRIORIDADE_DESCRIPTION = "prioridade da chamada"
+CHAMADA_PRIORIDADE_STATEMENTS = (
+    "ALTER TABLE chamadas ADD COLUMN prioridade TEXT NOT NULL DEFAULT 'Média'",
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2575,6 +2584,7 @@ MIGRATIONS = {
     55: (TELEGRAM_LINK_CODE_DESCRIPTION, TELEGRAM_LINK_CODE_STATEMENTS),
     56: (TEMPO_PADRAO_DESCRIPTION, TEMPO_PADRAO_STATEMENTS),
     57: (TEMPO_PADRAO_VIGENCIA_DESCRIPTION, TEMPO_PADRAO_VIGENCIA_STATEMENTS),
+    58: (CHAMADA_PRIORIDADE_DESCRIPTION, CHAMADA_PRIORIDADE_STATEMENTS),
 }
 
 

@@ -497,6 +497,10 @@ class TelegramPresenter:
         lines.append(
             f"Motivo: <b>{html(_first(item, 'motivo') or 'Não informado')}</b>"
         )
+        prioridade = _first(item, "prioridade")
+        if prioridade:
+            icone = {"Urgente": "🚨 ", "Alta": "🔴 "}.get(prioridade, "")
+            lines.append(f"Prioridade: {icone}<b>{html(prioridade)}</b>")
         comentario = _first(item, "comentario")
         if comentario:
             lines.append(f"Comentário: {html(comentario)}")
