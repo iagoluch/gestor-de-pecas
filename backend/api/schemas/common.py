@@ -119,7 +119,17 @@ class UserAccountRequest(BaseModel):
     nome: str = Field(min_length=1, max_length=120)
     nivel: str = Field(min_length=1, max_length=40)
     ativo: bool = True
+    unidade: str | None = Field(default=None, max_length=40)
     senha: str | None = Field(default=None, min_length=6, max_length=256)
+
+
+class UserLevelRequest(BaseModel):
+    """Nível de acesso personalizado: copia as permissões de ``nivel_base``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rotulo: str = Field(min_length=1, max_length=60)
+    nivel_base: str = Field(min_length=1, max_length=40)
 
 
 class ChamadaContatoRequest(BaseModel):

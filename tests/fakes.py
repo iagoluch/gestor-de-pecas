@@ -25,6 +25,7 @@ class FakeDatabase:
         self.ops = []
         self.history = []
         self.users = []
+        self.custom_levels = []
         self.events = []
         self.appointments = []
         self.cut_plans = []
@@ -211,7 +212,30 @@ class FakeDatabase:
         user = next((item for item in self.users if item["nome"] == nome and item["ativo"]), None)
         if not user or user["senha"] != senha:
             return None
-        return {key: user[key] for key in ("id", "nome", "nivel", "session_version")}
+        return {
+            "id": user["id"], "nome": user["nome"], "session_version": user["session_version"],
+            "nivel": self._nivel_efetivo(user["nivel"]),
+        }
+
+    def _nivel_efetivo(self, nivel):
+        custom = next((c for c in self.custom_levels if c["nome"] == nivel), None)
+        return custom["nivel_base"] if custom else nivel
+
+    def listar_niveis_personalizados(self):
+        return [dict(c) for c in self.custom_levels]
+
+    def criar_nivel_personalizado(self, nome, rotulo, nivel_base):
+        if any(c["nome"] == nome for c in self.custom_levels):
+            return False
+        self.custom_levels.append({"nome": nome, "rotulo": rotulo, "nivel_base": nivel_base})
+        return True
+
+    def excluir_nivel_personalizado(self, nome):
+        if any(u["nivel"] == nome for u in self.users):
+            return False
+        antes = len(self.custom_levels)
+        self.custom_levels[:] = [c for c in self.custom_levels if c["nome"] != nome]
+        return len(self.custom_levels) < antes
 
     def obter_falhas_login(self, throttle_key, *, agora=None, janela_segundos=300):
         agora = float(epoch_time.time() if agora is None else agora)
@@ -239,11 +263,26 @@ class FakeDatabase:
         return user["nivel"] if user else None
 
     def listar_usuarios(self):
-        return [{key: item[key] for key in ("id", "nome", "nivel", "ativo", "data_criacao")} for item in self.users]
+        rows = []
+        for item in self.users:
+            custom = next((c for c in self.custom_levels if c["nome"] == item["nivel"]), None)
+            rows.append({
+                **{key: item[key] for key in ("id", "nome", "ativo", "data_criacao")},
+                "unidade": item.get("unidade"),
+                "nivel": self._nivel_efetivo(item["nivel"]), "nivel_atribuido": item["nivel"],
+                "nivel_rotulo": custom["rotulo"] if custom else None,
+            })
+        return rows
 
     def obter_usuario_por_id(self, user_id):
         user = next((item for item in self.users if item["id"] == user_id), None)
-        return dict(user) if user else None
+        return {**user, "nivel": self._nivel_efetivo(user["nivel"])} if user else None
+
+    def atualizar_unidade_usuario(self, user_id, unidade):
+        target = next((item for item in self.users if item["id"] == user_id), None)
+        if target:
+            target["unidade"] = unidade
+        return target is not None
 
     def atualizar_nivel_usuario(self, user_id, level):
         user = self.obter_usuario_por_id(user_id)
@@ -269,6 +308,11 @@ class FakeDatabase:
         user["ativo"] = bool(active)
         user["session_version"] = int(user.get("session_version") or 0) + 1
         return True
+
+    def excluir_usuario(self, user_id):
+        antes = len(self.users)
+        self.users[:] = [item for item in self.users if item["id"] != user_id]
+        return len(self.users) < antes
 
     def revogar_sessoes_usuario(self, user_id):
         user = next((item for item in self.users if item["id"] == user_id), None)

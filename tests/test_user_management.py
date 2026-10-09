@@ -84,28 +84,28 @@ class UserManagementApiTests(unittest.TestCase):
         self._as(_admin_user())
         sem_senha = self.client.post(
             "/api/v1/management/users",
-            json={"nome": "Novo Supervisor", "nivel": "supervisor", "ativo": True},
+            json={"nome": "Novo Operador", "nivel": "operador_corte", "ativo": True},
         )
         self.assertEqual(sem_senha.status_code, 422)
 
         criado = self.client.post(
             "/api/v1/management/users",
             json={
-                "nome": "Novo Supervisor", "nivel": "supervisor", "ativo": True,
+                "nome": "Novo Operador", "nivel": "operador_corte", "ativo": True,
                 "senha": "senha-forte-123",
             },
         )
         self.assertEqual(criado.status_code, 200)
         item = criado.json()["item"]
-        self.assertEqual(item["nome"], "Novo Supervisor")
-        self.assertEqual(item["nivel"], "supervisor")
+        self.assertEqual(item["nome"], "Novo Operador")
+        self.assertEqual(item["nivel"], "operador_corte")
         self.assertTrue(item["ativo"])
 
     def test_admin_cria_usuario_ja_inativo_sem_passar_por_ativo(self):
         self._as(_admin_user())
         criado = self.client.post(
             "/api/v1/management/users",
-            json={"nome": "Desligado", "nivel": "supervisor", "ativo": False, "senha": "senha-forte-123"},
+            json={"nome": "Desligado", "nivel": "operador_corte", "ativo": False, "senha": "senha-forte-123"},
         )
         self.assertEqual(criado.status_code, 200)
         self.assertFalse(criado.json()["item"]["ativo"])
@@ -121,12 +121,50 @@ class UserManagementApiTests(unittest.TestCase):
 
     def test_nome_duplicado_e_recusado(self):
         self._as(_admin_user())
-        self.db.criar_usuario("Duplicado", "senha-123456", "gestor")
+        self.db.criar_usuario("Duplicado", "senha-123456", "operador_corte")
         resposta = self.client.post(
             "/api/v1/management/users",
-            json={"nome": "Duplicado", "nivel": "gestor", "senha": "senha-forte-123"},
+            json={"nome": "Duplicado", "nivel": "operador_corte", "senha": "senha-forte-123"},
         )
         self.assertEqual(resposta.status_code, 409)
+
+    def test_niveis_crus_nao_sao_mais_atribuidos(self):
+        self._as(_admin_user())
+        for cru in ("lider", "supervisor", "gestor"):
+            nova = self.client.post(
+                "/api/v1/management/users",
+                json={"nome": f"Cru {cru}", "nivel": cru, "senha": "senha-forte-123"},
+            )
+            self.assertEqual((nova.status_code, nova.json()["code"]), (422, "level_not_assignable"))
+        antigo = self.db.criar_usuario("Conta Antiga", "senha-antiga", "gestor")
+        corpo = {"id": antigo, "nome": "Conta Antiga", "ativo": True}
+        # Conta que já está num nível cru pode ser salva sem trocar; para outra conta crua, não.
+        self.assertEqual(self.client.post("/api/v1/management/users", json={**corpo, "nivel": "gestor"}).status_code, 200)
+        self.assertEqual(self.client.post("/api/v1/management/users", json={**corpo, "nivel": "lider"}).status_code, 422)
+        self.assertEqual(self.client.post("/api/v1/management/users", json={**corpo, "nivel": "operador_corte"}).status_code, 200)
+        self.assertEqual(self.client.post("/api/v1/management/users", json={**corpo, "nivel": "gestor"}).status_code, 422)
+
+    def test_lista_diz_em_qual_tela_cada_conta_entra(self):
+        self._as(_admin_user())
+        for nome, nivel in (("Op Corte", "operador_corte"), ("Sala Andon", "andon"), ("Gerente", "gestor")):
+            self.db.criar_usuario(nome, "senha-antiga", nivel)
+        telas = {u["nome"]: u["tela"] for u in self.client.get("/api/v1/management/users").json()["items"]}
+        self.assertEqual(telas["Op Corte"], "apontamento")
+        self.assertEqual(telas["Sala Andon"], "outro")
+        self.assertEqual(telas["Gerente"], "gestao")
+
+    def test_unidade_da_conta_e_gravada_aparada_e_listada(self):
+        self._as(_admin_user())
+        usuario_id = self.db.criar_usuario("Com Unidade", "senha-antiga", "gestor")
+        corpo = {"id": usuario_id, "nome": "Com Unidade", "nivel": "gestor", "ativo": True}
+
+        salvo = self.client.post("/api/v1/management/users", json={**corpo, "unidade": " 4 "})
+        self.assertEqual(salvo.json()["item"]["unidade"], "4")
+        listado = next(u for u in self.client.get("/api/v1/management/users").json()["items"] if u["id"] == usuario_id)
+        self.assertEqual(listado["unidade"], "4")
+
+        limpo = self.client.post("/api/v1/management/users", json={**corpo, "unidade": "  "})
+        self.assertIsNone(limpo.json()["item"]["unidade"])
 
     def test_admin_edita_nivel_situacao_e_senha_sem_exigir_senha_de_novo(self):
         self._as(_admin_user())
@@ -150,7 +188,7 @@ class UserManagementApiTests(unittest.TestCase):
         admin.id = admin_id
         self._as(admin)
 
-        for mudanca in ({"ativo": False, "nivel": "admin"}, {"ativo": True, "nivel": "gestor"}):
+        for mudanca in ({"ativo": False, "nivel": "admin"}, {"ativo": True, "nivel": "operador_corte"}):
             resposta = self.client.post(
                 "/api/v1/management/users",
                 json={"id": admin_id, "nome": "Admin Z", **mudanca},
@@ -160,6 +198,71 @@ class UserManagementApiTests(unittest.TestCase):
         proprio = next(u for u in self.db.users if u["id"] == admin_id)
         self.assertTrue(proprio["ativo"])
         self.assertEqual(proprio["nivel"], "admin")
+
+    def test_admin_exclui_outra_conta_mas_nao_a_propria(self):
+        admin = _admin_user()
+        admin.id = self.db.criar_usuario("Admin Z", "senha-forte-123", "admin")
+        alvo = self.db.criar_usuario("Fulano", "senha-forte-123", "operador")
+        self._as(admin)
+
+        resposta = self.client.delete(f"/api/v1/management/users/{alvo}")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(any(u["id"] == alvo for u in self.db.users))
+
+        resposta = self.client.delete(f"/api/v1/management/users/{alvo}")
+        self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(resposta.json()["code"], "user_not_found")
+
+        resposta = self.client.delete(f"/api/v1/management/users/{admin.id}")
+        self.assertEqual(resposta.status_code, 409)
+        self.assertEqual(resposta.json()["code"], "user_self_delete")
+        self.assertTrue(any(u["id"] == admin.id for u in self.db.users))
+
+    def test_gestao_comum_nao_exclui_usuario(self):
+        alvo = self.db.criar_usuario("Fulano", "senha-forte-123", "operador")
+        self._as(_management_user())
+        resposta = self.client.delete(f"/api/v1/management/users/{alvo}")
+        self.assertEqual(resposta.status_code, 403)
+        self.assertTrue(any(u["id"] == alvo for u in self.db.users))
+
+    def test_nivel_personalizado_herda_permissoes_do_nivel_base(self):
+        self._as(_admin_user())
+        r = self.client.post("/api/v1/management/levels", json={"rotulo": "Planejador PCP", "nivel_base": "gestor"})
+        self.assertEqual(r.status_code, 200)
+        nome = r.json()["item"]["nome"]
+        self.assertEqual(nome, "planejador_pcp")
+
+        self.assertEqual(
+            self.client.post("/api/v1/management/levels", json={"rotulo": "planejador pcp", "nivel_base": "gestor"}).status_code, 409
+        )
+        self.assertEqual(
+            self.client.post("/api/v1/management/levels", json={"rotulo": "Gestor", "nivel_base": "gestor"}).status_code, 409
+        )
+        self.assertEqual(
+            self.client.post("/api/v1/management/levels", json={"rotulo": "X", "nivel_base": "inexistente"}).status_code, 422
+        )
+
+        r = self.client.post(
+            "/api/v1/management/users",
+            json={"nome": "Ana", "nivel": nome, "senha": "senha-forte-123"},
+        )
+        self.assertEqual(r.status_code, 200)
+        lista = self.client.get("/api/v1/management/users").json()
+        self.assertIn(nome, lista["levels"])
+        ana = next(i for i in lista["items"] if i["nome"] == "Ana")
+        self.assertEqual((ana["nivel"], ana["nivel_atribuido"], ana["nivel_rotulo"]), ("gestor", nome, "Planejador PCP"))
+        self.assertEqual(self.db.autenticar_usuario("Ana", "senha-forte-123")["nivel"], "gestor")
+
+        r = self.client.delete(f"/api/v1/management/levels/{nome}")
+        self.assertEqual((r.status_code, r.json()["code"]), (409, "level_in_use"))
+        self.client.delete(f"/api/v1/management/users/{ana['id']}")
+        self.assertEqual(self.client.delete(f"/api/v1/management/levels/{nome}").status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/v1/management/levels/{nome}").status_code, 404)
+
+    def test_gestao_comum_nao_cria_nivel(self):
+        self._as(_management_user())
+        r = self.client.post("/api/v1/management/levels", json={"rotulo": "Novo", "nivel_base": "gestor"})
+        self.assertEqual(r.status_code, 403)
 
     def test_admin_pode_criar_outra_conta_admin(self):
         self._as(_admin_user())

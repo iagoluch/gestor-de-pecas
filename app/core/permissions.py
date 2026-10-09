@@ -128,7 +128,7 @@ CONSULTATION_TABS_BY_LEVEL = {
 for _operator_level in OPERATOR_LEVELS:
     CONSULTATION_TABS_BY_LEVEL.setdefault(_operator_level, ())
 
-USER_MANAGEMENT_LEVELS = ("admin", "supervisor")
+USER_MANAGEMENT_LEVELS = ("admin",)
 
 #: Edição de tempo padrão manual: só a engenharia de manufatura e o admin
 #: (decisão do usuário, 06/10/2026). O gestor lê o resultado, não edita.

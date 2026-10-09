@@ -441,7 +441,11 @@ class Database(
         # segurá-la durante o hash esgotava o pool numa rajada de logins (BK-01).
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, nome, senha_hash, nivel, session_version FROM usuarios WHERE nome = %s AND ativo IS TRUE",
+                """
+                SELECT u.id, u.nome, u.senha_hash, COALESCE(n.nivel_base, u.nivel) AS nivel, u.session_version
+                FROM usuarios u LEFT JOIN niveis_acesso n ON n.nome = u.nivel
+                WHERE u.nome = %s AND u.ativo IS TRUE
+                """,
                 (nome,),
             )
             row = cursor.fetchone()
@@ -477,8 +481,46 @@ class Database(
 
     def listar_usuarios(self):
         with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT id, nome, nivel, ativo, data_criacao FROM usuarios ORDER BY nome")
+            # ``nivel`` = nível efetivo (o do nível-base, para permissões);
+            # ``nivel_atribuido`` = o que está gravado na conta; ``nivel_rotulo``
+            # só vem preenchido para níveis personalizados.
+            cursor.execute(
+                """
+                SELECT u.id, u.nome, COALESCE(n.nivel_base, u.nivel) AS nivel, u.nivel AS nivel_atribuido,
+                       n.rotulo AS nivel_rotulo, u.unidade, u.ativo, u.data_criacao
+                FROM usuarios u LEFT JOIN niveis_acesso n ON n.nome = u.nivel
+                ORDER BY u.nome
+                """
+            )
             return [dict(row) for row in cursor.fetchall()]
+
+    def listar_niveis_personalizados(self):
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT nome, rotulo, nivel_base FROM niveis_acesso ORDER BY rotulo")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def criar_nivel_personalizado(self, nome, rotulo, nivel_base):
+        try:
+            with self.connection() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO niveis_acesso (nome, rotulo, nivel_base) VALUES (%s, %s, %s)",
+                    (nome, rotulo, nivel_base),
+                )
+            return True
+        except UniqueViolation:
+            return False
+
+    def excluir_nivel_personalizado(self, nome):
+        """Só apaga se nenhuma conta usa o nível; devolve se apagou."""
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM niveis_acesso n
+                WHERE n.nome = %s AND NOT EXISTS (SELECT 1 FROM usuarios u WHERE u.nivel = n.nome)
+                """,
+                (nome,),
+            )
+            return cursor.rowcount == 1
 
 
     def inserir_historico(
@@ -7031,7 +7073,11 @@ class Database(
     def obter_usuario_por_id(self, usuario_id):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, nome, nivel, ativo, session_version FROM usuarios WHERE id = %s",
+                """
+                SELECT u.id, u.nome, COALESCE(n.nivel_base, u.nivel) AS nivel, u.unidade, u.ativo, u.session_version
+                FROM usuarios u LEFT JOIN niveis_acesso n ON n.nome = u.nivel
+                WHERE u.id = %s
+                """,
                 (usuario_id,),
             )
             return _as_dict(cursor.fetchone())
@@ -7042,6 +7088,12 @@ class Database(
                 "UPDATE usuarios SET nivel = %s, session_version = session_version + 1 WHERE id = %s",
                 (novo_nivel, usuario_id),
             )
+            return cursor.rowcount == 1
+
+    def atualizar_unidade_usuario(self, usuario_id, unidade):
+        # Rótulo de organização: não mexe na sessão nem nas permissões.
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("UPDATE usuarios SET unidade = %s WHERE id = %s", (unidade, usuario_id))
             return cursor.rowcount == 1
 
     def resetar_senha_usuario(self, usuario_id, nova_senha):
@@ -7059,6 +7111,14 @@ class Database(
                 "UPDATE usuarios SET ativo = %s, session_version = session_version + 1 WHERE id = %s",
                 (bool(ativo), usuario_id),
             )
+            return cursor.rowcount == 1
+
+    def excluir_usuario(self, usuario_id):
+        # Definitivo. Conversas de IA, relatórios, destinos e agendamentos da
+        # conta saem junto (ON DELETE CASCADE); qualidade e tempo padrão ficam
+        # com o autor em branco (ON DELETE SET NULL).
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
             return cursor.rowcount == 1
 
     def revogar_sessoes_usuario(self, usuario_id):

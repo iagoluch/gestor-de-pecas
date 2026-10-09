@@ -2524,6 +2524,60 @@ CHAMADA_PRIORIDADE_STATEMENTS = (
     "ALTER TABLE chamadas ADD COLUMN prioridade TEXT NOT NULL DEFAULT 'Média'",
 )
 
+# Migration 59 — níveis de acesso personalizados: cada um copia as permissões de
+# um nível embutido (``nivel_base``) e é atribuído em ``usuarios.nivel`` pelo
+# ``nome``. Aditiva. Rollback: DROP TABLE niveis_acesso; (antes, trocar o nível
+# dos usuários que usam um nível personalizado);
+# DELETE FROM schema_migrations WHERE version = 59; e voltar SCHEMA_VERSION a 58.
+NIVEIS_ACESSO_DESCRIPTION = "níveis de acesso personalizados"
+NIVEIS_ACESSO_STATEMENTS = (
+    """
+    CREATE TABLE niveis_acesso (
+        nome TEXT PRIMARY KEY,
+        rotulo TEXT NOT NULL,
+        nivel_base TEXT NOT NULL,
+        data_criacao TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+)
+
+# Migration 60 — unidade da conta (texto livre, ex.: "4"; vazio = sem unidade).
+# Aditiva. Rollback: ALTER TABLE usuarios DROP COLUMN unidade;
+# DELETE FROM schema_migrations WHERE version = 60; e voltar SCHEMA_VERSION a 59.
+USUARIO_UNIDADE_DESCRIPTION = "unidade da conta de usuário"
+USUARIO_UNIDADE_STATEMENTS = (
+    "ALTER TABLE usuarios ADD COLUMN unidade TEXT",
+)
+
+# Migration 61 — níveis por setor/área (decisão de 09/10/2026: não existe mais
+# Líder/Supervisor "cru", sempre ligado a um setor). Líder copia ``lider`` e
+# Supervisor copia ``supervisor``; as demais áreas copiam ``lider``. O nome não
+# restringe o setor: só organiza. Idempotente (ON CONFLICT DO NOTHING).
+# Rollback: DELETE FROM niveis_acesso WHERE nome IN (...os nomes abaixo...)
+# (antes, trocar o nível das contas que os usam);
+# DELETE FROM schema_migrations WHERE version = 61; e voltar SCHEMA_VERSION a 60.
+NIVEIS_POR_SETOR_DESCRIPTION = "níveis de acesso por setor e área"
+NIVEIS_POR_SETOR = (
+    ("supervisor_caldeiraria", "Supervisor Caldeiraria", "supervisor"),
+    ("supervisor_almoxarifado_solda_pintura", "Supervisor Almoxarifado/Solda/Pintura", "supervisor"),
+    ("supervisor_prototipo", "Supervisor Protótipo", "supervisor"),
+    ("lider_dobra_corte", "Líder Dobra/Corte", "lider"),
+    ("lider_usinagem", "Líder Usinagem", "lider"),
+    ("lider_serra", "Líder Serra", "lider"),
+    ("lider_pintura_almoxarifado", "Líder Pintura/Almoxarifado", "lider"),
+    ("lider_solda", "Líder Solda", "lider"),
+    ("projetos_adm", "Projetos (Adm)", "lider"),
+    ("pcp", "PCP", "lider"),
+    ("gerente_industrial", "Gerente Industrial", "lider"),
+    ("melhoria_continua", "Melhoria Contínua", "lider"),
+    ("controladoria", "Controladoria", "lider"),
+)
+NIVEIS_POR_SETOR_STATEMENTS = tuple(
+    f"INSERT INTO niveis_acesso (nome, rotulo, nivel_base) VALUES ('{nome}', '{rotulo}', '{base}') "
+    "ON CONFLICT (nome) DO NOTHING"
+    for nome, rotulo, base in NIVEIS_POR_SETOR
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2585,6 +2639,9 @@ MIGRATIONS = {
     56: (TEMPO_PADRAO_DESCRIPTION, TEMPO_PADRAO_STATEMENTS),
     57: (TEMPO_PADRAO_VIGENCIA_DESCRIPTION, TEMPO_PADRAO_VIGENCIA_STATEMENTS),
     58: (CHAMADA_PRIORIDADE_DESCRIPTION, CHAMADA_PRIORIDADE_STATEMENTS),
+    59: (NIVEIS_ACESSO_DESCRIPTION, NIVEIS_ACESSO_STATEMENTS),
+    60: (USUARIO_UNIDADE_DESCRIPTION, USUARIO_UNIDADE_STATEMENTS),
+    61: (NIVEIS_POR_SETOR_DESCRIPTION, NIVEIS_POR_SETOR_STATEMENTS),
 }
 
 

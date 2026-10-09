@@ -1,10 +1,12 @@
 import logging
+import re
+import unicodedata
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
 
-from app.core.permissions import USER_LEVELS
+from app.core.permissions import USER_LEVELS, can_access_management_web, is_sector_operator
 from app.database.errors import PauseOrderConflictError
 from app.database.telegram_link_codes import TELEGRAM_LINK_CODE_TTL_SECONDS
 from backend.api.database import get_database
@@ -30,6 +32,7 @@ from backend.api.schemas.common import (
     ShiftParameterRequest,
     StandardTimeManualRequest,
     UserAccountRequest,
+    UserLevelRequest,
 )
 from mes.contracts import AnalyticsFilter
 from mes.integrations.notifications.telegram import deliver_telegram_message, telegram_outbound_allowed
@@ -479,18 +482,82 @@ def internal_alerts(
 # 14/09/2026). A gestão comum continua sem poder criar login de ninguém, do
 # mesmo jeito que não pode mais editar a lista de contatos de chamada.
 # ---------------------------------------------------------------------------
+#: Níveis "crus" (sem setor): decisão do usuário, 09/10/2026 — não se atribuem
+#: mais a contas. Continuam existindo só como molde de permissões dos níveis por
+#: setor (``nivel_base``) e para contas antigas que já os usam até serem trocadas.
+UNASSIGNABLE_LEVELS = ("lider", "supervisor", "gestor")
+
+
+def _tela_do_nivel(nivel) -> str:
+    """Onde a pessoa entra: tela de gestão, tela de apontamento ou outra (Andon/Almoxarifado)."""
+    if can_access_management_web(nivel):
+        return "gestao"
+    return "apontamento" if is_sector_operator(nivel) else "outro"
+
+
 @router.get("/users")
 def list_users(
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
-    rows = list(database.listar_usuarios() or [])
+    rows = [{**row, "tela": _tela_do_nivel(row.get("nivel"))} for row in database.listar_usuarios() or []]
+    custom = list(database.listar_niveis_personalizados() or [])
     return {
         "items": rows,
         "count": len(rows),
         "active": sum(1 for row in rows if row.get("ativo")),
-        "levels": list(USER_LEVELS),
+        "levels": [*USER_LEVELS, *(item["nome"] for item in custom)],
+        "custom_levels": custom,
+        "unassignable_levels": list(UNASSIGNABLE_LEVELS),
     }
+
+
+def _slug_nivel(rotulo: str) -> str:
+    texto = unicodedata.normalize("NFKD", rotulo).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "_", texto.lower()).strip("_")
+
+
+@router.post("/levels", dependencies=[Depends(require_csrf)])
+def create_level(
+    payload: UserLevelRequest,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    rotulo = payload.rotulo.strip()
+    nome = _slug_nivel(rotulo)
+    if not nome or payload.nivel_base not in USER_LEVELS or payload.nivel_base == "admin":
+        raise AppError(
+            "invalid_user_level",
+            "Informe um nome para o nível e um nível-base válido.",
+            status_code=422,
+        )
+    if nome in USER_LEVELS or nome == "comum" or not database.criar_nivel_personalizado(
+        nome, rotulo, payload.nivel_base
+    ):
+        raise AppError(
+            "level_name_taken",
+            "Já existe um nível com esse nome.",
+            status_code=409,
+        )
+    return {"ok": True, "item": {"nome": nome, "rotulo": rotulo, "nivel_base": payload.nivel_base}}
+
+
+@router.delete("/levels/{nome}", dependencies=[Depends(require_csrf)])
+def delete_level(
+    nome: str,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    if not database.excluir_nivel_personalizado(nome):
+        existe = any(item["nome"] == nome for item in database.listar_niveis_personalizados() or [])
+        if not existe:
+            raise AppError("level_not_found", "Nível não encontrado.", status_code=404)
+        raise AppError(
+            "level_in_use",
+            "Há contas usando este nível. Troque o nível delas antes de excluir.",
+            status_code=409,
+        )
+    return {"ok": True}
 
 
 @router.post("/users", dependencies=[Depends(require_csrf)])
@@ -499,12 +566,25 @@ def save_user(
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
-    if payload.nivel not in USER_LEVELS:
+    if payload.nivel not in USER_LEVELS and not any(
+        item["nome"] == payload.nivel for item in database.listar_niveis_personalizados() or []
+    ):
         raise AppError(
             "invalid_user_level",
             "Nível de acesso inválido.",
             status_code=422,
         )
+    if payload.nivel in UNASSIGNABLE_LEVELS:
+        atual = next(
+            (row.get("nivel_atribuido") for row in database.listar_usuarios() or [] if row["id"] == payload.id),
+            None,
+        )
+        if atual != payload.nivel:
+            raise AppError(
+                "level_not_assignable",
+                "Este nível não é mais atribuído. Escolha o nível do setor da pessoa.",
+                status_code=422,
+            )
     if payload.id is None:
         if not payload.senha:
             raise AppError(
@@ -535,10 +615,30 @@ def save_user(
         database.ativar_desativar_usuario(usuario_id, payload.ativo)
         if payload.senha:
             database.resetar_senha_usuario(usuario_id, payload.senha)
+    database.atualizar_unidade_usuario(usuario_id, (payload.unidade or "").strip() or None)
     row = database.obter_usuario_por_id(usuario_id)
     if row is None:
         raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
     return {"ok": True, "item": row}
+
+
+@router.delete("/users/{usuario_id}", dependencies=[Depends(require_csrf)])
+def delete_user(
+    usuario_id: int,
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    # Quem exclui é sempre um admin ativo; barrar a própria conta garante que
+    # o sistema nunca fica sem administrador pela tela.
+    if usuario_id == _user.id:
+        raise AppError(
+            "user_self_delete",
+            "Você não pode excluir a própria conta. Peça a outro administrador.",
+            status_code=409,
+        )
+    if not database.excluir_usuario(usuario_id):
+        raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
+    return {"ok": True}
 
 
 @router.get("/first-pieces")
