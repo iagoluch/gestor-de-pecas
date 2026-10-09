@@ -11,6 +11,8 @@ interface Chamada {
   contato_nome: string;
   contato_funcao: string;
   motivo: string;
+  /** Ausente em respostas antigas; o backend grava "Média" por padrão. */
+  prioridade?: string;
   comentario: string;
   solicitante_nome: string;
   solicitante_nivel: string;
@@ -25,6 +27,13 @@ interface Chamada {
 }
 
 type AvisoEstado = "enviado" | "falhou" | "enviando" | "sem_confirmacao";
+
+const PRIORIDADE_TOM: Record<string, "danger" | "warning" | "info" | "success"> = {
+  Urgente: "danger",
+  Alta: "warning",
+  Média: "info",
+  Baixa: "success",
+};
 
 /** Pendente além disso desde a criação deixa de ser "em andamento" e vira suspeita. */
 const PENDENTE_SUSPEITO_MS = 5 * 60 * 1000;
@@ -100,6 +109,14 @@ export function ManagementChamadasPage() {
             { key: "quando", label: "Quando", render: (row) => new Date(row.criado_em).toLocaleString("pt-BR") },
             { key: "para", label: "Para", render: (row) => `${row.contato_nome} (${row.contato_funcao})` },
             { key: "motivo", label: "Motivo", render: (row) => displayName(row.motivo) },
+            {
+              key: "prioridade",
+              label: "Prioridade",
+              render: (row) => {
+                const nivel = row.prioridade ?? "Média";
+                return <span className={`status-badge status-badge--${PRIORIDADE_TOM[nivel] ?? "info"}`}>{nivel}</span>;
+              },
+            },
             { key: "comentario", label: "Comentário", render: (row) => row.comentario },
             {
               key: "quem",

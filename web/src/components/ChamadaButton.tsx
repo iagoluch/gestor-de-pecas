@@ -27,6 +27,9 @@ function avisoDaResposta(resultado: ChamadaResult): Aviso {
   return "enviando";
 }
 
+const PRIORIDADES = ["Baixa", "Média", "Alta", "Urgente"] as const;
+type Prioridade = (typeof PRIORIDADES)[number];
+
 type Passo = "form" | "enviando" | "sucesso" | "erro";
 type Variante = "operador" | "gestao";
 
@@ -40,6 +43,8 @@ interface ChamadaButtonProps {
   defaultComment?: string;
   /** Uso dentro de um diálogo operacional, sem o botão flutuante. */
   inline?: boolean;
+  /** Botão redondo só com o ícone, para o menu de atalhos do canto da tela. */
+  dock?: boolean;
   label?: string;
 }
 
@@ -64,6 +69,7 @@ export function ChamadaButton({
   defaultReason = "",
   defaultComment = "",
   inline = false,
+  dock = false,
   label,
 }: ChamadaButtonProps) {
   const gestao = variant === "gestao";
@@ -75,6 +81,7 @@ export function ChamadaButton({
   const [buscando, setBuscando] = useState(false);
   const [contato, setContato] = useState<ChamadaContato | null>(null);
   const [motivo, setMotivo] = useState("");
+  const [prioridade, setPrioridade] = useState<Prioridade>("Média");
   const [comentario, setComentario] = useState("");
   const [cracha, setCracha] = useState("");
   const [nomeSolicitante, setNomeSolicitante] = useState("");
@@ -127,6 +134,7 @@ export function ChamadaButton({
     setOpcoes([]);
     setContato(null);
     setMotivo(defaultReason);
+    setPrioridade("Média");
     setComentario(defaultComment);
     setCracha("");
     setNomeSolicitante("");
@@ -152,6 +160,7 @@ export function ChamadaButton({
       const resultado = await api.post<ChamadaResult>("/api/v1/chamadas", {
         contato_id: contato.id,
         motivo,
+        ...(gestao ? { prioridade } : {}),
         comentario: comentario.trim(),
         ...(resource ? { recurso: resource } : {}),
         ...(gestao
@@ -176,13 +185,14 @@ export function ChamadaButton({
     <>
       <button
         type="button"
-        className={inline ? "button chamada-trigger" : "chamada-fab"}
+        className={inline ? "button chamada-trigger" : dock ? "dock-btn dock-btn--call" : "chamada-fab"}
         onClick={abrir}
         aria-label={label ?? "Chamar alguém"}
-        title={label ?? "Chamar alguém"}
+        title={dock ? undefined : label ?? "Chamar alguém"}
+        data-label={dock ? label ?? "Chamar alguém" : undefined}
       >
         <ChamadaIcon />
-        <span className={inline ? undefined : "chamada-fab__label"}>{label ?? "Chamar"}</span>
+        {dock ? null : <span className={inline ? undefined : "chamada-fab__label"}>{label ?? "Chamar"}</span>}
       </button>
 
       {aberto ? (
@@ -263,6 +273,26 @@ export function ChamadaButton({
                   ))}
                 </select>
               </label>
+
+              {gestao ? (
+                <fieldset className="chamada-prioridade">
+                  <legend>Prioridade</legend>
+                  <div className="chamada-prioridade__opcoes">
+                    {PRIORIDADES.map((item) => (
+                      <label key={item} className={`chamada-prioridade__opcao chamada-prioridade__opcao--${item.toLowerCase()}`}>
+                        <input
+                          type="radio"
+                          name="chamada-prioridade"
+                          value={item}
+                          checked={prioridade === item}
+                          onChange={() => setPrioridade(item)}
+                        />
+                        <span>{item}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
 
               <label>
                 Comentário

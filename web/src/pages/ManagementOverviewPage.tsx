@@ -37,7 +37,16 @@ function quantityTrend(current: number, previous?: number): { text: string; up: 
   return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, up: diff >= 0 };
 }
 
-const TIME_COLORS = ["var(--accent)", "var(--primary)", "var(--warning)", "var(--danger)", "var(--purple)", "var(--teal)", "var(--muted)"];
+const TIME_COLORS: Record<string, string> = {
+  production_seconds: "var(--accent)",
+  setup_seconds: "var(--primary)",
+  unplanned_downtime_seconds: "var(--warning)",
+  planned_downtime_seconds: "var(--orange)",
+  rework_seconds: "var(--danger)",
+  activity_without_op_seconds: "var(--purple)",
+  no_demand_seconds: "var(--teal)",
+  out_of_shift_seconds: "var(--muted)",
+};
 const SERIES_COLORS = { oee: "var(--purple)", availability: "var(--accent)", performance: "var(--warning)", ftt: "var(--teal)", good: "var(--primary)" };
 
 function dayLabel(point: OverviewTrendPoint) {
@@ -234,17 +243,18 @@ export function ManagementOverviewPage() {
               <EmptyState state={data.time_composition.availability} />
             ) : (
               <div className="time-composition">
-                {(data.time_composition.resource_count ?? 0) > 1 ? (
-                  <p className="time-composition__note">
-                    Total somado em {data.time_composition.resource_count} recursos · média por recurso na legenda
-                  </p>
-                ) : null}
+                <div className="time-composition__total">
+                  <strong>{hours(data.time_composition.total_seconds)}</strong>
+                  <span>{(data.time_composition.resource_count ?? 0) > 1 ? `somado em ${data.time_composition.resource_count} recursos` : "no período"}</span>
+                </div>
                 <StackBar
-                  parts={data.time_composition.items.map((item, index) => ({
+                  parts={data.time_composition.items.map((item) => ({
                     name: item.label,
                     value: item.seconds,
-                    color: TIME_COLORS[index % TIME_COLORS.length],
-                    text: (data.time_composition.resource_count ?? 0) > 1 && item.average_seconds != null ? `${hours(item.seconds)} · média ${hours(item.average_seconds)}` : hours(item.seconds),
+                    color: TIME_COLORS[item.source_field] ?? "var(--muted)",
+                    outside: item.summed === false,
+                    text: hours(item.seconds),
+                    hint: item.summed === false ? "não somado" : (data.time_composition.resource_count ?? 0) > 1 && item.average_seconds != null ? `média ${hours(item.average_seconds)}` : undefined,
                   }))}
                 />
               </div>
@@ -272,8 +282,8 @@ export function ManagementOverviewPage() {
               <ul className="feed">
                 {trend.recent_events.slice(0, 8).map((event, index) => (
                   <li key={`${event.resource}-${event.at}`} style={{ animationDelay: `${index * 60}ms` }}>
-                    <span className="feed__dot" style={{ "--c": eventColor(event.state) } as React.CSSProperties} aria-hidden="true">{displayName(event.resource).slice(0, 2)}</span>
-                    <span><strong>{displayName(event.resource)}</strong> · {displayText(event.state)}</span>
+                    <span className="feed__dot" style={{ "--c": eventColor(event.state) } as React.CSSProperties} aria-hidden="true">{displayName(event.resource_name ?? event.resource).slice(0, 2).toUpperCase()}</span>
+                    <span><strong>{displayName(event.resource_name ?? event.resource)}</strong> · {displayText(event.state)}</span>
                     <span className="feed__time">{ago(event.at)}</span>
                   </li>
                 ))}

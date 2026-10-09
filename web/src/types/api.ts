@@ -338,6 +338,8 @@ export interface TimeCompositionItem {
   seconds: number;
   percentage: number | null;
   source_field: string;
+  /** false = grandeza de calendário/planejada: fica fora do total somado e da barra. */
+  summed?: boolean;
   average_seconds?: number | null;
 }
 
@@ -507,5 +509,5 @@ export interface OverviewTrend {
   points: OverviewTrendPoint[];
   previous: { period_start: string; period_end: string; production: OverviewTrendPoint["production"]; kpis: OverviewTrendPoint["kpis"] } | null;
   sector_summary: Array<{ setor: string; oee: MetricValue | null; resources_total: number; resources_with_production: number }>;
-  recent_events: Array<{ resource: string; sector: string | null; state: string; at: string }>;
+  recent_events: Array<{ resource: string; resource_name?: string | null; sector: string | null; state: string; at: string }>;
 }

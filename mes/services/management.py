@@ -12,6 +12,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Optional
 
+from app.core.resource_mapping import resource_display_name
 from mes.analytics.physical_time import PhysicalInputSegment, consolidate_physical_time
 from mes.analytics.oee import OEE_CONTRACT, calculate_oee, oee_seconds_by_category
 from mes.analytics.resource_state import build_physical_state_inputs
@@ -1041,6 +1042,11 @@ class ManagementService:
         loader = getattr(self.db, "listar_estados_recurso_atuais", None)
         if not callable(loader):
             return []
+        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+        catalog_names = {
+            str(row.get("codigo") or "").strip().casefold(): row.get("nome")
+            for row in (catalog_loader() if callable(catalog_loader) else None) or []
+        }
         events = []
         for row in loader(
             setor=filters.setor, recurso=filters.recurso, reference_time=filters.fim
@@ -1048,8 +1054,10 @@ class ManagementService:
             started = _dt(row.get("data_inicio"))
             if started is None or started < filters.inicio or started > filters.fim:
                 continue
+            code = str(row.get("recurso") or "").strip()
             events.append({
                 "resource": row.get("recurso"),
+                "resource_name": resource_display_name(code, catalog_names.get(code.casefold())) or None,
                 "sector": row.get("tipo_setor"),
                 "state": row.get("status_nome") or row.get("categoria"),
                 "at": started,

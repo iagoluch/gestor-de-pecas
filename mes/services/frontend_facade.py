@@ -249,30 +249,45 @@ class FrontendBackendFacade:
         # por recurso. Fora do turno é do calendário: vale a união, sem somar nem dividir.
         hours = payload.get("hours", {})
         resource_count = int(hours.get("resource_count") or 0)
+        # "Parada não planejada" = tudo que não é planejada (inclui não classificada); a planejada sai da base.
+        hours = {
+            **hours,
+            "unplanned_downtime_seconds": max(
+                0.0, float(hours.get("downtime_seconds") or 0.0) - float(hours.get("planned_downtime_seconds") or 0.0)
+            ),
+        }
         composition = (
             ("Produção", "production_seconds"),
             ("Setup", "setup_seconds"),
-            ("Paradas", "downtime_seconds"),
+            ("Parada não planejada", "unplanned_downtime_seconds"),
+            ("Parada planejada", "planned_downtime_seconds"),
             ("Retrabalho", "rework_seconds"),
             ("Atividade sem OP", "activity_without_op_seconds"),
             ("Recurso sem demanda", "no_demand_seconds"),
             ("Fora do turno", "out_of_shift_seconds"),
         )
+        not_summed = {"planned_downtime_seconds", "out_of_shift_seconds"}
         items = [
-            {"label": label, "seconds": float(hours.get(field) or 0.0), "source_field": field}
+            {
+                "label": label,
+                "seconds": float(hours.get(field) or 0.0),
+                "source_field": field,
+                "summed": field not in not_summed,
+            }
             for label, field in composition
         ]
         for item in items:
-            per_resource = resource_count and item["source_field"] != "out_of_shift_seconds"
-            item["average_seconds"] = item["seconds"] / resource_count if per_resource else None
-        total = sum(item["seconds"] for item in items)
+            item["average_seconds"] = item["seconds"] / resource_count if resource_count and item["summed"] else None
+        # Total e % só sobre as grandezas somadas por recurso: misturar com o
+        # calendário (união, não somado) tornaria o % sem sentido.
+        total = sum(item["seconds"] for item in items if item["summed"])
         for item in items:
-            item["percentage"] = item["seconds"] / total * 100.0 if total > 0 else None
+            item["percentage"] = item["seconds"] / total * 100.0 if total > 0 and item["summed"] else None
         payload["time_composition"] = {
             "items": items,
             "resource_count": resource_count,
             "total_seconds": total,
-            "availability": "disponivel" if total > 0 else "sem_registros",
+            "availability": "disponivel" if any(item["seconds"] > 0 for item in items) else "sem_registros",
         }
         simulation = payload.get("simulation") or {}
         if self.simulation_mode and simulation:

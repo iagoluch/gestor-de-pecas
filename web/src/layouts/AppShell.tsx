@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { ChamadaButton } from "../components/ChamadaButton";
+import { AssistantDock } from "../components/AssistantDock";
 import { ChamadaSino } from "../components/ChamadaSino";
 import { CommandPalette } from "../components/CommandPalette";
 import { LogoutButton } from "../components/LogoutButton";
@@ -127,7 +127,7 @@ export function AppShell({ children }: PropsWithChildren) {
         <main id="conteudo" tabIndex={-1} className="app-content">{children ?? <Outlet />}</main>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} />
-      <ChamadaButton variant="gestao" />
+      <AssistantDock />
     </div>
   );
 }

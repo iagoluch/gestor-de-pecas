@@ -80,26 +80,32 @@ export interface StackPart {
   value: number;
   color: string;
   text: string;
+  /** Complemento discreto abaixo do valor (ex.: "média 0,4 h"). */
+  hint?: string;
+  /** Aparece na legenda, mas fica fora da barra e do total (ex.: calendário, parada planejada). */
+  outside?: boolean;
 }
 
-/** Barra empilhada + legenda em duas colunas. `text` já vem formatado (ex.: "12,4 h"). */
+/** Barra empilhada + legenda. `text` já vem formatado (ex.: "12,4 h"); cada linha mostra também a participação em %. */
 export function StackBar({ parts }: { parts: StackPart[] }) {
-  const total = parts.reduce((sum, part) => sum + part.value, 0);
+  const total = parts.reduce((sum, part) => sum + (part.outside ? 0 : part.value), 0);
   const id = useId();
   if (total <= 0) return null;
   return (
     <>
       <div className="stack" role="img" aria-labelledby={id}>
-        {parts.filter((part) => part.value > 0).map((part) => (
+        {parts.filter((part) => part.value > 0 && !part.outside).map((part) => (
           <i key={part.name} style={{ "--w": `${(part.value / total) * 100}%`, "--c": part.color } as React.CSSProperties} title={part.name} />
         ))}
       </div>
       <div className="legend" id={id}>
         {parts.map((part) => (
-          <span key={part.name}>
+          <span key={part.name} className={part.value > 0 ? undefined : "legend__zero"}>
             <i style={{ "--c": part.color } as React.CSSProperties} />
-            {part.name}
+            <em>{part.name}</em>
+            <small>{part.value > 0 && !part.outside ? `${((part.value / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%` : "—"}</small>
             <b>{part.text}</b>
+            {part.hint ? <small className="legend__hint">{part.hint}</small> : null}
           </span>
         ))}
       </div>

@@ -1,9 +1,10 @@
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ComponentProps, FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { aiApi } from "../api/ai";
 import { api, ApiError } from "../api/client";
 import { AssistantMarkdown } from "../components/AssistantMarkdown";
 import { EmptyState, LoadingState } from "../components/DataState";
 import { OperatorDialog } from "../components/OperatorDialog";
+import { AIIcon } from "../components/AIIcon";
 import { PageFrame } from "../components/PageFrame";
 import { assets } from "../config/assets";
 import type { AIConversation, AICooldown, AIMessage, AIReportArtifact, AIStatus, AIStreamEvent } from "../types/ai";
@@ -16,6 +17,45 @@ const QUICK_ACTIONS = [
   ["Analisar principais perdas", "Analise as principais perdas do período atual."],
   ["Gerar relatório", "Gere um relatório completo de hoje em Excel."],
 ] as const;
+
+const DAY_MS = 86_400_000;
+
+function conversationGroup(updatedAt: string): string {
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(updatedAt))) / DAY_MS);
+  if (days <= 0) return "Hoje";
+  if (days === 1) return "Ontem";
+  if (days <= 7) return "Últimos 7 dias";
+  return "Anteriores";
+}
+
+function conversationStamp(updatedAt: string): string {
+  const date = new Date(updatedAt);
+  return conversationGroup(updatedAt) === "Hoje"
+    ? date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Sem permissão de área de transferência: o texto continua selecionável na tela.
+    }
+  };
+  return (
+    <button type="button" className="ai-message__action" onClick={() => void copy()} aria-label={copied ? "Resposta copiada" : "Copiar resposta"} title="Copiar resposta">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {copied ? <path d="M5 12.5l4.5 4.5L19 7.5" /> : <><rect x="9" y="9" width="11" height="11" rx="2.5" /><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15" /></>}
+      </svg>
+      {copied ? <span>Copiado</span> : null}
+    </button>
+  );
+}
 
 function formatFileSize(bytes?: number) {
   if (!bytes || bytes < 1024) return `${bytes ?? 0} B`;
@@ -108,7 +148,12 @@ function formatCountdown(seconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function AIPage() {
+function EmbeddedFrame({ children }: ComponentProps<typeof PageFrame>) {
+  return <div className="ai-embedded">{children}</div>;
+}
+
+export function AIPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const Frame = embedded ? EmbeddedFrame : PageFrame;
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -135,6 +180,8 @@ export function AIPage() {
   const controllerRef = useRef<AbortController | null>(null);
   const inflightQuestionRef = useRef("");
   const skipConversationLoadRef = useRef<number | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
 
   const applyCooldown = useCallback((cooldown?: AICooldown | null) => {
     if (cooldown?.active && cooldown.blocked_until) {
@@ -231,6 +278,14 @@ export function AIPage() {
   }, [activeId]);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
+
+  // Acompanha a resposta só enquanto a pessoa está no fim da conversa; se rolou
+  // para cima para reler, a tela não puxa de volta.
+  useEffect(() => { stickToBottomRef.current = true; }, [activeId]);
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages, draft, progress, liveArtifacts, loadingConversation]);
 
   useEffect(() => {
     if (!timerRunning) {
@@ -407,12 +462,20 @@ export function AIPage() {
   };
 
   const cooldownActive = blockedUntil !== null;
+  const conversationGroups = conversations.reduce<{ label: string; items: AIConversation[] }[]>((groups, conversation) => {
+    const label = conversationGroup(conversation.updated_at);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.items.push(conversation);
+    else groups.push({ label, items: [conversation] });
+    return groups;
+  }, []);
+  const conversationEmpty = !loadingConversation && !messages.length && !draft;
   const countdown = formatCountdown(cooldownSeconds);
   const requestTooLarge = error?.code === "request_token_limit";
   const regularError = error && error.code !== "rate_limit" && !requestTooLarge ? error : null;
 
   if (loading) {
-    return <PageFrame sectionId="home" title="Tela inicial — IA" subtitle="Consulta segura aos dados canônicos do MES." filters={false}><LoadingState label="Verificando a IA…" /></PageFrame>;
+    return <Frame sectionId="home" title="Tela inicial — IA" subtitle="Consulta segura aos dados canônicos do MES." filters={false}><LoadingState label="Verificando a IA…" /></Frame>;
   }
 
   if (!status?.enabled || !status.configured) {
@@ -421,140 +484,187 @@ export function AIPage() {
       ? "A disponibilidade desta função deve ser ativada pelo responsável pelo sistema."
       : "A configuração segura da IA ainda não foi concluída pelo responsável. O restante do Gestor continua disponível.";
     return (
-      <PageFrame sectionId="home" title="Tela inicial — IA" subtitle="Consulta segura aos dados canônicos do MES." filters={false}>
+      <Frame sectionId="home" title="Tela inicial — IA" subtitle="Consulta segura aos dados canônicos do MES." filters={false}>
         <div className="ai-unavailable"><EmptyState title={title} detail={detail} /></div>
-      </PageFrame>
+      </Frame>
     );
   }
 
   return (
-    <PageFrame
+    <Frame
       sectionId="home"
       title="Tela inicial — IA"
       subtitle="Pergunte sobre fábrica, setor, recurso, OP, KPI, perdas e relatórios. A IA não executa ações produtivas."
       filters={false}
       actions={<span>Somente leitura • Dados oficiais</span>}
     >
-      <div className="ai-workspace">
+      <div className={embedded ? "ai-workspace ai-workspace--embedded" : "ai-workspace"}>
         <aside className="ai-conversations" aria-label="Conversas da IA">
           <button className="button button--primary ai-new-conversation" type="button" onClick={startNewConversation} disabled={streaming || creatingConversation}>
             Nova conversa
           </button>
           <div className="ai-conversation-list">
-            {conversations.length ? conversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                className={conversation.id === activeId ? "ai-conversation ai-conversation--active" : "ai-conversation"}
-              >
-                <button
-                  type="button"
-                  className="ai-conversation__select"
-                  onClick={() => setActiveId(conversation.id)}
-                  disabled={streaming}
-                >
-                  <strong>{conversation.title}</strong>
-                  <span>{new Date(conversation.updated_at).toLocaleString("pt-BR")}</span>
-                </button>
-                <button
-                  type="button"
-                  className="ai-conversation__delete"
-                  aria-label={`Excluir conversa: ${conversation.title}`}
-                  title="Excluir conversa"
-                  onClick={() => setDeleteCandidate(conversation)}
-                  disabled={streaming || deletingId !== null}
-                >
-                  <img src={assets.trash} alt="" aria-hidden="true" />
-                </button>
+            {conversations.length ? conversationGroups.map((group) => (
+              <div key={group.label} className="ai-conversation-group">
+                <h3>{group.label}</h3>
+                {group.items.map((conversation) => (
+                  <div
+                    key={conversation.id}
+                    className={conversation.id === activeId ? "ai-conversation ai-conversation--active" : "ai-conversation"}
+                  >
+                    <button
+                      type="button"
+                      className="ai-conversation__select"
+                      onClick={() => setActiveId(conversation.id)}
+                      disabled={streaming}
+                    >
+                      <strong>{conversation.title}</strong>
+                      <span>{conversationStamp(conversation.updated_at)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="ai-conversation__delete"
+                      aria-label={`Excluir conversa: ${conversation.title}`}
+                      title="Excluir conversa"
+                      onClick={() => setDeleteCandidate(conversation)}
+                      disabled={streaming || deletingId !== null}
+                    >
+                      <img src={assets.trash} alt="" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )) : <p>Nenhuma conversa iniciada.</p>}
           </div>
         </aside>
 
         <section className="ai-chat" aria-label="Conversa com a IA Industrial">
-          <div className="ai-messages" aria-live="polite">
-            {loadingConversation ? <LoadingState label="Carregando conversa…" /> : null}
-            {!loadingConversation && !messages.length && !draft ? (
-              <EmptyState title="Inicie uma consulta" detail="A IA buscará somente os dados oficiais necessários e autorizados." />
-            ) : null}
-            {messages.map((message) => (
-              <article key={message.id} className={`ai-message ai-message--${message.role}`}>
-                <strong>{message.role === "user" ? "Você" : "IA Industrial"}</strong>
-                {message.role === "assistant" ? <AssistantMarkdown content={message.content} /> : <p>{message.content}</p>}
-                {messageArtifacts(message).map((artifact) => <ReportArtifactCard key={artifact.id} artifact={artifact} />)}
-              </article>
-            ))}
-            {draft ? (
-              <article className="ai-message ai-message--assistant ai-message--streaming">
-                <strong>IA Industrial</strong>
-                <AssistantMarkdown content={draft} />
-              </article>
-            ) : null}
-            {liveArtifacts.map((artifact) => <ReportArtifactCard key={artifact.id} artifact={artifact} />)}
-          </div>
-
-          {progress ? <div className="ai-progress" role="status"><span className={streaming ? "loading-dot" : ""} />{humanizeAssistantText(progress)}{timerRunning ? <time aria-label="Tempo da solicitação">{formatCountdown(requestElapsed)}</time> : null}</div> : null}
-          {cooldownActive ? (
-            <div className="ai-limit-notice" role="status" aria-live="polite">
-              <div>
-                <strong>Limite temporário da IA atingido</strong>
-                <span aria-hidden="true">Nova pergunta disponível em {countdown}.</span>
-                <span className="visually-hidden">O envio de novas perguntas está temporariamente indisponível.</span>
-                <button type="button" aria-expanded={rateLimitExpanded} onClick={() => setRateLimitExpanded((current) => !current)}>Por que isso ocorreu?</button>
-                {rateLimitExpanded ? <p>A IA possui um limite de uso em pequenos períodos de tempo. Muitas perguntas ou análises grandes em sequência podem atingir esse limite. Isso é temporário e não afeta os dados do Gestor de Peças. Quando o contador terminar, você poderá perguntar novamente.</p> : null}
-              </div>
-            </div>
-          ) : null}
-          {requestTooLarge ? (
-            <div className="ai-limit-notice" role="status">
-              <div>
-                <strong>Esta consulta reuniu informações demais para serem analisadas de uma vez.</strong>
-                <span>Tente fazer uma pergunta mais específica, por exemplo sobre um setor, máquina, OP ou indicador.</span>
-                <button type="button" aria-expanded={largeQueryExpanded} onClick={() => setLargeQueryExpanded((current) => !current)}>Por que isso ocorreu?</button>
-                {largeQueryExpanded ? <p>A quantidade de informações necessária para responder foi maior do que a IA consegue processar nessa consulta. Seus dados não foram alterados. Uma pergunta mais específica normalmente resolve.</p> : null}
-              </div>
-            </div>
-          ) : null}
-          {regularError ? (
-            <div className="ai-error" role="alert">
-              <div><strong>Não foi possível concluir</strong><span>{humanizeAssistantText(regularError.message)}</span></div>
-              {regularError.requestId ? <small>Referência: {regularError.requestId}</small> : null}
-              {retryQuestion ? <button type="button" onClick={() => void send(retryQuestion, true)} disabled={streaming}>Tentar novamente</button> : null}
-            </div>
-          ) : null}
-
-          <div className="ai-quick-actions" aria-label="Ações rápidas da IA">
-            {QUICK_ACTIONS.map(([label, prompt]) => (
-              <button key={label} type="button" onClick={() => void send(prompt)} disabled={streaming || creatingConversation || cooldownActive}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <form className="ai-composer" onSubmit={submit}>
-            <label htmlFor="ai-question">Pergunta</label>
-            <div>
-              <textarea
-                id="ai-question"
-                value={question}
-                onChange={(event) => {
-                  setQuestion(event.target.value);
-                  if (event.target.value !== cooldownRetryQuestion) setCooldownRetryQuestion(null);
-                }}
-                onKeyDown={handleQuestionKeyDown}
-                placeholder={cooldownActive ? `IA disponível novamente em ${countdown}` : "Ex.: Como está a fábrica agora?"}
-                maxLength={4000}
-                disabled={streaming || creatingConversation || cooldownActive}
-                aria-disabled={streaming || creatingConversation || cooldownActive}
-                aria-describedby={cooldownActive ? "ai-cooldown-hint" : undefined}
-              />
-              {streaming ? (
-                <button className="button" type="button" onClick={() => controllerRef.current?.abort()}>Cancelar</button>
+          <div
+            className="ai-messages"
+            aria-live="polite"
+            ref={messagesRef}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            }}
+          >
+            <div className="ai-thread">
+              {loadingConversation ? <LoadingState label="Carregando conversa…" /> : null}
+              {conversationEmpty ? (
+                <div className="ai-hero">
+                  <span className="ai-hero__mark"><AIIcon /></span>
+                  <h2>Como posso ajudar na fábrica hoje?</h2>
+                  <p>Consulto somente os dados oficiais e autorizados. Não executo nenhuma ação produtiva.</p>
+                  <div className="ai-quick-actions ai-quick-actions--cards" aria-label="Ações rápidas da IA">
+                    {QUICK_ACTIONS.map(([label, prompt]) => (
+                      <button key={label} type="button" onClick={() => void send(prompt)} disabled={streaming || creatingConversation || cooldownActive}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {messages.map((message) => message.role === "user" ? (
+                <article key={message.id} className={message.id < 0 ? "ai-message ai-message--user ai-message--enter" : "ai-message ai-message--user"}>
+                  <strong className="visually-hidden">Você</strong>
+                  <p>{message.content}</p>
+                </article>
               ) : (
-                <button className="button button--primary" type="submit" disabled={!question.trim() || creatingConversation || cooldownActive}>Enviar</button>
-              )}
+                <article key={message.id} className="ai-message ai-message--assistant">
+                  <span className="ai-message__avatar"><AIIcon /></span>
+                  <div className="ai-message__body">
+                    <strong className="visually-hidden">IA Industrial</strong>
+                    <AssistantMarkdown content={message.content} />
+                    {messageArtifacts(message).map((artifact) => <ReportArtifactCard key={artifact.id} artifact={artifact} />)}
+                    <div className="ai-message__actions"><CopyButton text={humanizeAssistantText(message.content)} /></div>
+                  </div>
+                </article>
+              ))}
+              {draft ? (
+                <article className="ai-message ai-message--assistant ai-message--streaming">
+                  <span className="ai-message__avatar"><AIIcon /></span>
+                  <div className="ai-message__body">
+                    <strong className="visually-hidden">IA Industrial</strong>
+                    <AssistantMarkdown content={draft} />
+                  </div>
+                </article>
+              ) : null}
+              {liveArtifacts.map((artifact) => <ReportArtifactCard key={artifact.id} artifact={artifact} />)}
+              {progress ? <div className="ai-progress" role="status"><span className={streaming ? "loading-dot" : ""} /><span className="ai-progress__text">{humanizeAssistantText(progress)}</span>{timerRunning ? <time aria-label="Tempo da solicitação">{formatCountdown(requestElapsed)}</time> : null}</div> : null}
             </div>
-            <small id={cooldownActive ? "ai-cooldown-hint" : undefined}>{cooldownActive ? `IA disponível novamente em ${countdown} • ` : ""}Enter envia • Shift+Enter quebra a linha • {question.length}/4000 • Nenhuma alteração produtiva pode ser executada pela IA.</small>
-          </form>
+          </div>
+
+          <div className="ai-dock">
+            {cooldownActive ? (
+              <div className="ai-limit-notice" role="status" aria-live="polite">
+                <div>
+                  <strong>Limite temporário da IA atingido</strong>
+                  <span aria-hidden="true">Nova pergunta disponível em {countdown}.</span>
+                  <span className="visually-hidden">O envio de novas perguntas está temporariamente indisponível.</span>
+                  <button type="button" aria-expanded={rateLimitExpanded} onClick={() => setRateLimitExpanded((current) => !current)}>Por que isso ocorreu?</button>
+                  {rateLimitExpanded ? <p>A IA possui um limite de uso em pequenos períodos de tempo. Muitas perguntas ou análises grandes em sequência podem atingir esse limite. Isso é temporário e não afeta os dados do Gestor de Peças. Quando o contador terminar, você poderá perguntar novamente.</p> : null}
+                </div>
+              </div>
+            ) : null}
+            {requestTooLarge ? (
+              <div className="ai-limit-notice" role="status">
+                <div>
+                  <strong>Esta consulta reuniu informações demais para serem analisadas de uma vez.</strong>
+                  <span>Tente fazer uma pergunta mais específica, por exemplo sobre um setor, máquina, OP ou indicador.</span>
+                  <button type="button" aria-expanded={largeQueryExpanded} onClick={() => setLargeQueryExpanded((current) => !current)}>Por que isso ocorreu?</button>
+                  {largeQueryExpanded ? <p>A quantidade de informações necessária para responder foi maior do que a IA consegue processar nessa consulta. Seus dados não foram alterados. Uma pergunta mais específica normalmente resolve.</p> : null}
+                </div>
+              </div>
+            ) : null}
+            {regularError ? (
+              <div className="ai-error" role="alert">
+                <div><strong>Não foi possível concluir</strong><span>{humanizeAssistantText(regularError.message)}</span></div>
+                {regularError.requestId ? <small>Referência: {regularError.requestId}</small> : null}
+                {retryQuestion ? <button type="button" onClick={() => void send(retryQuestion, true)} disabled={streaming}>Tentar novamente</button> : null}
+              </div>
+            ) : null}
+
+            {!conversationEmpty ? (
+              <div className="ai-quick-actions" aria-label="Ações rápidas da IA">
+                {QUICK_ACTIONS.map(([label, prompt]) => (
+                  <button key={label} type="button" onClick={() => void send(prompt)} disabled={streaming || creatingConversation || cooldownActive}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <form className="ai-composer" onSubmit={submit}>
+              <label htmlFor="ai-question" className="visually-hidden">Pergunta</label>
+              <div className="ai-composer__box">
+                <textarea
+                  id="ai-question"
+                  rows={1}
+                  value={question}
+                  onChange={(event) => {
+                    setQuestion(event.target.value);
+                    if (event.target.value !== cooldownRetryQuestion) setCooldownRetryQuestion(null);
+                  }}
+                  onKeyDown={handleQuestionKeyDown}
+                  placeholder={cooldownActive ? `IA disponível novamente em ${countdown}` : "Pergunte qualquer coisa sobre a fábrica…"}
+                  maxLength={4000}
+                  disabled={streaming || creatingConversation || cooldownActive}
+                  aria-disabled={streaming || creatingConversation || cooldownActive}
+                  aria-describedby={cooldownActive ? "ai-cooldown-hint" : undefined}
+                />
+                {streaming ? (
+                  <button className="ai-composer__send ai-composer__send--stop" type="button" aria-label="Cancelar" title="Cancelar" onClick={() => controllerRef.current?.abort()}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3" /></svg>
+                  </button>
+                ) : (
+                  <button className="ai-composer__send" type="submit" aria-label="Enviar" title="Enviar" disabled={!question.trim() || creatingConversation || cooldownActive}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" /></svg>
+                  </button>
+                )}
+              </div>
+              <small id={cooldownActive ? "ai-cooldown-hint" : undefined}>{cooldownActive ? `IA disponível novamente em ${countdown} • ` : ""}Enter envia • Shift+Enter quebra a linha • {question.length}/4000 • Nenhuma alteração produtiva pode ser executada pela IA.</small>
+            </form>
+          </div>
         </section>
       </div>
       {deleteCandidate ? (
@@ -576,6 +686,6 @@ export function AIPage() {
           </div>
         </OperatorDialog>
       ) : null}
-    </PageFrame>
+    </Frame>
   );
 }

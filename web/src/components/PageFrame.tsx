@@ -79,7 +79,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
  * Enquanto não há resposta, ou se a consulta falhar, a aba fica: a própria
  * tela da IA explica a indisponibilidade.
  */
-function useAiEnabled(active: boolean) {
+export function useAiEnabled(active: boolean) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   useEffect(() => {
     if (!active) return;
