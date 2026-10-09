@@ -37,7 +37,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
   // Na própria tela da IA a aba é a atual e a página já consulta o status.
   const aiEnabled = useAiEnabled(sectionId === "home" && pathname !== "/inicio/ia");
   const tabs = section.tabs.filter((tab) =>
-    tabVisibleFor(tab, auth?.user?.role) && !(tab.screen === "home-ai" && aiEnabled === false));
+    tabVisibleFor(tab, auth?.user?.role, auth?.user?.areas?.map((area) => area.id)) &&!(tab.screen === "home-ai" && aiEnabled === false));
   // IA-01: numa rota de aba, o h1 e o título do documento saem do menu
   // ("Seção — Aba"), para o mesmo destino nunca ter dois nomes. `title` só
   // vale para telas fora das abas.

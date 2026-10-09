@@ -7,6 +7,7 @@ import anyio.to_thread
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
+from app.core.areas import areas_for_user
 from app.core.permissions import (
     can_access_andon_web,
     can_access_management_web,
@@ -156,6 +157,7 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         operator_sector=operator_sector.name if operator_sector else None,
         operator_resources=operator_sector.resources if operator_sector else (),
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
+        areas=areas_for_user(user.get("nivel_atribuido"), role),
     )
     token, claims = request.app.state.session_signer.issue(
         user_id=session_user.id,

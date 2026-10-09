@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -10,7 +10,7 @@ import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { assets } from "../config/assets";
 import { useDialogFocus } from "../hooks/useDialogFocus";
-import { isSectionActive, managementSections, sectionVisibleFor } from "../config/navigation";
+import { isSectionActive, managementSections, sectionPathFor, sectionVisibleFor } from "../config/navigation";
 
 const SIDEBAR_COLLAPSED_KEY = "gestor.sidebar.collapsed";
 
@@ -34,7 +34,8 @@ export function AppShell({ children }: PropsWithChildren) {
   // No celular a barra vira gaveta modal: foco preso nela, Esc fecha e o foco
   // volta ao botão de menu (AX-05). No desktop `open` nunca liga.
   useDialogFocus(drawerRef, open, () => setOpen(false));
-  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role));
+  const areaIds = useMemo(() => user?.areas?.map((area) => area.id) ?? [], [user?.areas]);
+  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role, areaIds));
   const section = sections.find((item) => isSectionActive(item, location.pathname));
   const tab = section?.tabs.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -88,7 +89,7 @@ export function AppShell({ children }: PropsWithChildren) {
             return (
               <Link
                 key={item.id}
-                to={item.defaultPath}
+                to={sectionPathFor(item, user?.role, areaIds)}
                 onClick={() => setOpen(false)}
                 aria-current={active ? "page" : undefined}
                 className={`sidebar-link ${active ? "sidebar-link--active" : ""}`}
@@ -126,7 +127,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </header>
         <main id="conteudo" tabIndex={-1} className="app-content">{children ?? <Outlet />}</main>
       </div>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} areaIds={areaIds} />
       <AssistantDock />
     </div>
   );

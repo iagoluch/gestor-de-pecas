@@ -442,7 +442,8 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT u.id, u.nome, u.senha_hash, COALESCE(n.nivel_base, u.nivel) AS nivel, u.session_version
+                SELECT u.id, u.nome, u.senha_hash, COALESCE(n.nivel_base, u.nivel) AS nivel,
+                       u.nivel AS nivel_atribuido, u.session_version
                 FROM usuarios u LEFT JOIN niveis_acesso n ON n.nome = u.nivel
                 WHERE u.nome = %s AND u.ativo IS TRUE
                 """,
@@ -7074,7 +7075,8 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT u.id, u.nome, COALESCE(n.nivel_base, u.nivel) AS nivel, u.unidade, u.ativo, u.session_version
+                SELECT u.id, u.nome, COALESCE(n.nivel_base, u.nivel) AS nivel, u.nivel AS nivel_atribuido,
+                       u.unidade, u.ativo, u.session_version
                 FROM usuarios u LEFT JOIN niveis_acesso n ON n.nome = u.nivel
                 WHERE u.id = %s
                 """,

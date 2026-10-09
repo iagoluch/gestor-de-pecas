@@ -6,6 +6,7 @@ import hmac
 
 from fastapi import Depends, Request
 
+from app.core.areas import areas_for_user
 from app.core.permissions import (
     can_access_andon_web,
     can_access_management_web,
@@ -59,6 +60,7 @@ def get_current_user(request: Request, database=Depends(get_database)) -> Sessio
         operator_sector=operator_sector.name if operator_sector else None,
         operator_resources=operator_sector.resources if operator_sector else (),
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
+        areas=areas_for_user(row.get("nivel_atribuido"), role),
     )
 
 

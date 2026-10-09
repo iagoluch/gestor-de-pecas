@@ -11,12 +11,15 @@ export type ManagementSectionId =
   | "audit"
   | "reports"
   | "traceability"
+  | `area-${string}`
   | "dev";
 
 export interface ManagementTab {
   label: string;
   path: string;
   screen: string;
+  /** Id da área da fábrica (`app/core/areas.py`): só quem tem essa área na sessão vê a aba. */
+  area?: string;
   /** Só a conta admin vê esta aba (decisão do usuário, 14/09/2026). */
   adminOnly?: boolean;
   /**
@@ -32,10 +35,18 @@ export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
 /** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
 export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
 
-/** A aba aparece para este nível? Usado pelo menu e pelo guarda de rota. */
-export function tabVisibleFor(tab: ManagementTab, role: string | null | undefined) {
+/**
+ * A aba aparece para este nível? Usado pelo menu e pelo guarda de rota.
+ * `areaIds` = ids das áreas da sessão (`user.areas`); aba de área sem ela some.
+ */
+export function tabVisibleFor(
+  tab: ManagementTab,
+  role: string | null | undefined,
+  areaIds?: readonly string[],
+) {
   if (tab.adminOnly && role !== "admin") return false;
   if (tab.levels && !(role && tab.levels.includes(role))) return false;
+  if (tab.area && !areaIds?.includes(tab.area)) return false;
   return true;
 }
 
@@ -51,12 +62,49 @@ export interface ManagementSection {
   levels?: readonly string[];
 }
 
-/** A seção aparece no menu para este nível? */
-export function sectionVisibleFor(section: ManagementSection, role: string | null | undefined) {
+/** A seção aparece no menu para este nível? Seção de áreas some se a conta não tem nenhuma. */
+export function sectionVisibleFor(
+  section: ManagementSection,
+  role: string | null | undefined,
+  areaIds?: readonly string[],
+) {
   if (section.adminOnly && role !== "admin") return false;
   if (section.levels && !(role && section.levels.includes(role))) return false;
+  if (section.tabs.some((tab) => tab.area) && !section.tabs.some((tab) => tabVisibleFor(tab, role, areaIds))) return false;
   return true;
 }
+
+/** Destino do clique na seção: nas seções por área, a primeira aba que a conta enxerga. */
+export function sectionPathFor(
+  section: ManagementSection,
+  role: string | null | undefined,
+  areaIds?: readonly string[],
+) {
+  if (!section.tabs.some((tab) => tab.area)) return section.defaultPath;
+  return section.tabs.find((tab) => tabVisibleFor(tab, role, areaIds))?.path ?? section.defaultPath;
+}
+
+/**
+ * Uma seção do menu por área da fábrica (decisão do usuário, 09/10/2026), igual a
+ * Manufatura e Qualidade, com o nome do setor. Quem vê qual vem da sessão
+ * (`user.areas`, montada em `app/core/areas.py` a partir do nível da conta): o
+ * líder da Serra só enxerga "Serra"; admin e gerente, todas. Os dados são os de
+ * Consulta Operacional, filtrados pelos setores da área.
+ */
+const AREA_SECTIONS: ManagementSection[] = [
+  ["dobra-corte", "Dobra e Corte"],
+  ["usinagem", "Usinagem"],
+  ["serra", "Serra"],
+  ["solda", "Solda"],
+  ["pintura", "Pintura"],
+  ["prototipo", "Protótipo"],
+].map(([area, label]) => ({
+  id: `area-${area}`,
+  label,
+  icon: assets.navigation.manufacturing,
+  defaultPath: `/areas/${area}`,
+  tabs: [{ label: "Recursos", path: `/areas/${area}`, screen: `areas-${area}`, area }],
+}));
 
 export const managementSections: ManagementSection[] = [
   {
@@ -189,6 +237,7 @@ export const managementSections: ManagementSection[] = [
       { label: "Lote / Material / Nesting", path: "/rastreabilidade/lote-material-nesting", screen: "traceability-nesting" },
     ],
   },
+  ...AREA_SECTIONS,
   {
     id: "dev",
     label: "IagoDev",

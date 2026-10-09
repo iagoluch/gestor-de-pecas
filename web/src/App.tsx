@@ -30,7 +30,8 @@ import {
 } from "./pages/analytics/AnalyticsPages";
 import { AuditAppointmentsPage, AuditIssuesPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
 import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
-import { OperationsOrdersPage, OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
+import { AreaPage } from "./pages/areas/AreaPage";
+import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
@@ -145,7 +146,9 @@ export default function App() {
         <Route path="consulta-operacional/ops-em-andamento" element={<OperationsOrdersPage />} />
         <Route path="consulta-operacional/tempo-mes" element={<OperationsTimePage />} />
 
-        <Route path="producao/ordens" element={<ProductionOrdersPage />} />
+        <Route path="areas/:areaId" element={<AreaPage />} />
+
+        <Route path="producao/ordens"element={<ProductionOrdersPage />} />
         <Route path="producao/realizada" element={<ProductionCompletedPage />} />
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
         <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />

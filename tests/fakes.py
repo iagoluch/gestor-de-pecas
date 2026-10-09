@@ -214,7 +214,7 @@ class FakeDatabase:
             return None
         return {
             "id": user["id"], "nome": user["nome"], "session_version": user["session_version"],
-            "nivel": self._nivel_efetivo(user["nivel"]),
+            "nivel": self._nivel_efetivo(user["nivel"]), "nivel_atribuido": user["nivel"],
         }
 
     def _nivel_efetivo(self, nivel):
@@ -276,7 +276,7 @@ class FakeDatabase:
 
     def obter_usuario_por_id(self, user_id):
         user = next((item for item in self.users if item["id"] == user_id), None)
-        return {**user, "nivel": self._nivel_efetivo(user["nivel"])} if user else None
+        return {**user, "nivel": self._nivel_efetivo(user["nivel"]), "nivel_atribuido": user["nivel"]} if user else None
 
     def atualizar_unidade_usuario(self, user_id, unidade):
         target = next((item for item in self.users if item["id"] == user_id), None)

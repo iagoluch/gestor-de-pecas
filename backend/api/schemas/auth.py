@@ -18,3 +18,5 @@ class SessionUser(BaseModel):
     operator_sector: str | None = None
     operator_resources: tuple[str, ...] = ()
     operator_automatic_queue: bool = False
+    #: Áreas da fábrica que a conta enxerga na gestão (ver app/core/areas.py).
+    areas: list[dict] = []

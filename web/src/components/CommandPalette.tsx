@@ -14,13 +14,14 @@ interface CommandPaletteProps {
   onClose: () => void;
   sections: ManagementSection[];
   role?: string | null;
+  areaIds?: readonly string[];
 }
 
 /**
  * Ir para qualquer tela (Ctrl K): lista só as telas que o menu já mostra para
  * o nível do usuário e navega para a rota existente — não abre nenhum fluxo novo.
  */
-export function CommandPalette({ open, onClose, sections, role }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, sections, role, areaIds }: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [term, setTerm] = useState("");
@@ -28,9 +29,9 @@ export function CommandPalette({ open, onClose, sections, role }: CommandPalette
 
   const destinations = useMemo<Destination[]>(
     () => sections.flatMap((section) =>
-      section.tabs.filter((tab) => tabVisibleFor(tab, role)).map((tab) => ({ label: tab.label, section: section.label, path: tab.path })),
+      section.tabs.filter((tab) => tabVisibleFor(tab, role, areaIds)).map((tab) => ({ label: tab.label, section: section.label, path: tab.path })),
     ),
-    [sections, role],
+    [sections, role, areaIds],
   );
   const results = useMemo(() => {
     const needle = term.trim().toLocaleLowerCase("pt-BR");

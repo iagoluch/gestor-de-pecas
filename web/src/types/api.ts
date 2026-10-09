@@ -24,6 +24,14 @@ export interface SessionUser {
   operator_sector?: string | null;
   operator_resources?: string[];
   operator_automatic_queue?: boolean;
+  /** Áreas da fábrica que a conta enxerga na gestão (menu "Áreas"). */
+  areas?: SessionArea[];
+}
+
+export interface SessionArea {
+  id: string;
+  label: string;
+  setores: string[];
 }
 
 export interface OperatorContext {
