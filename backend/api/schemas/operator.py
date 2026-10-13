@@ -77,6 +77,8 @@ class CuttingActionRequest(BaseModel):
     resource: str = Field(min_length=1, max_length=120)
     plan_hash: str | None = Field(default=None, max_length=256)
     appointment_id: int | None = None
+    # Falso encerra só o nesting atual, sem iniciar o próximo da fila.
+    start_next: bool = True
     stop_reason_code: str | None = Field(default=None, max_length=40)
     comment: str | None = Field(default=None, max_length=1000)
 

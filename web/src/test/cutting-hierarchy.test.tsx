@@ -273,6 +273,52 @@ describe("hierarquia da tela de Corte", () => {
     expect(screen.getByRole("button", { name: "Finalizar nesting" })).toBeEnabled();
   });
 
+  it("finaliza só o plano atual, sem iniciar o próximo da fila", async () => {
+    const repetido = {
+      ...PLANO_001,
+      estado: "EM CORTE",
+      chapas_em_corte: 1,
+      chapas_aguardando: 1,
+      chapas: [
+        { ...PLANO_001.chapas[0], status: "Em processo" },
+        PLANO_001.chapas[1],
+      ],
+    };
+    const fetchMock = stubQueue([{
+      ...TAREFA,
+      status: "Em processo",
+      programa_atual: "001",
+      nestings_aguardando: 1,
+      planos: [repetido, PLANO_002],
+      apontamento_ids_em_processo: [78],
+    }]);
+    renderCorte();
+
+    const botao = await screen.findByRole("button", { name: "Finalizar só este plano" });
+    fireEvent.click(botao);
+
+    await waitFor(() => {
+      const chamada = fetchMock.mock.calls.find(([url]) => String(url).includes("/cutting/actions"));
+      expect(chamada).toBeTruthy();
+      const corpo = JSON.parse(String((chamada![1] as RequestInit).body));
+      expect(corpo).toMatchObject({ action: "Finalizado", appointment_id: 78, start_next: false });
+    });
+  });
+
+  it("não oferece finalizar só este plano quando não há próximo na fila", async () => {
+    stubQueue([{
+      ...TAREFA,
+      status: "Em processo",
+      programa_atual: "001",
+      nestings_aguardando: 0,
+      apontamento_ids_em_processo: [79],
+    }]);
+    renderCorte();
+
+    await screen.findByRole("button", { name: /^Finalizar (plano|nesting)$/ });
+    expect(screen.queryByRole("button", { name: "Finalizar só este plano" })).not.toBeInTheDocument();
+  });
+
   it("apresenta várias tarefas, cada uma com seus próprios planos", async () => {
     const outra = {
       ...TAREFA,

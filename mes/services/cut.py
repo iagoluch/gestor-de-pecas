@@ -245,7 +245,14 @@ class CutService:
         self._record_event("corte_retomado", payload, f"Corte retomado em {machine}.")
         return CutResult(True, "Corte retomado.", data=payload)
 
-    def finalizar(self, apontamento_id, maquina=None):
+    def finalizar(self, apontamento_id, maquina=None, iniciar_proximo=True):
+        """Conclui o nesting em processo.
+
+        Por padrão o próximo da fila já é iniciado no mesmo instante.
+        ``iniciar_proximo=False`` encerra só o atual: o recurso fica sem
+        demanda e o operador inicia o próximo quando quiser.
+        """
+
         # O ID vem do cliente: com ``maquina`` (o recurso do terminal) a busca
         # fica restrita à fila daquela máquina, para um terminal não fechar o
         # nesting de outra. Máquina desconhecida não filtraria nada; recusa.
@@ -267,7 +274,7 @@ class CutService:
                 code="estado_alterado",
             )
         active_id = int(apontamento_id)
-        next_hashes = eligible.get("plano_hashes_aguardando", [])
+        next_hashes = eligible.get("plano_hashes_aguardando", []) if iniciar_proximo else []
         advanced = None
         if next_hashes:
             advanced = self.db.avancar_nesting_corte(
@@ -315,9 +322,8 @@ class CutService:
             row = refreshed
             completed = int(row.get("nestings_concluidos") or 0)
             total = int(row.get("nesting_count") or 1)
-            message = (
-                f"Nesting {completed}/{total} concluído. Próximo nesting iniciado."
-            )
+            seguinte = "Próximo nesting iniciado." if iniciar_proximo else "Próximo nesting não iniciado."
+            message = f"Nesting {completed}/{total} concluído. {seguinte}"
         event_type = "corte_finalizado" if refreshed is None else "corte_nesting_concluido"
         self._record_event(event_type, row, message)
         return CutResult(True, message, data=row)

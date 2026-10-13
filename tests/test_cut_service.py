@@ -87,6 +87,32 @@ class CutServiceTests(unittest.TestCase):
             ["corte_iniciado", "corte_nesting_concluido", "corte_finalizado"],
         )
 
+    def test_finalizar_sem_iniciar_proximo_encerra_so_o_atual(self):
+        self.db.cut_plans = [
+            _plan(plano_hash="plano-a", programa="PA", sequencia_nesting=1),
+            _plan(plano_hash="plano-b", programa="PB", sequencia_nesting=1),
+        ]
+        grouped = self.service.listar_fila("Laser Ensis 3015")[0]
+        started = self.service.iniciar(grouped["plano_hash"], "Laser Ensis 3015")
+        self.assertTrue(started.ok)
+
+        finished = self.service.finalizar(started.data["id"], iniciar_proximo=False)
+
+        self.assertTrue(finished.ok)
+        self.assertIn("não iniciado", finished.message)
+        self.assertEqual(finished.data["status"], "Aguardando")
+        self.assertEqual(finished.data["nestings_concluidos"], 1)
+        self.assertEqual(finished.data["nestings_em_processo"], 0)
+        self.assertEqual(finished.data["nestings_aguardando"], 1)
+        self.assertEqual(
+            [row["status"] for row in self.db.cut_appointments], ["Finalizado"]
+        )
+
+        # O próximo só começa quando o operador mandar.
+        restarted = self.service.iniciar(finished.data["plano_hash"], "Laser Ensis 3015")
+        self.assertTrue(restarted.ok)
+        self.assertEqual(self.db.cut_appointments[-1]["programa"], "PB")
+
     def test_recursos_do_setor_corte_batem_com_mapa_de_maquinas(self):
         # finalizar recusa recurso fora do mapa: setor e mapa precisam andar juntos.
         setor = next(s for s in OPERATOR_SECTORS if s.level == "operador_corte")

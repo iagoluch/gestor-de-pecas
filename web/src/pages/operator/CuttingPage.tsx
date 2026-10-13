@@ -292,6 +292,9 @@ export function CuttingPage({ resource }: { resource: string }) {
           {activityInProgress ? <button type="button" className="button button--primary" disabled={busy} onClick={() => setActivityPrompt("Finalizado")}>Finalizar atividade</button> : null}
           {!stopped && !activityInProgress && !active ? <button type="button" className="button operator-go" disabled={busy} onClick={() => setActivityPrompt("Início")}>Iniciar atividade</button> : null}
           {active && !stopped ? <button type="button" className="button button--primary" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id })}>{planoTemRepeticao(activePlan) ? "Finalizar nesting" : "Finalizar plano"}</button> : null}
+          {/* Com algo ainda na fila, o botão acima já inicia o próximo. Este
+              encerra só o atual e deixa o recurso livre. */}
+          {active && !stopped && Number(active.nestings_aguardando ?? 0) > 0 ? <button type="button" className="button" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id, start_next: false })}>Finalizar só este plano</button> : null}
         </div>
       </div>
       {stopped ? <Notice tone="error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</Notice> : null}
