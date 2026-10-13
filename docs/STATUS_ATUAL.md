@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 08/10/2026 (REAL em schema v57; tempo padrão estimado + manual commitado em `7e7bece`, 07/10).
+**Atualizado em:** 09/10/2026 (simulação TESTE em tempo real; marcos do REAL preservados abaixo).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -11,6 +11,17 @@ ferramenta.
 Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
+
+### Simulação contínua em tempo real — 09/10/2026
+
+- FATO: servidor LAN `0.0.0.0:8002` (porta própria desde 13/10/2026: a :8001 é só da API REAL; override `GESTOR_TEST_SIM_PORT`) e simulador persistente usam exclusivamente `gestor_pecas_test` (schema 61), sem relógio acelerado e sem alteração do `.env` operacional. `/andon` responde em `http://10.10.1.248:8002/andon`; API sem sessão retorna 401, login `sim_andon` e leitura autenticada retornam 200. A TV continua somente Andon; acompanhamento gerencial de Solda permanece desativado.
+- FATO: oito apontamentos com OP/produto do catálogo iniciados pela API canônica. Jato/`00592009001`: parada por motivo cadastrado `0011` às 12:23:01 e retomada HTTP 200 às 12:32:14, após nove minutos reais. Reinício do simulador readotou os apontamentos sem duplicar; arquivo travado + advisory lock recusam segunda instância.
+- DECISÃO DO USUÁRIO: TOTVS desabilitado, Telegram ativo. O launcher TESTE usa o grupo de fábrica já configurado como destino dos alertas quando o chat mestre está ausente. Mensagem `[TESTE]` teve ACK confirmado; nenhuma credencial foi gravada nos logs.
+- LIMITAÇÃO CONFIRMADA: as operações selecionadas não têm tempo padrão Protheus/manual/estimado nem template homologado correspondente na consulta operacional somente leitura. A agenda atual usa durações de cenário de 21–170 minutos, identificadas como `dados_insuficientes_sem_tempo_padrao`; não altera tempo padrão nem cálculo de OEE. Ausência de cotas mantém o portão de qualidade pendente.
+- OPERAÇÃO: `scripts/factory_realtime.ps1 start|status|stop`; implementações em `scripts/run_factory_realtime.py`, `scripts/run_factory_test_web.py` e `scripts/create_factory_test_orders.py`. Logs/estado/evidências locais em `dados/factory_realtime/` (`simulator.jsonl`, `state.json`, `andon_snapshot.json`, `canonical_evidence.json`, `telegram_validation.json`). Finalização natural foi validada em `A9694601005` (21m53s, 1 boa, 0 refugo); o runner mantém reposição e limite de 15 ativos.
+- FATO: a pausa inválida criada por `strix_pentest` foi removida exclusivamente no TESTE pela API de gestão (15 registros); `Laser Ensis 3015` e `Plasma TerraBlade 4` receberam `Retomada` canônica às 12:55:45 e ficaram em `Recurso sem demanda`. A consulta posterior retornou zero pausas configuradas.
+- FATO: após 13:00, seis estações de Solda Aço (`Estação 1` a `Estação 6`) entraram por `atividade_sem_op` canônica; o Andon confirmou `activity_without_op=6` e 15 recursos ativos. A tentativa inicial retornou 422 porque o runner enviava `op` vazio; o payload foi corrigido para omitir `op` quando a atividade é sem OP.
+- FATO: com autorização explícita para ensaio, `scripts/create_factory_test_orders.py` projetou seis OPs locais (`PCMD8201002`–`PCMD8201007`) a partir da ProductionOrder real `PCMD8201001`, mantendo o produto `PCGX08002027` e o roteiro recebido. A ingestão usou `TotvsProductionOrderIngestionService` no banco TESTE; nenhum envio ou escrita no TOTVS ocorreu. As operações aguardam a sequência canônica do roteiro antes de serem apontadas.
 
 ### Capturas das interfaces — 08/10/2026
 
