@@ -73,7 +73,7 @@ claude mcp remove omniroute --scope user
 Adicionado job `security` em `.github/workflows/ci.yml`:
 - **gitleaks** (`zricethezav/gitleaks:v8.30.1` via Docker, escaneando histórico completo de commits) — **testado localmente antes de commitar**: achou 4 candidatos, todos confirmados como falsos positivos (dois segredos de teste com nome explícito de fixture, um placeholder literal `"USUARIO:SENHA"` em `protheus/README.md`). Allowlist criada em `.gitleaks.toml` para esses 3 padrões específicos; re-testado após a allowlist e confirmado **"no leaks found"**, exit code 0. É bloqueante (falha o build se achar algo novo).
 - **pip-audit** — testado localmente, **0 vulnerabilidades** nas dependências atuais. Bloqueante.
-- **bandit** — 44 avisos encontrados, **todos triados individualmente e suprimidos com `#nosec` documentado** (ver seção "Bandit — os 44 achados, 100% triados" abaixo). Bloqueante desde a rodada 3, sem `|| true`.
+- **bandit** — 44 avisos encontrados, **todos triados individualmente e suprimidos com `#nosec` documentado** (ver seção "Bandit — os 44 achados, 100% triados" abaixo). Bloqueante desde a rodada 3, sem `|| true`. Rodar antes do push: `sh scripts/verificar_bandit.sh` (~10 s); o hook `pre-push` faz isso sozinho (instalar uma vez por clone: `sh scripts/setup-dev-hooks.sh`; pular: `git push --no-verify`).
 
 Não instalado: Ruff (o projeto não usa nenhum linter hoje; introduzir Ruff seria uma decisão maior que "segurança", fora do escopo desta auditoria — bandit é a ferramenta cirúrgica certa aqui, sem se comprometer com um linter completo).
 

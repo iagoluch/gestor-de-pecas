@@ -22,3 +22,18 @@ fi
 
 chmod +x "$HOOK"
 echo "Pronto. O grafo do graphify passa a se atualizar sozinho a cada commit que tocar mes/backend/app/web/tests."
+
+# pre-push: bandit local antes de subir (o CI barra o mesmo achado, ~10 s aqui vs ~10 min lá).
+PUSH_HOOK="$ROOT/.git/hooks/pre-push"
+PUSH_MARKER='scripts/pre-push-bandit.sh'
+[ -f "$PUSH_HOOK" ] || printf '#!/bin/sh
+' > "$PUSH_HOOK"
+if ! grep -q "$PUSH_MARKER" "$PUSH_HOOK" 2>/dev/null; then
+  printf '
+sh "$(git rev-parse --show-toplevel)/%s" || exit 1
+' "$PUSH_MARKER" >> "$PUSH_HOOK"
+  echo "pre-push: adicionado o gatilho do bandit."
+else
+  echo "pre-push: gatilho do bandit já estava instalado, nada a fazer."
+fi
+chmod +x "$PUSH_HOOK"
