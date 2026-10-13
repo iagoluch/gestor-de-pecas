@@ -488,6 +488,32 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
         self._assert_no_demand(timeline[-1])
         self._assert_continuous(timeline)
 
+    def test_nesting_aberto_nao_vira_sem_demanda_no_retorno_do_turno(self):
+        # Regressão 13/10/2026: o apontamento guarda "Laser Ensis 3015" e o
+        # estado físico "LASER1"; o retorno do turno comparava os textos crus e
+        # jogava o recurso em "Sem demanda" com o plano ainda "Em processo".
+        self._cut_plan()
+        machine = "Laser Ensis 3015"
+        started = self.db.iniciar_apontamento_corte(
+            "HASH-CORTE-SD", machine, "CORTADOR", "2026-01-01",
+            data_inicio=self._at(400),
+        )
+        limite = self._at(510)  # 17:30, fim do expediente
+        self.assertEqual(
+            [row["id"] for row in self.db.listar_cortes_abertos_no_limite_turno(limite)],
+            [started["id"]],
+        )
+        self.db.interromper_corte_fim_turno(started["id"], data_hora=limite)
+        self.assertEqual(self.db.listar_cortes_abertos_no_limite_turno(limite), [])
+        self.assertEqual(self._timeline(machine)[-1]["categoria"], "fora_turno")
+
+        retorno = datetime(2026, 9, 23, 8, 0)
+        self.assertEqual(self.db.finalizar_fora_turno_automatico(retorno), [])
+        current = self._timeline(machine)[-1]
+        self.assertEqual(current["categoria"], "fora_turno")
+        self.assertEqual(current["tipo_interrupcao"], "fim_turno")
+        self.assertIsNone(current["data_fim"])
+
     def test_nesting_iniciado_e_encerrado_no_intervalo_volta_ao_intervalo(self):
         self._cut_plan()
         machine = "Laser Ensis 3015"

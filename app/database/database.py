@@ -2904,18 +2904,29 @@ class Database(
                 WHERE a.status = 'Em processo'
                   AND a.data_inicio IS NOT NULL
                   AND a.data_inicio <= %s
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM eventos_estado_recurso e
-                      WHERE UPPER(e.recurso) = UPPER(a.maquina)
-                        AND e.tipo_interrupcao = 'fim_turno'
-                        AND e.data_inicio = %s
-                  )
                 ORDER BY a.id
                 """,
-                (limite, limite),
+                (limite,),
             )
-            return [dict(row) for row in cursor.fetchall()]
+            abertos = [dict(row) for row in cursor.fetchall()]
+            # O apontamento guarda o nome do posto ("Laser Ensis 3015") e o
+            # estado físico a identidade ("LASER1"): compara pela identidade.
+            cursor.execute(
+                """
+                SELECT DISTINCT recurso FROM eventos_estado_recurso
+                WHERE tipo_interrupcao = 'fim_turno' AND data_inicio = %s
+                """,
+                (limite,),
+            )
+            ja_interrompidos = {
+                str(resolve_resource_identity(row["recurso"]) or "").casefold()
+                for row in cursor.fetchall()
+            }
+            return [
+                row for row in abertos
+                if str(resolve_resource_identity(row["maquina"]) or "").casefold()
+                not in ja_interrompidos
+            ]
 
     def interromper_corte_fim_turno(
         self,
@@ -2952,7 +2963,7 @@ class Database(
                   AND data_inicio = %s
                 LIMIT 1
                 """,
-                (row.get("maquina"), tipo_interrupcao, instante),
+                (resolve_resource_identity(row.get("maquina")), tipo_interrupcao, instante),
             )
             if cursor.fetchone():
                 result = dict(row)
@@ -3457,7 +3468,6 @@ class Database(
         operador = str(operador or "SISTEMA").strip() or "SISTEMA"
         motivo = str(motivo or "Fim de turno — interrupção programada automática").strip()
         tipo_interrupcao = str(tipo_interrupcao or "fim_turno").strip() or "fim_turno"
-        executando = sorted(EXECUTING_APPOINTMENT_STATUSES)
         changed = []
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -3480,28 +3490,12 @@ class Database(
                         AND e2.tipo_interrupcao = %s
                         AND e2.data_inicio = %s
                   )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM apontamentos_operacionais a
-                      WHERE UPPER(a.maquina) = UPPER(e.recurso)
-                        AND a.status = ANY(%s)
-                        AND a.data_inicio IS NOT NULL AND a.data_inicio <= %s
-                        AND (a.data_fim IS NULL OR a.data_fim > %s)
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM apontamentos_corte c
-                      WHERE UPPER(c.maquina) = UPPER(e.recurso)
-                        AND c.status = 'Em processo'
-                        AND c.data_inicio IS NOT NULL AND c.data_inicio <= %s
-                        AND (c.data_fim IS NULL OR c.data_fim > %s)
-                  )
                 ORDER BY UPPER(e.recurso), e.prioridade
                 """,
-                (
-                    instante, instante, tipo_interrupcao, instante, executando,
-                    instante, instante, instante, instante,
-                ),
+                (instante, instante, tipo_interrupcao, instante),
             )
             candidatos = [dict(row) for row in cursor.fetchall()]
+            em_execucao = self._identidades_em_execucao_tx(cursor, instante)
             included = {
                 resolve_resource_identity(value).casefold()
                 for value in (recursos or ()) if resolve_resource_identity(value)
@@ -3515,7 +3509,7 @@ class Database(
                 key = identity.casefold()
                 if included and key not in included:
                     continue
-                if key in excluded:
+                if key in excluded or key in em_execucao:
                     continue
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
@@ -3561,7 +3555,6 @@ class Database(
         instante = _period_value(data_hora)
         if instante is None:
             raise ValueError("data_hora é obrigatória para o retorno do turno.")
-        executando = sorted(EXECUTING_APPOINTMENT_STATUSES)
         changed = []
         with self.connection() as connection, connection.cursor() as cursor:
             # Superconjunto dos candidatos abaixo: trava os recursos antes das
@@ -3605,34 +3598,16 @@ class Database(
                   AND e.tipo_interrupcao = 'fim_turno'
                   AND e.data_inicio < %s
                   AND UPPER(e.recurso) = ANY(%s)
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM apontamentos_operacionais a
-                      WHERE UPPER(a.maquina) = UPPER(e.recurso)
-                        AND a.status = ANY(%s)
-                        AND a.data_inicio IS NOT NULL
-                        AND a.data_inicio <= %s
-                        AND (a.data_fim IS NULL OR a.data_fim > %s)
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM apontamentos_corte c
-                      WHERE UPPER(c.maquina) = UPPER(e.recurso)
-                        AND c.status = 'Em processo'
-                        AND c.data_inicio IS NOT NULL
-                        AND c.data_inicio <= %s
-                        AND (c.data_fim IS NULL OR c.data_fim > %s)
-                  )
                 ORDER BY e.recurso, e.id
                 FOR UPDATE
                 """,
-                (
-                    instante, [str(value).upper() for value in selected],
-                    executando, instante, instante,
-                    instante, instante,
-                ),
+                (instante, [str(value).upper() for value in selected]),
             )
-            for current in [dict(row) for row in cursor.fetchall()]:
+            atuais = [dict(row) for row in cursor.fetchall()]
+            em_execucao = self._identidades_em_execucao_tx(cursor, instante)
+            for current in atuais:
+                if resolve_resource_identity(current["recurso"]).casefold() in em_execucao:
+                    continue
                 state = self._transicionar_estado_recurso_tx(
                     cursor,
                     current["recurso"],
@@ -4463,14 +4438,8 @@ class Database(
         )
         return dict(cursor.fetchone())
 
-    def _execucoes_ativas_tx(self, cursor, recurso, instante):
-        """OPs e nestings do Corte ativos no recurso: ``[(origem, maquina)]``.
-
-        A comparação é pela identidade canônica: o apontamento guarda o código
-        informado no posto (ex.: ``1303``) e o estado físico guarda a
-        identidade resolvida (ex.: ``DOBRA3``). ``maquina`` volta como está
-        gravada no apontamento.
-        """
+    def _execucoes_ativas_todas_tx(self, cursor, instante, status_operacionais=None):
+        """Todas as OPs e nestings do Corte ativos: ``[(origem, maquina)]``."""
 
         cursor.execute(
             """
@@ -4486,15 +4455,36 @@ class Database(
               AND (data_fim IS NULL OR data_fim > %s)
             """,
             (
-                list(ACTIVE_OPERATIONAL_STATUSES), instante, instante,
-                instante, instante,
+                list(status_operacionais or ACTIVE_OPERATIONAL_STATUSES),
+                instante, instante, instante, instante,
             ),
         )
+        return [(row["origem"], row["maquina"]) for row in cursor.fetchall()]
+
+    def _identidades_em_execucao_tx(self, cursor, instante):
+        """Identidades canônicas (casefold) dos recursos em execução."""
+
+        return {
+            str(resolve_resource_identity(maquina) or "").casefold()
+            for _origem, maquina in self._execucoes_ativas_todas_tx(
+                cursor, instante, sorted(EXECUTING_APPOINTMENT_STATUSES)
+            )
+        }
+
+    def _execucoes_ativas_tx(self, cursor, recurso, instante):
+        """OPs e nestings do Corte ativos no recurso: ``[(origem, maquina)]``.
+
+        A comparação é pela identidade canônica: o apontamento guarda o código
+        informado no posto (ex.: ``1303`` ou ``Laser Ensis 3015``) e o estado
+        físico guarda a identidade resolvida (ex.: ``DOBRA3``, ``LASER1``).
+        ``maquina`` volta como está gravada no apontamento.
+        """
+
         identity = str(resolve_resource_identity(recurso) or "").upper()
         return [
-            (row["origem"], row["maquina"])
-            for row in cursor.fetchall()
-            if str(resolve_resource_identity(row["maquina"]) or "").upper() == identity
+            (origem, maquina)
+            for origem, maquina in self._execucoes_ativas_todas_tx(cursor, instante)
+            if str(resolve_resource_identity(maquina) or "").upper() == identity
         ]
 
     def _recurso_em_execucao_tx(self, cursor, recurso, instante):
