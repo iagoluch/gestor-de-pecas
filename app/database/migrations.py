@@ -110,6 +110,7 @@ EXPECTED_TABLES = (
     "tempo_padrao_manual",
     "tempo_padrao_manual_historico",
     "tempo_padrao_estimado",
+    "niveis_acesso",
 )
 
 BASELINE_STATEMENTS = (
@@ -2573,7 +2574,7 @@ NIVEIS_POR_SETOR = (
     ("controladoria", "Controladoria", "lider"),
 )
 NIVEIS_POR_SETOR_STATEMENTS = tuple(
-    f"INSERT INTO niveis_acesso (nome, rotulo, nivel_base) VALUES ('{nome}', '{rotulo}', '{base}') "
+    f"INSERT INTO niveis_acesso (nome, rotulo, nivel_base) VALUES ('{nome}', '{rotulo}', '{base}') "  # nosec B608 -- valores vêm só da tupla constante NIVEIS_POR_SETOR, nunca de input externo
     "ON CONFLICT (nome) DO NOTHING"
     for nome, rotulo, base in NIVEIS_POR_SETOR
 )

@@ -93,8 +93,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(41);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(41);
+    expect(managementRoutes).toHaveLength(47);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(47);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
