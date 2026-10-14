@@ -161,7 +161,7 @@ class TotvsOutboundRepositoryMixin:
                     LIMIT 1
                 ),
                 apontaveis AS (
-                    SELECT id, numero_operacao, ordem
+                    SELECT id, numero_operacao, ordem, tipo_setor
                     FROM catalogo_operacoes_op
                     WHERE codigo_op = %(op)s
                       AND ativo IS TRUE
@@ -179,6 +179,48 @@ class TotvsOutboundRepositoryMixin:
                     JOIN eventos_apontamento_operador e ON e.apontamento_id = a.id
                     WHERE a.op = %(op)s
                     ORDER BY a.numero_operacao, e.data_hora DESC, e.id DESC
+                ),
+                -- OP que já existia no Protheus chega com o Corte apontado na
+                -- origem: só espera o Corte se ela ainda está na fila do Gestor
+                -- (plano SigmaNEST ativo sem apontamento Finalizado; mesma regra
+                -- de _corte_concluido_sql em database.py, que não dá pra importar
+                -- daqui sem ciclo).
+                corte_origem AS (
+                    SELECT a.numero_operacao
+                    FROM apontaveis a
+                    WHERE UPPER(a.tipo_setor) = 'CORTE'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM catalogo_sigmanest_ops sig_op
+                          JOIN catalogo_sigmanest_planos_corte plano
+                            ON plano.codigo_tarefa = sig_op.codigo_tarefa
+                           AND plano.ativo = TRUE
+                           AND (
+                                plano.programa = sig_op.programa
+                                OR (
+                                    sig_op.programa IS NULL
+                                    AND 1 = (
+                                        SELECT COUNT(DISTINCT legado.programa)
+                                        FROM catalogo_sigmanest_planos_corte legado
+                                        WHERE legado.codigo_tarefa = sig_op.codigo_tarefa
+                                          AND legado.ativo = TRUE
+                                    )
+                                )
+                           )
+                          WHERE sig_op.ativo = TRUE
+                            AND UPPER(sig_op.codigo_op) = UPPER(%(op)s)
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM apontamentos_corte corte
+                                WHERE corte.plano_hash = plano.plano_hash
+                                  AND corte.status = 'Finalizado'
+                            )
+                      )
+                ),
+                concluidas_ops AS (
+                    SELECT numero_operacao FROM ultimo_evento WHERE estado = 'finalizado'
+                    UNION
+                    SELECT numero_operacao FROM corte_origem
                 ),
                 ultima_produtiva AS (
                     SELECT c.numero_operacao
@@ -222,12 +264,12 @@ class TotvsOutboundRepositoryMixin:
                     x.iniciada_em,
                     x.finalizada_em,
                     (SELECT COUNT(*) FROM apontaveis) AS apontaveis,
-                    (SELECT COUNT(*) FROM ultimo_evento WHERE estado = 'finalizado') AS concluidas,
+                    (SELECT COUNT(*) FROM concluidas_ops) AS concluidas,
                     (
                         SELECT COALESCE(ARRAY_AGG(numero_operacao ORDER BY numero_operacao), ARRAY[]::TEXT[])
                         FROM apontaveis
                         WHERE numero_operacao NOT IN (
-                            SELECT numero_operacao FROM ultimo_evento WHERE estado = 'finalizado'
+                            SELECT numero_operacao FROM concluidas_ops
                         )
                     ) AS em_aberto,
                     COALESCE(

@@ -1274,6 +1274,75 @@ class TotvsOutboxPostgresTests(unittest.TestCase):
         self.assertNotIn("<ApprovedQuantity>18</ApprovedQuantity>", payload)
         self.assertEqual(terminais[0]["operation_code"], "99")
 
+    def _por_op_na_fila_de_corte(self, *, corte_finalizado):
+        """Liga a OP a um plano SigmaNEST ativo, finalizado ou não no Gestor."""
+
+        agora = self.db._now()
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO catalogo_sigmanest_tarefas
+                    (codigo_tarefa, material, espessura, ativo, sincronizado_em)
+                VALUES ('T-OUTBOX', 'A36', 6.35, TRUE, %s)
+                """,
+                (agora,),
+            )
+            cursor.execute(
+                """
+                INSERT INTO catalogo_sigmanest_planos_corte (
+                    plano_hash, codigo_tarefa, programa, sequencia_nesting,
+                    quantidade_processo, maquina_sigmanest, ativo, sincronizado_em
+                ) VALUES ('HASH-OUTBOX', 'T-OUTBOX', '1', 1, 1, 'PLASMA', TRUE, %s)
+                """,
+                (agora,),
+            )
+            cursor.execute(
+                """
+                INSERT INTO catalogo_sigmanest_ops (
+                    linha_hash, codigo_tarefa, codigo_op, setor_destino,
+                    quantidade, programa, ativo, sincronizado_em
+                ) VALUES ('LINHA-OUTBOX', 'T-OUTBOX', %s, 'Dobra', 10, '1', TRUE, %s)
+                """,
+                (self.op, agora),
+            )
+            if corte_finalizado:
+                cursor.execute(
+                    """
+                    INSERT INTO apontamentos_corte (
+                        plano_hash, codigo_tarefa, programa, sequencia_nesting,
+                        maquina, status, operador_inicio, data_inicio,
+                        operador_fim, data_fim
+                    ) VALUES (
+                        'HASH-OUTBOX', 'T-OUTBOX', '1', 1, 'PLASMA',
+                        'Finalizado', 'OPERADOR-TESTE', %s, 'OPERADOR-TESTE', %s
+                    )
+                    """,
+                    (agora, agora),
+                )
+
+    def _terminais(self):
+        return [
+            item
+            for item in self._outbox()
+            if item["event_type"] == EVENT_PRODUCTION_APPOINTMENT_TERMINAL
+        ]
+
+    def test_terminal_nao_espera_corte_ja_apontado_na_origem(self):
+        # OP que já existia no Protheus antes do Gestor: o Corte (10) vem
+        # apontado de lá e a OP não está na fila de corte do sistema.
+        self._produce_and_finish("20", boas=8, quantidade=8)
+        self.assertEqual(len(self._terminais()), 1)
+
+    def test_terminal_espera_corte_que_ainda_esta_na_fila_do_sistema(self):
+        self._por_op_na_fila_de_corte(corte_finalizado=False)
+        self._produce_and_finish("20", boas=8, quantidade=8)
+        self.assertEqual(self._terminais(), [])
+
+    def test_terminal_sai_quando_o_corte_da_fila_termina(self):
+        self._por_op_na_fila_de_corte(corte_finalizado=True)
+        self._produce_and_finish("20", boas=8, quantidade=8)
+        self.assertEqual(len(self._terminais()), 1)
+
     def test_terminal_nao_duplica_nem_por_chave_nem_por_reexecucao(self):
         self._produce_and_finish("10", boas=10)
         self._produce_and_finish("20", boas=8, quantidade=8)
