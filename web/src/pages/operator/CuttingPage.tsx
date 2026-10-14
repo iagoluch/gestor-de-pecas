@@ -345,13 +345,20 @@ export function CuttingPage({ resource }: { resource: string }) {
                       tempo_real_segundos: row.tempo_real_segundos,
                       maquina: resource,
                     }];
-                    return nestings.map((nesting, nestingIndex) => (
+                    return nestings.map((nesting, nestingIndex) => {
+                      const programaNesting = String(nesting.programa ?? "").trim();
+                      // O histórico deve mostrar as OPs do plano desta chapa, não
+                      // a lista plana da tarefa, que mistura OPs de outros planos.
+                      const opsDoPlano = row.planos
+                        ?.find((plano) => String(plano.programa ?? "").trim() === programaNesting)
+                        ?.ops?.map((op) => String(op.codigo_op ?? "").trim()).filter(Boolean) ?? [];
+                      return (
                       <tr key={nesting.plano_hash ?? `${row.codigo_tarefa}-${rowIndex}-${nestingIndex}`}>
                         <td>{row.codigo_tarefa ?? "—"}</td>
                         <td>{nesting.programa ?? "—"}</td>
                         <td>{nesting.nome_chapa ?? "—"}{nesting.repeticao != null ? ` · ${nesting.repeticao}` : ""}</td>
                         <td>{nesting.maquina ?? resource}</td>
-                        <td>{row.ops_relacionadas?.length ? row.ops_relacionadas.join(", ") : "—"}</td>
+                        <td>{opsDoPlano.length ? opsDoPlano.join(", ") : "—"}</td>
                         <td>{nesting.quantidade_processo ?? 0}</td>
                         <td>{formatDateTime(nesting.data_programa)}</td>
                         <td>{formatDateTime(nesting.data_inicio)}</td>
@@ -359,7 +366,8 @@ export function CuttingPage({ resource }: { resource: string }) {
                         <td>{nesting.tempo_real_segundos == null ? "—" : formatDuration(nesting.tempo_real_segundos)}</td>
                         <td>{nesting.status ?? "—"}</td>
                       </tr>
-                    ));
+                      );
+                    });
                   })}
                 </tbody>
               </table>
