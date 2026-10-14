@@ -9,6 +9,7 @@ from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.main import create_app
 from backend.api.schemas.auth import SessionUser
 from mes.contracts.ai import AIProviderResponse
+from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from tests.test_web_api import ApiFakeDatabase
 
@@ -330,11 +331,27 @@ database.catalog_operations.extend([
 ])
 _visual_flow = OperatorFlowService(database, "OPERADOR DOBRA VISUAL")
 _visual_operacao = database.listar_operacoes_para_op("OP-VISUAL-401", "Dobra")[0]
-_visual_flow.executar("Início", op="OP-VISUAL-401", setor="Dobra", recurso="1303", operacao=_visual_operacao)
-_visual_flow.executar(
-    "Finalizado", op="OP-VISUAL-401", setor="Dobra", recurso="1303",
-    operacao=_visual_operacao, pecas_boas=6, operadores_cracha=["77"],
+# Mesmo caminho do posto: Início → Setup → primeira peça medida no checklist →
+# Finalizado. Um passo recusado derruba a pré-visualização em vez de deixar a
+# OP parada em "Em processo" sem ninguém perceber.
+database.salvar_template_qualidade(
+    "FLANGE-401",
+    [{"sequencia": 1, "descricao": "Altura da aba", "padrao": "25,0 +/- 0,5"}],
+    produto_descricao="Flange dobrado",
 )
+_visual_contexto = dict(op="OP-VISUAL-401", setor="Dobra", recurso="1303", operacao=_visual_operacao)
+for _nome, _passo in (
+    ("Início", lambda: _visual_flow.executar("Início", **_visual_contexto)),
+    ("Setup", lambda: _visual_flow.executar("Setup", **_visual_contexto)),
+    ("Checklist", lambda: FirstPieceService(database, "OPERADOR DOBRA VISUAL").registrar_checklist(
+        **_visual_contexto, medidas=[{"sequencia": 1, "medida": "25,1"}],
+    )),
+    ("Finalizado", lambda: _visual_flow.executar(
+        "Finalizado", **_visual_contexto, pecas_boas=6, operadores_cracha=["77"],
+    )),
+):
+    _resultado = _passo()
+    assert _resultado.ok, f"seed OP-VISUAL-401 {_nome}: {_resultado.code} {_resultado.message}"
 
 # Wave 6E — variedade mínima para conferir visualmente os filtros das telas de
 # cadastro: crachá ativo/inativo, com e sem designação de responsável, e mais de
