@@ -25,6 +25,10 @@ export function useApiQuery<T>(
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [generation, setGeneration] = useState(0);
+  // Rota a que `data`/`error` pertencem. Ao trocar de rota, o efeito abaixo só
+  // limpa o estado um render depois; nesse render a tela já mostra a rota nova
+  // e não pode receber o snapshot da anterior (ex.: OP trocada pelo card).
+  const [statePath, setStatePath] = useState(path);
   const inFlight = useRef(false);
   const refreshQueued = useRef(false);
   const requestId = useRef(0);
@@ -65,12 +69,14 @@ export function useApiQuery<T>(
       setLoading(false);
       setError(null);
       setData(null);
+      setStatePath(null);
       return;
     }
     if (activePath.current !== path) {
       activePath.current = path;
       hasData.current = false;
       setData(null);
+      setStatePath(path);
     }
     const controller = new AbortController();
     const currentRequest = ++requestId.current;
@@ -108,5 +114,6 @@ export function useApiQuery<T>(
     return () => controller.abort();
   }, [path, generation]);
 
+  if (statePath !== path) return { data: null, error: null, loading: Boolean(path), reload, replaceData, updatedAt: null };
   return { data, error, loading, reload, replaceData, updatedAt };
 }

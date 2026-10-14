@@ -334,6 +334,39 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Início", op: "OP-OVERRIDE", operation_id: 3 });
   });
 
+  it("ao trocar de OP pelo card, a mensagem não cita a etapa da OP anterior", async () => {
+    // Resposta da OP nova atrasada: a tela fica um tempo com a OP-B carregada
+    // e o roteiro da OP-A ainda na memória (diagnóstico 14/10, item 1.1).
+    let liberarB: () => void = () => {};
+    const respostaB = new Promise<void>((resolve) => { liberarB = resolve; });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 11, name: "Operador", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["Gasparini"] });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["Gasparini"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/workbench")) return json({ queue: [], production: [{ id: 22, catalogo_operacao_id: 22, op: "OP-B", status: "Em processo", operation: "20 - DOBRA", product: "PEÇA-B", qty: 1 }] });
+      if (path.includes("/operator/operations/OP-A")) return json({ items: [{ id: 1, numero_operacao: "10", descricao_operacao: "CORTE", visual_status: "current", visual_current: true }] });
+      if (path.includes("/operator/operations/OP-B")) {
+        await respostaB;
+        return json({ items: [{ id: 22, numero_operacao: "20", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true }] });
+      }
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    }));
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("Gasparini");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByText("OP encontrada. Etapa atual: 10 - CORTE.");
+
+    fireEvent.click((await screen.findByText("OP: OP-B")).closest("button") as HTMLElement);
+    await act(async () => { liberarB(); });
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+    expect(screen.queryByText(/10 - CORTE/)).not.toBeInTheDocument();
+    expect(screen.getByText("OP OP-B selecionada no card.")).toBeInTheDocument();
+  });
+
   it("envia a ação contextual Parada como Retomar", async () => {
     const status = "Parada";
     const expectedAction = "Retomar";
