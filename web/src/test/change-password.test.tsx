@@ -64,12 +64,24 @@ describe("troca obrigatória da senha padrão (SEC-05)", () => {
 
   it("operador com a senha padrão não passa pela etapa", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).includes("/auth/session")) return json(operador);
+      const path = String(input);
+      if (path.includes("/auth/session")) return json(operador);
+      if (path.includes("/operator/context")) {
+        return json({
+          sector: "Dobra",
+          route: "Dobra",
+          resources: ["1303", "2204"],
+          fixed_resource: false,
+          station_profile_required: false,
+          has_setup: true,
+          automatic_queue: false,
+          workflow: "workbench",
+        });
+      }
       return json({}, 200);
     });
     renderAt("/operador", fetchMock);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    await waitFor(() => expect(screen.queryByText("Verificando sessão…")).toBeNull());
+    expect(await screen.findByText("2204")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Defina uma nova senha" })).toBeNull();
   });
 });
