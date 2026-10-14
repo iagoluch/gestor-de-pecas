@@ -392,6 +392,28 @@ class AccountResourceNoDemandTests(unittest.TestCase):
             [],
         )
 
+    def test_recursos_de_contas_respeitam_filtro_de_setor_e_recurso(self):
+        # Diagnóstico 14/10, item 3.3: "?setor=Dobra" trazia postos da Solda.
+        repository = AndonRepositoryFake()
+        repository.listar_estados_recurso_atuais = lambda **_kwargs: []
+        repository.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: []
+        repository.listar_usuarios = lambda: [
+            {"nivel": "estacao1aco", "ativo": True},
+            {"nivel": "estacao2aco", "ativo": True},
+        ]
+        now = datetime(2026, 9, 16, 11, 0)
+        facade = FrontendBackendFacade(repository, now_func=lambda: now)
+
+        def recursos(**filtro):
+            return [item["recurso"] for item in facade.consulta_operacional(
+                AnalyticsFilter(now, now, **filtro), incluir_recursos_sem_demanda_de_contas=True,
+            )["resources"]]
+
+        self.assertEqual(recursos(), ["Estação 1", "Estação 2"])
+        self.assertEqual(recursos(setor="Dobra"), [])
+        self.assertEqual(recursos(setor="solda aço"), ["Estação 1", "Estação 2"])
+        self.assertEqual(recursos(recurso="Estação 2"), ["Estação 2"])
+
     def test_somente_recursos_em_uso_mostra_so_postos_apontaveis(self):
         repository = AndonRepositoryFake()
         now = datetime(2026, 9, 25, 9, 0)

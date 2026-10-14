@@ -708,8 +708,16 @@ class FrontendBackendFacade:
                 for resource in (str(item.get("recurso") or "").strip(),)
                 for identity in (resource.casefold(), resource_display_name(resource).casefold(), _resource_key(resource))
             }
+            # Os estados e fatos já chegam recortados por setor/recurso; os
+            # postos das contas precisam do mesmo recorte para não vazar outro setor.
+            wanted_sector = str(filters.setor or "").strip().casefold()
+            wanted_resource = _post_identities(filters.recurso) if filters.recurso else None
             for resource, sector in account_resources.values():
                 identities = _post_identities(resource, sector)
+                if wanted_sector and sector.casefold() != wanted_sector:
+                    continue
+                if wanted_resource is not None and not identities & wanted_resource:
+                    continue
                 if identities & present:
                     continue
                 present.update(identities)

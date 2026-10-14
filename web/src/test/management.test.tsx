@@ -671,5 +671,10 @@ describe("KPIs gerenciais da Wave 2", () => {
 
     render(<MemoryRouter initialEntries={["/consulta-operacional/recursos?setor=Corte"]}><FilterProvider><OperationsResourcesPage /></FilterProvider></MemoryRouter>);
     await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes("setor=Corte"))).toBe(true));
+    // Diagnóstico 14/10, item 3.3: o seletor mostrava "Todos os setores".
+    expect(screen.getByLabelText("Setor")).toHaveValue("Corte");
+    // Só uma consulta, já com o setor; nada de pedir "todos" antes.
+    expect(fetchMock.mock.calls.every(([path]) => String(path).includes("setor=Corte"))).toBe(true);
+    expect(fetchMock.mock.calls.every(([path]) => (String(path).match(/setor=/g) ?? []).length === 1)).toBe(true);
   });
 });

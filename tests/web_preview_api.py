@@ -118,7 +118,11 @@ visual_facts = [{
     "eventos": [],
 }]
 database.listar_recursos_pcfactory = lambda *_args, **_kwargs: visual_resources
-database.listar_estados_recurso_atuais = lambda **_kwargs: visual_states
+# Mesmo recorte de setor que o banco faz (UPPER(tipo_setor) = UPPER(setor)).
+database.listar_estados_recurso_atuais = lambda setor=None, **_kwargs: [
+    state for state in visual_states
+    if not setor or state["tipo_setor"].upper() == str(setor).strip().upper()
+]
 database.listar_estados_recurso_periodo = lambda *_args, **_kwargs: visual_states
 database.listar_destaques_ativos_andon = lambda: visual_highlights
 database.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: visual_facts

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
@@ -106,13 +106,19 @@ export function OperationsOverviewPage() {
 
 export function OperationsResourcesPage() {
   const filters = useManagementFilters();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const sector = params.get("setor");
-  const queryText = sector ? `${filters.dailyQuery}&setor=${encodeURIComponent(sector)}` : filters.dailyQuery;
-  const query = useApiQuery<ResourcePage>(`/api/v1/operations/resources?${queryText}&page=1&page_size=200`);
+  // O link "?setor=X" (Início) vira o filtro da barra: assim o seletor mostra
+  // o setor de verdade e trocá-lo depois não fica preso ao parâmetro da URL.
+  useEffect(() => {
+    if (sector === null) return;
+    filters.setFilters({ ...filters.filters, sector });
+    setParams((current) => { current.delete("setor"); return current; }, { replace: true });
+  }, [sector]); // eslint-disable-line react-hooks/exhaustive-deps
+  const query = useApiQuery<ResourcePage>(sector === null ? `/api/v1/operations/resources?${filters.dailyQuery}&page=1&page_size=200` : null);
   const title = "Consulta Operacional — Recursos";
   const subtitle = "Estado, OP, operador e duração por recurso físico no dia corrente.";
-  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
+  if (query.loading || sector !== null) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
   if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   return (
