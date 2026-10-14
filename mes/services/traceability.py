@@ -134,6 +134,8 @@ class TraceabilityService:
                     fact.get("tipo_setor"), fact.get("setor_roteiro")
                 ),
                 "status": fact.get("status"),
+                "operador_inicio": fact.get("operador_inicio_nome") or fact.get("operador_inicio"),
+                "operador_fim": fact.get("operador_fim_nome") or fact.get("operador_fim"),
                 "inicio": fact.get("data_inicio"),
                 "fim": fact.get("data_fim"),
                 "quantidade_boa": int(fact.get("quantidade_boa") or 0),

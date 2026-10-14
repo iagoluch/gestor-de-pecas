@@ -864,6 +864,7 @@ class _TraceRepo:
             "id": 31, "op": "OP9", "numero_operacao": "10", "tipo_setor": "Dobra",
             "maquina": "DOBRA1", "status": "Finalizado", "quantidade_boa": 4,
             "quantidade_refugo": 1, "quantidade_retrabalho": 0, "eventos": [],
+            "operador_inicio_nome": "Ana Dobra", "operador_fim_nome": "Bruno Dobra",
         }]
 
     def listar_eventos_quantidade_periodo(self, *_args, **kwargs):
@@ -888,6 +889,12 @@ class TraceabilityTests(unittest.TestCase):
             {item["source"] for item in result["timeline"]},
             {"eventos_quantidade_producao", "apontamentos_corte", "historico_legado"},
         )
+
+    def test_operacoes_trazem_o_operador_do_apontamento(self):
+        # Diagnóstico 14/10, item 3.4: a coluna Operador dizia "Ver linha do tempo".
+        operation = TraceabilityService(_TraceRepo()).trace_op("OP9")["operations"][0]
+        self.assertEqual(operation["operador_inicio"], "Ana Dobra")
+        self.assertEqual(operation["operador_fim"], "Bruno Dobra")
 
 
 

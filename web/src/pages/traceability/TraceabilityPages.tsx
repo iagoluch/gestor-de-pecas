@@ -78,7 +78,7 @@ export function TraceabilityOrderPage() {
                 { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
                 { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
                 { key: "resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
-                { key: "operator", label: "Operador", render: () => "Ver linha do tempo" },
+                { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "Não disponível" },
                 { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
                 { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
                 { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },

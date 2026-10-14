@@ -152,6 +152,8 @@ export interface TraceOperation {
   recurso_real?: string | null;
   setor?: string | null;
   status?: string | null;
+  operador_inicio?: string | null;
+  operador_fim?: string | null;
   inicio?: string | null;
   fim?: string | null;
   quantidade_boa: number;

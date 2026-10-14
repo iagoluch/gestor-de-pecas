@@ -15,6 +15,7 @@ import { OperationsOverviewPage, OperationsResourcesPage } from "../pages/operat
 import { ProductionOrdersPage } from "../pages/production/ProductionPages";
 import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
 import { HomeSectorsPage } from "../pages/home/HomePages";
+import { TraceabilityOrderPage } from "../pages/traceability/TraceabilityPages";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -676,5 +677,22 @@ describe("KPIs gerenciais da Wave 2", () => {
     // Só uma consulta, já com o setor; nada de pedir "todos" antes.
     expect(fetchMock.mock.calls.every(([path]) => String(path).includes("setor=Corte"))).toBe(true);
     expect(fetchMock.mock.calls.every(([path]) => (String(path).match(/setor=/g) ?? []).length === 1)).toBe(true);
+  });
+
+  it("rastreabilidade mostra o operador de cada operação", async () => {
+    // Diagnóstico 14/10, item 3.4: a coluna dizia "Ver linha do tempo".
+    const operation = { quantidade_boa: 1, refugo: 0, retrabalho: 0 };
+    vi.stubGlobal("fetch", jsonOnce({
+      op: "OP9", timeline: [], cutting_nestings: [],
+      operations: [
+        { ...operation, apontamento_id: 1, operacao: "10", operador_inicio: "Ana Dobra" },
+        { ...operation, apontamento_id: 2, operacao: "20", operador_fim: "Bruno Dobra" },
+        { ...operation, apontamento_id: 3, operacao: "30" },
+      ],
+    }));
+    render(<MemoryRouter initialEntries={["/rastreabilidade/op-produto?op=OP9"]}><FilterProvider><TraceabilityOrderPage /></FilterProvider></MemoryRouter>);
+    expect(await screen.findByText("Ana Dobra")).toBeInTheDocument();
+    expect(screen.getByText("Bruno Dobra")).toBeInTheDocument();
+    expect(screen.queryByText("Ver linha do tempo")).not.toBeInTheDocument();
   });
 });
