@@ -20,6 +20,7 @@ import unittest
 
 from mes.services.cut import (
     PLAN_STATE_CUTTING,
+    PLAN_STATE_PARTIAL,
     PLAN_STATE_DONE,
     PLAN_STATE_HIGHLIGHT_READY,
     PLAN_STATE_WAITING_CUT,
@@ -237,7 +238,7 @@ class HierarquiaCorteTests(unittest.TestCase):
 
         # Chapa cortada dentro de um plano ainda pendente não transforma o
         # plano em trabalho do Destaque: ele continua sendo trabalho do Corte.
-        self.assertEqual(plano_parcial["estado"], PLAN_STATE_CUTTING)
+        self.assertEqual(plano_parcial["estado"], PLAN_STATE_PARTIAL)
         self.assertEqual(plano_intocado["estado"], PLAN_STATE_WAITING_CUT)
         self.assertNotEqual(plano_intocado["estado"], PLAN_STATE_HIGHLIGHT_READY)
         # A chapa já cortada permanece visível para o Destaque, pela regra

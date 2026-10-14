@@ -29,6 +29,9 @@ CUT_MACHINE_REVERSE = {value: key for key, value in CUT_MACHINE_MAP.items()}
 # o Destaque pode puxar.
 PLAN_STATE_WAITING_CUT = "AGUARDANDO CORTE"
 PLAN_STATE_CUTTING = "EM CORTE"
+# Manufatura (14/10/2026): chapa já cortada e chapa pendente, sem nenhuma na
+# máquina agora. Continua trabalho do Corte, mas não é "cortando agora".
+PLAN_STATE_PARTIAL = "CORTE PARCIAL"
 PLAN_STATE_HIGHLIGHT_READY = "DISPONÍVEL PARA DESTAQUE"
 PLAN_STATE_DONE = "FINALIZADO"
 
@@ -356,14 +359,19 @@ class CutService:
             search=search,
             agora=self._now(),
         )
-        current_keys = {
-            (row.get("codigo_tarefa"), row.get("maquina")) for row in current
-        }
-        completed_groups = [
-            row for row in self._group_rows(completed)
-            if (row.get("codigo_tarefa"), row.get("maquina")) not in current_keys
-        ]
-        rows = current + completed_groups
+        if status == "Finalizado":
+            # Manufatura (14/10/2026): o Histórico mostra os planos já cortados
+            # mesmo com a tarefa ainda tendo planos pendentes na fila.
+            rows = self._group_rows(completed)
+        else:
+            current_keys = {
+                (row.get("codigo_tarefa"), row.get("maquina")) for row in current
+            }
+            completed_groups = [
+                row for row in self._group_rows(completed)
+                if (row.get("codigo_tarefa"), row.get("maquina")) not in current_keys
+            ]
+            rows = current + completed_groups
         if status and status != "Todos":
             rows = [row for row in rows if row.get("status") == status]
         if search:
@@ -705,7 +713,7 @@ class CutService:
         if waiting:
             # Plano com chapa já cortada e chapa pendente continua sendo
             # trabalho do Corte — jamais "aguardando destaque".
-            return PLAN_STATE_CUTTING if completed else PLAN_STATE_WAITING_CUT
+            return PLAN_STATE_PARTIAL if completed else PLAN_STATE_WAITING_CUT
         if not ManufacturingRules.cut_releases_highlight(machine_sigmanest):
             return PLAN_STATE_DONE
         pendente = any(

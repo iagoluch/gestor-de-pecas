@@ -322,6 +322,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   );
   // Com 2+ OPs ativas no posto, a ação (ex.: Parada) vale para a OP selecionada.
   const activeCard = (selectedCard && activeCards.includes(selectedCard) ? selectedCard : undefined) ?? activeCards[0];
+  // Manufatura (14/10/2026): o Parar abre a lista das OPs ativas do posto e o
+  // operador marca em quais delas a parada vale. OP já parada não entra.
+  const stoppableCards = activeCards.filter((item) => item.status !== "Parada");
   // Produção simultânea é permitida; só Setup/Retrabalho de outra OP trava o
   // Iniciar. A decisão é do backend (`aceita_producao_simultanea`); a tela só
   // aponta qual OP está em Setup/Retrabalho para explicar o motivo.
@@ -658,8 +661,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     }
   }
 
-  async function execute(action: string, extra: Record<string, unknown> = {}) {
-    const appointmentForStop = action === "Parada" ? activeCard : undefined;
+  async function execute(action: string, extra: Record<string, unknown> = {}, stopTarget?: OperatorCard): Promise<boolean> {
+    const appointmentForStop = action === "Parada" ? stopTarget ?? activeCard : undefined;
     const stopWithoutOp = action === "Parada" && !appointmentForStop;
     // Parada e retomada do recurso correm sem OP: o backend atua no estado
     // físico do posto, não em um apontamento.
@@ -670,7 +673,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     if (!withoutOp && (!loadedOp || !selected)) {
       if (!appointmentForStop) {
         setMessage("Carregue e selecione uma operação antes de apontar.", "error");
-        return;
+        return false;
       }
     }
     setSubmitting(true);
@@ -695,6 +698,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         setLoadedOp("");
         setRouteSelection(null);
       }
+      return true;
     } catch (reason) {
       if (reason instanceof ApiError && ["confirmacao_recurso_obrigatoria", "confirmacao_etapa_anterior_obrigatoria"].includes(reason.code)) {
         setDialog({ kind: "authorization", action, code: reason.code, details: reason.details as Record<string, unknown> | undefined });
@@ -705,8 +709,18 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       } else {
         setMessage(operatorActionErrorMessage(reason), "error");
       }
+      return false;
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Uma parada por OP marcada, em sequência; a primeira recusa interrompe e a
+  // mensagem do backend fica na tela.
+  async function stopCards(targets: OperatorCard[], extra: Record<string, unknown>) {
+    if (!targets.length) return execute("Parada", extra);
+    for (const target of targets) {
+      if (!(await execute("Parada", extra, target))) return;
     }
   }
 
@@ -762,7 +776,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           preparação da máquina, que é quando a primeira peça é fabricada. */}
       <div className="operator-actions" aria-label="Ações operacionais">
         <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || activeCard?.status === "Parada"} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
+        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
         <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>Retrabalho</span></button>
@@ -812,7 +826,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           onConfirm={() => { applyRouteStep(dialog.operationKey); setDialog(null); }}
         />
       ) : null}
-      {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(code, comment) => execute("Parada", { stop_reason_code: code, comment })} /> : null}
+      {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} cards={stoppableCards} initial={activeCard && stoppableCards.includes(activeCard) ? activeCard : stoppableCards[0]} onCancel={() => setDialog(null)} onConfirm={(code, comment, targets) => stopCards(targets, { stop_reason_code: code, comment })} /> : null}
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => confirmFirstPiece(result, note)} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then(() => { if (action === "Setup" && gateRequired) openGate(); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
@@ -1200,11 +1214,27 @@ function ContextLine({ op, operation, resource }: Pick<OperationContext, "op" | 
   return <div className="operator-context-line"><span><small>OP</small><strong>{op || "—"}</strong></span><span><small>Operação</small><strong>{operation || "—"}</strong></span><span><small>Recurso</small><strong>{resource}</strong></span></div>;
 }
 
-function StopDialog({ context, reasons, onCancel, onConfirm }: { context: OperationContext; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => unknown }) {
+function StopDialog({ context, reasons, cards, initial, onCancel, onConfirm }: { context: OperationContext; reasons: StopReason[]; cards: OperatorCard[]; initial?: OperatorCard; onCancel: () => void; onConfirm: (code: string, comment: string, targets: OperatorCard[]) => unknown }) {
   const [code, setCode] = useState("");
   const [comment, setComment] = useState("");
+  // Guarda a chave, não o cartão: a lista é recarregada enquanto a janela está aberta.
+  const [targetKeys, setTargetKeys] = useState<string[]>(initial ? [cardKey(initial)] : []);
+  const targets = cards.filter((card) => targetKeys.includes(cardKey(card)));
   const selected = reasons.find((item) => item.codigo === code);
-  return <OperatorDialog title="Registrar parada" size="wide" context={<ContextLine {...context} />} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</AsyncButton></div></OperatorDialog>;
+  // Com uma OP só não há o que escolher: a janela continua como sempre foi.
+  const choosing = cards.length > 1;
+  function toggle(card: OperatorCard) {
+    const key = cardKey(card);
+    setTargetKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  }
+  return <OperatorDialog title="Registrar parada" size="wide" context={choosing ? undefined : <ContextLine {...context} />} onCancel={onCancel}>
+    {choosing ? <fieldset className="operator-stop-targets">
+      <legend>OPs que vão parar</legend>
+      {cards.map((card) => <label key={cardKey(card)}><input type="checkbox" checked={targetKeys.includes(cardKey(card))} onChange={() => toggle(card)} /><span><strong>OP {String(card.op ?? "")}</strong> · {String(card.operation ?? card.numero_operacao ?? "")} · {String(card.status ?? "")}</span></label>)}
+    </fieldset> : null}
+    <StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} />
+    <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim()) || (choosing && !targets.length)} onClick={() => onConfirm(code, comment, choosing ? targets : [])}>Confirmar parada</AsyncButton></div>
+  </OperatorDialog>;
 }
 
 function CardListDialog({ title, items, hasMore, onCancel, onSelect }: { title: string; items: OperatorCard[]; hasMore: boolean; onCancel: () => void; onSelect: (item: OperatorCard) => void }) {

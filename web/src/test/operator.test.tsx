@@ -455,6 +455,41 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Parada", resource: "1303", op: null, operation_id: null });
   });
 
+  it("com várias OPs ativas o Parar deixa marcar em quais a parada vale e envia uma por OP", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 4, name: "Operador Dobra", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra" });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons")) return json({ items: [{ codigo: "0029", nome: "Quebra de ferramenta", grupo_codigo: "0004" }] });
+      if (path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/workbench")) return json({ sector: "Dobra", resource: "1303", queue: [], production: [
+        { id: 1, op: "OP-A", status: "Em processo", operation: "20 - DOBRA", numero_operacao: "20", qty: 4 },
+        { id: 2, op: "OP-B", status: "Em processo", operation: "30 - DOBRA", numero_operacao: "30", qty: 4 },
+        { id: 3, op: "OP-C", status: "Parada", operation: "40 - DOBRA", numero_operacao: "40", qty: 4 },
+      ] });
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/actions") && init?.method === "POST") return json({ ok: true, message: "Parada registrada com sucesso." });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Parada" }));
+    const targets = await screen.findByRole("group", { name: "OPs que vão parar" });
+    // OP já parada não entra na lista; a primeira ativa vem marcada.
+    expect(within(targets).queryByText(/OP-C/)).not.toBeInTheDocument();
+    expect(within(targets).getByRole("checkbox", { name: /OP-A/ })).toBeChecked();
+    fireEvent.click(within(targets).getByRole("checkbox", { name: /OP-B/ }));
+    fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "0029" } });
+    await waitFor(() => expect(screen.getByRole("option", { name: "0029 - Quebra de ferramenta" })).toHaveAttribute("aria-selected", "true"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar parada" }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST")).toHaveLength(2));
+    const bodies = fetchMock.mock.calls
+      .filter(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST")
+      .map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies.map((body) => [body.action, body.op, body.stop_reason_code])).toEqual([["Parada", "OP-A", "0029"], ["Parada", "OP-B", "0029"]]);
+  });
+
   it("não abre o diálogo de parada para OP digitada que não existe e avisa no campo", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

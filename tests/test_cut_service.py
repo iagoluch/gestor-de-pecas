@@ -369,6 +369,22 @@ class CutServiceTests(unittest.TestCase):
             [300, 180],
         )
 
+    def test_historico_mostra_plano_finalizado_com_tarefa_ainda_na_fila(self):
+        self.db.cut_plans.append(_plan(
+            plano_hash="hash-corte-2",
+            programa="P9001",
+            sequencia_nesting=1,
+        ))
+        start = self.service.iniciar("hash-corte-1", "Laser Ensis 3015")
+        self.service.finalizar(start.data["id"])
+        self.assertTrue(self.service.listar_fila("Laser Ensis 3015"))
+
+        rows = self.service.listar_consulta(maquina="Laser Ensis 3015", status="Finalizado")
+
+        self.assertEqual([row["codigo_tarefa"] for row in rows], ["T3500"])
+        self.assertEqual(rows[0]["status"], "Finalizado")
+        self.assertEqual([item["programa"] for item in rows[0]["nestings"]], ["P9000"])
+
     def test_historico_usa_fim_real_para_ordenar_processadas_mais_recentes(self):
         older = {**self.db.cut_plans[0], "id": 1, "maquina": "Laser Ensis 3015", "status": "Finalizado",
                  "codigo_tarefa": "T-ANTIGA", "operador_inicio": "A", "operador_fim": "A",

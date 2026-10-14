@@ -1038,6 +1038,10 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-finish-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operator-badge-entry { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 8px; }
 .operator-badge-entry button { border: 1px solid var(--primary-fill); border-radius: var(--radius-control); color: white; background: var(--primary-fill); font-size: 27px; font-weight: 700; }
+.operator-stop-targets { display: grid; gap: 8px; margin: 0 0 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-alt); }
+.operator-stop-targets legend { padding: 0 4px; font-weight: 700; }
+.operator-stop-targets label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.operator-stop-targets input { width: 24px; height: 24px; flex: none; }
 .operator-badge-list { min-height: 74px; display: grid; gap: 7px; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-alt); }
 .operator-badge-list > p { margin: auto; color: var(--muted); font-size: var(--text-sm); }
 .operator-badge-list > div { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border: 1px solid var(--divider); border-radius: var(--radius-control); background: var(--surface); }
@@ -1090,6 +1094,7 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .cutting-plan--em-corte .cutting-plan__estado { background: var(--accent-soft); color: var(--accent); }
 .cutting-plan--disponivel-para-destaque .cutting-plan__estado { background: var(--primary-soft); color: var(--primary); }
 .cutting-plan--aguardando-corte .cutting-plan__estado { background: var(--warning-soft); color: var(--warning); }
+.cutting-plan--corte-parcial .cutting-plan__estado { background: var(--warning-soft); color: var(--warning); }
 .cutting-plan__resumo { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 10px 0 0; }
 .cutting-plan__ops-cabecalho { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 2fr) 56px; gap: 10px; margin: 10px 0 0; padding: 0 9px; color: var(--muted); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; }
 .cutting-plan__ops { display: grid; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
