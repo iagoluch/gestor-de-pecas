@@ -420,6 +420,7 @@ class IndustrialAnalyticsServiceTests(unittest.TestCase):
         self.assertEqual(result["items"], [])
         # A grandeza publicada é tempo; capacidade em peças não é estimada.
         self.assertEqual(result["unidade"], "tempo")
+        self.assertEqual(result["reason"], "Capacidade dos recursos ainda não configurada.")
 
     def test_confiabilidade_sem_catalogo_de_manutencao_fica_nao_configurada(self):
         result = self.service.reliability(self.filters)

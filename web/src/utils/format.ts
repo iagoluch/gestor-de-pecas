@@ -11,6 +11,11 @@ export function formatNumber(value: number | null | undefined, digits = 0) {
   return value.toLocaleString("pt-BR", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
 
+export function formatPieces(value: number | null | undefined) {
+  const text = formatNumber(value);
+  return value === null || value === undefined || Number.isNaN(value) ? text : `${text} peça(s)`;
+}
+
 function normalizeMeasurementToken(token: string) {
   const separator = token.includes(",") ? "," : ".";
   const decimals = token.includes(separator) ? token.split(separator)[1] ?? "" : "";

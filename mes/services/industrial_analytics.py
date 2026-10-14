@@ -622,7 +622,7 @@ class IndustrialAnalyticsService:
                 "items": [],
                 "unidade": "tempo",
                 "availability": DataAvailability.NOT_CONFIGURED.value,
-                "reason": "Repository atual não expõe configuração de capacidade.",
+                "reason": "Capacidade dos recursos ainda não configurada.",
             }
         rows = list(loader(setor=filters.setor, recurso=filters.recurso) or [])
         if not rows:

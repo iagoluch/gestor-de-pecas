@@ -83,9 +83,9 @@ export function AuditIssuesPage() {
   return (
     <PageFrame staleError={query.error} sectionId="audit" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Críticas" value={formatNumber(data?.by_severity.critical ?? 0)} accent="danger" />
-        <MetricCard label="Erros" value={formatNumber(data?.by_severity.error ?? 0)} accent="danger" />
-        <MetricCard label="Atenções" value={formatNumber(data?.by_severity.warning ?? 0)} accent="warning" />
+        <MetricCard label="Críticas" value={formatNumber(data?.by_severity.critico ?? 0)} accent="danger" />
+        <MetricCard label="Erros" value={formatNumber(data?.by_severity.erro ?? 0)} accent="danger" />
+        <MetricCard label="Atenções" value={formatNumber(data?.by_severity.aviso ?? 0)} accent="warning" />
         <MetricCard label="Total" value={formatNumber(data?.count ?? 0)} />
       </div>
       <SectionCard title="Inconsistências detectadas" className="content-section section-card--table">

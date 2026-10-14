@@ -25,6 +25,7 @@ import {
   formatDuration,
   formatHours,
   formatNumber,
+  formatPieces,
   formatPercent,
   formatSignedDuration,
   humanize,
@@ -376,8 +377,8 @@ export function AnalyticsOeePage() {
           <div><i className="dot dot--success" /><strong>Parada planejada</strong><span>{formatDuration(losses.parada_planejada_segundos ?? null)}</span></div>
           <div><i className="dot dot--danger" /><strong>Parada não planejada</strong><span>{formatDuration(losses.parada_nao_planejada_segundos ?? null)}</span></div>
           <div><i className="dot dot--warning" /><strong>Ritmo (performance)</strong><span>{formatDuration(losses.ritmo_segundos ?? null)}</span></div>
-          <div><i className="dot dot--teal" /><strong>Refugo</strong><span>{formatNumber(losses.refugo_quantidade ?? null)} peça(s)</span></div>
-          <div><i className="dot dot--teal" /><strong>Retrabalho</strong><span>{formatNumber(losses.retrabalho_quantidade ?? null)} peça(s)</span></div>
+          <div><i className="dot dot--teal" /><strong>Refugo</strong><span>{formatPieces(losses.refugo_quantidade)}</span></div>
+          <div><i className="dot dot--teal" /><strong>Retrabalho</strong><span>{formatPieces(losses.retrabalho_quantidade)}</span></div>
         </div>
       </SectionCard>
     </PageFrame>
