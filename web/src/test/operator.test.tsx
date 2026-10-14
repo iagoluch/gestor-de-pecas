@@ -1340,13 +1340,18 @@ describe("fluxo Web do operador", () => {
       if (path.includes("/cutting/history")) return json({
         resource: "Laser Ensis 3015", status: "Finalizado",
         items: [{
-          codigo_tarefa: "T3492", programa: "8634", material: "ASTM A36",
-          nesting_count: 2, nestings_concluidos: 2,
+          codigo_tarefa: "T3492", programa: "8634, 8635", material: "ASTM A36",
+          nesting_count: 3, nestings_concluidos: 3,
+          planos: [
+            { programa: "8634", ops: [{ codigo_op: "00617399002" }] },
+            { programa: "8635", ops: [{ codigo_op: "00617399003" }] },
+          ],
           // O histórico é uma linha por chapa física: cada nesting carrega os
           // próprios tempos, chapa, repetição e máquina.
           nestings: [
             { plano_hash: "h1", sequencia: 1, programa: "8634", nome_chapa: "CHAPA 3000 x 1500", repeticao: 1, status: "Finalizado", quantidade_processo: 6, maquina: "Laser Ensis 3015", data_programa: "2026-08-30T17:00:00", data_inicio: "2026-08-31T08:33:33", data_fim: "2026-08-31T08:33:35", tempo_real_segundos: 2 },
             { plano_hash: "h2", sequencia: 2, programa: "8634", nome_chapa: "CHAPA 3000 x 1500", repeticao: 2, status: "Finalizado", quantidade_processo: 6, maquina: "Laser Ensis 3015", data_programa: "2026-08-30T17:00:00", data_inicio: "2026-08-31T08:33:35", data_fim: "2026-08-31T08:33:37", tempo_real_segundos: 2 },
+            { plano_hash: "h3", sequencia: 3, programa: "8635", nome_chapa: "CHAPA 2000 x 1000", repeticao: 1, status: "Finalizado", quantidade_processo: 4, maquina: "Laser Ensis 3015", data_programa: "2026-08-30T17:00:00", data_inicio: "2026-08-31T08:33:37", data_fim: "2026-08-31T08:33:39", tempo_real_segundos: 2 },
           ],
           ops_relacionadas: ["00617399002", "00617399003"],
           data_inicio: "2026-08-31T08:33:33", data_fim: "2026-08-31T08:33:37", tempo_real_segundos: 4,
@@ -1362,13 +1367,20 @@ describe("fluxo Web do operador", () => {
     // O histórico só é consultado quando o operador pede.
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/cutting/history"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Histórico" }));
-    // Uma linha por chapa cortada, cada uma com a própria repetição e duração.
+    // Uma linha por chapa cortada, com duração própria e OPs do plano correspondente.
     const linhas = await screen.findAllByRole("row", { name: /T3492/ });
-    expect(linhas).toHaveLength(2);
+    expect(linhas).toHaveLength(3);
     expect(within(linhas[0]).getByText("CHAPA 3000 x 1500 · 1")).toBeInTheDocument();
     expect(within(linhas[1]).getByText("CHAPA 3000 x 1500 · 2")).toBeInTheDocument();
+    expect(within(linhas[2]).getByText("CHAPA 2000 x 1000 · 1")).toBeInTheDocument();
     expect(within(linhas[0]).getByText("00:00:02")).toBeInTheDocument();
-    expect(screen.getAllByText("00617399002, 00617399003")).toHaveLength(2);
+
+    expect(within(linhas[0]).getByText("00617399002")).toBeInTheDocument();
+    expect(within(linhas[1]).getByText("00617399002")).toBeInTheDocument();
+    expect(within(linhas[2]).getByText("00617399003")).toBeInTheDocument();
+    expect(within(linhas[0]).queryByText("00617399003")).not.toBeInTheDocument();
+    expect(within(linhas[1]).queryByText("00617399003")).not.toBeInTheDocument();
+    expect(within(linhas[2]).queryByText("00617399002")).not.toBeInTheDocument();
   });
 });
 
