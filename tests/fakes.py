@@ -9,6 +9,7 @@ from app.core.resource_mapping import resolve_resource_identity, resource_displa
 from app.database.schema import SCHEMA_VERSION
 from mes.domain import (
     ManufacturingRules,
+    NO_DEMAND_REASON,
     OperatorState,
     SIGMANEST_LASER_MACHINE,
     can_transition,
@@ -1171,6 +1172,40 @@ class FakeDatabase:
         )
         return dict(row) if row else None
 
+    def _reconciliar_estado_recurso_apontamentos(self, recurso, instante, operador):
+        """Espelho enxuto de ``Database._reconciliar_estado_recurso_apontamentos_tx``.
+
+        O estado físico sai das OPs ativas do recurso; produção vence parada.
+        ponytail: sem intervalo automático nem fora de turno; sem OP ativa vira
+        sempre "Recurso sem demanda".
+        """
+        categories_by_status = {
+            "Em processo": "producao", "Parada": "parada",
+            "Setup": "setup", "Retrabalho": "retrabalho",
+        }
+        identity = resolve_resource_identity(recurso) or recurso
+        active = [
+            item for item in self.appointments
+            if item.get("status") in categories_by_status
+            and (resolve_resource_identity(item.get("maquina")) or item.get("maquina")) == identity
+        ]
+        sector = next((item.get("tipo_setor") for item in active), None)
+        categories = {categories_by_status[item["status"]] for item in active}
+        if categories == {"producao", "parada"}:
+            categories = {"producao"}
+        if not active:
+            category, reason = "fila", NO_DEMAND_REASON
+        elif len(categories) == 1:
+            category = next(iter(categories))
+            reason = next(
+                (item.get("motivo_parada") for item in active if item.get("motivo_parada")), None,
+            ) if category == "parada" else None
+        else:
+            category, reason = "desconhecido", "Estados simultâneos incompatíveis no mesmo recurso"
+        return self.transicionar_estado_recurso(
+            recurso, category, tipo_setor=sector, operador=operador, motivo=reason, data_hora=instante,
+        )
+
     def transicionar_estado_recurso(self, recurso, categoria, **kwargs):
         state = {
             "recurso": str(recurso or "").strip(),
@@ -2061,6 +2096,7 @@ class FakeDatabase:
                 ],
             }
         )
+        self._reconciliar_estado_recurso_apontamentos(row.get("maquina"), now, operador)
         for kind, qty, reason in (
             ("boa", int(quantidade_boa or 0), None),
             ("refugo", int(quantidade_refugo or 0), motivo_refugo or motivo),

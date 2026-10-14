@@ -117,15 +117,38 @@ visual_facts = [{
     "descricao_operacao": "DOBRAR SUPORTE",
     "eventos": [],
 }]
+# O banco grava a quantidade como evento no mesmo apontamento; as telas de
+# produção realizada leem os eventos, não o fato.
+for _fact in visual_facts:
+    for _kind, _field in (("boa", "quantidade_boa"), ("refugo", "quantidade_refugo"), ("retrabalho", "quantidade_retrabalho")):
+        if _fact[_field]:
+            database.quantity_events.append({
+                "id": database._id("quantity_events"), "tipo": _kind, "quantidade": _fact[_field],
+                "op": _fact["op"], "numero_operacao": _fact["numero_operacao"],
+                "produto_codigo": _fact["produto_codigo"], "recurso": _fact["maquina"],
+                "tipo_setor": _fact["tipo_setor"], "operador": _fact["operador_inicio"], "lote": None,
+                "motivo": None, "causa_raiz": None, "comentario": None,
+                "data_hora": _fact["data_inicio"] + timedelta(minutes=30),
+            })
+
+
+def _visual_loader(rows, resource_key):
+    """Mesmos recortes de setor, recurso e OP que o banco faz (UPPER = UPPER)."""
+
+    def same(value, wanted):
+        return not wanted or str(value or "").upper() == str(wanted).strip().upper()
+
+    return lambda *_args, setor=None, recurso=None, op=None, **_kwargs: [
+        row for row in rows
+        if same(row.get("tipo_setor"), setor) and same(row.get(resource_key), recurso) and same(row.get("op"), op)
+    ]
+
+
 database.listar_recursos_pcfactory = lambda *_args, **_kwargs: visual_resources
-# Mesmo recorte de setor que o banco faz (UPPER(tipo_setor) = UPPER(setor)).
-database.listar_estados_recurso_atuais = lambda setor=None, **_kwargs: [
-    state for state in visual_states
-    if not setor or state["tipo_setor"].upper() == str(setor).strip().upper()
-]
-database.listar_estados_recurso_periodo = lambda *_args, **_kwargs: visual_states
+database.listar_estados_recurso_atuais = _visual_loader(visual_states, "recurso")
+database.listar_estados_recurso_periodo = _visual_loader(visual_states, "recurso")
 database.listar_destaques_ativos_andon = lambda: visual_highlights
-database.listar_fatos_operacionais_periodo = lambda *_args, **_kwargs: visual_facts
+database.listar_fatos_operacionais_periodo = _visual_loader(visual_facts, "maquina")
 # O sininho do menu e a tela de Chamadas leem isto; a prévia não tem chamadas.
 database.contar_chamadas_nao_vistas = lambda _usuario_id: 0
 database.marcar_chamadas_vistas = lambda _usuario_id: None
