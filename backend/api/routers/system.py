@@ -190,8 +190,15 @@ def health(request: Request):
 async def events(request: Request, _user=Depends(get_current_user)):
     """Canal SSE autenticado usado somente para invalidar consultas abertas."""
 
+    stream = request.app.state.realtime.open_stream()
+    if stream is None:
+        raise AppError(
+            "realtime_limit_reached",
+            "O servidor atingiu o limite de telas conectadas ao vivo. Tente de novo em instantes.",
+            status_code=429,
+        )
     return StreamingResponse(
-        request.app.state.realtime.stream(),
+        stream,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

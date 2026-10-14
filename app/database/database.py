@@ -390,6 +390,18 @@ class Database(
             cursor.execute("DELETE FROM login_throttle WHERE throttle_key = %s", (str(throttle_key),))
             return cursor.rowcount > 0
 
+    def limpar_falhas_login_expiradas(self, *, agora=None, janela_segundos=300):
+        """Apaga contadores parados há mais que a janela (nomes inventados numa
+        varredura nunca voltam para limpar a própria linha — SEC-05)."""
+
+        agora = float(epoch_time.time() if agora is None else agora)
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM login_throttle WHERE last_seen_epoch < %s",
+                (agora - float(janela_segundos),),
+            )
+            return cursor.rowcount
+
     def _hash_senha(self, senha, salt=None):
         return _hash_senha_pbkdf2(senha, salt)
 
@@ -418,17 +430,17 @@ class Database(
             f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}$"
         )
 
-    def criar_usuario(self, nome, senha, nivel="operador_destaque", ativo=True):
+    def criar_usuario(self, nome, senha, nivel="operador_destaque", ativo=True, unidade=None):
         senha_hash = self._hash_senha(senha)  # fora da conexão: o hash é CPU pura
         try:
             with self.connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO usuarios (nome, senha_hash, nivel, ativo, data_criacao)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO usuarios (nome, senha_hash, nivel, ativo, unidade, data_criacao)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (nome, senha_hash, nivel, bool(ativo), self._now()),
+                    (nome, senha_hash, nivel, bool(ativo), unidade, self._now()),
                 )
                 return int(cursor.fetchone()["id"])
         except UniqueViolation as exc:
@@ -7079,6 +7091,41 @@ class Database(
             cursor.execute(
                 "UPDATE usuarios SET nivel = %s, session_version = session_version + 1 WHERE id = %s",
                 (novo_nivel, usuario_id),
+            )
+            return cursor.rowcount == 1
+
+    def salvar_usuario(self, usuario_id, *, nivel, ativo, unidade, nova_senha=None):
+        """Edição da tela de cadastro numa única instrução (SEC-04).
+
+        Nível, situação, unidade e senha mudam juntos ou nada muda. A versão
+        da sessão só sobe quando nível, situação ou senha mudam de fato: trocar
+        só a unidade de uma conta de terminal não derruba quem está logado.
+        """
+
+        senha_hash = self._hash_senha(nova_senha) if nova_senha else None
+        with self.connection() as connection, connection.cursor() as cursor:
+            # No SET, ``nivel`` e ``ativo`` à direita ainda são os valores antigos.
+            cursor.execute(
+                """
+                UPDATE usuarios SET
+                    session_version = session_version + CASE
+                        WHEN nivel IS DISTINCT FROM %(nivel)s
+                          OR ativo IS DISTINCT FROM %(ativo)s
+                          OR %(senha_hash)s::text IS NOT NULL
+                        THEN 1 ELSE 0 END,
+                    nivel = %(nivel)s,
+                    ativo = %(ativo)s,
+                    unidade = %(unidade)s,
+                    senha_hash = COALESCE(%(senha_hash)s::text, senha_hash)
+                WHERE id = %(id)s
+                """,
+                {
+                    "id": usuario_id,
+                    "nivel": nivel,
+                    "ativo": bool(ativo),
+                    "unidade": unidade,
+                    "senha_hash": senha_hash,
+                },
             )
             return cursor.rowcount == 1
 

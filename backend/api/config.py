@@ -22,6 +22,11 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 ANDON_DEMO_DATABASE = "gestor_pecas_test_andon_demo"
 
+#: Únicos ambientes que liberam ferramentas de desenvolvimento (documentação
+#: da API, encerrar sessão do banco pelo Dev Observatory). É lista PERMITIDA:
+#: qualquer outro nome ("production", "prod", "real", "homologacao") bloqueia.
+DEVELOPMENT_ENVIRONMENTS = frozenset({"test", "development"})
+
 _DEMO_DISABLED_ENV_FLAGS = (
     "GESTOR_TOTVS_ENABLED", "GESTOR_TOTVS_SOAP_ENABLED",
     "GESTOR_TOTVS_OUTBOX_WORKER_ENABLED", "GESTOR_SIGMANEST_SYNC_ENABLED",
@@ -136,6 +141,14 @@ class WebSettings:
     # por vez, para que gestores atualizando a tela não atrasem as ações do
     # operador. Medido no teste de carga (BK-01).
     management_read_concurrency: int = 2
+    # Tetos de conexões ao vivo (SSE). O stream de operações roda a consulta
+    # operacional inteira a cada volta; o de eventos só avisa "atualize".
+    operations_stream_per_user: int = 3
+    operations_stream_total: int = 20
+    events_stream_total: int = 500
+    # Botão de chamada: cada acerto vira mensagem real no Telegram.
+    chamada_limit_per_session_per_minute: int = 10
+    chamada_limit_per_account_per_minute: int = 30
     session_cookie_name: str = "gestor_session"
     csrf_cookie_name: str = "gestor_csrf"
     simulation_mode: bool = False
@@ -258,6 +271,10 @@ class WebSettings:
     @property
     def ai_configured(self) -> bool:
         return bool(self.ai_api_key.strip())
+
+    @property
+    def development_tools_allowed(self) -> bool:
+        return str(self.environment).strip().casefold() in DEVELOPMENT_ENVIRONMENTS
 
     @property
     def telegram_configured(self) -> bool:
@@ -468,6 +485,41 @@ class WebSettings:
                 minimum=1,
                 maximum=32,
                 name="GESTOR_WEB_MANAGEMENT_READ_CONCURRENCY",
+            ),
+            operations_stream_per_user=_bounded_int(
+                env.get("GESTOR_WEB_OPERATIONS_STREAM_PER_USER"),
+                default=3,
+                minimum=1,
+                maximum=50,
+                name="GESTOR_WEB_OPERATIONS_STREAM_PER_USER",
+            ),
+            operations_stream_total=_bounded_int(
+                env.get("GESTOR_WEB_OPERATIONS_STREAM_TOTAL"),
+                default=20,
+                minimum=1,
+                maximum=500,
+                name="GESTOR_WEB_OPERATIONS_STREAM_TOTAL",
+            ),
+            events_stream_total=_bounded_int(
+                env.get("GESTOR_WEB_EVENTS_STREAM_TOTAL"),
+                default=500,
+                minimum=10,
+                maximum=10_000,
+                name="GESTOR_WEB_EVENTS_STREAM_TOTAL",
+            ),
+            chamada_limit_per_session_per_minute=_bounded_int(
+                env.get("GESTOR_CHAMADA_LIMIT_PER_SESSION_PER_MINUTE"),
+                default=10,
+                minimum=1,
+                maximum=600,
+                name="GESTOR_CHAMADA_LIMIT_PER_SESSION_PER_MINUTE",
+            ),
+            chamada_limit_per_account_per_minute=_bounded_int(
+                env.get("GESTOR_CHAMADA_LIMIT_PER_ACCOUNT_PER_MINUTE"),
+                default=30,
+                minimum=1,
+                maximum=600,
+                name="GESTOR_CHAMADA_LIMIT_PER_ACCOUNT_PER_MINUTE",
             ),
             simulation_mode=simulation_mode,
             simulation_reference_time=simulation_reference_time,

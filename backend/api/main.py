@@ -61,6 +61,7 @@ from backend.observability.readonly_db import ReadOnlyDatabaseManager
 from backend.observability.shift_report import closed_windows, report_exists
 from backend.api.security import SessionSigner
 from backend.api.static import SpaStaticFiles
+from backend.api.rate_limit import SlidingWindowLimiter, StreamSlots
 from backend.api.realtime import RealtimeBroker
 from backend.api.report_workbook import build_report_workbook
 from backend.messaging import TelegramProvider
@@ -836,8 +837,10 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
             "Indicadores e regras industriais permanecem nos serviços de domínio."
         ),
         lifespan=lifespan,
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        # Documentação interativa só em teste/desenvolvimento (A4): em qualquer
+        # outro ambiente o mapa completo da API não fica público.
+        docs_url="/api/docs" if resolved_settings.development_tools_allowed else None,
+        openapi_url="/api/openapi.json" if resolved_settings.development_tools_allowed else None,
         redoc_url=None,
     )
     application.state.settings = resolved_settings
@@ -862,7 +865,20 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         resolved_settings.dev_observatory_session_secret,
         ttl_seconds=resolved_settings.dev_observatory_session_ttl_seconds,
     )
-    application.state.realtime = RealtimeBroker()
+    application.state.realtime = RealtimeBroker(
+        StreamSlots(total=resolved_settings.events_stream_total)
+    )
+    # Tetos de conexões ao vivo e do botão de chamada (ver backend/api/rate_limit.py).
+    application.state.operations_stream_slots = StreamSlots(
+        total=resolved_settings.operations_stream_total,
+        per_user=resolved_settings.operations_stream_per_user,
+    )
+    application.state.chamada_session_limiter = SlidingWindowLimiter(
+        limit=resolved_settings.chamada_limit_per_session_per_minute
+    )
+    application.state.chamada_account_limiter = SlidingWindowLimiter(
+        limit=resolved_settings.chamada_limit_per_account_per_minute
+    )
     # Dev Observatory: captura sempre montada quando habilitada, para que um
     # erro ocorrido antes de alguém abrir a tela já esteja registrado.
     application.state.dev_observatory = (

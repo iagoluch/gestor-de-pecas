@@ -50,6 +50,12 @@ _REJEITADOS = [
         {"params": {"produto_codigo": "P", "numero_operacao": "10", "codigo_recurso": BIG}},
     ),
     (
+        "nome do nível na exclusão (SEC-06)",
+        "delete",
+        "/management/levels/" + "n" * 61,
+        {},
+    ),
+    (
         "body setores com item grande",
         "post",
         "/chamadas/admin/contatos",

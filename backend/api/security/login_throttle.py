@@ -6,7 +6,19 @@ from fastapi import Request
 
 
 def login_throttle_key(request: Request, username: str) -> str:
-    """Combina usuário e IP efetivo sem confiar em cabeçalhos arbitrários.
+    """Combina usuário e IP efetivo sem confiar em cabeçalhos arbitrários."""
+
+    return f"{_client_ip(request)}:{username.strip().casefold()}"
+
+
+def login_ip_throttle_key(request: Request) -> str:
+    """Chave só do IP (SEC-05). O prefixo não colide com ``<ip>:<usuário>``."""
+
+    return f"ip|{_client_ip(request)}"
+
+
+def _client_ip(request: Request) -> str:
+    """IP efetivo do cliente.
 
     Atrás do nginx da VM todos chegam pelo loopback, e o nginx sobrescreve
     ``X-Forwarded-For`` com o IP real (deploy/nginx.conf). Só nesse caminho o
@@ -24,4 +36,4 @@ def login_throttle_key(request: Request, username: str) -> str:
             pass
         else:
             ip = forwarded
-    return f"{ip}:{username.strip().casefold()}"
+    return ip

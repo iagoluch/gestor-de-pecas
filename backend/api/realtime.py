@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 import json
 from threading import Lock
 
+from backend.api.rate_limit import StreamSlots, hold_while_streaming
+
 
 @dataclass(frozen=True)
 class RealtimeSubscriber:
@@ -23,7 +25,9 @@ class RealtimeSubscriber:
 class RealtimeBroker:
     """Distribui invalidações SSE entre as sessões conectadas ao processo."""
 
-    def __init__(self):
+    def __init__(self, slots: StreamSlots | None = None):
+        # Teto global de assinantes (SEC-09); sem teto quando não informado.
+        self._slots = slots
         self._lock = Lock()
         self._subscribers: set[RealtimeSubscriber] = set()
         self._revision = 0
@@ -65,6 +69,16 @@ class RealtimeBroker:
         for subscriber in subscribers:
             subscriber.loop.call_soon_threadsafe(self._offer, subscriber.queue, payload)
         return payload
+
+    def open_stream(self):
+        """Stream com vaga reservada, ou ``None`` quando o teto está cheio."""
+
+        if self._slots is None:
+            return self.stream()
+        lease = self._slots.try_acquire()
+        if lease is None:
+            return None
+        return hold_while_streaming(lease, self.stream())
 
     async def stream(self):
         subscriber = self.subscribe()

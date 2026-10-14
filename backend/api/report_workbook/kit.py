@@ -403,7 +403,7 @@ class ReportSheet:
 
         if subtitle:
             ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=self.width)
-            legenda = ws.cell(4, 1, subtitle)
+            legenda = ws.cell(4, 1, safe_text(subtitle))
             legenda.font = Font(name=FONT, size=9, italic=True, color=MUTED)
 
         regua = 5
@@ -461,7 +461,7 @@ class ReportSheet:
                 valor.alignment = Alignment(horizontal="left", vertical="center")
 
                 contexto = ws.cell(context_row, first)
-                contexto.value = card.context if presente else _card_reason(card, card_width)
+                contexto.value = safe_text(card.context if presente else _card_reason(card, card_width))
                 contexto.font = Font(name=FONT, size=9, color=MUTED)
                 contexto.alignment = Alignment(horizontal="left", vertical="top")
 
@@ -481,7 +481,7 @@ class ReportSheet:
     def notice(self, text: str, *, tone: str = "info") -> None:
         ws = self.ws
         ws.merge_cells(start_row=self.row, start_column=1, end_row=self.row, end_column=self.width)
-        cell = ws.cell(self.row, 1, text)
+        cell = ws.cell(self.row, 1, safe_text(text))
         cell.font = Font(name=FONT, size=9, color=TONE_COLORS.get(tone, BLUE))
         cell.alignment = Alignment(vertical="center", wrap_text=False)
         cell.fill = PatternFill("solid", fgColor=SURFACE)
@@ -501,7 +501,7 @@ class ReportSheet:
         for rotulo, fato in linhas:
             ws.merge_cells(start_row=self.row, start_column=1, end_row=self.row, end_column=3)
             ws.merge_cells(start_row=self.row, start_column=4, end_row=self.row, end_column=self.width)
-            chave = ws.cell(self.row, 1, rotulo)
+            chave = ws.cell(self.row, 1, safe_text(rotulo))
             chave.font = Font(name=FONT, size=10, color=MUTED)
             valor = ws.cell(self.row, 4, safe_text(fato))
             valor.font = Font(name=FONT, size=10, bold=True, color=TEXT)
@@ -562,7 +562,8 @@ class ReportSheet:
             for offset, column in enumerate(columns):
                 cell = ws.cell(linha, start_col + offset)
                 if offset == 0:
-                    cell.value = totals.get(column.key, "Total")
+                    rotulo = totals.get(column.key, "Total")
+                    cell.value = safe_text(rotulo) if isinstance(rotulo, str) else rotulo
                     cell.number_format = FORMATS["text"]
                 elif column.key in totals:
                     write_value(cell, totals.get(column.key), column.kind, bold=True, color=NAVY)

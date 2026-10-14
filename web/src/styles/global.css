@@ -355,6 +355,8 @@ tbody tr:last-child > td { border-bottom: 0; }
 .login-card button:active { transform: translateY(1px); }
 .login-card button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .login-card button:disabled { cursor: wait; opacity: .65; }
+.login-card button.login-card__secondary { border-color: var(--border-strong); color: var(--text); background: var(--surface); box-shadow: none; }
+.login-card button.login-card__secondary:hover { border-color: var(--muted); background: var(--surface); }
 .form-error { margin: 0; padding: 10px 12px; border: 1px solid var(--danger-border); border-radius: var(--radius-control); color: var(--danger-ink); background: var(--danger-soft); font-size: var(--text-base); }
 
 .segment-toggle { display: inline-flex; gap: 4px; margin-bottom: 16px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface-alt); }

@@ -370,7 +370,8 @@ def status(request: Request, _user: SessionUser = Depends(require_dev_observator
         },
         "current_shift": window.as_dict() if window is not None else None,
         "summary": recorder.live_summary(),
-        "report_dir": str(settings.dev_observatory_report_dir),
+        # Só o nome da pasta: o caminho absoluto do servidor não sai daqui (SEC-10).
+        "report_dir": Path(settings.dev_observatory_report_dir).name,
         "ai": _ai_status(request),
         "quick_actions": {"terminate_backend": _terminate_allowed(settings)},
         "write_policy": {
@@ -494,7 +495,7 @@ def reports(request: Request, _user: SessionUser = Depends(require_dev_observato
     return {
         "items": items,
         "count": len(items),
-        "directory": str(settings.dev_observatory_report_dir),
+        "directory": Path(settings.dev_observatory_report_dir).name,
     }
 
 
@@ -550,7 +551,9 @@ def _ai_status(request: Request) -> dict:
 
 
 def _terminate_allowed(settings) -> bool:
-    return str(settings.environment).strip().casefold() not in {"production", "producao", "produção"}
+    # Lista permitida (SEC-03): só test/development; "prod", "real" ou
+    # qualquer nome inesperado ficam bloqueados.
+    return settings.development_tools_allowed
 
 
 @router.post("/ai/diagnose", dependencies=[Depends(_require_dev_observatory_csrf)])

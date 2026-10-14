@@ -19,9 +19,10 @@ from app.core.permissions import (
 from backend.api.database import get_database
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
+from backend.api.security.sessions import SESSION_FORMAT
 
 
-def get_current_user(request: Request, database=Depends(get_database)) -> SessionUser:
+def _session_user(request: Request, database, *, allow_password_change_pending: bool) -> SessionUser:
     settings = request.app.state.settings
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
@@ -48,6 +49,20 @@ def get_current_user(request: Request, database=Depends(get_database)) -> Sessio
             "A conta não possui um perfil de acesso válido.",
             status_code=403,
         )
+    if claims.session_format < SESSION_FORMAT and can_access_management_web(role):
+        # Cookie de gestão emitido antes do aviso de senha padrão não sabe se
+        # a conta ainda está na 123456: um novo login grava o aviso certo.
+        raise AppError(
+            "session_outdated",
+            "Sua sessão é de uma versão anterior do sistema. Entre novamente.",
+            status_code=401,
+        )
+    if claims.password_change_required and not allow_password_change_pending:
+        raise AppError(
+            "password_change_required",
+            "Defina uma nova senha antes de continuar.",
+            status_code=403,
+        )
     operator_sector = operator_sector_for_user_level(role)
     request.state.session_claims = claims
     return SessionUser(
@@ -61,7 +76,23 @@ def get_current_user(request: Request, database=Depends(get_database)) -> Sessio
         operator_resources=operator_sector.resources if operator_sector else (),
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
         areas=areas_for_user(row.get("nivel_atribuido"), role),
+        password_change_required=claims.password_change_required,
     )
+
+
+def get_current_user(request: Request, database=Depends(get_database)) -> SessionUser:
+    """Sessão válida e liberada. Conta de gestão ainda na senha padrão recebe
+    403 ``password_change_required`` em toda rota que usa esta dependência."""
+
+    return _session_user(request, database, allow_password_change_pending=False)
+
+
+def get_session_user_allow_password_change(
+    request: Request, database=Depends(get_database)
+) -> SessionUser:
+    """Só para ver a sessão, sair e definir a nova senha (``routers/auth.py``)."""
+
+    return _session_user(request, database, allow_password_change_pending=True)
 
 
 def require_management_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
@@ -189,6 +220,16 @@ def require_operator_user(user: SessionUser = Depends(get_current_user)) -> Sess
 
 
 def require_csrf(request: Request, _user: SessionUser = Depends(get_current_user)) -> None:
+    _verify_csrf(request)
+
+
+def require_csrf_allow_password_change(
+    request: Request, _user: SessionUser = Depends(get_session_user_allow_password_change)
+) -> None:
+    _verify_csrf(request)
+
+
+def _verify_csrf(request: Request) -> None:
     settings = request.app.state.settings
     claims = getattr(request.state, "session_claims", None)
     header_value = request.headers.get("X-CSRF-Token", "")

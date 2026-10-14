@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
 
+from app.core.password_policy import password_policy_error
 from app.core.permissions import USER_LEVELS, can_access_management_web, is_sector_operator
 from app.database.errors import PauseOrderConflictError
 from app.database.telegram_link_codes import TELEGRAM_LINK_CODE_TTL_SECONDS
@@ -544,7 +545,8 @@ def create_level(
 
 @router.delete("/levels/{nome}", dependencies=[Depends(require_csrf)])
 def delete_level(
-    nome: str,
+    # O slug nasce do rótulo (até 60 caracteres) e nunca fica mais longo (SEC-06).
+    nome: Annotated[str, ApiPath(max_length=60)],
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
@@ -566,8 +568,9 @@ def save_user(
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
+    custom_levels = list(database.listar_niveis_personalizados() or [])
     if payload.nivel not in USER_LEVELS and not any(
-        item["nome"] == payload.nivel for item in database.listar_niveis_personalizados() or []
+        item["nome"] == payload.nivel for item in custom_levels
     ):
         raise AppError(
             "invalid_user_level",
@@ -585,6 +588,15 @@ def save_user(
                 "Este nível não é mais atribuído. Escolha o nível do setor da pessoa.",
                 status_code=422,
             )
+    unidade = (payload.unidade or "").strip() or None
+    if payload.senha:
+        nivel_base = next(
+            (item["nivel_base"] for item in custom_levels if item["nome"] == payload.nivel),
+            payload.nivel,
+        )
+        erro_senha = password_policy_error(nivel_base, payload.senha)
+        if erro_senha:
+            raise AppError("user_password_weak", erro_senha, status_code=422)
     if payload.id is None:
         if not payload.senha:
             raise AppError(
@@ -593,7 +605,7 @@ def save_user(
                 status_code=422,
             )
         usuario_id = database.criar_usuario(
-            payload.nome, payload.senha, payload.nivel, ativo=payload.ativo
+            payload.nome, payload.senha, payload.nivel, ativo=payload.ativo, unidade=unidade
         )
         if usuario_id is None:
             raise AppError(
@@ -611,11 +623,13 @@ def save_user(
                 "Você não pode desativar nem rebaixar a própria conta. Peça a outro administrador.",
                 status_code=409,
             )
-        database.atualizar_nivel_usuario(usuario_id, payload.nivel)
-        database.ativar_desativar_usuario(usuario_id, payload.ativo)
-        if payload.senha:
-            database.resetar_senha_usuario(usuario_id, payload.senha)
-    database.atualizar_unidade_usuario(usuario_id, (payload.unidade or "").strip() or None)
+        database.salvar_usuario(
+            usuario_id,
+            nivel=payload.nivel,
+            ativo=payload.ativo,
+            unidade=unidade,
+            nova_senha=payload.senha or None,
+        )
     row = database.obter_usuario_por_id(usuario_id)
     if row is None:
         raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)

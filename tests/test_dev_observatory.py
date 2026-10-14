@@ -304,14 +304,18 @@ class DevObservatoryApiTests(unittest.TestCase):
         self.assertEqual(errado.status_code, 401)
         self.client.post("/api/v1/auth/login", json={"username": "devobs", "password": "x"})
 
-        chaves = sorted(self.db.login_throttle)
+        # O freio só por IP do login principal (prefixo ``ip|``) fica de fora.
+        def por_usuario():
+            return sorted(k for k in self.db.login_throttle if not k.startswith("ip|"))
+
+        chaves = por_usuario()
         self.assertEqual(len(chaves), 2)
         self.assertTrue(chaves[0].startswith("devobs:"), chaves)
         self.assertEqual(chaves[0], "devobs:" + chaves[1])
 
         # Sucesso no observatório limpa só a chave dele.
         self._login_dev_observatory()
-        self.assertEqual(list(self.db.login_throttle), [chaves[1]])
+        self.assertEqual(por_usuario(), [chaves[1]])
 
     def test_pagina_mostra_login_proprio_para_quem_nao_entrou(self):
         anonimo = self.client.get("/dev-observatory")

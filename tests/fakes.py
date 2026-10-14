@@ -197,12 +197,12 @@ class FakeDatabase:
             "message_id": int(message_id),
         })
 
-    def criar_usuario(self, nome, senha, nivel="operador_destaque", ativo=True):
+    def criar_usuario(self, nome, senha, nivel="operador_destaque", ativo=True, unidade=None):
         if self.usuario_existe(nome):
             return None
         user = {
             "id": self._id("users"), "nome": nome, "senha": senha, "nivel": nivel,
-            "ativo": bool(ativo), "session_version": 0,
+            "ativo": bool(ativo), "session_version": 0, "unidade": unidade,
             "data_criacao": datetime.now().replace(microsecond=0),
         }
         self.users.append(user)
@@ -255,6 +255,16 @@ class FakeDatabase:
     def limpar_falhas_login(self, throttle_key):
         return self.login_throttle.pop(str(throttle_key), None) is not None
 
+    def limpar_falhas_login_expiradas(self, *, agora=None, janela_segundos=300):
+        agora = float(epoch_time.time() if agora is None else agora)
+        expiradas = [
+            key for key, (_, last_seen) in self.login_throttle.items()
+            if last_seen < agora - float(janela_segundos)
+        ]
+        for key in expiradas:
+            del self.login_throttle[key]
+        return len(expiradas)
+
     def usuario_existe(self, nome):
         return any(item["nome"] == nome for item in self.users)
 
@@ -277,6 +287,17 @@ class FakeDatabase:
     def obter_usuario_por_id(self, user_id):
         user = next((item for item in self.users if item["id"] == user_id), None)
         return {**user, "nivel": self._nivel_efetivo(user["nivel"]), "nivel_atribuido": user["nivel"]} if user else None
+
+    def salvar_usuario(self, user_id, *, nivel, ativo, unidade, nova_senha=None):
+        target = next((item for item in self.users if item["id"] == user_id), None)
+        if not target:
+            return False
+        if target["nivel"] != nivel or target["ativo"] != bool(ativo) or nova_senha:
+            target["session_version"] = int(target.get("session_version") or 0) + 1
+        target.update(nivel=nivel, ativo=bool(ativo), unidade=unidade)
+        if nova_senha:
+            target["senha"] = nova_senha
+        return True
 
     def atualizar_unidade_usuario(self, user_id, unidade):
         target = next((item for item in self.users if item["id"] == user_id), None)

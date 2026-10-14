@@ -99,6 +99,24 @@ def _publica(chamada: dict) -> dict:
     return item
 
 
+def _limitar_frequencia(request: Request, user: SessionUser) -> None:
+    """Freio do botão (SEC-07/A5): cada acerto vira mensagem real no Telegram.
+
+    Conta toda tentativa, válida ou não, por sessão (um terminal) e por conta
+    (o login do posto, que pode estar aberto em vários terminais).
+    """
+
+    state = request.app.state
+    claims = getattr(request.state, "session_claims", None)
+    sessao = getattr(claims, "session_id", None) or f"conta:{user.id}"
+    if not state.chamada_session_limiter.hit(sessao) or not state.chamada_account_limiter.hit(user.id):
+        raise AppError(
+            "chamada_limite_frequencia",
+            "Muitas chamadas em pouco tempo neste posto. Aguarde um minuto e tente de novo.",
+            status_code=429,
+        )
+
+
 @router.get("/motivos")
 def listar_motivos(user: SessionUser = Depends(get_current_user)):
     return {"items": list(_motivos_para(user)), "prioridades": list(PRIORIDADES)}
@@ -147,6 +165,7 @@ def criar_chamada(
     user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
+    _limitar_frequencia(request, user)
     if payload.motivo not in _motivos_para(user):
         raise AppError(
             "chamada_motivo_invalido",

@@ -17,7 +17,7 @@ import json
 import re
 from typing import Any
 
-from backend.observability.classification import sanitize
+from backend.observability.classification import mask_url_credentials, sanitize
 
 EVENT_TRACEBACK_CHARS = 3_500
 EVENT_DETAILS_CHARS = 1_200
@@ -36,15 +36,20 @@ SYSTEM_PROMPT = (
 )
 
 # Segredos que sobrevivem ao ``sanitize`` por estarem dentro de texto livre
-# (mensagem de exceção, linha de traceback).
+# (mensagem de exceção, linha de traceback). Cobre a string de conexão ODBC
+# (``UID=...;PWD={...}``), o conninfo do psycopg (``password=...``) e chaves
+# com prefixo (``db_password=``): o lookbehind trata ``_`` como separador.
 _INLINE_SECRET = re.compile(
-    r"(?i)\b(bearer\s+|api[_-]?key\s*[=:]\s*|password\s*[=:]\s*|senha\s*[=:]\s*|"
-    r"token\s*[=:]\s*|secret\s*[=:]\s*)(\S+)"
+    r"(?i)(?<![a-z0-9])("
+    r"bearer\s+"
+    r"|(?:api[_-]?key|password|passwd|pwd|senha|token|secret|uid)['\"]?\s*[=:]\s*['\"]?"
+    r")(\{[^}]*\}|[^\s;'\"]+)"
 )
 
 
 def scrub(text: Any) -> str:
-    return _INLINE_SECRET.sub(lambda match: f"{match.group(1)}<omitido>", str(text or ""))
+    text = mask_url_credentials(str(text or ""))
+    return _INLINE_SECRET.sub(lambda match: f"{match.group(1)}<omitido>", text)
 
 
 def event_context(event: dict) -> str:

@@ -182,6 +182,79 @@ class UserManagementApiTests(unittest.TestCase):
         atualizado = next(u for u in self.db.users if u["id"] == usuario_id)
         self.assertEqual(atualizado["senha"], "senha-antiga")
 
+    def test_senha_de_gestao_exige_8_caracteres_e_operador_segue_com_6(self):
+        # A6 (auditoria 14/10/2026): gestão não nasce na senha padrão; terminal sim.
+        self._as(_admin_user())
+        for senha in ("123456", "1234567"):
+            recusa = self.client.post(
+                "/api/v1/management/users",
+                json={"nome": f"Gestao {senha}", "nivel": "manufatura", "senha": senha},
+            )
+            self.assertEqual((recusa.status_code, recusa.json()["code"]), (422, "user_password_weak"))
+        self.db.criar_nivel_personalizado("pcp", "PCP", "gestor")
+        herdado = self.client.post(
+            "/api/v1/management/users", json={"nome": "Bruna", "nivel": "pcp", "senha": "123456"}
+        )
+        self.assertEqual(herdado.status_code, 422)
+        ok = self.client.post(
+            "/api/v1/management/users",
+            json={"nome": "Gestao Ok", "nivel": "manufatura", "senha": "senha-forte"},
+        )
+        self.assertEqual(ok.status_code, 200)
+        operador = self.client.post(
+            "/api/v1/management/users",
+            json={"nome": "Terminal Corte", "nivel": "operador_corte", "senha": "123456"},
+        )
+        self.assertEqual(operador.status_code, 200, operador.text)
+
+    def test_mudar_so_a_unidade_nao_derruba_a_sessao(self):
+        # SEC-04: conta compartilhada de terminal não pode cair no meio do turno.
+        self._as(_admin_user())
+        usuario_id = self.db.criar_usuario("Terminal Dobra", "123456", "operador_dobra")
+        corpo = {"id": usuario_id, "nome": "Terminal Dobra", "nivel": "operador_dobra", "ativo": True}
+
+        def versao():
+            return next(u for u in self.db.users if u["id"] == usuario_id)["session_version"]
+
+        self.client.post("/api/v1/management/users", json={**corpo, "unidade": "4"})
+        self.assertEqual(versao(), 0)
+        self.client.post("/api/v1/management/users", json={**corpo, "unidade": "4", "nivel": "operador_corte"})
+        self.assertEqual(versao(), 1)
+        self.client.post("/api/v1/management/users", json={**corpo, "nivel": "operador_corte", "ativo": False})
+        self.assertEqual(versao(), 2)
+        self.client.post(
+            "/api/v1/management/users",
+            json={**corpo, "nivel": "operador_corte", "ativo": False, "senha": "outra-senha"},
+        )
+        self.assertEqual(versao(), 3)
+
+    def test_edicao_grava_numa_unica_operacao(self):
+        # SEC-04: nada de gravar nível, situação, senha e unidade em etapas.
+        from unittest.mock import patch
+
+        self._as(_admin_user())
+        usuario_id = self.db.criar_usuario("Editar Junto", "senha-antiga", "operador_dobra")
+        proibidos = (
+            "atualizar_nivel_usuario", "ativar_desativar_usuario",
+            "resetar_senha_usuario", "atualizar_unidade_usuario",
+        )
+        patches = [patch.object(self.db, nome, side_effect=AssertionError(nome)) for nome in proibidos]
+        for item in patches:
+            item.start()
+            self.addCleanup(item.stop)
+        with patch.object(self.db, "salvar_usuario", wraps=self.db.salvar_usuario) as salvar:
+            resposta = self.client.post(
+                "/api/v1/management/users",
+                json={
+                    "id": usuario_id, "nome": "Editar Junto", "nivel": "operador_corte",
+                    "ativo": False, "unidade": "4", "senha": "senha-nova",
+                },
+            )
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        salvar.assert_called_once_with(
+            usuario_id, nivel="operador_corte", ativo=False, unidade="4", nova_senha="senha-nova"
+        )
+
     def test_admin_nao_desativa_nem_rebaixa_a_propria_conta(self):
         admin = _admin_user()
         admin_id = self.db.criar_usuario("Admin Z", "senha-forte-123", "admin")

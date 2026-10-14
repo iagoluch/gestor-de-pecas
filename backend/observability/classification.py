@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal
+import re
 from typing import Any
 
 
@@ -57,24 +58,57 @@ SEV_CRITICAL = "CRITICAL"
 #: que cheguem por engano dentro de um payload de erro.
 _REDACTED_KEYS = frozenset(
     {
-        "apikey",
-        "api_key",
         "authorization",
         "cookie",
         "csrf",
-        "groq_api_key",
-        "gestor_ai_api_key",
-        "nvidia_api_key",
-        "password",
-        "secret",
-        "senha",
-        "senha_hash",
         "session",
         "set-cookie",
-        "token",
         "x-csrf-token",
     }
 )
+
+#: Pedaços de nome que denunciam segredo em qualquer variação de chave
+#: (``db_password``, ``GESTOR_AI_API_KEY``, ``sigmanest_dsn``).
+#: "session"/"cookie" ficam só na lista exata acima para não esconder campos
+#: inofensivos como ``session_version``. "url" não entra: esconderia todo campo
+#: de endereço; a senha embutida no endereço é mascarada no valor (abaixo).
+_REDACTED_KEY_FRAGMENTS = (
+    "password",
+    "passwd",
+    "pwd",
+    "senha",
+    "secret",
+    "token",
+    "apikey",
+    "api_key",
+    "credential",
+    "dsn",
+)
+
+#: "token" também nomeia CONTAGEM de tokens da IA (``total_tokens``,
+#: ``max_tokens``, ``prompt_tokens_details``): isso é número, não segredo.
+_TOKEN_COUNT_PREFIXES = ("total_", "max_", "prompt_", "completion_", "input_", "output_")
+
+#: Usuário e senha embutidos em endereço: ``postgresql://usuario:senha@host``.
+URL_CREDENTIALS = re.compile(r"(://)[^\s/:@]*:\S*@")
+
+
+def _is_token_count_key(name: str) -> bool:
+    return name.endswith("tokens") or name.startswith(_TOKEN_COUNT_PREFIXES)
+
+
+def _is_redacted_key(key: Any) -> bool:
+    name = str(key).strip().casefold()
+    if name in _REDACTED_KEYS:
+        return True
+    return any(
+        fragment in name and not (fragment == "token" and _is_token_count_key(name))
+        for fragment in _REDACTED_KEY_FRAGMENTS
+    )
+
+
+def mask_url_credentials(text: str) -> str:
+    return URL_CREDENTIALS.sub(r"\1<omitido>@", text)
 
 
 def sanitize(value: Any, *, depth: int = 0) -> Any:
@@ -86,7 +120,7 @@ def sanitize(value: Any, *, depth: int = 0) -> Any:
         return {
             str(key): (
                 "<omitido>"
-                if str(key).strip().casefold() in _REDACTED_KEYS
+                if _is_redacted_key(key)
                 else sanitize(item, depth=depth + 1)
             )
             for key, item in value.items()
@@ -97,9 +131,11 @@ def sanitize(value: Any, *, depth: int = 0) -> Any:
         return value.isoformat()
     if isinstance(value, Decimal):
         return float(value)
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, str):
+        return mask_url_credentials(value)
+    if isinstance(value, (int, float, bool)) or value is None:
         return value
-    return str(value)
+    return mask_url_credentials(str(value))
 
 
 def classify_http(

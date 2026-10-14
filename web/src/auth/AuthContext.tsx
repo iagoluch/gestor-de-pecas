@@ -8,6 +8,7 @@ interface AuthValue {
   user: SessionUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<SessionUser>;
+  changePassword: (newPassword: string) => Promise<SessionUser>;
   logout: () => Promise<void>;
 }
 
@@ -34,13 +35,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return authenticated;
   }, []);
 
+  const changePassword = useCallback(async (newPassword: string) => {
+    const released = await api.post<SessionUser>("/api/v1/auth/password", { new_password: newPassword });
+    setUser(released);
+    return released;
+  }, []);
+
   const logout = useCallback(async () => {
     await api.post<void>("/api/v1/auth/logout");
     clearLastSnapshots();
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+  const value = useMemo(
+    () => ({ user, loading, login, changePassword, logout }),
+    [user, loading, login, changePassword, logout],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

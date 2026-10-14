@@ -6,6 +6,7 @@ import { QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigati
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { AndonPage } from "./pages/AndonPage";
 import { ManagementOverviewPage } from "./pages/ManagementOverviewPage";
 import { ManagementGoalsPage } from "./pages/home/GoalsPage";
@@ -55,6 +56,8 @@ function RequireAuth({ management = false, andon = false, operator = false, chil
   const location = useLocation();
   if (loading) return <div className="app-loading"><LoadingState label="Verificando sessão…" /></div>;
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  // Gestão na senha padrão: a API recusa tudo até a troca, então a tela pede a nova senha antes.
+  if (user.password_change_required) return <ChangePasswordPage />;
   if (management && !user.management_access) return <Navigate to={roleHome(user)} replace />;
   if (andon && !user.andon_access && !user.management_access) return <Navigate to={roleHome(user)} replace />;
   if (operator && !user.operator_access) return <Navigate to={roleHome(user)} replace />;

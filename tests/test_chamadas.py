@@ -854,5 +854,54 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertEqual(inexistente.status_code, 404)
 
 
+class ChamadaFrequenciaTests(unittest.TestCase):
+    """SEC-07/A5: varrer crachás pelo botão de chamada esbarra no freio."""
+
+    def setUp(self):
+        self.db = _FakeChamadaDatabase()
+        self.app = create_app(
+            settings=_settings(
+                chamada_limit_per_session_per_minute=3,
+                chamada_limit_per_account_per_minute=3,
+            ),
+            database_factory=lambda: self.db,
+        )
+        self.app.dependency_overrides[get_database] = lambda: self.db
+        self.app.dependency_overrides[require_csrf] = lambda: None
+        self.client = TestClient(self.app)
+
+    def _chamar(self, cracha):
+        return self.client.post(
+            "/api/v1/chamadas",
+            json={
+                "contato_id": 1, "motivo": "Manutenção", "comentario": "Máquina parada",
+                "solicitante_cracha": cracha,
+            },
+        )
+
+    def test_tentativas_invalidas_tambem_contam_e_o_posto_recebe_429(self):
+        self.app.dependency_overrides[get_current_user] = _operator_user
+        self.assertEqual(self._chamar("9991").status_code, 422)
+        self.assertEqual(self._chamar("9992").status_code, 422)
+        self.assertEqual(self._chamar("0042").status_code, 200)
+        bloqueada = self._chamar("0042")
+        self.assertEqual(bloqueada.status_code, 429)
+        self.assertEqual(bloqueada.json()["code"], "chamada_limite_frequencia")
+        self.assertIn("Aguarde um minuto", bloqueada.json()["message"])
+        self.assertEqual(len(self.db.chamadas), 1)
+
+    def test_freio_e_por_posto_outro_login_continua_livre(self):
+        self.app.dependency_overrides[get_current_user] = _operator_user
+        for _ in range(3):
+            self._chamar("0042")
+        self.assertEqual(self._chamar("0042").status_code, 429)
+        outro_posto = SessionUser(
+            id=99, name="Outro posto", role="operador_corte",
+            management_access=False, andon_access=False, operator_access=True,
+        )
+        self.app.dependency_overrides[get_current_user] = lambda: outro_posto
+        self.assertEqual(self._chamar("0042").status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main()

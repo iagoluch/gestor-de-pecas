@@ -57,13 +57,18 @@ class LoginThrottlePostgresTests(unittest.TestCase):
             )
             self.assertEqual(recusa.status_code, 401, recusa.text)
         # O contador está na tabela, visível a qualquer worker que leia o banco.
-        self.assertEqual(list(self._contadores().values()), [2])
+        # Duas chaves: IP+usuário e só o IP (SEC-05, prefixo ``ip|``).
+        contadores = self._contadores()
+        self.assertEqual(sorted(contadores.values()), [2, 2])
+        chave_ip = next(chave for chave in contadores if chave.startswith("ip|"))
 
         sucesso = self.client.post(
             "/api/v1/auth/login", json={"username": "Operador Throttle", "password": "senha-certa"}
         )
         self.assertEqual(sucesso.status_code, 200, sucesso.text)
-        self.assertEqual(self._contadores(), {})
+        # Sucesso zera a chave IP+usuário; no freio do IP só falhas contam e
+        # um acerto não apaga as falhas de uma varredura.
+        self.assertEqual(self._contadores(), {chave_ip: 2})
 
     def test_dev_observatory_trava_pelo_contador_do_banco(self):
         for tentativa in range(dev_observatory_router.LOGIN_MAX_FAILURES):

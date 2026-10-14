@@ -9,9 +9,12 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
-from backend.api.dependencies.auth import require_management_user
+from backend.api.database import get_database
+from backend.api.dependencies.auth import get_current_user, require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import PageParams, analytics_filter, pagination
+from backend.api.errors import AppError
+from backend.api.rate_limit import hold_while_streaming
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 
@@ -126,16 +129,47 @@ async def stream(
     request: Request,
     filters: AnalyticsFilter = Depends(analytics_filter),
     interval: int | None = Query(default=None, ge=5, le=60),
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
+    database=Depends(get_database),
 ):
     refresh_seconds = interval or request.app.state.settings.stream_interval_seconds
+    lease = request.app.state.operations_stream_slots.try_acquire(user.id)
+    if lease is None:
+        raise AppError(
+            "operations_stream_limit_reached",
+            "Há telas demais acompanhando a operação ao vivo. Feche uma aba e tente de novo.",
+            status_code=429,
+        )
+
+    def session_still_valid():
+        # Mesma checagem da abertura (ativo, session_version, validade do
+        # cookie, nível): conta desativada ou rebaixada perde o stream (SEC-01).
+        require_management_user(get_current_user(request, database))
 
     async def events():
+        # Cancelamento (cliente caiu, servidor desligando) não é capturado:
+        # ``CancelledError`` não herda de ``Exception`` e sobe até
+        # ``hold_while_streaming``, cujo ``finally`` devolve a vaga.
         falhando = False
         while True:
             if await request.is_disconnected():
                 break
+            try:
+                await asyncio.to_thread(session_still_valid)
+            except AppError as exc:
+                data = json.dumps({"code": exc.code, "message": exc.message}, ensure_ascii=False)
+                yield f"event: error\ndata: {data}\n\n"
+                break
+            except Exception:
+                # Sem conseguir conferir a sessão (banco fora), nenhum dado
+                # sai nesta volta: o stream espera e tenta de novo.
+                if not falhando:
+                    LOGGER.exception("Falha ao conferir a sessão do stream operacional")
+                falhando = True
+                yield "event: error\ndata: {\"code\":\"stream_unavailable\",\"message\":\"Atualização temporariamente indisponível.\"}\n\n"
+                await asyncio.sleep(refresh_seconds)
+                continue
             try:
                 snapshot = await asyncio.to_thread(
                     facade.consulta_operacional,
@@ -146,8 +180,6 @@ async def stream(
                 data = json.dumps(jsonable_encoder(snapshot), ensure_ascii=False, separators=(",", ":"))
                 falhando = False
                 yield f"event: snapshot\ndata: {data}\n\n"
-            except asyncio.CancelledError:
-                break
             except Exception:
                 # Uma entrada por episódio de falha, não uma a cada intervalo.
                 if not falhando:
@@ -157,7 +189,7 @@ async def stream(
             await asyncio.sleep(refresh_seconds)
 
     return StreamingResponse(
-        events(),
+        hold_while_streaming(lease, events()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
