@@ -1296,7 +1296,12 @@ class _JanelaPrefetch:
         ganho de round-trip — a janela de três meses tem quase 30 mil estados.
         """
 
-        chaves = [(self._limite(i), self._limite(f)) for i, f in periodos]
+        # Um período repetido (janela de um dia: o resumo e o único bucket da
+        # evolução são o mesmo intervalo) anexaria cada linha duas vezes ao
+        # mesmo bucket; deduplica preservando a ordem.
+        chaves = list(dict.fromkeys(
+            (self._limite(i), self._limite(f)) for i, f in periodos
+        ))
         self._indice_facts = {chave: [] for chave in chaves}
         self._indice_quantidade = {chave: [] for chave in chaves}
         self._indice_estados = {chave: [] for chave in chaves}
@@ -1360,20 +1365,29 @@ class _JanelaPrefetch:
                 if comeco is None:
                     continue
                 bruto_fim = _dt(row.get("data_fim"))
-                for chave in candidatos(comeco, bruto_fim or comeco):
+                # Estado aberto entra em todo bucket a partir do início
+                # (``COALESCE(data_fim, fim) > inicio``), não só no primeiro.
+                for chave in candidatos(comeco, bruto_fim or contiguos[-1][1]):
                     inicio, fim = chave
                     if fim <= inicio or comeco >= fim:
                         continue
-                    termino = bruto_fim or fim
-                    if termino <= inicio:
+                    if (bruto_fim or fim) <= inicio:
                         continue
                     self._indice_estados[chave].append(
-                        self._recortar_estado(row, comeco, termino, inicio, fim)
+                        self._recortar_estado(row, comeco, bruto_fim, inicio, fim, self._agora)
                         if derivados else row
                     )
 
     @staticmethod
-    def _recortar_estado(row, comeco, termino, inicio, fim):
+    def _recortar_estado(row, comeco, bruto_fim, inicio, fim, agora):
+        """Mesmo recorte de ``listar_estados_recurso_periodo``.
+
+        A inclusão do estado aberto usa ``fim``; o tempo dele, porém, vai só
+        até ``min(fim, agora)`` — senão o resto do dia seria contado antes de
+        acontecer.
+        """
+
+        termino = bruto_fim or (min(fim, agora) if agora is not None else fim)
         recorte = dict(row)
         recorte["inicio_periodo"] = max(comeco, inicio)
         recorte["fim_periodo"] = min(termino, fim)
@@ -1441,22 +1455,17 @@ class _JanelaPrefetch:
             comeco = _dt(row.get("data_inicio"))
             if comeco is None or comeco >= fim:
                 continue
-            termino = _dt(row.get("data_fim")) or fim
-            if termino <= inicio:
+            bruto_fim = _dt(row.get("data_fim"))
+            if (bruto_fim or fim) <= inicio:
                 continue
             if "inicio_periodo" in row or "fim_periodo" in row:
                 # A consulta deriva estes campos em função do período pedido; a
                 # fatia recalcula para o sub-período, senão o tempo físico do
                 # bucket herdaria o recorte da janela inteira. Repositórios que
                 # não publicam esses campos mantêm o formato original.
-                recorte = dict(row)
-                recorte["inicio_periodo"] = max(comeco, inicio)
-                recorte["fim_periodo"] = min(termino, fim)
-                recorte["segundos_periodo"] = max(
-                    0.0,
-                    (recorte["fim_periodo"] - recorte["inicio_periodo"]).total_seconds(),
+                resultado.append(
+                    self._recortar_estado(row, comeco, bruto_fim, inicio, fim, self._agora)
                 )
-                resultado.append(recorte)
             else:
                 resultado.append(row)
         return True, resultado
