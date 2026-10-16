@@ -140,6 +140,10 @@ STANDARD_TIME_LEVELS = ("admin", "manufatura")
 #: ``QUALITY_TEMPLATE_EDITOR_LEVELS`` (que também inclui Supervisor/Líder).
 QUALITY_TEMPLATE_MANAGEMENT_LEVELS = ("admin", "qualidade")
 
+#: Aba Diretoria (custo de produção): só a diretoria e o admin (spec de
+#: 16/10/2026). O gestor comum não vê o menu nem as rotas.
+DIRECTOR_LEVELS = ("admin", "diretoria")
+
 
 def normalize_user_level(level):
     normalized = str(level or "").strip().lower()
@@ -169,6 +173,10 @@ def can_manage_quality_templates(level):
     ``can_manage_quality_template`` (singular), que decide quem EDITA um template."""
 
     return normalize_user_level(level) in QUALITY_TEMPLATE_MANAGEMENT_LEVELS
+
+
+def can_view_director_tab(level):
+    return normalize_user_level(level) in DIRECTOR_LEVELS
 
 
 def can_access_management_web(level):

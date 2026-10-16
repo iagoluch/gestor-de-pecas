@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { EmptyState, LoadingState } from "./components/DataState";
-import { QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
+import { DIRECTOR_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -36,6 +36,7 @@ import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, O
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
+import { DirectorPage } from "./pages/director/DirectorPage";
 import {
   AnalyticalDataReportPage,
   IndicatorsReportPage,
@@ -114,6 +115,16 @@ function RequireQualityTemplateAccess({ children }: PropsWithChildren) {
   );
 }
 
+/**
+ * Aba Diretoria: só a diretoria e o admin. Quem não é desses níveis volta para a
+ * tela inicial da gestão (o menu já esconde o item); a API recusa de qualquer forma.
+ */
+function RequireDiretoriaAccess({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  if (user && (DIRECTOR_LEVELS as readonly string[]).includes(user.role)) return children;
+  return <Navigate to="/inicio/visao-geral" replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -156,6 +167,8 @@ export default function App() {
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
         <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
         <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
+
+        <Route path="diretoria" element={<RequireDiretoriaAccess><DirectorPage /></RequireDiretoriaAccess>} />
 
         <Route path="analises/oee" element={<AnalyticsOeePage />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />

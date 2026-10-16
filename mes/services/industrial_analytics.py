@@ -48,55 +48,18 @@ class IndustrialAnalyticsService:
         cache_key = ("time_breakdown", filters)
         if cache_key in self._cache:
             return self._cache[cache_key]
-        facts = self._facts(filters)
         state_source_available, state_rows = self._resource_states(filters)
         use_canonical_resource_state = bool(state_source_available and state_rows)
-        physical_inputs = []
-        if use_canonical_resource_state:
-            physical_inputs = build_physical_state_inputs(
-                state_rows,
-                inicio=filters.inicio,
-                fim=filters.fim,
-            )
-        else:
-            for row in facts:
-                timeline = self._timeline(row, filters)
-                if timeline is None:
-                    continue
-                sector = str(row.get("tipo_setor") or "Não informado")
-                resource = str(row.get("maquina") or "Não informado")
-                for segment in timeline.segments:
-                    physical_inputs.append(PhysicalInputSegment(
-                        resource=resource,
-                        sector=sector,
-                        category=(segment.category if timeline.has_event_data else EventCategory.UNKNOWN),
-                        start=segment.start,
-                        end=segment.end,
-                        source_ref=f"apontamento:{row.get('id')}",
-                    ))
+        physical_inputs = self.physical_inputs(filters)
 
         nesting_rows = self._nestings(filters)
         undated_cutting_seconds = 0.0
-        for row in nesting_rows:
-            start = _dt(row.get("inicio"))
-            end = _dt(row.get("fim")) or (min(self._now(), filters.fim) if start else None)
-            if start and end:
-                clip_start = max(start, filters.inicio)
-                clip_end = min(end, filters.fim)
-                if clip_end > clip_start:
-                    if not use_canonical_resource_state:
-                        physical_inputs.append(PhysicalInputSegment(
-                            resource=str(row.get("maquina") or "Não informado"),
-                            sector="Corte",
-                            category=EventCategory.PRODUCTION,
-                            start=clip_start,
-                            end=clip_end,
-                            source_ref=f"nesting:{row.get('apontamento_id')}",
-                        ))
+        if not use_canonical_resource_state:
+            for row in nesting_rows:
+                if self._nesting_interval(row, filters) is not None:
                     continue
-            # Fontes legadas podem ter apenas a duração. Sem início/fim não há
-            # como remover sobreposição com segurança, então o caso fica explícito.
-            if not use_canonical_resource_state:
+                # Fontes legadas podem ter apenas a duração. Sem início/fim não há
+                # como remover sobreposição com segurança, então o caso fica explícito.
                 undated_cutting_seconds += float(
                     row.get("real_periodo_segundos", row.get("real_segundos")) or 0
                 )
@@ -154,6 +117,62 @@ class IndustrialAnalyticsService:
         }
         self._cache[cache_key] = payload
         return payload
+
+    def physical_inputs(self, filters: AnalyticsFilter) -> list:
+        """Entradas do tempo físico por recurso, montadas como na Visão Geral.
+
+        Estado físico canônico quando existe; senão a timeline por apontamento
+        mais os nestings datados do Corte. Quem precisa do tempo consolidado
+        passa isto por ``consolidate_physical_time`` — a mesma regra
+        ("produção prevalece sobre parada", conflito vira desconhecido).
+        """
+        state_source_available, state_rows = self._resource_states(filters)
+        if state_source_available and state_rows:
+            return build_physical_state_inputs(
+                state_rows,
+                inicio=filters.inicio,
+                fim=filters.fim,
+            )
+        inputs = []
+        for row in self._facts(filters):
+            timeline = self._timeline(row, filters)
+            if timeline is None:
+                continue
+            sector = str(row.get("tipo_setor") or "Não informado")
+            resource = str(row.get("maquina") or "Não informado")
+            for segment in timeline.segments:
+                inputs.append(PhysicalInputSegment(
+                    resource=resource,
+                    sector=sector,
+                    category=(segment.category if timeline.has_event_data else EventCategory.UNKNOWN),
+                    start=segment.start,
+                    end=segment.end,
+                    source_ref=f"apontamento:{row.get('id')}",
+                ))
+        for row in self._nestings(filters):
+            interval = self._nesting_interval(row, filters)
+            if interval is None:
+                continue
+            inputs.append(PhysicalInputSegment(
+                resource=str(row.get("maquina") or "Não informado"),
+                sector="Corte",
+                category=EventCategory.PRODUCTION,
+                start=interval[0],
+                end=interval[1],
+                source_ref=f"nesting:{row.get('apontamento_id')}",
+            ))
+        return inputs
+
+    def _nesting_interval(self, row, filters):
+        start = _dt(row.get("inicio"))
+        end = _dt(row.get("fim")) or (min(self._now(), filters.fim) if start else None)
+        if not (start and end):
+            return None
+        clip_start = max(start, filters.inicio)
+        clip_end = min(end, filters.fim)
+        if clip_end <= clip_start:
+            return None
+        return clip_start, clip_end
 
     def downtimes(self, filters: AnalyticsFilter) -> dict:
         # Intervalo automático (almoço/café) é pausa do calendário, não perda:

@@ -90,6 +90,7 @@ TRUNCATE_TABLES = (
     "eventos_destaque_tarefa",
     "eventos_estado_recurso",
     "eventos_quantidade_producao",
+    "fila_manual_recurso",
     "eventos_sistema",
     "historico",
     "inconsistencias_dados",

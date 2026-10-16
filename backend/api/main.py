@@ -44,6 +44,7 @@ from backend.api.routers import (
     chamadas,
     cutting,
     dev_observatory,
+    director,
     highlight,
     management,
     operations,
@@ -1016,6 +1017,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.include_router(audit.router, prefix=prefix)
     application.include_router(traceability.router, prefix=prefix)
     application.include_router(reports.router, prefix=prefix)
+    application.include_router(director.router, prefix=prefix)
     if resolved_settings.dev_observatory_enabled:
         application.include_router(dev_observatory.router, prefix=prefix)
         # A página do observatório vive fora do SPA dos operadores e precisa ser

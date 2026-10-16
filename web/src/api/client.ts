@@ -1,4 +1,5 @@
 import type { ApiErrorPayload } from "../types/api";
+import type { DirectorCosts, DirectorPanel, DirectorPeriodName, DirectorSheet } from "../types/director";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -51,7 +52,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-function failure(status: number, body: ApiErrorPayload | null) {
+function failure(status: number, body: (ApiErrorPayload & { detail?: Partial<ApiErrorPayload> }) | null) {
+  // Recusa de regra no formato FastAPI cru: {"detail": {"code", "message"}}.
+  const detail = body?.detail;
+  if (!body?.message && detail && typeof detail === "object" && detail.message) {
+    return new ApiError(status, { code: detail.code ?? "request_failed", message: detail.message });
+  }
   return new ApiError(status, body ?? {
     code: "request_failed",
     message: "Não foi possível concluir a solicitação.",
@@ -88,6 +94,32 @@ export const api = {
       method: "PUT",
       body: payload === undefined ? undefined : JSON.stringify(payload),
     }),
-  delete: (path: string) => request<void>(path, { method: "DELETE" }),
+  delete: <T = void>(path: string) => request<T>(path, { method: "DELETE" }),
   download,
 };
+
+// Aba Diretoria (só diretoria/admin; a API recusa os demais níveis).
+const DIRECTOR_BASE = "/api/v1/diretoria";
+
+/** Rotas de leitura da Diretoria, para `useApiQuery` (carregamento, erro e atualização ao vivo). */
+export const directorPaths = {
+  panel: (periodo: DirectorPeriodName) => `${DIRECTOR_BASE}/painel?periodo=${periodo}`,
+  sheet: (periodo: DirectorPeriodName, setor = "", recurso = "") => {
+    const query = new URLSearchParams({ periodo });
+    if (setor) query.set("setor", setor);
+    if (recurso) query.set("recurso", recurso);
+    return `${DIRECTOR_BASE}/ficha?${query.toString()}`;
+  },
+  costs: `${DIRECTOR_BASE}/custos`,
+};
+
+export const getDirectorPanel = (periodo: DirectorPeriodName, signal?: AbortSignal) =>
+  api.get<DirectorPanel>(directorPaths.panel(periodo), signal);
+export const getDirectorSheet = (periodo: DirectorPeriodName, setor?: string, recurso?: string, signal?: AbortSignal) =>
+  api.get<DirectorSheet>(directorPaths.sheet(periodo, setor, recurso), signal);
+export const getDirectorCosts = (signal?: AbortSignal) => api.get<DirectorCosts>(directorPaths.costs, signal);
+/** Valor da hora em R$ (número JSON, ex.: 12.5). A regra (> 0, até 2 casas) é do servidor. */
+export const putResourceRate = (recurso: string, valorHora: number) =>
+  api.put<{ ok: boolean }>(`${DIRECTOR_BASE}/custos/recurso/${encodeURIComponent(recurso)}`, { valor_hora: valorHora });
+export const putOperatorRate = (operadorId: number, valorHora: number) =>
+  api.put<{ ok: boolean }>(`${DIRECTOR_BASE}/custos/pessoa/${operadorId}`, { valor_hora: valorHora });

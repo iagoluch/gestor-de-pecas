@@ -12,6 +12,7 @@ from app.core.permissions import (
     can_access_management_web,
     can_manage_quality_templates,
     can_manage_standard_time,
+    can_view_director_tab,
     is_sector_operator,
     normalize_user_level,
     operator_sector_for_user_level,
@@ -127,6 +128,20 @@ def require_qualidade_user(user: SessionUser = Depends(get_current_user)) -> Ses
         raise AppError(
             "quality_templates_access_denied",
             "Só a Qualidade e a conta administradora acessam o cadastro de cotas padrão.",
+            status_code=403,
+        )
+    return user
+
+
+def require_diretoria_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    """Diretoria (``diretoria``) e admin: aba Diretoria e o custo por produto.
+
+    Sem sessão o ``get_current_user`` já responde 401; os demais níveis, 403."""
+
+    if not can_view_director_tab(user.role):
+        raise AppError(
+            "director_access_denied",
+            "Só a diretoria e a conta administradora acessam esta área.",
             status_code=403,
         )
     return user

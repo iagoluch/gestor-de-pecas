@@ -7,6 +7,7 @@ export type ManagementSectionId =
   | "production"
   | "manufacturing"
   | "quality"
+  | "diretoria"
   | "analytics"
   | "audit"
   | "reports"
@@ -34,6 +35,9 @@ export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
 
 /** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
 export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
+
+/** Níveis da aba Diretoria: espelha `DIRECTOR_LEVELS` do backend. */
+export const DIRECTOR_LEVELS = ["admin", "diretoria"] as const;
 
 /**
  * A aba aparece para este nível? Usado pelo menu e pelo guarda de rota.
@@ -184,6 +188,18 @@ export const managementSections: ManagementSection[] = [
     levels: QUALITY_TEMPLATE_LEVELS,
     tabs: [
       { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
+    ],
+  },
+  {
+    id: "diretoria",
+    label: "Diretoria",
+    icon: assets.navigation.analytics,
+    defaultPath: "/diretoria",
+    // Aba da diretoria (spec de 16/10/2026): custo de produção por produto.
+    // O gestor comum não vê a seção nem a rota.
+    levels: DIRECTOR_LEVELS,
+    tabs: [
+      { label: "Diretoria", path: "/diretoria", screen: "diretoria", levels: DIRECTOR_LEVELS },
     ],
   },
   {
