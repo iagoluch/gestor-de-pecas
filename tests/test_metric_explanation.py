@@ -18,6 +18,10 @@ import unittest
 from mes.contracts import AnalyticsFilter
 from mes.domain import EventCategory
 from mes.services.management import ManagementService
+from mes.services.metric_explanation import (
+    MetricExplanationService,
+    UnknownMetricError,
+)
 
 
 QUARTA = datetime(2026, 8, 19)  # dia_semana 2
@@ -166,6 +170,347 @@ class DivisorTests(unittest.TestCase):
         repo = _Repo([], {})
         filters = AnalyticsFilter(QUARTA, datetime(2026, 8, 21))
         self.assertEqual(_service(repo).physical_consolidation(filters)["days"], 2)
+
+
+class ResourceCountPerDayTests(unittest.TestCase):
+    def test_resource_with_shifts_on_two_days_counts_once(self):
+        # Revisão da Tarefa 2 (M1): divisor = recursos distintos, não recurso x dia.
+        estados = [
+            _estado(1, "A", "producao", QUARTA.replace(hour=8), QUARTA.replace(hour=9)),
+            _estado(2, "A", "producao", QUINTA.replace(hour=8), QUINTA.replace(hour=9)),
+        ]
+        repo = _Repo(estados, {"A": [_turno(2), _turno(3)]})
+        filters = AnalyticsFilter(QUARTA, QUINTA.replace(hour=23, minute=59))
+
+        hours = _service(repo).get_overview(filters)["hours"]
+
+        self.assertEqual(hours["resource_count"], 1)
+        self.assertEqual(hours["day_count"], 2)
+
+
+# -- Serviço de explicação (Tarefa 3) ---------------------------------------
+
+H = 3600
+
+
+def _at(day, hour, minute=0):
+    return day.replace(hour=hour, minute=minute)
+
+
+def _full_day_states():
+    """Quarta-feira com todas as categorias de tempo, resultado conhecido.
+
+    sem demanda 6 h (Dobra 5 h = DOBRA2 3 + DOBRA1 2; Corte 1 h), parada
+    planejada 1 h (almoço), não planejada 2 h, a esclarecer 1 h (DOBRA3).
+    """
+
+    return [
+        _estado(1, "DOBRA1", "fora_turno", _at(QUARTA, 0), _at(QUARTA, 8),
+                automatico=True, planejado=True, tipo_interrupcao="fim_turno"),
+        _estado(2, "DOBRA1", "producao", _at(QUARTA, 8), _at(QUARTA, 9),
+                operador="Ana", origem="app"),
+        _estado(3, "DOBRA1", "parada", _at(QUARTA, 9), _at(QUARTA, 10),
+                planejado=True, motivo="Almoço"),
+        _estado(4, "DOBRA1", "parada", _at(QUARTA, 10), _at(QUARTA, 12),
+                planejado=False, motivo="Falta de material"),
+        _estado(5, "DOBRA1", "fila", _at(QUARTA, 12), _at(QUARTA, 14),
+                operador="Sistema", origem="sistema"),
+        _estado(6, "DOBRA2", "fila", _at(QUARTA, 8), _at(QUARTA, 11)),
+        _estado(7, "LASER1", "fila", _at(QUARTA, 8), _at(QUARTA, 9),
+                tipo_setor="Corte", operador="Maria", origem="sistema"),
+        # Conflito: produção e setup ao mesmo tempo no mesmo recurso (9h-10h).
+        _estado(8, "DOBRA3", "producao", _at(QUARTA, 8), _at(QUARTA, 10)),
+        _estado(9, "DOBRA3", "setup", _at(QUARTA, 9), _at(QUARTA, 11)),
+        _estado(10, "DOBRA4", "retrabalho", _at(QUARTA, 8), _at(QUARTA, 9)),
+        _estado(11, "DOBRA4", "atividade_sem_op", _at(QUARTA, 9), _at(QUARTA, 10)),
+    ]
+
+
+_FULL_DAY_TURNOS = {
+    name: [_turno(2)]
+    for name in ("DOBRA1", "DOBRA2", "DOBRA3", "DOBRA4", "LASER1")
+}
+
+_METRIC_TO_HOURS_KEY = {
+    "tempo.producao": "production_seconds",
+    "tempo.setup": "setup_seconds",
+    "tempo.sem_demanda": "no_demand_seconds",
+    "tempo.parada_planejada": "planned_downtime_seconds",
+    "tempo.parada_nao_planejada": "unplanned_downtime_seconds",
+    "tempo.a_esclarecer": "conflicting_state_seconds",
+    "tempo.fora_turno": "out_of_shift_seconds",
+    "tempo.retrabalho": "rework_seconds",
+    "tempo.atividade_sem_op": "activity_without_op_seconds",
+}
+
+
+def _explainer(estados=None, turnos=None):
+    repo = _Repo(
+        _full_day_states() if estados is None else estados,
+        _FULL_DAY_TURNOS if turnos is None else turnos,
+    )
+    return MetricExplanationService(_service(repo), repo), repo
+
+
+def _day_filters(day=QUARTA):
+    return AnalyticsFilter(day, day.replace(hour=23, minute=59))
+
+
+def _count_nodes(nodes):
+    return sum(1 + _count_nodes(node.children) for node in nodes)
+
+
+class MetricExplanationTests(unittest.TestCase):
+    def setUp(self):
+        self.explainer, self.repo = _explainer()
+        self.filters = _day_filters()
+
+    def test_sem_demanda_tree_sums_to_total(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters)
+
+        self.assertEqual(tree.total_seconds, 6 * H)
+        self.assertTrue(tree.reconciliation["ok"])
+        self.assertEqual(sum(s.seconds for s in tree.children), tree.total_seconds)
+        for sector in tree.children:
+            self.assertEqual(sum(r.seconds for r in sector.children), sector.seconds)
+            for resource in sector.children:
+                self.assertEqual(sum(t.seconds for t in resource.children), resource.seconds)
+        self.assertEqual(
+            [(s.label, s.seconds) for s in tree.children],
+            [("Dobra", 5 * H), ("Corte", 1 * H)],
+        )
+        self.assertEqual(
+            [(r.label, r.seconds) for r in tree.children[0].children],
+            [("DOBRA2", 3 * H), ("DOBRA1", 2 * H)],
+        )
+
+    def test_total_equals_overview_number(self):
+        hours = _service(self.repo).get_overview(self.filters)["hours"]
+        for metric, key in _METRIC_TO_HOURS_KEY.items():
+            with self.subTest(metric=metric):
+                tree = self.explainer.explain(metric, self.filters)
+                self.assertEqual(tree.total_seconds, hours[key])
+                self.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
+                self.assertEqual(tree.reconciliation["diff_seconds"], 0)
+
+    def test_every_metric_is_non_trivial_in_the_fixture(self):
+        # Protege os testes acima de passarem por vácuo (tudo zero).
+        for metric in _METRIC_TO_HOURS_KEY:
+            with self.subTest(metric=metric):
+                self.assertGreater(
+                    self.explainer.explain(metric, self.filters).total_seconds, 0
+                )
+
+    def test_parada_two_lines_plus_a_esclarecer_sum(self):
+        hours = _service(self.repo).get_overview(self.filters)["hours"]
+        planned = self.explainer.explain("tempo.parada_planejada", self.filters)
+        unplanned = self.explainer.explain("tempo.parada_nao_planejada", self.filters)
+        unclear = self.explainer.explain("tempo.a_esclarecer", self.filters)
+
+        self.assertEqual(planned.total_seconds, 1 * H)
+        self.assertEqual(unplanned.total_seconds, 2 * H)
+        self.assertEqual(unclear.total_seconds, 1 * H)
+        # Parada consolidada = planejada + não planejada; o conflito vira a
+        # terceira linha, nunca escondido dentro de uma das duas.
+        self.assertEqual(
+            planned.total_seconds + unplanned.total_seconds, hours["downtime_seconds"]
+        )
+        self.assertEqual(
+            planned.total_seconds + unplanned.total_seconds + unclear.total_seconds,
+            hours["downtime_seconds"] + hours["conflicting_state_seconds"],
+        )
+
+    def test_stretch_detail_has_origin_and_record_id(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters)
+        corte = next(s for s in tree.children if s.label == "Corte")
+        stretch = corte.children[0].children[0]
+
+        self.assertEqual(stretch.kind, "stretch")
+        self.assertEqual(stretch.detail["record_id"], "estado_recurso:7")
+        self.assertEqual(stretch.detail["origin"], "sistema")
+        self.assertEqual(stretch.detail["who"], "Maria")
+        self.assertEqual(stretch.detail["start"], _at(QUARTA, 8).isoformat())
+        self.assertEqual(stretch.detail["end"], _at(QUARTA, 9).isoformat())
+
+    def test_who_is_none_when_event_has_no_operator(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters)
+        dobra2 = next(
+            r for s in tree.children for r in s.children if r.label == "DOBRA2"
+        )
+        detail = dobra2.children[0].detail
+        self.assertIsNone(detail["who"])
+        self.assertEqual(detail["record_id"], "estado_recurso:6")
+        # Sem a coluna de origem, a origem é o tipo da fonte do registro.
+        self.assertEqual(detail["origin"], "estado_recurso")
+
+    def test_without_repository_rows_detail_still_has_record_id(self):
+        class _NoRows:
+            pass
+
+        service = MetricExplanationService(_service(self.repo), _NoRows())
+        tree = service.explain("tempo.sem_demanda", self.filters)
+        detail = tree.children[0].children[0].children[0].detail
+        self.assertIsNone(detail["who"])
+        self.assertTrue(detail["record_id"].startswith("estado_recurso:"))
+
+    def test_excluded_items_listed_with_reason(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters)
+
+        almoco = [e for e in tree.excluded if "Almoço" in e["label"]]
+        self.assertEqual(len(almoco), 1)
+        self.assertEqual(almoco[0]["seconds"], 1 * H)
+        self.assertTrue(almoco[0]["reason"].strip())
+        self.assertIn("Parada planejada", almoco[0]["label"])
+        for item in tree.excluded:
+            self.assertTrue(item["reason"].strip())
+            self.assertGreater(item["seconds"], 0)
+        # Fora de turno é calendário, não tempo do recurso dentro do turno.
+        self.assertFalse(any("Fora de turno" in e["label"] for e in tree.excluded))
+
+    def test_parent_total_and_siblings(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters)
+        by_metric = {s["metric"]: s["seconds"] for s in tree.siblings}
+
+        self.assertEqual(list(by_metric), [
+            "tempo.producao", "tempo.setup", "tempo.sem_demanda",
+            "tempo.parada_planejada", "tempo.parada_nao_planejada", "tempo.a_esclarecer",
+        ])
+        self.assertEqual(by_metric["tempo.sem_demanda"], tree.total_seconds)
+        # Tempo do turno = tempo físico medido menos o fora de turno.
+        hours = _service(self.repo).get_overview(self.filters)["hours"]
+        self.assertEqual(
+            tree.parent_total_seconds,
+            hours["physical_measured_seconds"] - hours["out_of_shift_attributed_seconds"],
+        )
+
+    def test_average_uses_calendar_resource_count(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters)
+        self.assertEqual(tree.resource_count, 5)
+        self.assertEqual(tree.day_count, 1)
+        self.assertEqual(tree.average_seconds, 6 * H / 5)
+        self.assertEqual(tree.notes, [])
+
+    def test_fora_turno_is_calendar_number_without_average(self):
+        tree = self.explainer.explain("tempo.fora_turno", self.filters)
+        self.assertEqual(tree.total_seconds, 8 * H)
+        self.assertIsNone(tree.average_seconds)
+        self.assertEqual(tree.siblings, [])
+        self.assertTrue(tree.reconciliation["ok"])
+
+    def test_fora_turno_same_hours_in_two_resources_counted_once(self):
+        estados = [
+            _estado(1, "DOBRA1", "fora_turno", _at(QUARTA, 0), _at(QUARTA, 8)),
+            _estado(2, "DOBRA2", "fora_turno", _at(QUARTA, 0), _at(QUARTA, 8)),
+        ]
+        explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)], "DOBRA2": [_turno(2)]})
+        tree = explainer.explain("tempo.fora_turno", self.filters)
+        hours = _service(repo).get_overview(self.filters)["hours"]
+
+        self.assertEqual(tree.total_seconds, 8 * H)
+        self.assertEqual(tree.total_seconds, hours["out_of_shift_seconds"])
+        self.assertEqual(sum(s.seconds for s in tree.children), 16 * H)
+        self.assertTrue(tree.reconciliation["ok"])
+        self.assertEqual(tree.excluded[0]["seconds"], 8 * H)
+
+    def test_resource_without_calendar_is_flagged_not_dropped(self):
+        estados = [
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 8), _at(QUARTA, 10)),
+            _estado(2, "SEMTURNO", "fila", _at(QUARTA, 8), _at(QUARTA, 11)),
+        ]
+        explainer, _repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        tree = explainer.explain("tempo.sem_demanda", self.filters)
+
+        self.assertEqual(tree.total_seconds, 5 * H)
+        self.assertEqual(tree.resource_count, 1)
+        self.assertEqual(tree.average_seconds, 5 * H)  # divisor não mudou
+        self.assertEqual(len(tree.notes), 1)
+        self.assertIn("1 recurso sem turno cadastrado", tree.notes[0])
+        self.assertIn("3.0 h", tree.notes[0])
+
+    def test_unknown_metric_raises(self):
+        with self.assertRaises(UnknownMetricError):
+            self.explainer.explain("tempo.inexistente", self.filters)
+
+    def test_rule_applied_is_explained_on_conflict_stretch(self):
+        tree = self.explainer.explain("tempo.a_esclarecer", self.filters)
+        detail = tree.children[0].children[0].children[0].detail
+        self.assertEqual(detail["record_id"], "estado_recurso:8, estado_recurso:9")
+        self.assertIn("incompatíveis", detail["rule"])
+
+    def test_empty_period(self):
+        explainer, _repo = _explainer([], {})
+        tree = explainer.explain("tempo.sem_demanda", self.filters)
+
+        self.assertEqual(tree.total_seconds, 0)
+        self.assertEqual(tree.children, [])
+        self.assertTrue(tree.reconciliation["ok"])
+        self.assertIn("nenhum registro no período", tree.reason.lower())
+        self.assertIsNone(tree.average_seconds)
+        self.assertEqual(tree.resource_count, 0)
+        self.assertFalse(tree.truncated)
+
+    def test_segment_crossing_period_boundary_is_clipped(self):
+        estados = [
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 22), _at(QUINTA, 2)),
+        ]
+        explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        filters = AnalyticsFilter(QUARTA, QUINTA)  # [qua 00:00, qui 00:00)
+
+        tree = explainer.explain("tempo.sem_demanda", filters)
+
+        self.assertEqual(tree.total_seconds, 2 * H)
+        stretch = tree.children[0].children[0].children[0]
+        self.assertEqual(stretch.seconds, 2 * H)
+        self.assertEqual(stretch.detail["end"], QUINTA.isoformat())
+        self.assertEqual(
+            tree.total_seconds,
+            _service(repo).get_overview(filters)["hours"]["no_demand_seconds"],
+        )
+
+    def test_truncation_flag(self):
+        estados = [
+            _estado(i, f"DOBRA{i}", "fila", _at(QUARTA, 8), _at(QUARTA, 8 + i))
+            for i in range(1, 11)
+        ]
+        turnos = {f"DOBRA{i}": [_turno(2)] for i in range(1, 11)}
+        explainer, _repo = _explainer(estados, turnos)
+        full = explainer.explain("tempo.sem_demanda", self.filters)
+        tree = explainer.explain("tempo.sem_demanda", self.filters, max_nodes=3)
+
+        self.assertFalse(full.truncated)
+        self.assertTrue(tree.truncated)
+        self.assertEqual(tree.total_seconds, sum(range(1, 11)) * H)
+        self.assertTrue(tree.reconciliation["ok"])
+        sector = tree.children[0]
+        self.assertEqual(sector.seconds, tree.total_seconds)
+        self.assertEqual(sum(r.seconds for r in sector.children), sector.seconds)
+        self.assertEqual(sector.children[0].label, "DOBRA10")
+        self.assertEqual(sector.children[-1].label, "outros 9 recursos")
+        self.assertLessEqual(_count_nodes(tree.children), 3)
+
+    def test_truncation_keeps_every_level_closing(self):
+        for limit in (1, 2, 5, 8, 12):
+            with self.subTest(max_nodes=limit):
+                tree = self.explainer.explain(
+                    "tempo.sem_demanda", self.filters, max_nodes=limit
+                )
+                self.assertTrue(tree.reconciliation["ok"])
+                self.assertEqual(tree.total_seconds, 6 * H)
+                self.assertLessEqual(_count_nodes(tree.children), max(1, limit))
+                for sector in tree.children:
+                    if sector.children:
+                        self.assertEqual(
+                            sum(r.seconds for r in sector.children), sector.seconds
+                        )
+
+    def test_to_dict_is_json_ready(self):
+        import json
+
+        payload = self.explainer.explain("tempo.sem_demanda", self.filters).to_dict()
+        json.dumps(payload)
+        self.assertEqual(payload["metric"], "tempo.sem_demanda")
+        self.assertEqual(payload["children"][0]["kind"], "sector")
+        self.assertEqual(payload["calculated_at"], "2026-08-21T12:00:00")
 
 
 if __name__ == "__main__":
