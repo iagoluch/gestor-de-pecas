@@ -41,7 +41,7 @@
 - Modify `mes/services/frontend_facade.py:251-288` — linhas de composição: Parada planejada/não planejada/a esclarecer, `resource_count` por calendário.
 - Create `backend/api/schemas/explanation.py`, `backend/api/routers/explanation.py`; Modify `backend/api/main.py` (registrar router) — ⚠ arquivo já modificado e não commitado: adicionar só as 2 linhas de include e commitar com `git add -p`.
 - Modify `backend/api/schemas/ai.py`, `backend/api/routers/ai.py`, `mes/services/ai_service.py` — referência de explicação na mensagem do chat.
-- Create `web/src/components/MetricExplanationPanel.tsx`, `web/src/hooks/useMetricExplanation.ts`; Modify `web/src/types/api.ts` (⚠ já modificado: `git add -p`), `web/src/pages/ManagementOverviewPage.tsx`, `web/src/pages/operations/OperationsPages.tsx`.
+- Create `web/src/components/MetricExplanationPanel.tsx`, `web/src/hooks/useMetricExplanation.ts`; Create `web/src/types/explanation.ts` (tipos; NÃO editar `api.ts`, que está sujo com trabalho alheio), Modify `web/src/pages/ManagementOverviewPage.tsx`, `web/src/pages/operations/OperationsPages.tsx`.
 - Tests: `tests/test_physical_time_provenance.py`, `tests/test_metric_explanation.py`, `tests/test_explanation_endpoint.py`, `tests/test_explanation_ai_context.py`, `web/src/test/metric-explanation-panel.test.tsx`.
 
 ---
@@ -101,7 +101,7 @@
 - Produces: `MetricExplanationService(management, repository)` com
   `explain(metric: str, filters: AnalyticsFilter, *, max_nodes: int = 400) -> ExplanationTree`.
   `ExplanationTree` (dataclass) = `{metric, label, total_seconds, average_seconds, resource_count, day_count, parent_total_seconds, siblings: list[{metric, label, seconds}], reason: str, rule: str, children: list[Node], excluded: list[{label, seconds, reason}], reconciliation: {ok: bool, sum_seconds, diff_seconds}, calculated_at: str, truncated: bool}`; `Node` = `{kind: "sector"|"resource"|"stretch", label, seconds, children, detail?: {start, end, who?, origin, record_id}}`.
-  Métricas válidas: `tempo.producao`, `tempo.setup`, `tempo.sem_demanda`, `tempo.parada_planejada`, `tempo.parada_nao_planejada`, `tempo.a_esclarecer`, `tempo.fora_turno`; outra → `UnknownMetricError`.
+  Métricas válidas: `tempo.producao`, `tempo.setup`, `tempo.sem_demanda`, `tempo.parada_planejada`, `tempo.parada_nao_planejada`, `tempo.a_esclarecer`, `tempo.fora_turno`, `tempo.retrabalho`, `tempo.atividade_sem_op`; outra → `UnknownMetricError`.
 
 - [ ] **Step 1: Testes que falham:**
   - `test_sem_demanda_tree_sums_to_total`: `reconciliation.ok is True` e `sum(setor.seconds) == total_seconds` e, por setor, `sum(recurso) == setor`.
@@ -146,7 +146,7 @@
 **Files:**
 - Modify: `mes/services/frontend_facade.py:251-288` (composição: Parada planejada, Parada não planejada, A esclarecer como linhas próprias; `metric` id em cada item; `resource_count`/`day_count` do calendário)
 - Create: `web/src/components/MetricExplanationPanel.tsx`, `web/src/hooks/useMetricExplanation.ts`
-- Modify: `web/src/types/api.ts` (tipos `ExplanationTree`/`ExplanationNode`; `git add -p`), `web/src/pages/ManagementOverviewPage.tsx` (Composição do tempo), `web/src/pages/operations/OperationsPages.tsx` (Operações > Tempo, `categoryTotal`/`categoryAverage`)
+- Modify: `web/src/types/explanation.ts` (NOVO; tipos `ExplanationTree`/`ExplanationNode`), `web/src/pages/ManagementOverviewPage.tsx` (Composição do tempo), `web/src/pages/operations/OperationsPages.tsx` (Operações > Tempo, `categoryTotal`/`categoryAverage`)
 - Test: `tests/test_metric_explanation.py::test_time_composition_lines` e `web/src/test/metric-explanation-panel.test.tsx`
 
 **Interfaces:**
