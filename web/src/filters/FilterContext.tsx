@@ -68,7 +68,7 @@ export function defaultFilters(reference: Date | null): ManagementFilters {
   };
 }
 
-function toQuery(filters: ManagementFilters, fields: FilterField[] = ALL_FILTER_FIELDS) {
+export function toQuery(filters: ManagementFilters, fields: FilterField[] = ALL_FILTER_FIELDS) {
   const query = new URLSearchParams();
   query.set("inicio", `${filters.startDate}T00:00:00`);
   query.set("fim", `${filters.endDate}T23:59:59`);

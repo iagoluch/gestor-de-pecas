@@ -1,4 +1,5 @@
 import { useId } from "react";
+import "../styles/metric-explanation.css";
 
 /** Gráficos SVG do visual do protótipo. Só desenham o que recebem — nenhum cálculo de métrica aqui. */
 
@@ -84,6 +85,10 @@ export interface StackPart {
   hint?: string;
   /** Aparece na legenda, mas fica fora da barra e do total (ex.: calendário, parada planejada). */
   outside?: boolean;
+  /** Torna a linha da legenda um botão (ex.: abrir "de onde vem este número"). */
+  onSelect?: () => void;
+  /** Id da métrica explicável; vira `data-explain-metric` para teste e inspeção. */
+  explainMetric?: string;
 }
 
 /** Barra empilhada + legenda. `text` já vem formatado (ex.: "12,4 h"); cada linha mostra também a participação em %. */
@@ -99,15 +104,31 @@ export function StackBar({ parts }: { parts: StackPart[] }) {
         ))}
       </div>
       <div className="legend" id={id}>
-        {parts.map((part) => (
-          <span key={part.name} className={part.value > 0 ? undefined : "legend__zero"}>
-            <i style={{ "--c": part.color } as React.CSSProperties} />
-            <em>{part.name}</em>
-            <small>{part.value > 0 && !part.outside ? `${((part.value / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%` : "—"}</small>
-            <b>{part.text}</b>
-            {part.hint ? <small className="legend__hint">{part.hint}</small> : null}
-          </span>
-        ))}
+        {parts.map((part) => {
+          const content = (
+            <>
+              <i style={{ "--c": part.color } as React.CSSProperties} />
+              <em>{part.name}</em>
+              <small>{part.value > 0 && !part.outside ? `${((part.value / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%` : "—"}</small>
+              <b>{part.text}</b>
+              {part.hint ? <small className="legend__hint">{part.hint}</small> : null}
+            </>
+          );
+          const className = part.value > 0 ? undefined : "legend__zero";
+          if (!part.onSelect) return <span key={part.name} className={className}>{content}</span>;
+          return (
+            <button
+              key={part.name}
+              type="button"
+              className={["legend__button", className].filter(Boolean).join(" ")}
+              data-explain-metric={part.explainMetric}
+              aria-label={`Explicar ${part.name}: ${part.text}`}
+              onClick={part.onSelect}
+            >
+              {content}
+            </button>
+          );
+        })}
       </div>
     </>
   );

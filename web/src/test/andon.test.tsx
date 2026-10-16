@@ -190,6 +190,26 @@ describe("Andon Geral Web", () => {
     expect(container.querySelector(".andon-page--tv")).toBeInTheDocument();
   });
 
+  it("não oferece clique de explicação de número na tela de TV", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) {
+        return new Response(JSON.stringify({
+          id: 2, name: "Andon", role: "andon", management_access: false, andon_access: true, operator_access: false,
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (path.includes("/api/v1/andon")) return new Response(JSON.stringify(snapshot()), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(null, { status: 404 });
+    });
+    const { container } = renderAndon(fetchMock);
+
+    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
+    expect(container.querySelector("[data-explain-metric]")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /explicar/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-explanation-panel")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/management/explicacao"))).toBe(false);
+  });
+
   it("abre em rota própria exibindo somente os cartões do Andon", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

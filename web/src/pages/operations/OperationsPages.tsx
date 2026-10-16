@@ -4,6 +4,7 @@ import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
+import { MetricExplanationPanel } from "../../components/MetricExplanationPanel";
 import { PageFrame } from "../../components/PageFrame";
 import { ResourceCard } from "../../components/ResourceCard";
 import { SectionCard } from "../../components/SectionCard";
@@ -14,6 +15,16 @@ import { useOperationsStream } from "../../hooks/useOperationsStream";
 import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
 import { displayName, formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
+
+/** Categorias do Tempo MES que têm explicação (id estável no backend). Parada e fila ficam de fora: parada tem duas linhas próprias na Visão Geral. */
+const TIME_CATEGORY_METRIC: Record<string, string> = {
+  producao: "tempo.producao",
+  setup: "tempo.setup",
+  sem_demanda: "tempo.sem_demanda",
+  fora_turno: "tempo.fora_turno",
+  retrabalho: "tempo.retrabalho",
+  atividade_sem_op: "tempo.atividade_sem_op",
+};
 
 interface ResourceSummary {
   resources: number;
@@ -212,6 +223,7 @@ function OrdersTable({ rows }: { rows: PagedOrders["items"] }) {
 export function OperationsTimePage() {
   const filters = useManagementFilters();
   const query = useApiQuery<TimeBreakdown>(`/api/v1/operations/time?${filters.query}`);
+  const [explainedMetric, setExplainedMetric] = useState<string | null>(null);
   const title = "Consulta Operacional — Tempo MES";
   const subtitle = "Tempo físico consolidado por categoria, setor e recurso.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
@@ -233,6 +245,16 @@ export function OperationsTimePage() {
   const perResource = (seconds: number) => formatHours(resourceCount ? seconds / resourceCount : seconds);
   const categoryTotal = (key: string) => key === "fora_turno" ? Number(data?.totals?.[key] ?? 0) : resourceSum([key]);
   const categoryAverage = (key: string) => key === "fora_turno" || !resourceCount ? categoryTotal(key) : resourceSum([key]) / resourceCount;
+  // Só as categorias com id de métrica ganham clique; as demais ficam como estavam.
+  const explainable = (category: string, text: string) => {
+    const metric = TIME_CATEGORY_METRIC[category];
+    if (!metric) return text;
+    return (
+      <button type="button" className="metric-link" data-explain-metric={metric} aria-label={`Explicar ${humanize(category)}: ${text}`} onClick={() => setExplainedMetric(metric)}>
+        {text}
+      </button>
+    );
+  };
   const totalDetail = (seconds: number) => resourceCount > 1 ? `Total ${formatHours(seconds)} em ${resourceCount} recursos` : undefined;
   const productive = resourceSum(["producao", "setup"]);
   const stopped = resourceSum(["parada"]);
@@ -255,12 +277,13 @@ export function OperationsTimePage() {
             rowKey={(row) => row[0]}
             columns={[
               { key: "category", label: "Categoria", render: (row) => humanize(row[0]) },
-              { key: "time", label: resourceCount > 1 ? "Média por recurso" : "Tempo físico", render: (row) => formatHours(categoryAverage(row[0])) },
-              ...(resourceCount > 1 ? [{ key: "total", label: "Tempo total", render: (row: [string, number]) => formatHours(categoryTotal(row[0])) }] : []),
+              { key: "time", label: resourceCount > 1 ? "Média por recurso" : "Tempo físico", render: (row) => explainable(row[0], formatHours(categoryAverage(row[0]))) },
+              ...(resourceCount > 1 ? [{ key: "total", label: "Tempo total", render: (row: [string, number]) => explainable(row[0], formatHours(categoryTotal(row[0]))) }] : []),
             ]}
           />
         </SectionCard>
       </div>
+      {explainedMetric ? <MetricExplanationPanel metric={explainedMetric} filters={filters.filters} onClose={() => setExplainedMetric(null)} /> : null}
     </PageFrame>
   );
 }

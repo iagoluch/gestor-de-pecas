@@ -4,10 +4,12 @@ import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
 import { ManagementInsightDrawer } from "../components/ManagementInsightDrawer";
 import { MetricCard } from "../components/MetricCard";
+import { MetricExplanationPanel } from "../components/MetricExplanationPanel";
 import { PageFrame } from "../components/PageFrame";
 import { SectionCard } from "../components/SectionCard";
 import { useManagementFilters } from "../filters/FilterContext";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { explainableComposition } from "../types/explanation";
 import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
 import { displayName, displayText, formatHours } from "../utils/format";
 import { humanizeSystemState } from "../utils/systemState";
@@ -49,6 +51,18 @@ const TIME_COLORS: Record<string, string> = {
 };
 const SERIES_COLORS = { oee: "var(--purple)", availability: "var(--accent)", performance: "var(--warning)", ftt: "var(--teal)", good: "var(--primary)" };
 
+/**
+ * Complemento de cada linha da composição. A média vem pronta do backend
+ * (total ÷ recursos com turno) e sempre diz quantos recursos; sem média, só
+ * quem fica fora do total ganha "não somado".
+ */
+function averageHint(item: { summed?: boolean; average_seconds?: number | null }, resourceCount: number) {
+  if (item.average_seconds != null && resourceCount > 0) {
+    return `média ${hours(item.average_seconds)} (${resourceCount} ${resourceCount === 1 ? "recurso" : "recursos"})`;
+  }
+  return item.summed === false ? "não somado" : undefined;
+}
+
 function dayLabel(point: OverviewTrendPoint) {
   const [, month, day] = point.period_start.slice(0, 10).split("-");
   return `${day}/${month}`;
@@ -81,6 +95,9 @@ export function ManagementOverviewPage() {
   const closeInsight = useCallback(() => {
     setSelectedKpi(null);
   }, []);
+  // Painel "de onde vem este número" (composição do tempo): guarda só o id da métrica.
+  const [explainedMetric, setExplainedMetric] = useState<string | null>(null);
+  const closeExplanation = useCallback(() => setExplainedMetric(null), []);
 
   const navigateTo = useCallback((path: string, overrides: Partial<typeof filters.filters> = {}) => {
     filters.setFilters({ ...filters.filters, ...overrides });
@@ -109,6 +126,7 @@ export function ManagementOverviewPage() {
   if (!query.data) return <PageFrame sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><EmptyState state="sem_registros" /></PageFrame>;
 
   const data = query.data;
+  const composition = explainableComposition(data.time_composition);
   const kpis = data.kpis;
   const simulation = data.simulation;
   const insights = data.insights;
@@ -239,22 +257,24 @@ export function ManagementOverviewPage() {
             title="Composição do tempo"
             navigation={{ label: "Abrir Consulta Operacional: Tempo MES", onNavigate: () => navigateTo("/consulta-operacional/tempo-mes") }}
           >
-            {data.time_composition.availability === "sem_registros" ? (
-              <EmptyState state={data.time_composition.availability} />
+            {composition.availability === "sem_registros" ? (
+              <EmptyState state={composition.availability} />
             ) : (
               <div className="time-composition">
                 <div className="time-composition__total">
-                  <strong>{hours(data.time_composition.total_seconds)}</strong>
-                  <span>{(data.time_composition.resource_count ?? 0) > 1 ? `somado em ${data.time_composition.resource_count} recursos` : "no período"}</span>
+                  <strong>{hours(composition.total_seconds)}</strong>
+                  <span>{(composition.resource_count ?? 0) > 1 ? `somado em ${composition.resource_count} recursos` : "no período"}</span>
                 </div>
+                {composition.average_note ? <p className="time-composition__note">{composition.average_note}</p> : null}
                 <StackBar
-                  parts={data.time_composition.items.map((item) => ({
+                  parts={composition.items.map((item) => ({
                     name: item.label,
                     value: item.seconds,
                     color: TIME_COLORS[item.source_field] ?? "var(--muted)",
                     outside: item.summed === false,
                     text: hours(item.seconds),
-                    hint: item.summed === false ? "não somado" : (data.time_composition.resource_count ?? 0) > 1 && item.average_seconds != null ? `média ${hours(item.average_seconds)}` : undefined,
+                    hint: averageHint(item, composition.resource_count ?? 0),
+                    ...(item.metric ? { explainMetric: item.metric, onSelect: () => setExplainedMetric(item.metric ?? null) } : {}),
                   }))}
                 />
               </div>
@@ -376,6 +396,7 @@ export function ManagementOverviewPage() {
           </SectionCard>
         </div>
         <ManagementInsightDrawer explanation={selectedKpi} exception={null} onClose={closeInsight} />
+        {explainedMetric ? <MetricExplanationPanel metric={explainedMetric} filters={filters.filters} onClose={closeExplanation} /> : null}
     </PageFrame>
   );
 }
