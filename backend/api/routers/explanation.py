@@ -49,6 +49,20 @@ def redact_operator_names(tree: dict, level: str) -> dict:
     return tree
 
 
+def explain_for_user(facade, metric: str, filters: AnalyticsFilter, user: SessionUser) -> dict:
+    """Recalcula a árvore no servidor (422 para métrica desconhecida) e oculta o operador se preciso.
+
+    Compartilhado com o chat da IA (``/ai/.../messages`` com ``explanation``):
+    uma única fonte da árvore, nunca aceita do cliente.
+    """
+    service = MetricExplanationService(facade.management, facade.db)
+    try:
+        tree = service.explain(metric.strip(), filters)
+    except UnknownMetricError as exc:
+        raise AppError("unknown_metric", str(exc), status_code=422) from exc
+    return redact_operator_names(tree.to_dict(), user.role)
+
+
 @router.get("/explicacao", response_model=ExplanationResponse)
 def explain_metric(
     metric: str = Query(min_length=1, max_length=64),
@@ -56,9 +70,4 @@ def explain_metric(
     user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
 ):
-    service = MetricExplanationService(facade.management, facade.db)
-    try:
-        tree = service.explain(metric.strip(), filters)
-    except UnknownMetricError as exc:
-        raise AppError("unknown_metric", str(exc), status_code=422) from exc
-    return redact_operator_names(tree.to_dict(), user.role)
+    return explain_for_user(facade, metric, filters, user)

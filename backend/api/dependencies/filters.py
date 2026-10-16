@@ -58,18 +58,20 @@ def request_now(request: Request) -> datetime:
     return clock.now() if clock is not None else datetime.now().replace(microsecond=0)
 
 
-def analytics_filter(
+def build_analytics_filter(
     request: Request,
-    inicio: datetime | None = Query(default=None),
-    fim: datetime | None = Query(default=None),
-    setor: str | None = Query(default=None, max_length=120),
-    recurso: str | None = Query(default=None, max_length=120),
-    turno: str | None = Query(default=None, max_length=80),
-    op: str | None = Query(default=None, max_length=120),
-    operacao: str | None = Query(default=None, max_length=120),
-    produto: str | None = Query(default=None, max_length=160),
-    operador: str | None = Query(default=None, max_length=160),
+    *,
+    inicio: datetime | None = None,
+    fim: datetime | None = None,
+    setor: str | None = None,
+    recurso: str | None = None,
+    turno: str | None = None,
+    op: str | None = None,
+    operacao: str | None = None,
+    produto: str | None = None,
+    operador: str | None = None,
 ) -> AnalyticsFilter:
+    """Valida e normaliza os filtros gerenciais (query string ou corpo JSON)."""
     current = request_now(request)
     fim = validated_business_datetime(fim, current)
     inicio = validated_business_datetime(inicio, current)
@@ -100,6 +102,25 @@ def analytics_filter(
         for key, value in values.items()
     }
     return AnalyticsFilter(inicio=start, fim=end, **values)
+
+
+def analytics_filter(
+    request: Request,
+    inicio: datetime | None = Query(default=None),
+    fim: datetime | None = Query(default=None),
+    setor: str | None = Query(default=None, max_length=120),
+    recurso: str | None = Query(default=None, max_length=120),
+    turno: str | None = Query(default=None, max_length=80),
+    op: str | None = Query(default=None, max_length=120),
+    operacao: str | None = Query(default=None, max_length=120),
+    produto: str | None = Query(default=None, max_length=160),
+    operador: str | None = Query(default=None, max_length=160),
+) -> AnalyticsFilter:
+    return build_analytics_filter(
+        request,
+        inicio=inicio, fim=fim, setor=setor, recurso=recurso, turno=turno,
+        op=op, operacao=operacao, produto=produto, operador=operador,
+    )
 
 
 @dataclass(frozen=True)

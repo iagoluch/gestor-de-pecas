@@ -5,6 +5,7 @@ import { useMetricExplanation } from "../hooks/useMetricExplanation";
 import type { ExplanationNode, ExplanationTree, OverviewFilters } from "../types/explanation";
 import { formatHours } from "../utils/format";
 import { LoadingState } from "./DataState";
+import { MetricExplanationChat } from "./MetricExplanationChat";
 import "../styles/metric-explanation.css";
 
 const SIBLING_COLORS = ["var(--warning)", "var(--teal)", "var(--purple)", "var(--orange)", "var(--accent)"];
@@ -227,7 +228,9 @@ export function MetricExplanationPanel({ metric, filters, onClose }: {
           ) : null}
           {tree ? <Explanation tree={tree} /> : null}
         </div>
-        <div className="metric-explanation__chat" data-testid="explanation-chat-slot" />
+        <div className="metric-explanation__chat" data-testid="explanation-chat-slot">
+          {tree ? <MetricExplanationChat metric={metric} label={tree.label} filters={filters} /> : null}
+        </div>
       </aside>
     </div>
   );

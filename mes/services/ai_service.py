@@ -8,8 +8,14 @@ import logging
 import time
 from typing import Any
 
-from mes.ai.context_budget import build_budgeted_context, fit_messages_to_budget
+from mes.ai.context_budget import (
+    build_budgeted_context,
+    estimate_tokens,
+    fit_messages_to_budget,
+)
+from mes.ai.explanation_context import build_explanation_context
 from mes.ai.prompts import FINAL_RESPONSE_INSTRUCTION
+from mes.ai.prompts.system_prompt import BASE_SYSTEM_PROMPT
 from mes.contracts.ai import (
     AIConversationNotFoundError,
     AIRequestContext,
@@ -97,6 +103,20 @@ class AIService:
             if isinstance(value, int):
                 target[key] = target.get(key, 0) + value
 
+    def _explanation_allowance(self, question: str) -> int:
+        """Tokens que a explicação pode ocupar sem expulsar prompt-base e pergunta.
+
+        Reserva uma fatia para o histórico recente; o que sobra é da árvore.
+        """
+        fixed = (
+            estimate_tokens(BASE_SYSTEM_PROMPT)
+            + estimate_tokens(question)
+            + self.config.max_completion_tokens
+            + 64
+        )
+        history_reserve = self.config.request_token_budget // 6
+        return max(400, self.config.request_token_budget - fixed - history_reserve)
+
     async def stream_message(
         self,
         conversation_id: int,
@@ -104,6 +124,7 @@ class AIService:
         context: AIRequestContext,
         *,
         retry: bool = False,
+        explanation_tree: dict[str, Any] | None = None,
     ):
         started = time.monotonic()
         tools_called: list[str] = []
@@ -177,15 +198,31 @@ class AIService:
         )
         rounds = 0
         limit_reached = False
-        selected_tools = self.tools.select_schemas(question)
+        explanation_context = None
+        request_token_budget = self.config.request_token_budget
+        if explanation_tree is None:
+            selected_tools = self.tools.select_schemas(question)
+        else:
+            # Modo explicação: sem ferramentas, só a árvore recalculada pelo servidor.
+            selected_tools = []
+            explanation_context = build_explanation_context(
+                explanation_tree,
+                max_tokens=self._explanation_allowance(question),
+            )
+            request_token_budget -= estimate_tokens(explanation_context)
         messages, context_metrics = build_budgeted_context(
             history=history.get("messages") or [],
             knowledge=knowledge,
             question=question,
             tools=selected_tools,
-            request_token_budget=self.config.request_token_budget,
+            request_token_budget=request_token_budget,
             max_completion_tokens=self.config.max_completion_tokens,
         )
+        if explanation_context is not None:
+            messages[0] = {
+                "role": "system",
+                "content": messages[0]["content"] + "\n\n" + explanation_context,
+            }
         logging.info(
             "AI context request_id=%s estimated_tokens=%s budget=%s history=%s/%s knowledge=%s/%s truncated=%s",
             context.request_id,

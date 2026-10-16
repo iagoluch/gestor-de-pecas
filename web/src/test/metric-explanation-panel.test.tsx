@@ -387,3 +387,94 @@ describe("Operações > Tempo: categorias clicáveis", () => {
     expect(document.body).not.toHaveTextContent("NaN");
   });
 });
+
+
+function sse(blocks: string[]) {
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const block of blocks) controller.enqueue(encoder.encode(block));
+      controller.close();
+    },
+  }), { headers: { "content-type": "text/event-stream" } });
+}
+
+function event(name: string, data: unknown) {
+  return `event: ${name}
+data: ${JSON.stringify(data)}
+
+`;
+}
+
+describe("MetricExplanationPanel chat", () => {
+  function chatFetch(messageResponse: () => Response) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/management/explicacao")) return respond(tree());
+      if (url.endsWith("/api/v1/ai/conversations") && init?.method === "POST") {
+        return respond({ id: 7, title: "Explicação", created_at: "2026-10-16T10:00:00", updated_at: "2026-10-16T10:00:00" }, 201);
+      }
+      if (url.endsWith("/api/v1/ai/conversations/7/messages")) return messageResponse();
+      throw new Error(`Chamada inesperada: ${url}`);
+    });
+  }
+
+  async function ask(dialog: HTMLElement, text: string) {
+    fireEvent.change(within(dialog).getByLabelText("Pergunta para a IA"), { target: { value: text } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Enviar" }));
+  }
+
+  it("envia a pergunta com {metric, filters} e mostra a resposta em streaming", async () => {
+    const fetchMock = chatFetch(() => sse([
+      event("status", { message: "Preparando a consulta…", user_message_id: 1 }),
+      event("delta", { content: "O LASER1 ficou 4h " }),
+      event("delta", { content: "sem demanda." }),
+      event("done", {
+        message: { id: 2, conversation_id: 7, role: "assistant", content: "O LASER1 ficou 4h sem demanda.", created_at: "2026-10-16T10:00:01" },
+        conversation_id: 7, tool_rounds: 0, artifacts: [],
+      }),
+    ]));
+    renderPanel(fetchMock);
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByTestId("explanation-total");
+
+    await ask(dialog, "por que o LASER1 está sem demanda?");
+
+    expect(await within(dialog).findByText("O LASER1 ficou 4h sem demanda.")).toBeInTheDocument();
+    expect(within(dialog).getByText("por que o LASER1 está sem demanda?")).toBeInTheDocument();
+    const call = fetchMock.mock.calls.find(([path]) => String(path).endsWith("/conversations/7/messages"));
+    const body = JSON.parse(String((call?.[1] as RequestInit).body));
+    expect(body.content).toBe("por que o LASER1 está sem demanda?");
+    expect(body.explanation).toEqual({
+      metric: "tempo.sem_demanda",
+      filters: { inicio: "2026-10-16T00:00:00", fim: "2026-10-16T23:59:59" },
+    });
+    expect(body.explanation).not.toHaveProperty("children");
+  });
+
+  it("429 mostra 'Limite temporário da IA' e mantém o painel aberto", async () => {
+    const { onClose } = renderPanel(chatFetch(() => respond(
+      { code: "rate_limit", message: "Limite temporário da IA atingido.", details: { retry_after_seconds: 30 } },
+      429,
+    )));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByTestId("explanation-total");
+
+    await ask(dialog, "e agora?");
+
+    expect(await within(dialog).findByText(/Limite temporário da IA/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("explanation-total")).toBeInTheDocument();
+  });
+
+  it("falha qualquer vira uma mensagem simples em português", async () => {
+    renderPanel(chatFetch(() => sse([event("error", { code: "ai_internal_error", message: "x", retryable: true })])));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByTestId("explanation-total");
+
+    await ask(dialog, "oi");
+
+    expect(await within(dialog).findByText("Não foi possível obter a resposta da IA agora.")).toBeInTheDocument();
+  });
+});

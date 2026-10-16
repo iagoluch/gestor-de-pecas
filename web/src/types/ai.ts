@@ -53,3 +53,9 @@ export type AIStreamEvent =
   | { event: "artifact"; data: AIReportArtifact }
   | { event: "done"; data: { message: AIMessage; conversation_id: number; tool_rounds: number; artifacts?: AIReportArtifact[] } }
   | { event: "error"; data: { code: string; message: string; retryable?: boolean; request_id?: string | null; retry_after_seconds?: number; blocked_until?: string | null } };
+
+/** Referência à explicação aberta no painel: só métrica + filtros (a árvore o servidor recalcula). */
+export interface AIExplanationRef {
+  metric: string;
+  filters: Record<string, string>;
+}

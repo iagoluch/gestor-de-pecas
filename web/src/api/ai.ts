@@ -1,6 +1,6 @@
 import { api, ApiError } from "./client";
 import type { ApiErrorPayload } from "../types/api";
-import type { AIConversation, AIConversationDetail, AIStatus, AIStreamEvent } from "../types/ai";
+import type { AIConversation, AIConversationDetail, AIExplanationRef, AIStatus, AIStreamEvent } from "../types/ai";
 
 function cookie(name: string): string | undefined {
   return document.cookie
@@ -49,6 +49,7 @@ export const aiApi = {
     onEvent: (event: AIStreamEvent) => void,
     signal: AbortSignal,
     retry = false,
+    explanation?: AIExplanationRef,
   ) {
     const headers = new Headers({
       "Content-Type": "application/json",
@@ -60,7 +61,7 @@ export const aiApi = {
       method: "POST",
       headers,
       credentials: "include",
-      body: JSON.stringify({ content, retry }),
+      body: JSON.stringify(explanation ? { content, retry, explanation } : { content, retry }),
       signal,
     });
     if (!response.ok) throw await errorFromResponse(response);
