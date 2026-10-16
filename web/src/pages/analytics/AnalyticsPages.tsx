@@ -475,6 +475,11 @@ function SegmentPage() {
       <div className="analytics-split content-section">
         <SectionCard title={isStop ? "Pareto por motivo" : "Tempo por tipo de setup"}>{reasons.length ? <BarList data={reasons.slice(0, 10)} /> : <EmptyState />}</SectionCard>
         <SectionCard title="Ocorrências" className="section-card--table">
+          {isStop && data?.difference ? (
+            <p className="chart-note" style={{ padding: "8px 16px 10px" }}>
+              diferença: {data.difference.seconds < 0 ? "−" : "+"}{formatHours(Math.abs(data.difference.seconds))}, motivo: {data.difference.reason}
+            </p>
+          ) : null}
           <DataTable
             rows={data?.items ?? []}
             rowKey={(row, index) => row.estado_recurso_id ?? row.evento_id ?? `${row.inicio}-${index}`}

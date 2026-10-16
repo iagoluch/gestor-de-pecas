@@ -10,7 +10,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PageFrame } from "../components/PageFrame";
 import { managementRoutes, sectionById } from "../config/navigation";
 import { FilterProvider, useManagementFilters } from "../filters/FilterContext";
-import { AnalyticsCapacityPage, AnalyticsOeePage, AnalyticsReliabilityPage } from "../pages/analytics/AnalyticsPages";
+import { AnalyticsCapacityPage, AnalyticsDowntimesPage, AnalyticsOeePage, AnalyticsReliabilityPage } from "../pages/analytics/AnalyticsPages";
 import { OperationsOverviewPage, OperationsResourcesPage } from "../pages/operations/OperationsPages";
 import { ProductionOrdersPage } from "../pages/production/ProductionPages";
 import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
@@ -448,6 +448,45 @@ describe("GE-13 — KPI sem meta canônica", () => {
     expect(await screen.findAllByText("Sem registros para o filtro selecionado")).toHaveLength(1);
     expect(container.querySelector(".metric-card")).toBeNull();
     expect(screen.queryByText("Maior produção boa")).not.toBeInTheDocument();
+  });
+});
+
+describe("Análises > Paradas: diferença para o consolidado", () => {
+  const stop = (id: number, recurso: string, segundos: number) => ({
+    estado_recurso_id: id,
+    recurso,
+    setor: "Dobra",
+    motivo: "Falta de material",
+    programada: false,
+    inicio: "2026-08-19T09:00:00",
+    segundos,
+  });
+  const payload = (difference: { seconds: number; reason: string } | null) => ({
+    periodo: {},
+    count: 2,
+    total_seconds: 10800,
+    raw_attributed_seconds: 14400,
+    overlap_removed_seconds: 3600,
+    items: [stop(1, "DOBRA1", 7200), stop(2, "DOBRA1", 7200)],
+    by_reason: [{ motivo: "Falta de material", seconds: 10800 }],
+    by_resource: [{ recurso: "DOBRA1", seconds: 10800 }],
+    kind: "paradas",
+    difference,
+  });
+
+  it("mostra a linha de diferença com o motivo e o total consolidado", async () => {
+    vi.stubGlobal("fetch", jsonOnce(payload({ seconds: 3600, reason: "eventos sobrepostos contados uma vez" })));
+    render(<MemoryRouter><FilterProvider><AnalyticsDowntimesPage /></FilterProvider></MemoryRouter>);
+    const line = await screen.findByText(/diferença:/i);
+    expect(line).toHaveTextContent("diferença: +1h, motivo: eventos sobrepostos contados uma vez");
+    expect(screen.getByText("Tempo total de parada").closest("article, section, div.metric-card, div")?.parentElement).toHaveTextContent("3h");
+  });
+
+  it("não mostra a linha quando não há diferença", async () => {
+    vi.stubGlobal("fetch", jsonOnce(payload(null)));
+    render(<MemoryRouter><FilterProvider><AnalyticsDowntimesPage /></FilterProvider></MemoryRouter>);
+    await screen.findByText("Tempo total de parada");
+    expect(screen.queryByText(/diferença:/i)).not.toBeInTheDocument();
   });
 });
 

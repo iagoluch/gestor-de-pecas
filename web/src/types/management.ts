@@ -215,6 +215,8 @@ export interface SegmentSummary {
   by_reason: RankedSeconds[];
   by_resource: RankedSeconds[];
   kind: string;
+  /** Só em Paradas: soma da lista menos o consolidado (o total exibido é o consolidado). */
+  difference?: { seconds: number; reason: string } | null;
 }
 
 export interface TimeBreakdown {

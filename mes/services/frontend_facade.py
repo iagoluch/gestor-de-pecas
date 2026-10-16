@@ -47,6 +47,9 @@ from mes.services.shift_parameters import load_manufacturing_rules
 from mes.services.traceability import TraceabilityService
 
 
+#: Abaixo disto a lista de paradas e o consolidado são considerados iguais.
+_STOPS_DIFFERENCE_MIN_SECONDS = 1.0
+
 #: Tipos aceitos pela fachada de relatórios da Web. A lista é o contrato: um
 #: tipo fora dela é erro do cliente (4xx), não falha do servidor.
 FACADE_REPORT_TYPES = (
@@ -1053,7 +1056,9 @@ class FrontendBackendFacade:
                 payload["simulation"] = self.management.get_overview(filters).get("simulation")
             return payload
         if key == "paradas":
-            return self.analytics.downtimes(filters)
+            return self._stops_with_consolidated_total(
+                self.analytics.downtimes(filters), filters
+            )
         if key == "setup":
             return self.analytics.setups(filters)
         if key == "qualidade":
@@ -1082,6 +1087,31 @@ class FrontendBackendFacade:
                 "losses_breakdown": overview.get("kpi_losses_breakdown") or {},
             }
         raise ValueError("Análise solicitada não existe.")
+
+    def _stops_with_consolidated_total(self, payload: dict, filters: AnalyticsFilter) -> dict:
+        """Análises > Paradas: o consolidado vence a soma da lista.
+
+        O total exibido é a parada do tempo físico consolidado (a mesma da Visão
+        Geral). A lista de ocorrências mantém suas linhas; a diferença entre a
+        soma delas e o consolidado vai em ``difference`` com o motivo.
+        """
+
+        consolidated = self.management.physical_consolidation(filters)["consolidated"]
+        downtime = float(consolidated["totals"].get(EventCategory.DOWNTIME, 0.0))
+        listed = sum(float(row.get("segundos") or 0.0) for row in payload["items"])
+        gap = listed - downtime
+        difference = None
+        if abs(gap) >= _STOPS_DIFFERENCE_MIN_SECONDS:
+            difference = {
+                "seconds": gap,
+                "reason": (
+                    "eventos sobrepostos contados uma vez"
+                    if gap > 0
+                    else "tempo de parada sem evento na lista (ex.: intervalos automáticos)"
+                ),
+            }
+        # Cópia: o payload do analytics é cacheado e compartilhado.
+        return {**payload, "total_seconds": downtime, "difference": difference}
 
     def _operations_time_extras(self, payload: dict, filters: AnalyticsFilter) -> dict:
         """Divisor da média e parada planejada/não planejada de Operações > Tempo.

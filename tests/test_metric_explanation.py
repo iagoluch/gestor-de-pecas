@@ -772,6 +772,62 @@ class TimeCompositionFacadeTests(unittest.TestCase):
         )
         self.assertEqual(facade.analise("tempos", _day_filters())["resource_count"], 0)
 
+class StopsListDifferenceTests(unittest.TestCase):
+    """Análises > Paradas: o consolidado vence; a lista mostra a diferença."""
+
+    @staticmethod
+    def _paradas(estados):
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repo = _Repo(estados, _FULL_DAY_TURNOS)
+        facade = FrontendBackendFacade(repo, now_func=lambda: datetime(2026, 8, 21, 12, 0))
+        overview = facade.inicio(_day_filters(), include_insights=False)["hours"]
+        return facade.analise("paradas", _day_filters()), overview
+
+    def test_stops_list_difference_line(self):
+        # Duas paradas sobrepostas no mesmo recurso: 9h-11h e 10h-12h.
+        estados = [
+            _estado(1, "DOBRA1", "parada", _at(QUARTA, 9), _at(QUARTA, 11),
+                    planejado=False, motivo="Falta de material"),
+            _estado(2, "DOBRA1", "parada", _at(QUARTA, 10), _at(QUARTA, 12),
+                    planejado=False, motivo="Manutenção"),
+        ]
+        payload, overview = self._paradas(estados)
+
+        list_sum = sum(item["segundos"] for item in payload["items"])
+        self.assertEqual(list_sum, 4 * H)
+        # O total exibido é o consolidado do overview, não a soma da lista.
+        self.assertEqual(payload["total_seconds"], overview["downtime_seconds"])
+        self.assertLess(payload["total_seconds"], list_sum)
+        difference = payload["difference"]
+        self.assertEqual(difference["seconds"], list_sum - payload["total_seconds"])
+        self.assertGreater(difference["seconds"], 0)
+        self.assertTrue(difference["reason"].strip())
+        self.assertIn("sobrepostos", difference["reason"])
+        self.assertEqual(len(payload["items"]), 2)  # a lista mantém as linhas
+
+    def test_stops_list_without_difference_is_none(self):
+        payload, overview = self._paradas(_full_day_states())
+
+        self.assertEqual(payload["total_seconds"], overview["downtime_seconds"])
+        self.assertIsNone(payload["difference"])
+
+    def test_stops_list_below_consolidated_gets_other_reason(self):
+        # Intervalo automático fica fora da lista, mas conta no tempo físico.
+        estados = [
+            _estado(1, "DOBRA1", "parada", _at(QUARTA, 9), _at(QUARTA, 10),
+                    planejado=False, motivo="Falta de material"),
+            _estado(2, "DOBRA1", "parada", _at(QUARTA, 12), _at(QUARTA, 13),
+                    planejado=True, automatico=True, motivo="Almoço"),
+        ]
+        payload, overview = self._paradas(estados)
+
+        self.assertEqual(payload["total_seconds"], overview["downtime_seconds"])
+        difference = payload["difference"]
+        self.assertLess(difference["seconds"], 0)
+        self.assertTrue(difference["reason"].strip())
+        self.assertNotIn("sobrepostos", difference["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()
