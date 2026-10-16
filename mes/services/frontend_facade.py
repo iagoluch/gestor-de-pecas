@@ -256,28 +256,39 @@ class FrontendBackendFacade:
                 0.0, float(hours.get("downtime_seconds") or 0.0) - float(hours.get("planned_downtime_seconds") or 0.0)
             ),
         }
+        # (rótulo, campo de hours, id da métrica explicável em MetricExplanationService)
         composition = (
-            ("Produção", "production_seconds"),
-            ("Setup", "setup_seconds"),
-            ("Parada não planejada", "unplanned_downtime_seconds"),
-            ("Parada planejada", "planned_downtime_seconds"),
-            ("Retrabalho", "rework_seconds"),
-            ("Atividade sem OP", "activity_without_op_seconds"),
-            ("Recurso sem demanda", "no_demand_seconds"),
-            ("Fora do turno", "out_of_shift_seconds"),
+            ("Produção", "production_seconds", "tempo.producao"),
+            ("Setup", "setup_seconds", "tempo.setup"),
+            ("Parada não planejada", "unplanned_downtime_seconds", "tempo.parada_nao_planejada"),
+            ("Parada planejada", "planned_downtime_seconds", "tempo.parada_planejada"),
+            # Estados incompatíveis no mesmo instante: linha própria, nunca dentro de uma parada.
+            ("A esclarecer", "conflicting_state_seconds", "tempo.a_esclarecer"),
+            ("Retrabalho", "rework_seconds", "tempo.retrabalho"),
+            ("Atividade sem OP", "activity_without_op_seconds", "tempo.atividade_sem_op"),
+            ("Recurso sem demanda", "no_demand_seconds", "tempo.sem_demanda"),
+            ("Fora do turno", "out_of_shift_seconds", "tempo.fora_turno"),
         )
-        not_summed = {"planned_downtime_seconds", "out_of_shift_seconds"}
+        # Fora do total: planejada (já fora), a esclarecer (tempo em disputa) e fora do turno (calendário).
+        not_summed = {"planned_downtime_seconds", "conflicting_state_seconds", "out_of_shift_seconds"}
+        # Fora do turno é número de calendário (união): não tem média por recurso.
+        no_average = {"out_of_shift_seconds"}
         items = [
             {
                 "label": label,
                 "seconds": float(hours.get(field) or 0.0),
                 "source_field": field,
                 "summed": field not in not_summed,
+                "metric": metric,
             }
-            for label, field in composition
+            for label, field, metric in composition
         ]
         for item in items:
-            item["average_seconds"] = item["seconds"] / resource_count if resource_count and item["summed"] else None
+            item["average_seconds"] = (
+                item["seconds"] / resource_count
+                if resource_count and item["source_field"] not in no_average
+                else None
+            )
         # Total e % só sobre as grandezas somadas por recurso: misturar com o
         # calendário (união, não somado) tornaria o % sem sentido.
         total = sum(item["seconds"] for item in items if item["summed"])
@@ -286,6 +297,8 @@ class FrontendBackendFacade:
         payload["time_composition"] = {
             "items": items,
             "resource_count": resource_count,
+            "day_count": int(hours.get("day_count") or 0),
+            "average_note": None if resource_count else "Sem recursos com turno no período.",
             "total_seconds": total,
             "availability": "disponivel" if any(item["seconds"] > 0 for item in items) else "sem_registros",
         }

@@ -673,5 +673,67 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertEqual(payload["calculated_at"], "2026-08-21T12:00:00")
 
 
+class TimeCompositionFacadeTests(unittest.TestCase):
+    """Cartão "Composição do tempo" da Visão Geral (frontend_facade.inicio)."""
+
+    @staticmethod
+    def _composition(estados, turnos):
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repo = _Repo(estados, turnos)
+        facade = FrontendBackendFacade(repo, now_func=lambda: datetime(2026, 8, 21, 12, 0))
+        payload = facade.inicio(_day_filters(), include_insights=False)
+        return payload["time_composition"], payload["hours"]
+
+    def test_time_composition_lines(self):
+        composition, hours = self._composition(_full_day_states(), _FULL_DAY_TURNOS)
+        items = {item["label"]: item for item in composition["items"]}
+
+        for label in ("Parada planejada", "Parada não planejada", "A esclarecer"):
+            self.assertIn(label, items)
+        self.assertNotIn("Parada", items)
+        self.assertEqual(items["Parada planejada"]["seconds"], 1 * H)
+        self.assertEqual(items["Parada não planejada"]["seconds"], 2 * H)
+        self.assertEqual(items["A esclarecer"]["seconds"], 1 * H)
+        self.assertEqual(
+            items["Parada planejada"]["seconds"] + items["Parada não planejada"]["seconds"],
+            hours["downtime_seconds"],
+        )
+        self.assertEqual(items["A esclarecer"]["seconds"], hours["conflicting_state_seconds"])
+
+        explainer, _ = _explainer()
+        for item in composition["items"]:
+            metric = item["metric"]
+            if metric is None:
+                continue
+            with self.subTest(metric=metric):
+                explainer.explain(metric, _day_filters())  # não levanta UnknownMetricError
+        self.assertEqual(items["Produção"]["metric"], "tempo.producao")
+        self.assertEqual(items["Recurso sem demanda"]["metric"], "tempo.sem_demanda")
+        self.assertEqual(items["Fora do turno"]["metric"], "tempo.fora_turno")
+
+    def test_time_composition_average_uses_calendar_resource_count(self):
+        composition, hours = self._composition(_full_day_states(), _FULL_DAY_TURNOS)
+        items = {item["label"]: item for item in composition["items"]}
+
+        self.assertEqual(composition["resource_count"], hours["resource_count"])
+        self.assertEqual(composition["day_count"], hours["day_count"])
+        self.assertEqual(composition["resource_count"], 5)
+        self.assertIsNone(composition["average_note"])
+        self.assertEqual(items["Recurso sem demanda"]["average_seconds"], 6 * H / 5)
+        self.assertEqual(items["Parada planejada"]["average_seconds"], 1 * H / 5)
+        self.assertEqual(items["A esclarecer"]["average_seconds"], 1 * H / 5)
+        # Fora do turno é número de calendário: sem média.
+        self.assertIsNone(items["Fora do turno"]["average_seconds"])
+
+    def test_time_composition_without_calendar_has_no_average(self):
+        composition, _ = self._composition(_full_day_states(), {})
+
+        self.assertEqual(composition["resource_count"], 0)
+        self.assertTrue(composition["average_note"])
+        for item in composition["items"]:
+            self.assertIsNone(item["average_seconds"])
+
+
 if __name__ == "__main__":
     unittest.main()
