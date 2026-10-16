@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from mes.contracts import AnalyticsFilter
+from mes.analytics.resource_state import physical_state_category
 from mes.domain import EventCategory, StopClassification
 
 
@@ -104,6 +105,8 @@ RULE_TEXT: dict[str, dict[str, str]] = {
 }
 
 _EMPTY_REASON = "Nenhum registro no período."
+_EMPTY_METRIC_REASON = "Nenhum registro desta métrica no período."
+_LEGACY_NESTING_LABEL = "Apontamento de nesting sem horário de início/fim"
 
 _RULE_APPLIED_TEXT = {
     "production_prevailed": "Produção e parada ao mesmo tempo: vale produção.",
@@ -127,13 +130,7 @@ _CATEGORY_LABEL = {
 _EXCLUDED_REASON = {
     "Parada planejada": "Conta como parada planejada, não nesta linha.",
     "Parada não planejada": "Conta como parada não planejada, não nesta linha.",
-    "Parada sem classificação": "Parada sem classificação planejada ou não; fica fora das duas linhas.",
     "Tempo a esclarecer": "Registros incompatíveis no mesmo instante; fica em linha própria.",
-}
-
-_STOP_CLASS_BY_METRIC = {
-    "tempo.parada_planejada": StopClassification.PLANNED,
-    "tempo.parada_nao_planejada": StopClassification.UNPLANNED,
 }
 
 _CATEGORY_BY_METRIC = {
@@ -166,6 +163,8 @@ class Node:
     seconds: float
     children: list["Node"] = field(default_factory=list)
     detail: dict[str, Any] | None = None
+    # Verdadeiro quando filhos foram omitidos sem caber um nó "outros N ...".
+    truncated: bool = False
 
 
 @dataclass
@@ -196,6 +195,8 @@ class ExplanationTree:
 class MetricExplanationService:
     def __init__(self, management, repository):
         self.management = management
+        # Reservado: hoje tudo vem de ``management.physical_consolidation``
+        # (estados já lidos, sem nova consulta).
         self.repository = repository
 
     def explain(
@@ -215,8 +216,18 @@ class MetricExplanationService:
         text = RULE_TEXT[metric]
 
         selected = [seg for seg in segments if _belongs(metric, seg)]
-        rows = self._state_rows(filters, segments)
-        total = _official_total(metric, consolidated)
+        rows = {
+            str(row.get("id")): dict(row)
+            for row in consolidation.get("state_rows") or ()
+        }
+        # Leitura legada (sem estado canônico): o overview soma à produção os
+        # nestings que só conhecem a duração; a explicação precisa fechar com ele.
+        legacy = consolidation.get("legacy_without_interval") or []
+        legacy_seconds = sum(item["seconds"] for item in legacy)
+        legacy_production = legacy if metric == "tempo.producao" else []
+        total = _official_total(metric, consolidated) + (
+            legacy_seconds if metric == "tempo.producao" else 0.0
+        )
 
         by_sector: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
         for seg in selected:
@@ -227,6 +238,7 @@ class MetricExplanationService:
             _sector_node(sector, resources, rows, multi_day)
             for sector, resources in by_sector.items()
         ]
+        _add_legacy_nesting(sector_nodes, legacy_production)
         sector_nodes.sort(key=_by_seconds)
         children, truncated = _truncate(sector_nodes, max_nodes)
 
@@ -253,11 +265,14 @@ class MetricExplanationService:
         excluded = self._excluded(metric, segments, selected, rows, duplicated)
         notes = _no_calendar_notes(metric, selected, calendar_resources)
 
-        in_shift = float(consolidated["physical_seconds"]) - float(
-            consolidated.get("out_of_shift_attributed_seconds", 0.0)
+        # ``measured_seconds`` do overview inclui os nestings legados.
+        in_shift = (
+            float(consolidated["physical_seconds"])
+            - float(consolidated.get("out_of_shift_attributed_seconds", 0.0))
+            + legacy_seconds
         )
         if metric == "tempo.fora_turno":
-            parent_total = float(consolidated["physical_seconds"])
+            parent_total = float(consolidated["physical_seconds"]) + legacy_seconds
             siblings: list[dict] = []
         else:
             parent_total = in_shift
@@ -265,7 +280,8 @@ class MetricExplanationService:
                 {
                     "metric": sibling,
                     "label": RULE_TEXT[sibling]["label"],
-                    "seconds": _official_total(sibling, consolidated),
+                    "seconds": _official_total(sibling, consolidated)
+                    + (legacy_seconds if sibling == "tempo.producao" else 0.0),
                 }
                 for sibling in _SIBLING_METRICS
             ]
@@ -280,7 +296,13 @@ class MetricExplanationService:
             day_count=consolidation["days"],
             parent_total_seconds=parent_total,
             siblings=siblings,
-            reason=text["reason"] if selected else _EMPTY_REASON,
+            reason=(
+                text["reason"]
+                if selected or legacy_production
+                else _EMPTY_METRIC_REASON
+                if segments or legacy
+                else _EMPTY_REASON
+            ),
             rule=text["rule"],
             children=children,
             excluded=excluded,
@@ -293,31 +315,6 @@ class MetricExplanationService:
             truncated=truncated,
             notes=notes,
         )
-
-    def _state_rows(self, filters, segments) -> dict[str, dict]:
-        """Linhas de ``eventos_estado_recurso`` por id, para quem/origem/motivo.
-
-        Uma leitura só, e só quando algum segmento veio de estado de recurso.
-        """
-
-        if not any(
-            str(ref).startswith(_STATE_REF_PREFIX)
-            for seg in segments
-            for ref in seg.source_refs
-        ):
-            return {}
-        loader = getattr(self.repository, "listar_estados_recurso_periodo", None)
-        if not callable(loader):
-            return {}
-        rows = loader(
-            filters.inicio,
-            filters.fim,
-            setor=filters.setor,
-            recurso=filters.recurso,
-            op=filters.op,
-            operacao=filters.operacao,
-        )
-        return {str(row.get("id")): dict(row) for row in rows or ()}
 
     def _excluded(self, metric, segments, selected, rows, duplicated) -> list[dict]:
         """Tempo dos mesmos recursos que ficou de fora desta métrica, com motivo."""
@@ -361,13 +358,49 @@ class MetricExplanationService:
         return result
 
 
+def _add_legacy_nesting(sector_nodes: list[Node], legacy: list[dict]) -> None:
+    """Nestings sem horário (só duração) como um trecho por máquina, no Corte."""
+
+    by_machine: dict[str, float] = defaultdict(float)
+    for item in legacy:
+        by_machine[item["resource"] or "Não informado"] += item["seconds"]
+    if not by_machine:
+        return
+    sector = next((n for n in sector_nodes if n.label.casefold() == "corte"), None)
+    if sector is None:
+        sector = Node("sector", "Corte", 0.0, [])
+        sector_nodes.append(sector)
+    for machine, seconds in by_machine.items():
+        stretch = Node(
+            "stretch", _LEGACY_NESTING_LABEL, seconds, [],
+            {"start": None, "end": None, "who": None, "origin": "nesting", "record_id": None},
+        )
+        resource = next(
+            (n for n in sector.children if n.label.casefold() == machine.casefold()), None
+        )
+        if resource is None:
+            resource = Node("resource", machine, 0.0, [])
+            sector.children.append(resource)
+        resource.children.append(stretch)
+        resource.seconds += seconds
+        sector.seconds += seconds
+    sector.children.sort(key=_by_seconds)
+
+
 def _belongs(metric: str, seg) -> bool:
     if metric == "tempo.a_esclarecer":
         return seg.state_conflict
-    if metric in _STOP_CLASS_BY_METRIC:
+    if metric == "tempo.parada_planejada":
         return (
             seg.category is EventCategory.DOWNTIME
-            and seg.stop_classification is _STOP_CLASS_BY_METRIC[metric]
+            and seg.stop_classification is StopClassification.PLANNED
+        )
+    if metric == "tempo.parada_nao_planejada":
+        # Como o cartão da Visão Geral: parada total menos a planejada. Parada
+        # sem classificação (leitura legada) conta como não planejada.
+        return (
+            seg.category is EventCategory.DOWNTIME
+            and seg.stop_classification is not StopClassification.PLANNED
         )
     return seg.category is _CATEGORY_BY_METRIC[metric]
 
@@ -377,11 +410,14 @@ def _official_total(metric: str, consolidated: dict) -> float:
 
     if metric == "tempo.a_esclarecer":
         return float(consolidated["conflicting_state_seconds"])
-    if metric in _STOP_CLASS_BY_METRIC:
+    if metric in ("tempo.parada_planejada", "tempo.parada_nao_planejada"):
         by_class = consolidated["totals_by_stop_classification"].get(
             EventCategory.DOWNTIME, {}
         )
-        return float(by_class.get(_STOP_CLASS_BY_METRIC[metric], 0.0))
+        planned = float(by_class.get(StopClassification.PLANNED, 0.0))
+        if metric == "tempo.parada_planejada":
+            return planned
+        return float(consolidated["totals"].get(EventCategory.DOWNTIME, 0.0)) - planned
     return float(consolidated["totals"].get(_CATEGORY_BY_METRIC[metric], 0.0))
 
 
@@ -391,19 +427,27 @@ def _bucket_label(seg) -> str:
     if seg.category is EventCategory.DOWNTIME:
         if seg.stop_classification is StopClassification.PLANNED:
             return "Parada planejada"
-        if seg.stop_classification is StopClassification.UNPLANNED:
-            return "Parada não planejada"
-        return "Parada sem classificação"
+        return "Parada não planejada"
     return _CATEGORY_LABEL.get(seg.category, "Sem classificação")
 
 
 def _first_state_row(seg, rows):
+    """Linha de estado que sustenta o trecho; nunca uma que o contradiz.
+
+    Só vale a linha cuja categoria física bate com a do segmento (produção que
+    venceu uma parada não herda operador/motivo da parada vencida). Trecho em
+    conflito não tem categoria única: usa a primeira fonte.
+    """
+
     for ref in seg.source_refs:
         ref = str(ref)
-        if ref.startswith(_STATE_REF_PREFIX):
-            row = rows.get(ref[len(_STATE_REF_PREFIX):])
-            if row is not None:
-                return row
+        if not ref.startswith(_STATE_REF_PREFIX):
+            continue
+        row = rows.get(ref[len(_STATE_REF_PREFIX):])
+        if row is None:
+            continue
+        if seg.state_conflict or physical_state_category(row) is seg.category:
+            return row
     return None
 
 
@@ -533,8 +577,11 @@ def _fit_level(layer, budget: int, kind: str, plural: str):
         )
 
     best = next((n for n in range(min(len(ranked), budget), -1, -1) if cost(n) <= budget), None)
+    # Sem orçamento nem para o "outros N", mantém os maiores que couberem e
+    # marca o pai como cortado: nunca omite filhos em silêncio.
     add_others = best is not None
-    best = best or 0
+    if best is None:
+        best = min(len(ranked), budget)
     kept = defaultdict(list)
     for index, child in ranked[:best]:
         kept[index].append(child)
@@ -551,6 +598,8 @@ def _fit_level(layer, budget: int, kind: str, plural: str):
             parent.children.append(
                 Node(kind, f"outros {len(rest)} {plural}", sum(c.seconds for c in rest))
             )
+        elif rest:
+            parent.truncated = True
         used += len(parent.children)
     for child, _kids in next_layer:
         child.children = []

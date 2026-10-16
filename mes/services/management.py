@@ -859,7 +859,7 @@ class ManagementService:
 
         facts = self._load_operational_facts(filters)
         state_source_available, state_rows = self._load_resource_states(filters)
-        nesting_inputs, _without_interval = self._nesting_physical_inputs(
+        nesting_inputs, without_interval = self._nesting_physical_inputs(
             self.get_nesting_times(filters), filters
         )
         result = self._consolidate_physical(
@@ -869,9 +869,27 @@ class ManagementService:
             state_rows=state_rows,
             nesting_physical_inputs=nesting_inputs,
         )
-        return {key: result[key] for key in (
+        public = {key: result[key] for key in (
             "consolidated", "calendar_resources", "days", "calculated_at"
         )}
+        # Insumos da explicação (aditivos, sem nova consulta): estados lidos e,
+        # só na leitura legada (sem estado canônico), os nestings que o overview
+        # soma à produção por conhecerem apenas a duração.
+        public["state_rows"] = state_rows
+        public["legacy_without_interval"] = (
+            []
+            if state_source_available and state_rows
+            else [
+                {
+                    "resource": str(row.get("maquina") or "").strip(),
+                    "seconds": float(
+                        row.get("real_periodo_segundos", row.get("real_segundos")) or 0
+                    ),
+                }
+                for row in without_interval
+            ]
+        )
+        return public
 
     def _consolidate_physical(
         self, filters, *, facts, state_source_available, state_rows, nesting_physical_inputs

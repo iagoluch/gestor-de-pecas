@@ -120,7 +120,10 @@ class OverviewNumbersUnchangedTests(unittest.TestCase):
         consolidation = _service(_Repo([], {})).physical_consolidation(self.filters)
         self.assertEqual(
             set(consolidation),
-            {"consolidated", "calendar_resources", "days", "calculated_at"},
+            {
+                "consolidated", "calendar_resources", "days", "calculated_at",
+                "state_rows", "legacy_without_interval",
+            },
         )
 
         service = _service(_Repo(
@@ -260,6 +263,114 @@ def _count_nodes(nodes):
     return sum(1 + _count_nodes(node.children) for node in nodes)
 
 
+def _assert_totals_equal_overview(case, explainer, repo, filters):
+    hours = _service(repo).get_overview(filters)["hours"]
+    expected = {
+        metric: hours[key] for metric, key in _METRIC_TO_HOURS_KEY.items()
+    }
+    # Mesma conta do cartão da Visão Geral (frontend_facade.inicio()).
+    expected["tempo.parada_nao_planejada"] = (
+        hours["downtime_seconds"] - hours["planned_downtime_seconds"]
+    )
+    for metric, number in expected.items():
+        with case.subTest(metric=metric):
+            tree = explainer.explain(metric, filters)
+            case.assertEqual(tree.total_seconds, number)
+            case.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
+            case.assertEqual(tree.reconciliation["diff_seconds"], 0)
+
+
+class _LegacyRepo(_Repo):
+    """Sem estados gravados: só apontamentos (timeline) e nesting sem horário."""
+
+    def __init__(self, facts, nestings=(), turnos=None):
+        super().__init__([], turnos)
+        self._facts = facts
+        self._nestings = list(nestings)
+
+    def listar_fatos_operacionais_periodo(self, *_a, **_k):
+        return [dict(fact) for fact in self._facts]
+
+    def listar_tempos_nesting_corte(self, **_k):
+        return [dict(row) for row in self._nestings]
+
+
+def _fact(fact_id, machine, sector, start, finish, events):
+    return {
+        "id": fact_id, "op": f"OP-{fact_id}", "tipo_setor": sector, "maquina": machine,
+        "status": "Finalizado", "data_inicio": start, "data_fim": finish,
+        "quantidade_boa": 1, "quantidade_refugo": 0, "quantidade_retrabalho": 0,
+        "tempo_medio_segundos": 60, "eventos": events,
+    }
+
+
+class LegacyReadingTests(unittest.TestCase):
+    """Leitura sem estado canônico (fallback por apontamento + nesting legado)."""
+
+    def setUp(self):
+        self.filters = _day_filters()
+        facts = [
+            _fact(1, "DOBRA1", "Dobra", _at(QUARTA, 8), _at(QUARTA, 10), [
+                {"id": 11, "estado": "producao", "data_hora": _at(QUARTA, 8)},
+                {"id": 12, "estado": "parada", "data_hora": _at(QUARTA, 9)},
+                {"id": 13, "estado": "finalizado", "data_hora": _at(QUARTA, 10)},
+            ]),
+        ]
+        nestings = [{
+            "maquina": "LASER1", "status": "finalizado",
+            "real_periodo_segundos": 5400, "previsto_segundos": 0,
+        }]
+        self.repo = _LegacyRepo(
+            facts, nestings, {"DOBRA1": [_turno(2)], "LASER1": [_turno(2)]}
+        )
+        self.explainer = MetricExplanationService(_service(self.repo), self.repo)
+
+    def test_producao_includes_nesting_without_interval_like_overview(self):
+        hours = _service(self.repo).get_overview(self.filters)["hours"]
+        tree = self.explainer.explain("tempo.producao", self.filters)
+
+        self.assertEqual(hours["production_seconds"], 1 * H + 5400)
+        self.assertEqual(tree.total_seconds, hours["production_seconds"])
+        self.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
+        self.assertEqual(sum(s.seconds for s in tree.children), tree.total_seconds)
+        corte = next(s for s in tree.children if s.label == "Corte")
+        stretch = corte.children[0].children[0]
+        self.assertEqual(corte.children[0].label, "LASER1")
+        self.assertEqual(stretch.label, "Apontamento de nesting sem horário de início/fim")
+        self.assertEqual(stretch.seconds, 5400)
+        self.assertEqual(stretch.detail["origin"], "nesting")
+        self.assertIsNone(stretch.detail["start"])
+        self.assertIsNone(stretch.detail["record_id"])
+
+    def test_parent_total_matches_measured_seconds(self):
+        hours = _service(self.repo).get_overview(self.filters)["hours"]
+        tree = self.explainer.explain("tempo.producao", self.filters)
+        self.assertEqual(
+            tree.parent_total_seconds,
+            hours["measured_seconds"] - hours["out_of_shift_attributed_seconds"],
+        )
+        sibling = next(s for s in tree.siblings if s["metric"] == "tempo.producao")
+        self.assertEqual(sibling["seconds"], hours["production_seconds"])
+
+    def test_nao_planejada_matches_home_card_without_classification(self):
+        # Sem estado canônico a parada não vem classificada; o cartão mostra
+        # parada total menos a planejada, e a explicação tem de bater com ele.
+        hours = _service(self.repo).get_overview(self.filters)["hours"]
+        planned = self.explainer.explain("tempo.parada_planejada", self.filters)
+        unplanned = self.explainer.explain("tempo.parada_nao_planejada", self.filters)
+
+        self.assertEqual(hours["downtime_seconds"], 1 * H)
+        self.assertEqual(hours["unplanned_downtime_seconds"], 0)  # por classe
+        self.assertEqual(unplanned.total_seconds, 1 * H)
+        self.assertEqual(
+            planned.total_seconds + unplanned.total_seconds, hours["downtime_seconds"]
+        )
+        self.assertTrue(unplanned.reconciliation["ok"])
+
+    def test_all_totals_equal_overview(self):
+        _assert_totals_equal_overview(self, self.explainer, self.repo, self.filters)
+
+
 class MetricExplanationTests(unittest.TestCase):
     def setUp(self):
         self.explainer, self.repo = _explainer()
@@ -285,13 +396,7 @@ class MetricExplanationTests(unittest.TestCase):
         )
 
     def test_total_equals_overview_number(self):
-        hours = _service(self.repo).get_overview(self.filters)["hours"]
-        for metric, key in _METRIC_TO_HOURS_KEY.items():
-            with self.subTest(metric=metric):
-                tree = self.explainer.explain(metric, self.filters)
-                self.assertEqual(tree.total_seconds, hours[key])
-                self.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
-                self.assertEqual(tree.reconciliation["diff_seconds"], 0)
+        _assert_totals_equal_overview(self, self.explainer, self.repo, self.filters)
 
     def test_every_metric_is_non_trivial_in_the_fixture(self):
         # Protege os testes acima de passarem por vácuo (tudo zero).
@@ -315,10 +420,7 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertEqual(
             planned.total_seconds + unplanned.total_seconds, hours["downtime_seconds"]
         )
-        self.assertEqual(
-            planned.total_seconds + unplanned.total_seconds + unclear.total_seconds,
-            hours["downtime_seconds"] + hours["conflicting_state_seconds"],
-        )
+        self.assertEqual(unclear.total_seconds, hours["conflicting_state_seconds"])
 
     def test_stretch_detail_has_origin_and_record_id(self):
         tree = self.explainer.explain("tempo.sem_demanda", self.filters)
@@ -343,15 +445,26 @@ class MetricExplanationTests(unittest.TestCase):
         # Sem a coluna de origem, a origem é o tipo da fonte do registro.
         self.assertEqual(detail["origin"], "estado_recurso")
 
-    def test_without_repository_rows_detail_still_has_record_id(self):
-        class _NoRows:
-            pass
-
-        service = MetricExplanationService(_service(self.repo), _NoRows())
+    def test_details_come_from_consolidation_without_repository(self):
+        # Os estados já vêm da consolidação: nenhuma leitura extra.
+        service = MetricExplanationService(_service(self.repo), None)
         tree = service.explain("tempo.sem_demanda", self.filters)
-        detail = tree.children[0].children[0].children[0].detail
-        self.assertIsNone(detail["who"])
-        self.assertTrue(detail["record_id"].startswith("estado_recurso:"))
+        corte = next(s for s in tree.children if s.label == "Corte")
+        detail = corte.children[0].children[0].detail
+        self.assertEqual(detail["who"], "Maria")
+        self.assertEqual(detail["record_id"], "estado_recurso:7")
+
+    def test_no_extra_state_query(self):
+        calls = []
+        original = self.repo.listar_estados_recurso_periodo
+
+        def counting(*args, **kwargs):
+            calls.append(1)
+            return original(*args, **kwargs)
+
+        self.repo.listar_estados_recurso_periodo = counting
+        self.explainer.explain("tempo.sem_demanda", self.filters)
+        self.assertEqual(len(calls), 1)  # só a da consolidação
 
     def test_excluded_items_listed_with_reason(self):
         tree = self.explainer.explain("tempo.sem_demanda", self.filters)
@@ -449,6 +562,33 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertEqual(tree.resource_count, 0)
         self.assertFalse(tree.truncated)
 
+    def test_empty_metric_with_data_in_period_says_so(self):
+        estados = [_estado(1, "DOBRA1", "producao", _at(QUARTA, 8), _at(QUARTA, 9))]
+        explainer, _repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        tree = explainer.explain("tempo.sem_demanda", self.filters)
+
+        self.assertEqual(tree.total_seconds, 0)
+        self.assertEqual(tree.reason, "Nenhum registro desta métrica no período.")
+
+    def test_outvoted_stop_does_not_lend_operator_or_reason(self):
+        estados = [
+            _estado(20, "DOBRA1", "producao", _at(QUARTA, 8), _at(QUARTA, 10),
+                    operador="Ana", origem="app"),
+            _estado(21, "DOBRA1", "parada", _at(QUARTA, 9), _at(QUARTA, 10),
+                    operador="Beto", origem="app", motivo="Quebra", planejado=False),
+        ]
+        explainer, _repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        tree = explainer.explain("tempo.producao", self.filters)
+        stretches = tree.children[0].children[0].children
+        prevailed = next(t for t in stretches if t.detail["start"] == _at(QUARTA, 9).isoformat())
+
+        self.assertEqual(prevailed.detail["who"], "Ana")
+        self.assertNotIn("motivo", prevailed.detail)
+        self.assertIn("vale produção", prevailed.detail["rule"])
+        # A parada vencida some da parada (produção prevalece) e não vira "quem".
+        stop = explainer.explain("tempo.parada_nao_planejada", self.filters)
+        self.assertEqual(stop.total_seconds, 0)
+
     def test_segment_crossing_period_boundary_is_clipped(self):
         estados = [
             _estado(1, "DOBRA1", "fila", _at(QUARTA, 22), _at(QUINTA, 2)),
@@ -489,7 +629,9 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertLessEqual(_count_nodes(tree.children), 3)
 
     def test_truncation_keeps_every_level_closing(self):
-        for limit in (1, 2, 5, 8, 12):
+        full = self.explainer.explain("tempo.sem_demanda", self.filters, max_nodes=400)
+        full_count = _count_nodes(full.children)
+        for limit in (1, 2, 3, 5, 8, 12):
             with self.subTest(max_nodes=limit):
                 tree = self.explainer.explain(
                     "tempo.sem_demanda", self.filters, max_nodes=limit
@@ -497,11 +639,29 @@ class MetricExplanationTests(unittest.TestCase):
                 self.assertTrue(tree.reconciliation["ok"])
                 self.assertEqual(tree.total_seconds, 6 * H)
                 self.assertLessEqual(_count_nodes(tree.children), max(1, limit))
+                self.assertEqual(sum(n.seconds for n in tree.children), 6 * H)
+                if limit < full_count:
+                    self.assertTrue(tree.truncated)
+
+                def check(node):
+                    if node.kind == "stretch" or node.label.startswith("outros"):
+                        return
+                    # Nenhum corte em silêncio: ou fecha com o pai, ou está marcado.
+                    closes = abs(sum(c.seconds for c in node.children) - node.seconds) < 0.01
+                    self.assertTrue(closes or node.truncated, (node.label, node.children))
+                    for child in node.children:
+                        check(child)
+
                 for sector in tree.children:
-                    if sector.children:
-                        self.assertEqual(
-                            sum(r.seconds for r in sector.children), sector.seconds
-                        )
+                    check(sector)
+
+    def test_truncation_marks_cut_nodes_when_no_room_for_outros(self):
+        tree = self.explainer.explain("tempo.sem_demanda", self.filters, max_nodes=3)
+        # 3 nós: um setor, um recurso, "outros" no nível de recursos; o recurso
+        # mantido não tem espaço para seus trechos e fica marcado como cortado.
+        resource = tree.children[0].children[0]
+        self.assertEqual(resource.kind, "resource")
+        self.assertTrue(resource.truncated or resource.children)
 
     def test_to_dict_is_json_ready(self):
         import json
