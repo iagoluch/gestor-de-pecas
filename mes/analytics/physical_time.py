@@ -16,11 +16,16 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Mapping
+from typing import Iterable, Literal, Mapping
 
 from app.core.resource_mapping import resolve_resource_identity
 from mes.analytics.intervals import merge_intervals
 from mes.domain import EventCategory, StopClassification
+
+
+# Regra aplicada quando mais de uma fonte disputa o mesmo instante. ``None``
+# significa que nenhuma decisão foi necessária (fonte única ou fontes em acordo).
+Rule = Literal["production_prevailed", "state_conflict", "reclassified_to_unplanned"]
 
 
 @dataclass(frozen=True)
@@ -49,6 +54,10 @@ class PhysicalConsolidatedSegment:
     state_conflict: bool = False
     sector_conflict: bool = False
     stop_classification: StopClassification | None = None
+    # Proveniência (explicação clicável): fontes ativas no intervalo e a regra
+    # aplicada. Não entram em nenhum total.
+    source_refs: tuple[str | int, ...] = ()
+    rule: Rule | None = None
 
     @property
     def seconds(self) -> float:
@@ -233,8 +242,10 @@ def _sweep_resource(group):
             # com uma OP produzindo, o recurso está produzindo, mesmo que outra
             # OP dele esteja parada. Só é parada quando todas as fontes param.
             classified = active_segments
+            production_prevailed = False
             if categories == {EventCategory.PRODUCTION, EventCategory.DOWNTIME}:
                 categories = {EventCategory.PRODUCTION}
+                production_prevailed = True
                 classified = [
                     segment for segment in active_segments
                     if segment.category is EventCategory.PRODUCTION
@@ -244,9 +255,14 @@ def _sweep_resource(group):
             category = next(iter(categories)) if not state_conflict else EventCategory.UNKNOWN
             sector = next(iter(sectors)) if not sector_conflict else "Não informado"
             resource = _display_resource(active_segments)
-            classification = (
-                None if state_conflict
+            classification, reclassified = (
+                (None, False) if state_conflict
                 else _resolve_stop_classification(classified)
+            )
+            rule = _applied_rule(
+                state_conflict=state_conflict,
+                reclassified=reclassified,
+                production_prevailed=production_prevailed,
             )
 
             result.append(PhysicalConsolidatedSegment(
@@ -259,6 +275,8 @@ def _sweep_resource(group):
                 state_conflict=state_conflict,
                 sector_conflict=sector_conflict,
                 stop_classification=classification,
+                source_refs=_source_refs(active_segments),
+                rule=rule,
             ))
 
         # Processa todos os eventos do mesmo instante em conjunto.
@@ -283,6 +301,9 @@ def _resolve_stop_classification(active_segments):
     Quando duas fontes concordam, o valor é preservado. Quando divergem sobre o
     mesmo estado físico, o instante é tratado como não planejado: o sistema não
     esconde perda operacional atrás da classificação mais favorável.
+
+    Retorna ``(classificação, reclassificada)``; ``reclassificada`` é verdadeiro
+    só quando a divergência forçou ``UNPLANNED``.
     """
 
     values = {
@@ -291,10 +312,32 @@ def _resolve_stop_classification(active_segments):
         if segment.stop_classification is not None
     }
     if not values:
-        return None
+        return None, False
     if len(values) == 1:
-        return next(iter(values))
-    return StopClassification.UNPLANNED
+        return next(iter(values)), False
+    return StopClassification.UNPLANNED, True
+
+
+def _applied_rule(*, state_conflict, reclassified, production_prevailed):
+    """Regra que de fato decidiu o intervalo (a mais consequente vence)."""
+
+    if state_conflict:
+        return "state_conflict"
+    if reclassified:
+        return "reclassified_to_unplanned"
+    if production_prevailed:
+        return "production_prevailed"
+    return None
+
+
+def _source_refs(active_segments):
+    """Origens (sem ``None``, sem repetição) ordenadas de forma estável."""
+
+    refs = {
+        segment.source_ref for segment in active_segments
+        if segment.source_ref is not None
+    }
+    return tuple(sorted(refs, key=lambda ref: (isinstance(ref, str), str(ref))))
 
 
 def _display_resource(active_segments):
