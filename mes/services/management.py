@@ -155,6 +155,13 @@ class ManagementService:
             standard_unit_seconds = official_standard_seconds(row)
             view_unit_seconds = estimated_view_standard_seconds(row)
             row_good = max(0, int(row.get("quantidade_boa") or 0))
+            if quantity_source_available:
+                # S_boas e "sem padrão" contam só as peças boas lançadas DENTRO
+                # do período, a mesma base de ``good``; o total do apontamento
+                # inflaria cada dia que ele toca.
+                period_good = _good_quantity_in_period(row, filters.inicio, filters.fim)
+                if period_good is not None:
+                    row_good = period_good
             row_bucket = resource_bucket(resource, sector) if resource else None
             if standard_unit_seconds is None:
                 good_without_standard += row_good
@@ -1478,3 +1485,31 @@ def _dt(value) -> Optional[datetime]:
         return datetime.fromisoformat(str(value))
     except (TypeError, ValueError):
         return None
+
+
+def _good_quantity_in_period(fact, inicio, fim) -> Optional[int]:
+    """Peças boas do apontamento lançadas dentro de ``[inicio, fim]``.
+
+    Cada evento do operador com ``quantidade_boa`` gera, no mesmo instante, o
+    evento canônico ``boa`` de ``eventos_quantidade_producao``; somar os
+    eventos do fato com o mesmo predicado da consulta de quantidade mantém
+    ``S_boas`` e "sem padrão" na mesma base das peças boas do período.
+    Fatos cujos eventos não trazem quantidade (fontes legadas) devolvem
+    ``None``: quem chama mantém o total do apontamento.
+    """
+
+    events = [
+        event for event in (fact.get("eventos") or [])
+        if isinstance(event, dict) and "quantidade_boa" in event
+    ]
+    if not events:
+        return None
+    # Mesma normalização de segundos inteiros que a consulta recebe.
+    inicio = _JanelaPrefetch._limite(inicio)
+    fim = _JanelaPrefetch._limite(fim)
+    total = 0
+    for event in events:
+        moment = _dt(event.get("data_hora"))
+        if moment is not None and inicio <= moment <= fim:
+            total += max(0, int(event.get("quantidade_boa") or 0))
+    return total
