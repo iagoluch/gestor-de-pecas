@@ -228,6 +228,12 @@ export interface TimeBreakdown {
   conflicting_sector_seconds: number;
   by_sector: Array<Record<string, string | number>>;
   by_resource: Array<Record<string, string | number>>;
+  /** Recursos com turno no período: divisor da média, igual à Visão Geral. */
+  resource_count?: number;
+  day_count?: number;
+  /** Parada total dividida em planejada + não planejada (soma = totals.parada). */
+  planned_downtime_seconds?: number;
+  unplanned_downtime_seconds?: number;
   availability: Availability;
   reason: string;
   simulation?: SimulationSummary | null;

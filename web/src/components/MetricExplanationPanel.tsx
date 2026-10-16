@@ -171,7 +171,7 @@ function Explanation({ tree }: { tree: ExplanationTree }) {
         </ul>
       ) : null}
       {cut ? <p className="mx-warning">A lista foi cortada por tamanho: o total está certo, mas nem todos os itens aparecem.</p> : null}
-      {tree.children.length ? (
+      {tree.children.length || tree.total_seconds > 0 ? (
         reconciliation.ok ? (
           <p className="mx-check"><span aria-hidden="true">✓</span> os setores somam {formatHours(reconciliation.sum_seconds)}, igual ao número clicado.</p>
         ) : (

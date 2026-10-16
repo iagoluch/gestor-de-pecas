@@ -538,7 +538,8 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertEqual(tree.average_seconds, 5 * H)  # divisor não mudou
         self.assertEqual(len(tree.notes), 1)
         self.assertIn("1 recurso sem turno cadastrado", tree.notes[0])
-        self.assertIn("3.0 h", tree.notes[0])
+        self.assertIn("3h,", tree.notes[0])  # h/m pt-BR, igual ao painel
+        self.assertNotIn("3.0", tree.notes[0])
 
     def test_unknown_metric_raises(self):
         with self.assertRaises(UnknownMetricError):
@@ -733,6 +734,43 @@ class TimeCompositionFacadeTests(unittest.TestCase):
         self.assertTrue(composition["average_note"])
         for item in composition["items"]:
             self.assertIsNone(item["average_seconds"])
+
+
+    def test_operations_time_uses_overview_resource_count(self):
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repo = _Repo(_full_day_states(), _FULL_DAY_TURNOS)
+        facade = FrontendBackendFacade(repo, now_func=lambda: datetime(2026, 8, 21, 12, 0))
+        overview = facade.inicio(_day_filters(), include_insights=False)["hours"]
+        operations = facade.analise("tempos", _day_filters())
+
+        self.assertEqual(operations["resource_count"], overview["resource_count"])
+        self.assertEqual(operations["resource_count"], 5)
+        self.assertEqual(operations["day_count"], overview["day_count"])
+
+    def test_operations_time_splits_parada_like_overview(self):
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        repo = _Repo(_full_day_states(), _FULL_DAY_TURNOS)
+        facade = FrontendBackendFacade(repo, now_func=lambda: datetime(2026, 8, 21, 12, 0))
+        composition = facade.inicio(_day_filters(), include_insights=False)["time_composition"]
+        items = {item["label"]: item["seconds"] for item in composition["items"]}
+        operations = facade.analise("tempos", _day_filters())
+
+        self.assertEqual(operations["planned_downtime_seconds"], items["Parada planejada"])
+        self.assertEqual(operations["unplanned_downtime_seconds"], items["Parada não planejada"])
+        self.assertEqual(
+            operations["planned_downtime_seconds"] + operations["unplanned_downtime_seconds"],
+            operations["totals"]["parada"],
+        )
+
+    def test_operations_time_without_calendar_has_zero_resource_count(self):
+        from mes.services.frontend_facade import FrontendBackendFacade
+
+        facade = FrontendBackendFacade(
+            _Repo(_full_day_states(), {}), now_func=lambda: datetime(2026, 8, 21, 12, 0)
+        )
+        self.assertEqual(facade.analise("tempos", _day_filters())["resource_count"], 0)
 
 
 if __name__ == "__main__":

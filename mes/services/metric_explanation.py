@@ -509,6 +509,20 @@ def _stretch_label(seg, multi_day) -> str:
     return f"{seg.start:%H:%M} → {seg.end:%H:%M}"
 
 
+def _format_hours_ptbr(seconds: float) -> str:
+    """Mesmo formato do painel (``formatHours``): 509h 36m, 45m, 30s."""
+
+    total = max(0, round(seconds))
+    hours, minutes = divmod(total, 3600)
+    minutes //= 60
+    if hours:
+        grouped = f"{hours:,}".replace(",", ".")
+        return f"{grouped}h {minutes}m" if minutes else f"{grouped}h"
+    if minutes:
+        return f"{minutes}m"
+    return f"{total}s"
+
+
 def _no_calendar_notes(metric, selected, calendar_resources) -> list[str]:
     if metric in _NO_AVERAGE_METRICS:
         return []
@@ -518,11 +532,11 @@ def _no_calendar_notes(metric, selected, calendar_resources) -> list[str]:
             by_resource[seg.resource] += seg.seconds
     if not by_resource:
         return []
-    hours = sum(by_resource.values()) / 3600.0
+    duration = _format_hours_ptbr(sum(by_resource.values()))
     count = len(by_resource)
     plural = "recurso sem turno cadastrado" if count == 1 else "recursos sem turno cadastrado"
     return [
-        f"{count} {plural}, {hours:.1f} h, entram no total mas não na média."
+        f"{count} {plural}, {duration}, entram no total mas não na média."
     ]
 
 

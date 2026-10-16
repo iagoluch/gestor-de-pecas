@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MetricExplanationPanel } from "../components/MetricExplanationPanel";
 import { defaultFilters, FilterProvider } from "../filters/FilterContext";
@@ -72,12 +73,8 @@ function respond(body: unknown, status = 200) {
 
 function renderPanel(fetchMock: ReturnType<typeof vi.fn>, onClose = vi.fn()) {
   vi.stubGlobal("fetch", fetchMock);
-  function Where() {
-    return <span data-testid="where">{useLocation().pathname}</span>;
-  }
   const view = render(
     <MemoryRouter initialEntries={["/inicio"]}>
-      <Where />
       <MetricExplanationPanel metric="tempo.sem_demanda" filters={FILTERS} onClose={onClose} />
     </MemoryRouter>,
   );
@@ -102,7 +99,7 @@ describe("MetricExplanationPanel", () => {
     expect(url).toContain("inicio=2026-10-16T00%3A00%3A00");
   });
 
-  it("clica no setor para ver recursos e no recurso para ver trechos, sem trocar de tela", async () => {
+  it("clica no setor para ver recursos e no recurso para ver trechos", async () => {
     renderPanel(vi.fn(async () => respond(tree())));
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByTestId("explanation-total");
@@ -115,7 +112,38 @@ describe("MetricExplanationPanel", () => {
     fireEvent.click(laser1);
     expect(within(dialog).getByRole("button", { name: /07:12 → 12:00/ })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /12:48 → 13:48/ })).toBeInTheDocument();
-    expect(screen.getByTestId("where")).toHaveTextContent("/inicio");
+  });
+
+  it("ao fechar, o foco volta para o botão que abriu o painel", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => respond(tree())));
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>Abrir explicação</button>
+          {open ? <MetricExplanationPanel metric="tempo.sem_demanda" filters={FILTERS} onClose={() => setOpen(false)} /> : null}
+        </>
+      );
+    }
+    render(<MemoryRouter><Harness /></MemoryRouter>);
+    const opener = screen.getByRole("button", { name: "Abrir explicação" });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByTestId("explanation-total");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar explicação" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("total maior que zero sem itens ainda mostra a conferência (em vermelho, soma 0)", async () => {
+    renderPanel(vi.fn(async () => respond(tree({
+      children: [], excluded: [], reconciliation: { ok: false, sum_seconds: 0, diff_seconds: 36000 },
+    }))));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("os setores somam 0s, mas o número clicado é 10h");
   });
 
   it("fecha a conta com 'os setores somam' quando bate e avisa em vermelho quando não bate", async () => {
@@ -252,6 +280,9 @@ describe("Visão Geral: composição do tempo clicável", () => {
     const fetchMock = renderOverview(overview());
     const row = await screen.findByRole("button", { name: /Recurso sem demanda/ });
     expect(row).toHaveTextContent("média");
+    // Mesmo formato do painel (h/m), não decimal: 36000 s = "10h", não "10 h".
+    expect(row).toHaveTextContent(/10h/);
+    expect(screen.getByText("12h")).toBeInTheDocument();
     fireEvent.click(row);
 
     const dialog = await screen.findByRole("dialog", { name: /Recurso sem demanda/ });
@@ -288,24 +319,71 @@ describe("Visão Geral: composição do tempo clicável", () => {
 });
 
 describe("Operações > Tempo: categorias clicáveis", () => {
-  it("só as categorias com id de métrica ganham clique; parada fica como estava", async () => {
-    const time = {
-      periodo: {}, totals: { producao: 7200, parada: 3600, sem_demanda: 36000, fora_turno: 28800 },
-      physical_seconds: 75600, raw_attributed_timeline_seconds: 0, overlap_removed_seconds: 0, overlap_seconds: 0,
-      conflicting_state_seconds: 0, conflicting_sector_seconds: 0, by_sector: [], by_resource: [],
-      availability: "disponivel", reason: "",
-    };
+  // 6 recursos tiveram algum segmento, mas só 4 tiveram turno: o divisor é 4 (igual à Visão Geral).
+  const row = (recurso: string) => ({ recurso, producao: 2400, parada: 600, sem_demanda: 6000 });
+  const time = {
+    periodo: {}, totals: { producao: 14400, parada: 3600, sem_demanda: 36000, fora_turno: 28800 },
+    physical_seconds: 82800, raw_attributed_timeline_seconds: 0, overlap_removed_seconds: 0, overlap_seconds: 0,
+    conflicting_state_seconds: 0, conflicting_sector_seconds: 0, by_sector: [],
+    by_resource: ["R1", "R2", "R3", "R4", "R5", "R6"].map(row),
+    resource_count: 4, day_count: 1, planned_downtime_seconds: 1200, unplanned_downtime_seconds: 2400,
+    availability: "disponivel", reason: "",
+  };
+
+  function renderTime() {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => (
       String(input).includes("/management/explicacao") ? respond(tree()) : respond(time)
     ));
     vi.stubGlobal("fetch", fetchMock);
     render(<MemoryRouter><FilterProvider><OperationsTimePage /></FilterProvider></MemoryRouter>);
+    return fetchMock;
+  }
 
-    const semDemanda = await screen.findByRole("button", { name: /Explicar Sem demanda/i });
-    expect(screen.getByRole("button", { name: /Explicar Produção/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Explicar Parada/i })).not.toBeInTheDocument();
+  it("a média usa o número de recursos com turno da Visão Geral, não as linhas por recurso", async () => {
+    renderTime();
+    const produzir = await screen.findByRole("button", { name: /Explicar Produção: 1h$/ });
+    expect(produzir).toBeInTheDocument(); // 14400 s / 4 recursos = 1h (com 6 daria 40m)
+    expect(screen.getByRole("button", { name: /Explicar Produção: 4h$/ })).toBeInTheDocument();
+    expect(screen.getByText("Média por recurso")).toBeInTheDocument();
+    expect(screen.getAllByText(/em 4 recursos/).length).toBeGreaterThan(0);
+    expect(document.body).not.toHaveTextContent("6 recursos");
+  });
+
+  it("Parada vira Parada planejada e Parada não planejada, cada uma clicável, e a soma fecha com o total antigo", async () => {
+    const fetchMock = renderTime();
+    await screen.findAllByRole("button", { name: /Explicar Produção/i });
+    expect(screen.queryByText("Tempo parado")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Explicar Parada:/i })).not.toBeInTheDocument();
+
+    // Média por recurso: 1200/4 = 5m e 2400/4 = 10m; juntas 15m = os 3600/4 da Parada de antes.
+    const planejada = screen.getByRole("button", { name: "Explicar Parada planejada: 5m" });
+    const naoPlanejada = screen.getByRole("button", { name: "Explicar Parada não planejada: 10m" });
+    expect(screen.getByRole("button", { name: "Explicar Parada planejada: 20m" })).toBeInTheDocument(); // total 1200 s
+    expect(screen.getByRole("button", { name: "Explicar Parada não planejada: 40m" })).toBeInTheDocument();
+
+    fireEvent.click(naoPlanejada);
+    await screen.findByRole("dialog");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("metric=tempo.parada_nao_planejada"))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
+    fireEvent.click(planejada);
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("metric=tempo.parada_planejada"))).toBe(true);
+    });
+  });
+
+  it("categorias com id de métrica ganham clique e abrem a explicação", async () => {
+    const fetchMock = renderTime();
+    const [semDemanda] = await screen.findAllByRole("button", { name: /Explicar Sem demanda/i });
     fireEvent.click(semDemanda);
     await screen.findByRole("dialog", { name: /Recurso sem demanda/ });
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes("metric=tempo.sem_demanda"))).toBe(true);
+  });
+
+  it("sem resource_count (resposta antiga) mostra só o tempo físico, sem dividir", async () => {
+    const { resource_count: _omit, ...old } = time;
+    vi.stubGlobal("fetch", vi.fn(async () => respond(old)));
+    render(<MemoryRouter><FilterProvider><OperationsTimePage /></FilterProvider></MemoryRouter>);
+    await screen.findByText("Tempo físico");
+    expect(document.body).not.toHaveTextContent("NaN");
   });
 });

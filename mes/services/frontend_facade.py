@@ -30,6 +30,8 @@ from mes.domain import (
     OPEN_APPOINTMENT_STATUSES,
     PLANNED_STOP_GROUP_CODES,
     RESOURCE_WITHOUT_OP_STOP_REASON,
+    EventCategory,
+    StopClassification,
     NO_DEMAND_REASON,
     SHIFT_START_NO_DEMAND_TYPE,
     STOP_CLASSIFICATION_COLORS,
@@ -1044,7 +1046,9 @@ class FrontendBackendFacade:
         """Executa apenas a análise solicitada pela rota Web."""
 
         if key == "tempos":
-            payload = self.analytics.time_breakdown(filters)
+            # Cópia: o payload do analytics é cacheado e compartilhado.
+            payload = dict(self.analytics.time_breakdown(filters))
+            payload.update(self._operations_time_extras(payload, filters))
             if self.simulation_mode:
                 payload["simulation"] = self.management.get_overview(filters).get("simulation")
             return payload
@@ -1078,6 +1082,27 @@ class FrontendBackendFacade:
                 "losses_breakdown": overview.get("kpi_losses_breakdown") or {},
             }
         raise ValueError("Análise solicitada não existe.")
+
+    def _operations_time_extras(self, payload: dict, filters: AnalyticsFilter) -> dict:
+        """Divisor da média e parada planejada/não planejada de Operações > Tempo.
+
+        Mesma fonte da Visão Geral (``physical_consolidation``): recursos com
+        turno no período e a divisão da parada por classificação. A não
+        planejada é "parada total menos planejada", como em ``inicio``.
+        """
+
+        consolidation = self.management.physical_consolidation(filters)
+        stops = consolidation["consolidated"]["totals_by_stop_classification"].get(
+            EventCategory.DOWNTIME, {}
+        )
+        downtime = float(payload["totals"].get(EventCategory.DOWNTIME.value) or 0.0)
+        planned = min(downtime, float(stops.get(StopClassification.PLANNED, 0.0)))
+        return {
+            "resource_count": len(consolidation["calendar_resources"]),
+            "day_count": consolidation["days"],
+            "planned_downtime_seconds": planned,
+            "unplanned_downtime_seconds": max(0.0, downtime - planned),
+        }
 
     def auditoria(self, filters: AnalyticsFilter):
         return self.audit_service.run_period(filters)

@@ -16,15 +16,27 @@ import { localDate, referenceNow, useReferenceClock } from "../../system/Referen
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
 import { displayName, formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
 
-/** Categorias do Tempo MES que têm explicação (id estável no backend). Parada e fila ficam de fora: parada tem duas linhas próprias na Visão Geral. */
+/**
+ * Categorias do Tempo MES que têm explicação (id estável no backend). A parada
+ * nunca aparece solta: vira "planejada" e "não planejada" (chaves sintéticas,
+ * montadas abaixo a partir do payload). Fila fica de fora.
+ */
 const TIME_CATEGORY_METRIC: Record<string, string> = {
   producao: "tempo.producao",
+  parada_planejada: "tempo.parada_planejada",
+  parada_nao_planejada: "tempo.parada_nao_planejada",
   setup: "tempo.setup",
   sem_demanda: "tempo.sem_demanda",
   fora_turno: "tempo.fora_turno",
   retrabalho: "tempo.retrabalho",
   atividade_sem_op: "tempo.atividade_sem_op",
 };
+
+const CATEGORY_LABEL: Record<string, string> = {
+  parada_planejada: "Parada planejada",
+  parada_nao_planejada: "Parada não planejada",
+};
+const categoryLabel = (key: string) => CATEGORY_LABEL[key] ?? humanize(key);
 
 interface ResourceSummary {
   resources: number;
@@ -238,34 +250,46 @@ export function OperationsTimePage() {
   // por recurso acompanha o relógio. Fora do turno é do calendário, não do recurso:
   // vale a união de ``totals.fora_turno``, sem somar nem dividir.
   const resources = data?.by_resource ?? [];
-  const resourceCount = resources.length;
-  const resourceSum = (keys: string[]) => resourceCount
+  // Divisor da média: recursos com turno no período, o mesmo número da Visão Geral
+  // e do painel de explicação (não as linhas de by_resource, que incluem recursos sem turno).
+  const resourceCount = Number(data?.resource_count ?? 0);
+  const resourceSum = (keys: string[]) => resources.length
     ? resources.reduce((sum, row) => sum + keys.reduce((acc, key) => acc + Number(row[key] ?? 0), 0), 0)
     : keys.reduce((acc, key) => acc + Number(data?.totals?.[key] ?? 0), 0);
   const perResource = (seconds: number) => formatHours(resourceCount ? seconds / resourceCount : seconds);
-  const categoryTotal = (key: string) => key === "fora_turno" ? Number(data?.totals?.[key] ?? 0) : resourceSum([key]);
-  const categoryAverage = (key: string) => key === "fora_turno" || !resourceCount ? categoryTotal(key) : resourceSum([key]) / resourceCount;
+  const plannedStop = Number(data?.planned_downtime_seconds ?? 0);
+  const unplannedStop = Number(data?.unplanned_downtime_seconds ?? Math.max(0, resourceSum(["parada"]) - plannedStop));
+  const syntheticTotal: Record<string, number> = { parada_planejada: plannedStop, parada_nao_planejada: unplannedStop };
+  const categoryTotal = (key: string) => {
+    if (key in syntheticTotal) return syntheticTotal[key];
+    return key === "fora_turno" ? Number(data?.totals?.[key] ?? 0) : resourceSum([key]);
+  };
+  const categoryAverage = (key: string) => key === "fora_turno" || !resourceCount ? categoryTotal(key) : categoryTotal(key) / resourceCount;
   // Só as categorias com id de métrica ganham clique; as demais ficam como estavam.
   const explainable = (category: string, text: string) => {
     const metric = TIME_CATEGORY_METRIC[category];
     if (!metric) return text;
     return (
-      <button type="button" className="metric-link" data-explain-metric={metric} aria-label={`Explicar ${humanize(category)}: ${text}`} onClick={() => setExplainedMetric(metric)}>
+      <button type="button" className="metric-link" data-explain-metric={metric} aria-label={`Explicar ${categoryLabel(category)}: ${text}`} onClick={() => setExplainedMetric(metric)}>
         {text}
       </button>
     );
   };
   const totalDetail = (seconds: number) => resourceCount > 1 ? `Total ${formatHours(seconds)} em ${resourceCount} recursos` : undefined;
   const productive = resourceSum(["producao", "setup"]);
-  const stopped = resourceSum(["parada"]);
   const categories = Object.keys(data?.totals ?? {});
+  // A parada solta sai da tabela: entram as duas linhas (a soma delas é a Parada de antes).
+  const categoryRows: Array<[string, number]> = Object.entries(data?.totals ?? {}).flatMap(([key, value]): Array<[string, number]> => (
+    key === "parada" ? [["parada_planejada", plannedStop], ["parada_nao_planejada", unplannedStop]] : [[key, value]]
+  ));
   const measured = resourceCount ? categories.reduce((acc, key) => acc + categoryTotal(key), 0) : Number(data?.physical_seconds ?? 0);
   const measuredAverage = resourceCount ? categories.reduce((acc, key) => acc + categoryAverage(key), 0) : measured;
   return (
     <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle}>
-      <div className="metric-grid metric-grid--four">
+      <div className="metric-grid metric-grid--five">
         <MetricCard label="Tempo produtivo" value={perResource(productive)} detail={totalDetail(productive) ?? "Produção e setup"} accent="success" />
-        <MetricCard label="Tempo parado" value={perResource(stopped)} detail={totalDetail(stopped)} accent="danger" />
+        <MetricCard label="Parada não planejada" value={perResource(unplannedStop)} detail={totalDetail(unplannedStop)} accent="danger" />
+        <MetricCard label="Parada planejada" value={perResource(plannedStop)} detail={totalDetail(plannedStop)} accent="warning" />
         <MetricCard label="Tempo total medido" value={formatHours(measuredAverage)} detail={totalDetail(measured)} accent="primary" />
         <MetricCard label="Tempo a esclarecer" value={formatHours(data?.conflicting_state_seconds)} detail={Number(data?.conflicting_state_seconds ?? 0) > 0 ? "Estados simultâneos incompatíveis no mesmo recurso" : "Sem conflito no período"} accent={Number(data?.conflicting_state_seconds ?? 0) > 0 ? "warning" : "success"} />
       </div>
@@ -273,10 +297,10 @@ export function OperationsTimePage() {
         <SectionCard title="Produção por setor">{sectorBars.length ? <BarList data={sectorBars} /> : <EmptyState />}</SectionCard>
         <SectionCard title="Categorias de tempo">
           <DataTable
-            rows={Object.entries(data?.totals ?? {})}
+            rows={categoryRows}
             rowKey={(row) => row[0]}
             columns={[
-              { key: "category", label: "Categoria", render: (row) => humanize(row[0]) },
+              { key: "category", label: "Categoria", render: (row) => categoryLabel(row[0]) },
               { key: "time", label: resourceCount > 1 ? "Média por recurso" : "Tempo físico", render: (row) => explainable(row[0], formatHours(categoryAverage(row[0]))) },
               ...(resourceCount > 1 ? [{ key: "total", label: "Tempo total", render: (row: [string, number]) => explainable(row[0], formatHours(categoryTotal(row[0]))) }] : []),
             ]}

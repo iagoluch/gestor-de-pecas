@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { AuthProvider } from "../auth/AuthContext";
+import { StackBar } from "../components/charts";
 import type { AndonResource, AndonSnapshot } from "../types/andon";
 
 class MockEventSource {
@@ -190,24 +191,33 @@ describe("Andon Geral Web", () => {
     expect(container.querySelector(".andon-page--tv")).toBeInTheDocument();
   });
 
-  it("não oferece clique de explicação de número na tela de TV", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path.includes("/auth/session")) {
-        return new Response(JSON.stringify({
-          id: 2, name: "Andon", role: "andon", management_access: false, andon_access: true, operator_access: false,
-        }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (path.includes("/api/v1/andon")) return new Response(JSON.stringify(snapshot()), { status: 200, headers: { "content-type": "application/json" } });
-      return new Response(null, { status: 404 });
-    });
-    const { container } = renderAndon(fetchMock);
+  it("barra de composição sem onSelect (uso de TV) não vira botão; com onSelect vira exatamente um", () => {
+    const base = { name: "Recurso sem demanda", value: 3600, color: "var(--accent)", text: "1h", explainMetric: "tempo.sem_demanda" };
+    const tv = render(<StackBar parts={[base, { ...base, name: "Produção", explainMetric: "tempo.producao" }]} />);
+    expect(tv.container.querySelector("[data-explain-metric]")).toBeNull();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    tv.unmount();
 
-    await screen.findByRole("heading", { name: /Painéis Operacionais — Andon/i });
-    expect(container.querySelector("[data-explain-metric]")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /explicar/i })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("metric-explanation-panel")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/management/explicacao"))).toBe(false);
+    // Controle positivo: o mesmo desenho com onSelect tem o botão (o teste acima pode falhar).
+    const gestao = render(<StackBar parts={[{ ...base, onSelect: () => undefined }, { ...base, name: "Produção", explainMetric: "tempo.producao" }]} />);
+    expect(gestao.container.querySelectorAll("[data-explain-metric]")).toHaveLength(1);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("as telas de TV, Solda e operador não referenciam a explicação de números", () => {
+    const sources = {
+      ...import.meta.glob("../pages/AndonPage.tsx", { query: "?raw", import: "default", eager: true }),
+      ...import.meta.glob("../pages/operator/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }),
+      ...import.meta.glob("../components/Andon*.tsx", { query: "?raw", import: "default", eager: true }),
+      ...import.meta.glob("../components/Operator*.tsx", { query: "?raw", import: "default", eager: true }),
+    } as Record<string, string>;
+    // A guarda só vale se de fato leu as telas: 1 Andon + operador + componentes.
+    expect(Object.keys(sources).some((path) => path.endsWith("AndonPage.tsx"))).toBe(true);
+    expect(Object.keys(sources).some((path) => path.includes("/operator/"))).toBe(true);
+    const offenders = Object.entries(sources)
+      .filter(([, code]) => /MetricExplanationPanel|useMetricExplanation|data-explain-metric|explainMetric/.test(code))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
   });
 
   it("abre em rota própria exibindo somente os cartões do Andon", async () => {

@@ -58,7 +58,7 @@ const SERIES_COLORS = { oee: "var(--purple)", availability: "var(--accent)", per
  */
 function averageHint(item: { summed?: boolean; average_seconds?: number | null }, resourceCount: number) {
   if (item.average_seconds != null && resourceCount > 0) {
-    return `média ${hours(item.average_seconds)} (${resourceCount} ${resourceCount === 1 ? "recurso" : "recursos"})`;
+    return `média ${formatHours(item.average_seconds)} (${resourceCount} ${resourceCount === 1 ? "recurso" : "recursos"})`;
   }
   return item.summed === false ? "não somado" : undefined;
 }
@@ -262,7 +262,7 @@ export function ManagementOverviewPage() {
             ) : (
               <div className="time-composition">
                 <div className="time-composition__total">
-                  <strong>{hours(composition.total_seconds)}</strong>
+                  <strong>{formatHours(composition.total_seconds)}</strong>
                   <span>{(composition.resource_count ?? 0) > 1 ? `somado em ${composition.resource_count} recursos` : "no período"}</span>
                 </div>
                 {composition.average_note ? <p className="time-composition__note">{composition.average_note}</p> : null}
@@ -272,7 +272,7 @@ export function ManagementOverviewPage() {
                     value: item.seconds,
                     color: TIME_COLORS[item.source_field] ?? "var(--muted)",
                     outside: item.summed === false,
-                    text: hours(item.seconds),
+                    text: formatHours(item.seconds),
                     hint: averageHint(item, composition.resource_count ?? 0),
                     ...(item.metric ? { explainMetric: item.metric, onSelect: () => setExplainedMetric(item.metric ?? null) } : {}),
                   }))}
