@@ -28,6 +28,7 @@ from mes.domain.standard_time import (
     estimated_view_standard_seconds,
     official_standard_seconds,
 )
+from mes.services.calendar import CalendarService
 
 
 class ManagementService:
@@ -64,7 +65,6 @@ class ManagementService:
             else "apontamentos_operacionais_fallback"
         )
         totals = defaultdict(float)
-        physical_inputs = []
         good = scrap = rework_qty = 0
         standard_run_seconds = 0.0
         good_without_standard = 0
@@ -113,28 +113,11 @@ class ManagementService:
             return bucket
 
         for row in facts:
-            start = _dt(row.get("data_inicio"))
-            if not start:
+            if self._fact_window(row, filters) is None:
                 continue
-            finish = _dt(row.get("data_fim")) or min(self._now(), filters.fim)
-            clip_start = max(start, filters.inicio)
-            clip_end = min(finish, filters.fim)
-            if clip_end <= clip_start:
-                continue
-            events = row.get("eventos") or []
             resource = str(row.get("maquina") or "").strip()
             op = str(row.get("op") or "").strip()
             sector = str(row.get("tipo_setor") or "").strip() or "Não informado"
-            timeline = build_operator_timeline(events, start=clip_start, end=clip_end)
-            for segment in timeline.segments:
-                physical_inputs.append(PhysicalInputSegment(
-                    resource=resource or "Não informado",
-                    sector=sector,
-                    category=(segment.category if timeline.has_event_data else EventCategory.UNKNOWN),
-                    start=segment.start,
-                    end=segment.end,
-                    source_ref=f"apontamento:{row.get('id')}",
-                ))
             if not quantity_source_available:
                 good += int(row.get("quantidade_boa") or 0)
                 scrap += int(row.get("quantidade_refugo") or 0)
@@ -197,11 +180,6 @@ class ManagementService:
         state_source_available, state_rows = self._load_resource_states(filters)
         use_canonical_resource_state = bool(state_source_available and state_rows)
         if use_canonical_resource_state:
-            physical_inputs = build_physical_state_inputs(
-                state_rows,
-                inicio=filters.inicio,
-                fim=filters.fim,
-            )
             resources.update(
                 str(row.get("recurso") or "").strip()
                 for row in state_rows
@@ -278,31 +256,16 @@ class ManagementService:
         if cutting_production:
             quantity_evidence = True
 
-        nesting_physical_inputs = []
+        nesting_physical_inputs, nesting_without_interval = self._nesting_physical_inputs(
+            nesting_rows, filters
+        )
         cutting_without_interval_seconds = 0.0
         cutting_without_interval_by_resource = defaultdict(float)
-        for row in nesting_rows:
-            start = _dt(row.get("inicio"))
-            finish = _dt(row.get("fim")) or (min(self._now(), filters.fim) if start else None)
-            if start and finish:
-                clip_start = max(start, filters.inicio)
-                clip_end = min(finish, filters.fim)
-                if clip_end > clip_start:
-                    item = PhysicalInputSegment(
-                        resource=str(row.get("maquina") or "Não informado").strip() or "Não informado",
-                        sector="Corte",
-                        category=EventCategory.PRODUCTION,
-                        start=clip_start,
-                        end=clip_end,
-                        source_ref=f"nesting:{row.get('apontamento_id')}",
-                    )
-                    nesting_physical_inputs.append(item)
-                    if not use_canonical_resource_state:
-                        physical_inputs.append(item)
-                    continue
-            # Compatibilidade com fontes antigas que conhecem a duração, mas não
-            # fornecem início/fim. Sem intervalo não é possível detectar sobreposição.
-            if not use_canonical_resource_state:
+        if not use_canonical_resource_state:
+            for row in nesting_without_interval:
+                # Compatibilidade com fontes antigas que conhecem a duração, mas
+                # não fornecem início/fim. Sem intervalo não é possível detectar
+                # sobreposição.
                 legacy_seconds = float(
                     row.get("real_periodo_segundos", row.get("real_segundos")) or 0
                 )
@@ -312,7 +275,15 @@ class ManagementService:
                     cutting_without_interval_by_resource[machine.casefold()] += legacy_seconds
                     resource_bucket(machine, "Corte")
 
-        physical = consolidate_physical_time(physical_inputs)
+        consolidation = self._consolidate_physical(
+            filters,
+            facts=facts,
+            state_source_available=state_source_available,
+            state_rows=state_rows,
+            nesting_physical_inputs=nesting_physical_inputs,
+        )
+        physical = consolidation["consolidated"]
+        physical_inputs = consolidation["inputs"]
         for category, seconds in physical["totals"].items():
             totals[category] += seconds
         if cutting_without_interval_seconds:
@@ -659,8 +630,11 @@ class ManagementService:
                 "out_of_shift_seconds": totals[EventCategory.OUT_OF_SHIFT],
                 "out_of_shift_attributed_seconds": physical["out_of_shift_attributed_seconds"],
                 "out_of_shift_duplicated_seconds": physical["out_of_shift_duplicated_seconds"],
-                # Recursos com tempo no período: divisor da média por recurso.
-                "resource_count": len(physical["by_resource"]),
+                # Divisor da média por recurso: recursos que tiveram turno/
+                # calendário no período (um recurso conta uma vez, mesmo em
+                # vários dias). ``day_count`` informa a extensão do período.
+                "resource_count": len(consolidation["calendar_resources"]),
+                "day_count": consolidation["days"],
             },
             "kpis": {
                 "availability": availability.to_dict(),
@@ -871,6 +845,153 @@ class ManagementService:
             "missing_points": missing_points,
             "calculation_policy": "canonical_oee",
         }
+
+    def physical_consolidation(self, filters: AnalyticsFilter) -> dict:
+        """Tempo físico consolidado do período: a mesma conta que o overview publica.
+
+        É a fonte única para ``get_overview`` e para o serviço de explicação do
+        número: quem explica usa exatamente esta consolidação, não uma segunda
+        conta paralela. Retorna o resultado de ``consolidate_physical_time``
+        (cujos segmentos carregam ``source_refs`` e ``rule``), os recursos que
+        tiveram turno/calendário no período, a quantidade de dias e o instante
+        do cálculo.
+        """
+
+        facts = self._load_operational_facts(filters)
+        state_source_available, state_rows = self._load_resource_states(filters)
+        nesting_inputs, _without_interval = self._nesting_physical_inputs(
+            self.get_nesting_times(filters), filters
+        )
+        result = self._consolidate_physical(
+            filters,
+            facts=facts,
+            state_source_available=state_source_available,
+            state_rows=state_rows,
+            nesting_physical_inputs=nesting_inputs,
+        )
+        return {key: result[key] for key in (
+            "consolidated", "calendar_resources", "days", "calculated_at"
+        )}
+
+    def _consolidate_physical(
+        self, filters, *, facts, state_source_available, state_rows, nesting_physical_inputs
+    ) -> dict:
+        """Núcleo de ``physical_consolidation`` sobre insumos já carregados.
+
+        ``get_overview`` já tem fatos, estados e nestings em mãos; passar por
+        aqui evita reler o banco sem criar uma segunda conta. Além do contrato
+        público devolve ``inputs`` (segmentos que entraram na consolidação).
+        """
+
+        if state_source_available and state_rows:
+            # Estado físico canônico substitui as timelines por OP.
+            inputs = build_physical_state_inputs(
+                state_rows, inicio=filters.inicio, fim=filters.fim
+            )
+        else:
+            inputs = self._fact_physical_inputs(facts, filters)
+            inputs.extend(nesting_physical_inputs)
+        consolidated = consolidate_physical_time(inputs)
+        return {
+            "consolidated": consolidated,
+            "calendar_resources": self._calendar_resources(consolidated, filters),
+            "days": self._period_days(filters),
+            "calculated_at": self._now(),
+            "inputs": inputs,
+        }
+
+    def _fact_window(self, row, filters):
+        """Recorte do apontamento no período, ou ``None`` se não toca o período."""
+
+        start = _dt(row.get("data_inicio"))
+        if not start:
+            return None
+        finish = _dt(row.get("data_fim")) or min(self._now(), filters.fim)
+        clip_start = max(start, filters.inicio)
+        clip_end = min(finish, filters.fim)
+        if clip_end <= clip_start:
+            return None
+        return clip_start, clip_end
+
+    def _fact_physical_inputs(self, facts, filters) -> list:
+        """Segmentos físicos das timelines dos apontamentos (fonte de fallback)."""
+
+        inputs = []
+        for row in facts:
+            window = self._fact_window(row, filters)
+            if window is None:
+                continue
+            timeline = build_operator_timeline(
+                row.get("eventos") or [], start=window[0], end=window[1]
+            )
+            resource = str(row.get("maquina") or "").strip()
+            sector = str(row.get("tipo_setor") or "").strip() or "Não informado"
+            for segment in timeline.segments:
+                inputs.append(PhysicalInputSegment(
+                    resource=resource or "Não informado",
+                    sector=sector,
+                    category=(segment.category if timeline.has_event_data else EventCategory.UNKNOWN),
+                    start=segment.start,
+                    end=segment.end,
+                    source_ref=f"apontamento:{row.get('id')}",
+                ))
+        return inputs
+
+    def _nesting_physical_inputs(self, nesting_rows, filters):
+        """Nestings do Corte como segmentos físicos.
+
+        Retorna ``(segmentos, linhas_sem_intervalo)``: as linhas sem início/fim
+        válidos só conhecem a duração e ficam fora da detecção de sobreposição.
+        """
+
+        inputs = []
+        without_interval = []
+        for row in nesting_rows:
+            start = _dt(row.get("inicio"))
+            finish = _dt(row.get("fim")) or (min(self._now(), filters.fim) if start else None)
+            if start and finish:
+                clip_start = max(start, filters.inicio)
+                clip_end = min(finish, filters.fim)
+                if clip_end > clip_start:
+                    inputs.append(PhysicalInputSegment(
+                        resource=str(row.get("maquina") or "Não informado").strip() or "Não informado",
+                        sector="Corte",
+                        category=EventCategory.PRODUCTION,
+                        start=clip_start,
+                        end=clip_end,
+                        source_ref=f"nesting:{row.get('apontamento_id')}",
+                    ))
+                    continue
+            without_interval.append(row)
+        return inputs, without_interval
+
+    def _calendar_resources(self, consolidated, filters) -> set:
+        """Recursos consolidados que tiveram turno no período.
+
+        É o divisor da média por recurso. Um recurso entra uma vez só, tenha
+        turno em um ou em vários dias do período. Recurso sem calendário
+        cadastrado, ou com turnos só fora do período, não entra.
+        """
+
+        calendar = CalendarService(self.db)
+        resources = set()
+        for resource in consolidated["by_resource"]:
+            name = str(resource or "").strip()
+            if not name or name.casefold() == "não informado":
+                continue
+            if any(
+                end > filters.inicio and start < filters.fim
+                for start, end in calendar.shift_intervals(name, filters.inicio, filters.fim)
+            ):
+                resources.add(name)
+        return resources
+
+    @staticmethod
+    def _period_days(filters) -> int:
+        """Dias de calendário que o período toca; ``fim`` à meia-noite é exclusivo."""
+
+        last = filters.fim - timedelta(microseconds=1) if filters.fim > filters.inicio else filters.inicio
+        return (last.date() - filters.inicio.date()).days + 1
 
     def get_overview_trend(self, filters: AnalyticsFilter) -> dict:
         """Projeção de tendência da Visão Geral: pontos, período anterior e setores.
