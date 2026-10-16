@@ -142,8 +142,14 @@ def fit_messages_to_budget(
     tools: list[dict[str, Any]],
     request_token_budget: int,
     max_completion_tokens: int,
+    protect_system: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Remove somente contexto antigo; preserva pergunta e ciclo assistant/tool atual."""
+    """Remove somente contexto antigo; preserva pergunta e ciclo assistant/tool atual.
+
+    ``protect_system`` nunca troca o prompt de sistema pelo prompt-base: quem
+    chama (modo explicação) trata ``within_budget`` falso como erro em vez de
+    seguir sem os dados e sem as regras.
+    """
 
     fitted = [dict(item) for item in messages]
     before = estimate_request_tokens(fitted, tools, max_completion_tokens)
@@ -172,7 +178,10 @@ def fit_messages_to_budget(
         removed += removed_now
 
     knowledge_removed = False
-    if estimate_request_tokens(fitted, tools, max_completion_tokens) > request_token_budget:
+    if (
+        not protect_system
+        and estimate_request_tokens(fitted, tools, max_completion_tokens) > request_token_budget
+    ):
         system = str(fitted[0].get("content") or "") if fitted else ""
         if system != BASE_SYSTEM_PROMPT:
             fitted[0] = {

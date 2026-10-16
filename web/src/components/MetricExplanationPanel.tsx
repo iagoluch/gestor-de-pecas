@@ -229,7 +229,7 @@ export function MetricExplanationPanel({ metric, filters, onClose }: {
           {tree ? <Explanation tree={tree} /> : null}
         </div>
         <div className="metric-explanation__chat" data-testid="explanation-chat-slot">
-          {tree ? <MetricExplanationChat metric={metric} label={tree.label} filters={filters} /> : null}
+          {tree ? <MetricExplanationChat key={`${metric}|${JSON.stringify(filters)}`} metric={metric} label={tree.label} filters={filters} /> : null}
         </div>
       </aside>
     </div>

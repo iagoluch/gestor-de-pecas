@@ -59,6 +59,7 @@ export function MetricExplanationChat({ metric, label, filters }: {
     const text = question.trim();
     if (!text || sending) return;
     setQuestion("");
+    setDraft("");
     setError(null);
     setSending(true);
     setLines((current) => [...current, { id: nextId.current++, role: "user", content: text }]);

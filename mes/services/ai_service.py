@@ -13,7 +13,7 @@ from mes.ai.context_budget import (
     estimate_tokens,
     fit_messages_to_budget,
 )
-from mes.ai.explanation_context import build_explanation_context
+from mes.ai.explanation_context import ExplanationContextTooLarge, build_explanation_context
 from mes.ai.prompts import FINAL_RESPONSE_INSTRUCTION
 from mes.ai.prompts.system_prompt import BASE_SYSTEM_PROMPT
 from mes.contracts.ai import (
@@ -103,19 +103,33 @@ class AIService:
             if isinstance(value, int):
                 target[key] = target.get(key, 0) + value
 
-    def _explanation_allowance(self, question: str) -> int:
-        """Tokens que a explicação pode ocupar sem expulsar prompt-base e pergunta.
+    def _build_explanation_context(self, tree: dict[str, Any], question: str) -> str:
+        """Contexto da explicação que cabe no pedido, ou erro (nunca resposta sem a árvore).
 
-        Reserva uma fatia para o histórico recente; o que sobra é da árvore.
+        Primeiro reserva uma fatia para o histórico recente; se nem a forma mínima
+        cabe assim, tenta sem a reserva; se ainda não cabe, recusa a pergunta.
         """
+        budget = self.config.request_token_budget
         fixed = (
             estimate_tokens(BASE_SYSTEM_PROMPT)
             + estimate_tokens(question)
             + self.config.max_completion_tokens
             + 64
         )
-        history_reserve = self.config.request_token_budget // 6
-        return max(400, self.config.request_token_budget - fixed - history_reserve)
+        room = budget - fixed
+        for allowance in (room - budget // 6, room):
+            if allowance <= 0:
+                continue
+            try:
+                return build_explanation_context(tree, max_tokens=allowance)
+            except ExplanationContextTooLarge:
+                continue
+        raise AIServiceError(
+            "explanation_context_too_large",
+            "A explicação desta métrica não cabe no limite da IA configurado. "
+            "Peça ao administrador para aumentar o limite de tokens da IA ou "
+            "consulte o painel diretamente.",
+        )
 
     async def stream_message(
         self,
@@ -140,6 +154,14 @@ class AIService:
                 "ai_message_too_large",
                 f"A pergunta deve ter no máximo {MAX_AI_MESSAGE_CHARS} caracteres.",
             )
+
+        # Falha fechado antes de gravar a pergunta: sem a árvore o modo
+        # explicação não responde.
+        explanation_context = (
+            self._build_explanation_context(explanation_tree, question)
+            if explanation_tree is not None
+            else None
+        )
 
         conversation = await asyncio.to_thread(
             self.repository.obter_conversa_ia,
@@ -198,17 +220,12 @@ class AIService:
         )
         rounds = 0
         limit_reached = False
-        explanation_context = None
         request_token_budget = self.config.request_token_budget
-        if explanation_tree is None:
+        if explanation_context is None:
             selected_tools = self.tools.select_schemas(question)
         else:
             # Modo explicação: sem ferramentas, só a árvore recalculada pelo servidor.
             selected_tools = []
-            explanation_context = build_explanation_context(
-                explanation_tree,
-                max_tokens=self._explanation_allowance(question),
-            )
             request_token_budget -= estimate_tokens(explanation_context)
         messages, context_metrics = build_budgeted_context(
             history=history.get("messages") or [],
@@ -358,7 +375,13 @@ class AIService:
                     tools=[],
                     request_token_budget=self.config.request_token_budget,
                     max_completion_tokens=self.config.max_completion_tokens,
+                    protect_system=explanation_context is not None,
                 )
+                if explanation_context is not None and not budget_metrics["within_budget"]:
+                    raise AIServiceError(
+                        "explanation_context_too_large",
+                        "A explicação desta métrica não cabe no limite da IA configurado.",
+                    )
                 logging.info(
                     "AI request budget request_id=%s phase=final estimated_tokens=%s budget=%s removed=%s knowledge_removed=%s",
                     context.request_id,

@@ -10,7 +10,6 @@ from fastapi.responses import Response, StreamingResponse
 
 from backend.api.dependencies.ai import get_ai_service
 from backend.api.dependencies.auth import require_csrf, require_management_user
-from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import build_analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.ai import AIConversationCreateRequest, AIMessageRequest
@@ -125,7 +124,6 @@ async def message(
     user: SessionUser = Depends(require_management_user),
     _csrf: None = Depends(require_csrf),
     service=Depends(get_ai_service),
-    facade=Depends(get_frontend_facade),
 ):
     current_status = service.status()
     if not current_status["enabled"]:
@@ -155,10 +153,20 @@ async def message(
     if payload.explanation is not None:
         # A árvore é sempre recalculada aqui, com os mesmos filtros e a mesma
         # conta do painel; o cliente só informa métrica e filtros.
+        # A conversa é validada antes, para não gastar o cálculo em conversa alheia.
+        owned = await asyncio.to_thread(
+            service.repository.obter_conversa_ia, conversation_id, user.id, message_limit=1
+        )
+        if owned is None:
+            raise AppError(
+                "ai_conversation_not_found", "Conversa não encontrada.", status_code=404
+            )
         ref = payload.explanation
         filters = build_analytics_filter(request, **ref.filters.model_dump())
+        # A fachada é a mesma do serviço (já resolvida por get_ai_service): o
+        # fluxo sem explicação não constrói nada além do que construía antes.
         explanation_tree = await asyncio.to_thread(
-            explain_for_user, facade, ref.metric, filters, user
+            explain_for_user, service.tools.facade, ref.metric, filters, user
         )
     context = AIRequestContext(
         user_id=user.id,
