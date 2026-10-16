@@ -36,7 +36,7 @@ REPO = Path(__file__).resolve().parents[1]
 GENERATED = "gerado por scripts/export_opencode.py"
 MARK = f"<!-- {GENERATED} (Gestor de Peças); edite a fonte no Claude Code -->"
 
-MODEL = "opencode/nemotron-3-ultra-free"
+MODEL = "opencode/deepseek-v4.1-flash-free"
 SMALL_MODEL = "opencode/nemotron-3.5-lightning-free"
 
 # Coleções-fonte do composio (832 skills SaaS removidas de propósito) que o
@@ -183,14 +183,19 @@ def export_agents() -> dict[str, str]:
         if meta.get("skills"):
             skills = ", ".join(f"`{s}`" for s in meta["skills"])
             body = f"Ao iniciar, carregue com a ferramenta `skill`: {skills}.\n\n{body}"
+        # V2: mode "subagent" = especialistas fora do seletor principal, só
+        # acionáveis via ferramenta `subagent` (o orquestrador delega a eles;
+        # decisão do usuário em 2026-10-15). `permissions` é a forma V2; o mapa
+        # `permission`/`tools` do V1 não deve ser usado em config nova.
         out = {
             "description": meta.get("description", src.stem),
             "mode": "subagent",
-            "permission": {
-                "edit": "allow" if tools & {"edit", "write"} else "deny",
-                "bash": "allow" if "bash" in tools else "deny",
-                "webfetch": "allow" if tools & {"webfetch", "websearch"} else "deny",
-            },
+            "permissions": [
+                {"action": "edit", "resource": "*", "effect": "allow" if tools & {"edit", "write"} else "deny"},
+                {"action": "shell", "resource": "*", "effect": "allow" if "bash" in tools else "deny"},
+                {"action": "webfetch", "resource": "*", "effect": "allow" if tools & {"webfetch", "websearch"} else "deny"},
+                {"action": "websearch", "resource": "*", "effect": "allow" if tools & {"webfetch", "websearch"} else "deny"},
+            ],
         }
         files[f"{meta.get('name', src.stem)}.md"] = render(out, body)
     return files
@@ -325,6 +330,9 @@ def export_global_config() -> None:
     cfg.setdefault("$schema", "https://opencode.ai/config.json")
     cfg["model"] = MODEL
     cfg["small_model"] = SMALL_MODEL
+    # Modo padrão do OpenCode = orquestrador (delega tudo; nunca executa
+    # sozinho). setdefault: preserva uma troca manual posterior no json.
+    cfg.setdefault("default_agent", "orchestrator")
 
     mcp = cfg.setdefault("mcp", {})
     servers = dict(load_json(HOME / ".claude.json").get("mcpServers", {}))
