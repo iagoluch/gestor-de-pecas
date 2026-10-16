@@ -879,6 +879,9 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.state.chamada_account_limiter = SlidingWindowLimiter(
         limit=resolved_settings.chamada_limit_per_account_per_minute
     )
+    # Busca de OP no Protheus (até 20 s por chamada, ocupa vaga do pool): freio por terminal e por conta.
+    application.state.op_sync_session_limiter = SlidingWindowLimiter(limit=10)
+    application.state.op_sync_account_limiter = SlidingWindowLimiter(limit=30)
     # Dev Observatory: captura sempre montada quando habilitada, para que um
     # erro ocorrido antes de alguém abrir a tela já esteja registrado.
     application.state.dev_observatory = (

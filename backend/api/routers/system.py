@@ -122,7 +122,7 @@ def simulation_clock(
     "/rebuild-frontend",
     dependencies=[Depends(require_csrf)],
 )
-def rebuild_frontend(_user=Depends(require_admin_user)):
+def rebuild_frontend(request: Request, _user=Depends(require_admin_user)):
     """Reconstrói o bundle do frontend (``web/dist``) para publicar alterações de tela.
 
     Só o build: o backend serve os arquivos estáticos direto da pasta ``dist``
@@ -131,6 +131,8 @@ def rebuild_frontend(_user=Depends(require_admin_user)):
     incluídos (decisão do usuário, 16/09/2026).
     """
 
+    if not request.app.state.settings.development_tools_allowed:
+        raise AppError("nao_encontrado", "Recurso indisponível neste ambiente.", status_code=404)
     npm = shutil.which("npm.cmd" if platform.system() == "Windows" else "npm")
     if not npm:
         raise AppError(

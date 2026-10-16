@@ -194,6 +194,20 @@ def operations(
     }
 
 
+def _limitar_busca_de_op(request: Request, user: SessionUser) -> None:
+    """Cada OP desconhecida vira consulta ao Protheus (até 20 s, ocupa vaga do pool)."""
+
+    state = request.app.state
+    claims = getattr(request.state, "session_claims", None)
+    sessao = getattr(claims, "session_id", None) or f"conta:{user.id}"
+    if not state.op_sync_session_limiter.hit(sessao) or not state.op_sync_account_limiter.hit(user.id):
+        raise AppError(
+            "operator_order_sync_rate_limited",
+            "Muitas buscas de OP em pouco tempo neste posto. Aguarde um minuto e tente de novo.",
+            status_code=429,
+        )
+
+
 @router.post("/operations/{op}/sync", dependencies=[Depends(require_csrf)])
 def provision_operation_order(
     request: Request,
@@ -214,6 +228,7 @@ def provision_operation_order(
         raise AppError("operator_workflow_mismatch", "Este setor utiliza um fluxo operacional próprio.", status_code=409)
     if resource is not None:
         _, resource = validate_resource(user, resource)
+    _limitar_busca_de_op(request, user)
     provisioning = _provisioning(request, database)
     try:
         result = provisioning.provision(op)

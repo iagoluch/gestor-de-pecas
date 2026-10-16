@@ -6,8 +6,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from backend.api.database import get_database
 from backend.api.dependencies.auth import (
+    require_admin_user,
     require_csrf,
-    require_management_user,
     require_operator_user,
 )
 from backend.api.dependencies.clock import request_now_func
@@ -200,9 +200,11 @@ async def sync(
 @router.get("/sync/diagnostico")
 def sync_diagnostics(
     request: Request,
-    user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_admin_user),
 ):
-    """Diagnóstico técnico do último ciclo, fora da tela do operador."""
+    """Diagnóstico técnico do último ciclo, fora da tela do operador.
+
+    Só admin: ``ultimo_erro`` pode trazer servidor/banco/usuário do ODBC."""
 
     del user
     coordinator = getattr(request.app.state, "sigmanest_refresh", None)
