@@ -1,6 +1,6 @@
 openpyxl>=3.1,<4
 # Driver PostgreSQL 3 com distribuição binária para o backend Web.
-psycopg[binary]>=3.3,<4
+psycopg[binary]>=3.3.6,<4
 # Pool síncrono thread-safe usado pela facade Database.
 psycopg_pool>=3.3.3,<4
 # Parser XML endurecido contra DTD, entidades e XXE.
