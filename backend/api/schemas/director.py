@@ -84,6 +84,7 @@ class DirectorSheetResponse(BaseModel):
 
 class DirectorResourceRate(BaseModel):
     recurso: str
+    nome: str | None = None
     setor: str | None = None
     valor_hora: float | None = None
 

@@ -86,6 +86,7 @@ export interface DirectorSheet {
 
 export interface DirectorResourceRate {
   recurso: string;
+  nome?: string | null;
   setor: string | null;
   valor_hora: number | null;
 }

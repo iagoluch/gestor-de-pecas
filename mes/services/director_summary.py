@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app.core.operator_sectors import OPERATOR_SECTORS
-from app.core.resource_mapping import STATION_RESOURCE_CODES, resolve_resource_identity
+from app.core.resource_mapping import STATION_RESOURCE_CODES, resolve_resource_identity, resource_display_name
 from mes.analytics.oee import _WORKED_CATEGORIES
 from mes.analytics.physical_time import consolidate_physical_time
 from mes.analytics.resource_state import classify_state_row
@@ -254,9 +254,9 @@ class DirectorSummaryService:
         seen = set()
         for key, sector in _resource_catalog():
             seen.add(key)
-            recursos.append({"recurso": key, "setor": sector, "valor_hora": _float_or_none(resource_rates.get(key))})
+            recursos.append({"recurso": key, "nome": resource_display_name(key), "setor": sector, "valor_hora": _float_or_none(resource_rates.get(key))})
         for key in sorted(set(resource_rates) - seen - {""}):
-            recursos.append({"recurso": key, "setor": None, "valor_hora": _float_or_none(resource_rates[key])})
+            recursos.append({"recurso": key, "nome": resource_display_name(key), "setor": None, "valor_hora": _float_or_none(resource_rates[key])})
 
         operator_rates = {
             int(row.get("operador_id")): _decimal_or_none(row.get("valor_hora"))

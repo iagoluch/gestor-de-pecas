@@ -33,7 +33,7 @@ export function DirectorCosts() {
           {data.recursos.length ? (
             <ul className="director-rates">
               {data.recursos.map((item) => (
-                <RateRow key={item.recurso} label={item.recurso} detail={item.setor} initial={item.valor_hora} onSave={(value) => putResourceRate(item.recurso, value)} />
+                <RateRow key={item.recurso} label={item.nome || item.recurso} detail={[item.setor, item.nome && item.nome !== item.recurso ? item.recurso : null].filter(Boolean).join(" · ") || null} initial={item.valor_hora} onSave={(value) => putResourceRate(item.recurso, value)} />
               ))}
             </ul>
           ) : <EmptyState title="Nenhum recurso cadastrado" />}
