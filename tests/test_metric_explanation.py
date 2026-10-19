@@ -13,12 +13,14 @@ mesmos ids de evento (``estado_recurso:<id>``).
 """
 
 from datetime import datetime, time
+import itertools
 import unittest
 
 from mes.contracts import AnalyticsFilter
 from mes.domain import EventCategory
 from mes.services.management import ManagementService
 from mes.services.metric_explanation import (
+    RULE_TEXT,
     MetricExplanationService,
     UnknownMetricError,
 )
@@ -398,6 +400,36 @@ class MetricExplanationTests(unittest.TestCase):
     def test_total_equals_overview_number(self):
         _assert_totals_equal_overview(self, self.explainer, self.repo, self.filters)
 
+    def test_every_time_metric_list_sums_to_total(self):
+        # Teste-fecho da Fase 1: toda métrica de tempo que o serviço expõe
+        # reconcilia (filhos == total) em um dia com produção, setup, parada
+        # planejada e não planejada, sem demanda e conflito.
+        metrics = list(RULE_TEXT)
+        self.assertEqual(len(metrics), 9)
+        # A lista do teste de números tem de cobrir exatamente o que o serviço expõe.
+        self.assertEqual(set(metrics), set(_METRIC_TO_HOURS_KEY))
+
+        for metric in metrics:
+            with self.subTest(metric=metric):
+                tree = self.explainer.explain(metric, self.filters)
+
+                self.assertGreater(tree.total_seconds, 0)  # a fixture popula as 9
+                self.assertTrue(tree.children)
+                self.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
+                self.assertEqual(tree.reconciliation["diff_seconds"], 0)
+                self.assertEqual(
+                    sum(sector.seconds for sector in tree.children), tree.total_seconds
+                )
+                # Cada nível fecha com o pai: setor -> recurso -> trecho.
+                for sector in tree.children:
+                    self.assertEqual(
+                        sum(r.seconds for r in sector.children), sector.seconds
+                    )
+                    for resource in sector.children:
+                        self.assertEqual(
+                            sum(t.seconds for t in resource.children), resource.seconds
+                        )
+
     def test_every_metric_is_non_trivial_in_the_fixture(self):
         # Protege os testes acima de passarem por vácuo (tudo zero).
         for metric in _METRIC_TO_HOURS_KEY:
@@ -672,6 +704,175 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertEqual(payload["metric"], "tempo.sem_demanda")
         self.assertEqual(payload["children"][0]["kind"], "sector")
         self.assertEqual(payload["calculated_at"], "2026-08-21T12:00:00")
+
+
+def _kind(categoria, **extra):
+    return {"categoria": categoria, **extra}
+
+
+_PAIR_KINDS = {
+    "producao": _kind("producao"),
+    "setup": _kind("setup"),
+    "parada_planejada": _kind("parada", planejado=True, motivo="P"),
+    "parada_nao_planejada": _kind("parada", planejado=False, motivo="N"),
+    "parada_sem_classificacao": _kind("parada"),
+    "fila": _kind("fila"),
+    "retrabalho": _kind("retrabalho"),
+    "atividade_sem_op": _kind("atividade_sem_op"),
+    "fora_turno": _kind("fora_turno"),
+}
+
+
+class AdversarialClosingTests(unittest.TestCase):
+    """Tentativas de quebrar a reconciliação (Fase 1, tarefa 8)."""
+
+    def test_any_two_overlapping_states_reconcile_in_every_metric(self):
+        # Sobreposição de 1 h entre QUALQUER par de categorias no mesmo recurso.
+        filters = _day_filters()
+        for first, second in itertools.product(_PAIR_KINDS, repeat=2):
+            with self.subTest(first=first, second=second):
+                a = dict(_PAIR_KINDS[first])
+                b = dict(_PAIR_KINDS[second])
+                estados = [
+                    _estado(1, "DOBRA1", a.pop("categoria"), _at(QUARTA, 8), _at(QUARTA, 10), **a),
+                    _estado(2, "DOBRA1", b.pop("categoria"), _at(QUARTA, 9), _at(QUARTA, 11), **b),
+                ]
+                explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+                hours = _service(repo).get_overview(filters)["hours"]
+                totals = {}
+                for metric in RULE_TEXT:
+                    tree = explainer.explain(metric, filters)
+                    self.assertTrue(tree.reconciliation["ok"], (metric, tree.reconciliation))
+                    totals[metric] = tree.total_seconds
+
+                # Parada planejada + não planejada = parada do overview; o
+                # "a esclarecer" nunca entra nela.
+                self.assertEqual(
+                    totals["tempo.parada_planejada"] + totals["tempo.parada_nao_planejada"],
+                    hours["downtime_seconds"],
+                )
+                self.assertEqual(
+                    totals["tempo.a_esclarecer"], hours["conflicting_state_seconds"]
+                )
+                # Nenhum segundo contado duas vezes: as linhas do turno somam o
+                # tempo medido dentro do turno.
+                in_shift = sum(
+                    seconds for metric, seconds in totals.items()
+                    if metric != "tempo.fora_turno"
+                )
+                self.assertEqual(
+                    in_shift,
+                    hours["physical_measured_seconds"]
+                    - hours["out_of_shift_attributed_seconds"],
+                )
+
+    def test_a_esclarecer_is_not_downtime(self):
+        # Parada (8-10) e setup (9-11): a hora em conflito não é parada nem setup.
+        estados = [
+            _estado(1, "DOBRA1", "parada", _at(QUARTA, 8), _at(QUARTA, 10),
+                    planejado=False, motivo="Quebra"),
+            _estado(2, "DOBRA1", "setup", _at(QUARTA, 9), _at(QUARTA, 11)),
+        ]
+        explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        filters = _day_filters()
+        hours = _service(repo).get_overview(filters)["hours"]
+
+        self.assertEqual(explainer.explain("tempo.a_esclarecer", filters).total_seconds, 1 * H)
+        self.assertEqual(explainer.explain("tempo.parada_nao_planejada", filters).total_seconds, 1 * H)
+        self.assertEqual(explainer.explain("tempo.setup", filters).total_seconds, 1 * H)
+        self.assertEqual(hours["downtime_seconds"], 1 * H)
+
+    def test_open_state_is_closed_by_the_repository_period_end(self):
+        # Estado aberto chega do repositório com ``fim_periodo`` = agora; o que
+        # ainda não aconteceu não pode entrar na explicação.
+        estados = [
+            _estado(1, "DOBRA1", "producao", _at(QUARTA, 8), None,
+                    inicio_periodo=_at(QUARTA, 8), fim_periodo=_at(QUARTA, 10)),
+        ]
+        explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        filters = _day_filters()
+        tree = explainer.explain("tempo.producao", filters)
+
+        self.assertEqual(tree.total_seconds, 2 * H)
+        self.assertTrue(tree.reconciliation["ok"])
+        self.assertEqual(
+            tree.total_seconds,
+            _service(repo).get_overview(filters)["hours"]["production_seconds"],
+        )
+
+    def test_state_crossing_midnight_in_a_two_day_period(self):
+        estados = [
+            _estado(1, "DOBRA1", "parada", _at(QUARTA, 22), _at(QUINTA, 3),
+                    planejado=False, motivo="Quebra"),
+            _estado(2, "DOBRA1", "fila", _at(QUINTA, 3), _at(QUINTA, 6)),
+        ]
+        explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2), _turno(3)]})
+        filters = AnalyticsFilter(QUARTA, QUINTA.replace(hour=23, minute=59))
+        stop = explainer.explain("tempo.parada_nao_planejada", filters)
+
+        self.assertEqual(stop.total_seconds, 5 * H)
+        self.assertEqual(stop.day_count, 2)
+        self.assertTrue(stop.reconciliation["ok"])
+        stretch = stop.children[0].children[0].children[0]
+        self.assertEqual(stretch.label, "19/08 22:00 → 20/08 03:00")
+        self.assertEqual(
+            explainer.explain("tempo.sem_demanda", filters).total_seconds, 3 * H
+        )
+
+    def test_night_shift_spilling_into_the_period_counts_as_calendar(self):
+        noite = {
+            "id": 9, "nome": "Noite", "dia_semana": 2,
+            "hora_inicio": time(22, 0), "hora_fim": time(6, 0),
+            "cruza_meia_noite": True, "minutos_intervalo": 0,
+        }
+        estados = [_estado(1, "DOBRA1", "fila", _at(QUARTA, 22), _at(QUINTA, 6))]
+        explainer, _repo = _explainer(estados, {"DOBRA1": [noite]})
+        # Só quinta: o turno começou na quarta, mas as 6 h finais são da quinta.
+        tree = explainer.explain("tempo.sem_demanda", _day_filters(QUINTA))
+
+        self.assertEqual(tree.total_seconds, 6 * H)
+        self.assertEqual(tree.resource_count, 1)
+        self.assertEqual(tree.average_seconds, 6 * H)
+        self.assertEqual(tree.notes, [])
+        self.assertTrue(tree.reconciliation["ok"])
+
+    def test_multi_day_divisor_counts_distinct_resources_with_calendar(self):
+        estados = [
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 8), _at(QUARTA, 10)),
+            _estado(2, "DOBRA2", "fila", _at(QUINTA, 8), _at(QUINTA, 10)),
+        ]
+        explainer, _repo = _explainer(
+            estados, {"DOBRA1": [_turno(2)], "DOBRA2": [_turno(3)]}
+        )
+        filters = AnalyticsFilter(QUARTA, QUINTA.replace(hour=23, minute=59))
+        tree = explainer.explain("tempo.sem_demanda", filters)
+
+        self.assertEqual((tree.resource_count, tree.day_count), (2, 2))
+        self.assertEqual(tree.total_seconds, 4 * H)
+        self.assertEqual(tree.average_seconds, 2 * H)
+
+    def test_no_calendar_at_all_keeps_totals_and_drops_the_average(self):
+        estados = [
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 8), _at(QUARTA, 10)),
+            _estado(2, "DOBRA1", "parada", _at(QUARTA, 10), _at(QUARTA, 11),
+                    planejado=True, motivo="Reunião"),
+        ]
+        explainer, repo = _explainer(estados, {})
+        filters = _day_filters()
+        hours = _service(repo).get_overview(filters)["hours"]
+
+        for metric, key in (
+            ("tempo.sem_demanda", "no_demand_seconds"),
+            ("tempo.parada_planejada", "planned_downtime_seconds"),
+        ):
+            with self.subTest(metric=metric):
+                tree = explainer.explain(metric, filters)
+                self.assertEqual(tree.total_seconds, hours[key])
+                self.assertGreater(tree.total_seconds, 0)
+                self.assertEqual(tree.resource_count, 0)
+                self.assertIsNone(tree.average_seconds)
+                self.assertTrue(tree.reconciliation["ok"])
+                self.assertEqual(len(tree.notes), 1)
 
 
 class TimeCompositionFacadeTests(unittest.TestCase):
