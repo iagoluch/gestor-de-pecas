@@ -447,7 +447,7 @@ class ValueEndpointTests(unittest.TestCase):
 
 
 class AdversarialBorderTests(unittest.TestCase):
-    """Casos de borda: o value tem que continuar sendo o nÃºmero da VisÃ£o Geral."""
+    """Casos de borda: o value tem que continuar sendo o número da Visão Geral."""
 
     def _assert_closes(self, repo, metric, key=None):
         tree, overview = _tree(repo, metric)
@@ -479,7 +479,7 @@ class AdversarialBorderTests(unittest.TestCase):
         self.assertEqual(leaf["kind"], "op")
         self.assertEqual(leaf["detail"]["origem"], "apontamentos_corte")
         self.assertTrue(any("Corte" in note for note in tree["notes"]))
-        # Sem refugo/retrabalho: taxa 0 (nÃ£o "indisponÃ­vel") e FTT 100.
+        # Sem refugo/retrabalho: taxa 0 (não "indisponível") e FTT 100.
         rate, _ = self._assert_closes(repo, "qtd.taxa_refugo")
         self.assertEqual(rate["value"], 0.0)
         ftt, overview = self._assert_closes(repo, "qtd.ftt")
@@ -532,7 +532,7 @@ class AdversarialBorderTests(unittest.TestCase):
         sector = tree["children"][0]
         resource = sector["children"][0]
         leaf = resource["children"][0]
-        self.assertEqual((sector["label"], resource["label"]), ("NÃ£o informado", "Sem recurso informado"))
+        self.assertEqual((sector["label"], resource["label"]), ("Não informado", "Sem recurso informado"))
         self.assertTrue(leaf["label"].startswith("Sem OP"))
         self.assertNotIn("op", leaf["detail"])
 
@@ -559,12 +559,12 @@ class AdversarialBorderTests(unittest.TestCase):
         self.assertIsNone(rate["value"])
         self.assertIsNone(rate["reconciliation"]["sum"])
         self.assertEqual([x["label"] for x in rate["excluded"]], ["Retrabalho"])
-        # FTT = 0 Ã© um nÃºmero vÃ¡lido (nÃ£o pode virar "indisponÃ­vel").
+        # FTT = 0 é um número válido (não pode virar "indisponível").
         ftt, overview = self._assert_closes(so_retrabalho, "qtd.ftt")
         self.assertEqual(ftt["value"], 0.0)
         self.assertIsNotNone(ftt["value"])
         self.assertEqual(ftt["value"], overview["kpis"]["ftt"]["value"])
-        # Sem nenhuma peÃ§a: os dois ficam None, com motivo, e as entradas sÃ£o zero.
+        # Sem nenhuma peça: os dois ficam None, com motivo, e as entradas são zero.
         for metric in ("qtd.taxa_refugo", "qtd.ftt"):
             tree, _ = self._assert_closes(_EventRepo([]), metric)
             self.assertIsNone(tree["value"])
@@ -625,7 +625,7 @@ class AdversarialTruncationTests(unittest.TestCase):
         tree, _ = _tree(_EventRepo(self._boas(MAX_LEAVES_PER_RESOURCE + 10)), "qtd.boa")
         context = build_explanation_context(tree, max_tokens=8000)
         self.assertIn("TRUNCATED", context)
-        self.assertIn("Valor: 210 peÃ§as", context)
+        self.assertIn("Valor: 210 peças", context)
 
     def test_max_leaves_reduzido_mantem_a_conta(self):
         service, management = _service(_EventRepo(self._boas(12)))
@@ -640,8 +640,8 @@ class AdversarialContextAndApiTests(unittest.TestCase):
         repo = _EventRepo(_events(), cutting=[_cutting_row()])
         tree, _ = _tree(repo, "qtd.taxa_refugo")
         context = build_explanation_context(tree, max_tokens=4000)
-        self.assertIn('"PeÃ§as boas": 28', context)
-        self.assertNotIn('"PeÃ§as boas": 28%', context)
+        self.assertIn('"Peças boas": 28', context)
+        self.assertNotIn('"Peças boas": 28%', context)
         self.assertNotIn('"Refugo": 2%', context)
         self.assertNotIn('"Retrabalho": 3%', context)
         self.assertIn('"Retrabalho": 3.', context)
@@ -651,12 +651,15 @@ class AdversarialContextAndApiTests(unittest.TestCase):
         tree, _ = _tree(_EventRepo(_events()), "qtd.ftt")
         context = build_explanation_context(tree, max_tokens=4000)
         self.assertIn('"Retrabalho": 3', context)
-        self.assertNotIn("3%", context)
+        # O único "%" do contexto é o do próprio FTT; as entradas ficam em peças.
+        self.assertIn("Valor: 78,3%", context)
+        self.assertEqual(context.count("%"), 1)
 
     def test_operador_nao_vaza_no_contexto_da_ia_nem_no_fallback(self):
         db = _ApiRepo()
         facade = FrontendBackendFacade(db, now_func=lambda: AGORA)
-        for metric in ("qtd.refugo", "qtd.boa"):
+        # Só o refugo tem lançamento de Maria dentro do período; o fallback cobre as boas.
+        for metric in ("qtd.refugo",):
             with self.subTest(metric):
                 gestor = build_explanation_context(
                     explain_for_user(facade, metric, _filters(), _user("gestor", management=True)),
@@ -687,7 +690,7 @@ class AdversarialContextAndApiTests(unittest.TestCase):
 
 
 class _FilterableApiRepo(_ApiRepo):
-    """Como ``_ApiRepo``, mas respeita os filtros setor/recurso (como o repositÃ³rio real)."""
+    """Como ``_ApiRepo``, mas respeita os filtros setor/recurso (como o repositório real)."""
 
     def listar_eventos_quantidade_periodo(self, inicio, fim, **kwargs):
         rows = super().listar_eventos_quantidade_periodo(inicio, fim)
