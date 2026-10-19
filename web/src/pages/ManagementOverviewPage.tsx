@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
 import { ManagementInsightDrawer } from "../components/ManagementInsightDrawer";
+import { ExplainableValue } from "../components/ExplainableValue";
 import { MetricCard } from "../components/MetricCard";
 import { MetricExplanationPanel } from "../components/MetricExplanationPanel";
 import { PageFrame } from "../components/PageFrame";
@@ -158,6 +159,9 @@ export function ManagementOverviewPage() {
           <MetricCard
             label="Produção boa"
             value={quantityText(data.production.good)}
+            valueNode={hasQuantityRecords ? (
+              <ExplainableValue metric="qtd.boa" filters={filters.filters} context={`Produção boa ${quantityText(data.production.good)}`}>{quantityText(data.production.good)}</ExplainableValue>
+            ) : undefined}
             detail={data.production.reason ?? "Peças boas; refugo e retrabalho permanecem separados."}
             availability={data.production.availability}
             trend={trend && hasQuantityRecords && !periodOpen ? quantityTrend(data.production.good, trend.previous?.production.good) : undefined}

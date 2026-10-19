@@ -1,7 +1,7 @@
-"""Explicação clicável das métricas de tempo (``GET /management/explicacao``).
+"""Explicação clicável das métricas (``GET /management/explicacao``): tempo e valor.
 
 Rota fina: filtros iguais aos de ``/management/overview`` (mesma dependência
-``analytics_filter``) e a conta inteira em ``MetricExplanationService``.
+``analytics_filter``) e a conta inteira em ``MetricExplanationService`` (tempo) ou ``ValueExplanationService`` (valor).
 """
 
 from __future__ import annotations
@@ -15,9 +15,15 @@ from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
-from backend.api.schemas.explanation import ExplanationResponse
+from backend.api.schemas.explanation import ExplanationResponse, ValueExplanationResponse
 from mes.contracts import AnalyticsFilter
 from mes.services.metric_explanation import MetricExplanationService, UnknownMetricError
+from mes.services.value_explanation import ValueExplanationService
+
+
+# Despacho por prefixo do id: ``tempo.*`` fica no serviço de tempo (que também
+# responde 422 para id desconhecido); cada família nova entra aqui.
+_VALUE_PREFIXES = ("qtd.",)
 
 
 router = APIRouter(
@@ -41,8 +47,10 @@ def redact_operator_names(tree: dict, level: str) -> dict:
     def blank(nodes: list[dict]) -> None:
         for node in nodes:
             detail = node.get("detail")
-            if detail is not None and "who" in detail:
-                detail["who"] = None
+            if detail is not None:
+                for key in ("who", "operador"):
+                    if key in detail:
+                        detail[key] = None
             blank(node.get("children") or [])
 
     blank(tree.get("children") or [])
@@ -55,15 +63,21 @@ def explain_for_user(facade, metric: str, filters: AnalyticsFilter, user: Sessio
     Compartilhado com o chat da IA (``/ai/.../messages`` com ``explanation``):
     uma única fonte da árvore, nunca aceita do cliente.
     """
-    service = MetricExplanationService(facade.management, facade.db)
+    metric = metric.strip()
+    service_class = (
+        ValueExplanationService
+        if metric.startswith(_VALUE_PREFIXES)
+        else MetricExplanationService
+    )
+    service = service_class(facade.management, facade.db)
     try:
-        tree = service.explain(metric.strip(), filters)
+        tree = service.explain(metric, filters)
     except UnknownMetricError as exc:
         raise AppError("unknown_metric", str(exc), status_code=422) from exc
     return redact_operator_names(tree.to_dict(), user.role)
 
 
-@router.get("/explicacao", response_model=ExplanationResponse)
+@router.get("/explicacao", response_model=ExplanationResponse | ValueExplanationResponse)
 def explain_metric(
     metric: str = Query(min_length=1, max_length=64),
     filters: AnalyticsFilter = Depends(analytics_filter),

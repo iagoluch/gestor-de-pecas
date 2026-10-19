@@ -1359,6 +1359,28 @@ class ManagementService:
         )
         return True, list(rows or [])
 
+    def quantity_sources(self, filters: AnalyticsFilter) -> dict:
+        """Linhas de quantidade que ``get_overview`` soma (insumo da explicação de valor).
+
+        Mesma leitura do overview: eventos de quantidade do período e, só quando
+        a fonte de eventos não existe, os apontamentos que tocam o período
+        (fallback). A produção do Corte vem à parte, como no overview.
+        """
+
+        available, events = self._load_quantity_events(filters)
+        facts = []
+        if not available:
+            facts = [
+                row for row in self._load_operational_facts(filters)
+                if self._fact_window(row, filters) is not None
+            ]
+        return {
+            "available": available,
+            "events": events,
+            "facts": facts,
+            "cutting": self.get_cutting_production(filters),
+        }
+
     def _prefetch_memo(self, key, compute):
         """Leituras que não dependem do sub-período são feitas uma vez por janela."""
 

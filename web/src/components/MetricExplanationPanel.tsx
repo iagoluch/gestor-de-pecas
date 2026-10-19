@@ -1,11 +1,13 @@
-import { useId, useRef, useState } from "react";
+import { useState } from "react";
 import { ApiError } from "../api/client";
-import { useDialogFocus } from "../hooks/useDialogFocus";
 import { useMetricExplanation } from "../hooks/useMetricExplanation";
 import type { ExplanationNode, ExplanationTree, OverviewFilters } from "../types/explanation";
+import { isValueExplanation } from "../types/valueExplanation";
 import { formatHours } from "../utils/format";
 import { LoadingState } from "./DataState";
+import { clockTime, ExplanationDrawer, plural } from "./ExplanationDrawer";
 import { MetricExplanationChat } from "./MetricExplanationChat";
+import { ValueExplanationBody } from "./ValueExplanationPanel";
 import "../styles/metric-explanation.css";
 
 const SIBLING_COLORS = ["var(--warning)", "var(--teal)", "var(--purple)", "var(--orange)", "var(--accent)"];
@@ -13,19 +15,6 @@ const SIBLING_COLORS = ["var(--warning)", "var(--teal)", "var(--purple)", "var(-
 function errorMessage(error: ApiError) {
   if (error.status === 403 || error.code === "management_access_denied") return "Você não tem acesso a esta explicação.";
   return "Não foi possível carregar a explicação agora.";
-}
-
-/** Hora do cálculo (HH:MM). O backend manda horário local sem fuso; com fuso, converte. */
-function clockTime(iso: string) {
-  const naive = /T(\d{2}):(\d{2})/.exec(iso);
-  if (naive && !/(Z|[+-]\d{2}:?\d{2})$/i.test(iso)) return `${naive[1]}:${naive[2]}`;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return naive ? `${naive[1]}:${naive[2]}` : iso;
-  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function plural(count: number, one: string, many: string) {
-  return `${count} ${count === 1 ? one : many}`;
 }
 
 function hasTruncated(nodes: ExplanationNode[]): boolean {
@@ -189,49 +178,34 @@ function Explanation({ tree }: { tree: ExplanationTree }) {
 /**
  * Painel lateral "de onde vem este número": desliza por cima da tela (sem rota
  * nem aba nova) e abre setor, recurso e trecho por dentro. Só mostra o que o
- * backend calculou; nada é recalculado aqui.
+ * backend calculou; nada é recalculado aqui. Aceita a forma de tempo e a de
+ * valor (`kind: "value"`, peças etc.).
  */
 export function MetricExplanationPanel({ metric, filters, onClose }: {
   metric: string;
   filters: OverviewFilters;
   onClose: () => void;
 }) {
-  const panelRef = useRef<HTMLElement>(null);
-  const titleId = useId();
-  useDialogFocus(panelRef, true, onClose);
   const query = useMetricExplanation(metric, filters);
-  const tree = query.data;
+  const response = query.data;
   return (
-    <div
-      className="insight-drawer-backdrop"
-      role="presentation"
-      data-testid="metric-explanation-panel"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <aside ref={panelRef} className="insight-drawer metric-explanation" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <header>
-          <div>
-            <small>De onde vem este número</small>
-            <h2 id={titleId}>{tree?.label ?? "Explicação"}</h2>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Fechar explicação">×</button>
-        </header>
-        <div className="insight-drawer__body metric-explanation__body">
-          {query.loading ? <LoadingState label="Carregando explicação…" /> : null}
-          {!query.loading && query.error && !tree ? (
-            <div className="state-box state-box--error" role="alert">
-              <strong>{errorMessage(query.error)}</strong>
-              {query.error.status === 403 ? null : <button type="button" onClick={query.reload}>Tentar novamente</button>}
-            </div>
-          ) : null}
-          {tree ? <Explanation tree={tree} /> : null}
-        </div>
+    <ExplanationDrawer
+      title={response?.label ?? "Explicação"}
+      onClose={onClose}
+      footer={(
         <div className="metric-explanation__chat" data-testid="explanation-chat-slot">
-          {tree ? <MetricExplanationChat key={`${metric}|${JSON.stringify(filters)}`} metric={metric} label={tree.label} filters={filters} /> : null}
+          {response ? <MetricExplanationChat key={`${metric}|${JSON.stringify(filters)}`} metric={metric} label={response.label} filters={filters} /> : null}
         </div>
-      </aside>
-    </div>
+      )}
+    >
+      {query.loading ? <LoadingState label="Carregando explicação…" /> : null}
+      {!query.loading && query.error && !response ? (
+        <div className="state-box state-box--error" role="alert">
+          <strong>{errorMessage(query.error)}</strong>
+          {query.error.status === 403 ? null : <button type="button" onClick={query.reload}>Tentar novamente</button>}
+        </div>
+      ) : null}
+      {response ? (isValueExplanation(response) ? <ValueExplanationBody explanation={response} /> : <Explanation tree={response} />) : null}
+    </ExplanationDrawer>
   );
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -35,4 +35,32 @@ class ExplanationResponse(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class ValueNode(BaseModel):
+    kind: str
+    label: str
+    value: float | None = None
+    children: list["ValueNode"] = Field(default_factory=list)
+    detail: dict[str, Any] | None = None
+    truncated: bool = False
+
+
+class ValueExplanationResponse(BaseModel):
+    """Explicação de um número que não é tempo (``kind: "value"``)."""
+
+    kind: Literal["value"] = "value"
+    metric: str
+    label: str
+    unit: str
+    value: float | None = None
+    reason: str
+    rule: str
+    children: list[ValueNode]
+    excluded: list[dict[str, Any]]
+    reconciliation: dict[str, Any]
+    calculated_at: str
+    truncated: bool
+    notes: list[str] = Field(default_factory=list)
+
+
 ExplanationNode.model_rebuild()
+ValueNode.model_rebuild()

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
+import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { MetricExplanationPanel } from "../../components/MetricExplanationPanel";
 import { PageFrame } from "../../components/PageFrame";
@@ -12,6 +13,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
+import { buildSumExplanation, ROW_LIMIT, sumQuantities, type ExplanationScope, type SumMetric } from "../production/productionExplanations";
 import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
 import { displayName, formatDateTime, formatDuration, formatHours, formatNumber, formatPercent, formatResourceName, humanize } from "../../utils/format";
@@ -181,27 +183,27 @@ export function OperationsResourcesPage() {
 
 export function OperationsOrdersPage() {
   const filters = useManagementFilters();
-  const query = useApiQuery<PagedOrders>(`/api/v1/operations/orders?${filters.dailyQuery}&page=1&page_size=200`);
+  const query = useApiQuery<PagedOrders>(`/api/v1/operations/orders?${filters.dailyQuery}&page=1&page_size=${ROW_LIMIT}`);
   const title = "Consulta Operacional — OPs em andamento";
   const subtitle = "Execuções do dia corrente, mantendo quantidade boa, refugo e retrabalho separados.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
   if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
   // Somatório de linhas já entregues pelo backend: apresentação, não regra.
-  const totals = rows.reduce(
-    (acc, row) => ({
-      good: acc.good + Number(row.quantidade_boa ?? 0),
-      scrap: acc.scrap + Number(row.refugo ?? 0),
-      stopped: acc.stopped + (String(row.status ?? "") === "Parada" ? 1 : 0),
-    }),
-    { good: 0, scrap: 0, stopped: 0 },
-  );
+  // A explicação clicável usa as mesmas linhas e a mesma conta (`sumQuantities`).
+  const scope: ExplanationScope = { rows, filterTotal: query.data?.page.total };
+  const quantities = sumQuantities(rows);
+  const totals = { good: quantities.good, scrap: quantities.scrap, stopped: rows.reduce((acc, row) => acc + (String(row.status ?? "") === "Parada" ? 1 : 0), 0) };
+  const explained = (metric: SumMetric, text: string) => {
+    const explanation = buildSumExplanation(metric, scope);
+    return <ExplainableValue local={explanation} context={`${explanation.label} ${text}`}>{text}</ExplainableValue>;
+  };
   return (
     <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle} period={false}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="OPs em andamento" value={formatNumber(query.data?.page.total ?? 0)} />
-        <MetricCard label="Peças boas hoje" value={formatNumber(totals.good)} detail="Somente peças boas" accent="success" />
-        <MetricCard label="Refugo" value={formatNumber(totals.scrap)} detail={totals.good ? `${formatPercent(totals.scrap / Math.max(1, totals.good + totals.scrap) * 100)} da produção` : undefined} accent="danger" />
+        <MetricCard label="Peças boas hoje" value={formatNumber(totals.good)} valueNode={explained("good", formatNumber(totals.good))} detail="Somente peças boas" accent="success" />
+        <MetricCard label="Refugo" value={formatNumber(totals.scrap)} valueNode={explained("scrap", formatNumber(totals.scrap))} detail={totals.good ? `${formatPercent(totals.scrap / Math.max(1, totals.good + totals.scrap) * 100)} da produção` : undefined} accent="danger" />
         <MetricCard label="OPs paradas" value={formatNumber(totals.stopped)} detail={totals.stopped ? "Verifique o motivo na tabela" : "Nenhuma OP parada"} accent={totals.stopped ? "warning" : "success"} />
       </div>
       <OrdersTable rows={rows} />

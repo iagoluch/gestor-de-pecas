@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
+import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
 import { SearchInput } from "../../components/SearchInput";
@@ -14,6 +15,7 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { PageMeta, PagedOrders, ProductionResponse } from "../../types/management";
 import { displayName, formatDateTime, formatNumber, formatPercent } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
+import { buildAttendanceExplanation, buildSumExplanation, ROW_LIMIT, sumQuantities, type ExplanationScope, type SumMetric } from "./productionExplanations";
 
 interface PlanActualRow {
   apontamento_id?: number | null;
@@ -51,35 +53,27 @@ export function ProductionOrdersPage() {
   const filters = useManagementFilters();
   const [search, setSearch] = useState("");
   const deferredSearch = useDebouncedValue(search);
-  const query = useApiQuery<PagedOrders>(`/api/v1/orders?${filters.query}&page=1&page_size=200${deferredSearch ? `&search=${encodeURIComponent(deferredSearch)}` : ""}`);
+  const query = useApiQuery<PagedOrders>(`/api/v1/orders?${filters.query}&page=1&page_size=${ROW_LIMIT}${deferredSearch ? `&search=${encodeURIComponent(deferredSearch)}` : ""}`);
   const title = "Produção — Ordens de Produção";
   const subtitle = "Plano corporativo em leitura e execução real do Gestor, sem permitir edição do planejamento.";
   if (query.loading && !query.data) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar OP, produto ou recurso" />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   // Somatório das linhas já entregues pelo backend: apresentação, não regra.
-  const orderTotals = (data?.items ?? []).reduce(
-    (acc, row) => {
-      const planned = Number(row.quantidade_planejada ?? 0);
-      const good = Number(row.quantidade_boa ?? 0);
-      const scrap = Number(row.refugo ?? 0);
-      return {
-        planned: acc.planned + planned,
-        good: acc.good + good,
-        scrap: acc.scrap + scrap,
-        attended: acc.attended + Number(row.quantidade_atendida ?? good + scrap),
-        balance: acc.balance + Number(row.saldo_quantidade ?? Math.max(0, planned - good - scrap)),
-      };
-    },
-    { planned: 0, good: 0, scrap: 0, attended: 0, balance: 0 },
-  );
+  // A explicação clicável usa as mesmas linhas e a mesma conta (`sumQuantities`).
+  const scope: ExplanationScope = { rows: data?.items ?? [], filterTotal: data?.page.total };
+  const orderTotals = sumQuantities(scope.rows);
+  const explained = (metric: SumMetric, text: string) => {
+    const explanation = buildSumExplanation(metric, scope);
+    return <ExplainableValue local={explanation} context={`${explanation.label} ${text}`}>{text}</ExplainableValue>;
+  };
   return (
     <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar OP, produto ou recurso" />}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Ordens no filtro" value={formatNumber(data?.page.total ?? 0)} />
-        <MetricCard label="Quantidade planejada" value={formatNumber(orderTotals.planned)} detail="Somatório das OPs do filtro" accent="primary" />
-        <MetricCard label="Peças boas produzidas" value={formatNumber(orderTotals.good)} detail={orderTotals.planned ? `${formatPercent(orderTotals.good / orderTotals.planned * 100)} do planejado (só boas)` : undefined} accent="success" />
-        <MetricCard label="Saldo a produzir" value={formatNumber(orderTotals.balance)} detail={`${formatNumber(orderTotals.attended)} atendidas (boas + refugo); retrabalho não reduz saldo`} accent={orderTotals.balance > 0 ? "warning" : "success"} />
+        <MetricCard label="Quantidade planejada" value={formatNumber(orderTotals.planned)} valueNode={explained("planned", formatNumber(orderTotals.planned))} detail="Somatório das OPs do filtro" accent="primary" />
+        <MetricCard label="Peças boas produzidas" value={formatNumber(orderTotals.good)} valueNode={explained("good", formatNumber(orderTotals.good))} detail={orderTotals.planned ? `${formatPercent(orderTotals.good / orderTotals.planned * 100)} do planejado (só boas)` : undefined} accent="success" />
+        <MetricCard label="Saldo a produzir" value={formatNumber(orderTotals.balance)} valueNode={explained("balance", formatNumber(orderTotals.balance))} detail={`${formatNumber(orderTotals.attended)} atendidas (boas + refugo); retrabalho não reduz saldo`} accent={orderTotals.balance > 0 ? "warning" : "success"} />
       </div>
       <SectionCard title="Ordens de Produção" className="content-section section-card--table">
         <DataTable
@@ -122,17 +116,27 @@ export function ProductionCompletedPage() {
   const hasQuantityRecords = productionAvailability !== "sem_registros";
   const quantityText = (value: number | null | undefined) => hasQuantityRecords ? formatNumber(value) : humanizeSystemState("sem_registros");
   const lossBase = Number(data?.production.good ?? 0) + Number(data?.production.scrap ?? 0);
+  // Números do período: a explicação vem do servidor (mesmos filtros da tela).
+  const serverExplained = (metric: string, label: string, text: string, enabled = hasQuantityRecords) => enabled
+    ? <ExplainableValue metric={metric} filters={filters.filters} context={`${label} ${text}`}>{text}</ExplainableValue>
+    : undefined;
+  const goodText = quantityText(data?.production.good);
+  const scrapText = quantityText(data?.production.scrap);
+  const reworkText = quantityText(data?.production.rework);
+  const showRate = hasQuantityRecords && lossBase > 0;
+  const rateText = showRate ? formatPercent((data?.production.scrap ?? 0) / lossBase * 100) : humanizeSystemState("sem_registros");
   return (
     <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Produção boa" value={quantityText(data?.production.good)} detail={data?.production.reason ?? undefined} availability={productionAvailability} accent="success" />
-        <MetricCard label="Refugo" value={quantityText(data?.production.scrap)} availability={productionAvailability} accent="danger" />
-        <MetricCard label="Retrabalho" value={quantityText(data?.production.rework)} availability={productionAvailability} accent="warning" />
+        <MetricCard label="Produção boa" value={goodText} valueNode={serverExplained("qtd.boa", "Produção boa", goodText)} detail={data?.production.reason ?? undefined} availability={productionAvailability} accent="success" />
+        <MetricCard label="Refugo" value={scrapText} valueNode={serverExplained("qtd.refugo", "Refugo", scrapText)} availability={productionAvailability} accent="danger" />
+        <MetricCard label="Retrabalho" value={reworkText} valueNode={serverExplained("qtd.retrabalho", "Retrabalho", reworkText)} availability={productionAvailability} accent="warning" />
         <MetricCard
           label="Taxa de refugo"
-          value={hasQuantityRecords && lossBase > 0 ? formatPercent((data?.production.scrap ?? 0) / lossBase * 100) : humanizeSystemState("sem_registros")}
-          detail={hasQuantityRecords && lossBase > 0 ? `${formatNumber(data?.production.resources)} recursos no período` : undefined}
-          availability={hasQuantityRecords && lossBase > 0 ? "disponivel" : "sem_registros"}
+          value={rateText}
+          valueNode={serverExplained("qtd.taxa_refugo", "Taxa de refugo", rateText, showRate)}
+          detail={showRate ? `${formatNumber(data?.production.resources)} recursos no período` : undefined}
+          availability={showRate ? "disponivel" : "sem_registros"}
           accent="teal"
         />
       </div>
@@ -159,30 +163,27 @@ export function ProductionCompletedPage() {
 
 export function ProductionPlanActualPage() {
   const filters = useManagementFilters();
-  const query = useApiQuery<PlanActualResponse>(`/api/v1/orders/planned-vs-actual?${filters.query}&page=1&page_size=200`);
+  const query = useApiQuery<PlanActualResponse>(`/api/v1/orders/planned-vs-actual?${filters.query}&page=1&page_size=${ROW_LIMIT}`);
   const title = "Produção — Planejado × Realizado";
   const subtitle = "Comparação somente leitura entre o plano corporativo e a execução registrada.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
-  const comparison = rows.reduce(
-    (acc, row) => ({
-      planned: acc.planned + Number(row.quantidade_planejada ?? 0),
-      good: acc.good + Number(row.quantidade_boa ?? 0),
-      scrap: acc.scrap + Number(row.refugo ?? 0),
-      rework: acc.rework + Number(row.retrabalho ?? 0),
-      attended: acc.attended + Number(row.quantidade_atendida ?? Number(row.quantidade_boa ?? 0) + Number(row.refugo ?? 0)),
-      balance: acc.balance + Number(row.saldo_quantidade ?? Math.max(0, Number(row.quantidade_planejada ?? 0) - Number(row.quantidade_boa ?? 0) - Number(row.refugo ?? 0))),
-    }),
-    { planned: 0, good: 0, scrap: 0, rework: 0, attended: 0, balance: 0 },
-  );
+  const scope: ExplanationScope = { rows, filterTotal: query.data?.page.total };
+  const comparison = sumQuantities(rows);
+  const explained = (metric: SumMetric, text: string) => {
+    const explanation = buildSumExplanation(metric, scope);
+    return <ExplainableValue local={explanation} context={`${explanation.label} ${text}`}>{text}</ExplainableValue>;
+  };
+  const attendanceText = comparison.planned ? formatPercent(comparison.attended / comparison.planned * 100) : "Sem plano no filtro";
+  const lossesText = formatNumber(comparison.scrap + comparison.rework);
   return (
     <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Quantidade planejada" value={formatNumber(comparison.planned)} detail={`${formatNumber(query.data?.page.total ?? 0)} comparações no filtro`} accent="primary" />
-        <MetricCard label="Realizado (boas)" value={formatNumber(comparison.good)} accent="success" />
-        <MetricCard label="Atendimento" value={comparison.planned ? formatPercent(comparison.attended / comparison.planned * 100) : "Sem plano no filtro"} detail={`${formatNumber(comparison.attended)} boas + refugo · saldo ${formatNumber(comparison.balance)}`} availability={comparison.planned ? "disponivel" : "dados_insuficientes"} accent="teal" />
-        <MetricCard label="Perdas no período" value={formatNumber(comparison.scrap + comparison.rework)} detail={`${formatNumber(comparison.scrap)} refugo · ${formatNumber(comparison.rework)} retrabalho`} accent={comparison.scrap + comparison.rework > 0 ? "danger" : "success"} />
+        <MetricCard label="Quantidade planejada" value={formatNumber(comparison.planned)} valueNode={explained("planned", formatNumber(comparison.planned))} detail={`${formatNumber(query.data?.page.total ?? 0)} comparações no filtro`} accent="primary" />
+        <MetricCard label="Realizado (boas)" value={formatNumber(comparison.good)} valueNode={explained("good", formatNumber(comparison.good))} accent="success" />
+        <MetricCard label="Atendimento" value={attendanceText} valueNode={comparison.planned ? <ExplainableValue local={buildAttendanceExplanation(scope)} context={`Atendimento ${attendanceText}`}>{attendanceText}</ExplainableValue> : undefined} detail={`${formatNumber(comparison.attended)} boas + refugo · saldo ${formatNumber(comparison.balance)}`} availability={comparison.planned ? "disponivel" : "dados_insuficientes"} accent="teal" />
+        <MetricCard label="Perdas no período" value={lossesText} valueNode={explained("losses", lossesText)} detail={`${formatNumber(comparison.scrap)} refugo · ${formatNumber(comparison.rework)} retrabalho`} accent={comparison.scrap + comparison.rework > 0 ? "danger" : "success"} />
       </div>
       <SectionCard title="Plano × Real por OP/operação" className="content-section section-card--table">
         <DataTable
