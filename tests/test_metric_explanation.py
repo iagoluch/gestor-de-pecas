@@ -967,13 +967,17 @@ class TimeCompositionFacadeTests(unittest.TestCase):
         self.assertEqual(hours["no_demand_seconds"], 5 * H)
         self.assertEqual(hours["resource_count"], 1)
 
-    def test_time_composition_without_calendar_has_no_average(self):
+    def test_time_composition_without_calendar_averages_over_summed_resources(self):
         composition, _ = self._composition(_full_day_states(), {})
 
-        self.assertEqual(composition["resource_count"], 0)
-        self.assertTrue(composition["average_note"])
+        count = composition["resource_count"]
+        self.assertGreater(count, 0)
+        self.assertIn("Nenhum recurso tem turno cadastrado", composition["average_note"])
         for item in composition["items"]:
-            self.assertIsNone(item["average_seconds"])
+            if item["source_field"] == "out_of_shift_seconds":
+                self.assertIsNone(item["average_seconds"])
+            else:
+                self.assertAlmostEqual(item["average_seconds"], item["seconds"] / count)
 
 
     def test_operations_time_uses_overview_resource_count(self):

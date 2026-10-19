@@ -642,6 +642,9 @@ class ManagementService:
                 # calendário no período (um recurso conta uma vez, mesmo em
                 # vários dias). ``day_count`` informa a extensão do período.
                 "resource_count": len(consolidation["calendar_resources"]),
+                # Recursos que entram na soma (fora do turno não conta). Aditivo:
+                # divisor da média quando nenhum recurso tem turno cadastrado.
+                "summed_resource_count": self._summed_resources(physical),
                 "day_count": consolidation["days"],
                 # Mesma conta, só com recursos que têm turno no período. Aditivo:
                 # só o cartão "Composição do tempo" lê (decisão de 19/10/2026).
@@ -912,6 +915,21 @@ class ManagementService:
             ]
         )
         return public
+
+    @staticmethod
+    def _summed_resources(physical) -> int:
+        """Recursos com tempo somado no período, sem contar o fora do turno."""
+
+        return sum(
+            1
+            for resource, totals in physical["by_resource"].items()
+            if str(resource or "").strip().casefold() not in ("", "não informado")
+            and any(
+                seconds > 0
+                for category, seconds in totals.items()
+                if category != EventCategory.OUT_OF_SHIFT
+            )
+        )
 
     @staticmethod
     def _calendar_scope(

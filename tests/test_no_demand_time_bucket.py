@@ -177,6 +177,16 @@ class NoDemandRollupTests(unittest.TestCase):
         self.assertAlmostEqual(itens["Fora do turno"], 8 * 3600)
         self.assertNotIn("Fila / espera", itens)
 
+    def test_composicao_sem_turno_cadastrado_ainda_mostra_media(self):
+        facade = FrontendBackendFacade(_ShiftReturnRepo(), now_func=lambda: datetime(2026, 9, 17, 23, 59))
+        composicao = facade.inicio(self.filters, include_insights=False)["time_composition"]
+        itens = {item["label"]: item for item in composicao["items"]}
+
+        self.assertEqual(composicao["resource_count"], 1)
+        self.assertAlmostEqual(itens["Recurso sem demanda"]["average_seconds"], 8.5 * 3600)
+        self.assertIsNone(itens["Fora do turno"]["average_seconds"])
+        self.assertIn("Nenhum recurso tem turno cadastrado", composicao["average_note"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -263,7 +263,7 @@ class FrontendBackendFacade:
         }
         # Cartão só conta recursos com turno no período (decisão de 19/10/2026);
         # os demais números da tela seguem com todos os recursos. Sem calendário
-        # nenhum, vale o total inteiro (sem média).
+        # nenhum, vale o total inteiro, com média sobre os recursos somados.
         calendar_scope = hours.get("calendar_scope")
         scope_note = None
         if calendar_scope:
@@ -278,6 +278,12 @@ class FrontendBackendFacade:
             if excluded:
                 plural = "recurso sem turno cadastrado" if excluded == 1 else "recursos sem turno cadastrado"
                 scope_note = f"{excluded} {plural} ficam fora desta composição."
+        else:
+            # Nenhum recurso com turno cadastrado: a média ainda aparece, dividida
+            # pelos recursos que entraram na soma, para o total não parecer um relógio.
+            resource_count = int(hours.get("summed_resource_count") or 0)
+            if resource_count:
+                scope_note = "Nenhum recurso tem turno cadastrado: média sobre os recursos somados."
         # (rótulo, campo de hours, id da métrica explicável em MetricExplanationService)
         composition = (
             ("Produção", "production_seconds", "tempo.producao"),
