@@ -282,7 +282,9 @@ describe("Visão Geral: composição do tempo clicável", () => {
     expect(row).toHaveTextContent("média");
     // Mesmo formato do painel (h/m), não decimal: 36000 s = "10h", não "10 h".
     expect(row).toHaveTextContent(/10h/);
-    expect(screen.getByText("12h")).toBeInTheDocument();
+    // Topo do cartão: média por recurso (43200 s ÷ 4) em destaque; a soma anda 4x mais rápido que o relógio.
+    expect(screen.getByText("3h")).toBeInTheDocument();
+    expect(screen.getByText(/total 12h somado em 4 recursos/)).toBeInTheDocument();
     fireEvent.click(row);
 
     const dialog = await screen.findByRole("dialog", { name: /Recurso sem demanda/ });

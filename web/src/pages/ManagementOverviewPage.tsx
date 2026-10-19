@@ -264,8 +264,18 @@ export function ManagementOverviewPage() {
             ) : (
               <div className="time-composition">
                 <div className="time-composition__total">
-                  <strong>{formatHours(composition.total_seconds)}</strong>
-                  <span>{(composition.resource_count ?? 0) > 1 ? `somado em ${composition.resource_count} recursos` : "no período"}</span>
+                  {(composition.resource_count ?? 0) > 1 ? (
+                    <>
+                      {/* A soma de N recursos anda N vezes mais rápido que o relógio; em destaque fica a média, que anda no ritmo do relógio. */}
+                      <strong>{formatHours(composition.total_seconds / (composition.resource_count ?? 1))}</strong>
+                      <span>média por recurso · total {formatHours(composition.total_seconds)} somado em {composition.resource_count} recursos</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{formatHours(composition.total_seconds)}</strong>
+                      <span>no período</span>
+                    </>
+                  )}
                 </div>
                 {composition.average_note ? <p className="time-composition__note">{composition.average_note}</p> : null}
                 <StackBar
