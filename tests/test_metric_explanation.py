@@ -362,8 +362,9 @@ class LegacyReadingTests(unittest.TestCase):
         unplanned = self.explainer.explain("tempo.parada_nao_planejada", self.filters)
 
         self.assertEqual(hours["downtime_seconds"], 1 * H)
-        self.assertEqual(hours["unplanned_downtime_seconds"], 0)  # por classe
-        self.assertEqual(unplanned.total_seconds, 1 * H)
+        # Decisão 19/10/2026: a conta única é parada total − planejada.
+        self.assertEqual(hours["unplanned_downtime_seconds"], 1 * H)
+        self.assertEqual(unplanned.total_seconds, hours["unplanned_downtime_seconds"])
         self.assertEqual(
             planned.total_seconds + unplanned.total_seconds, hours["downtime_seconds"]
         )

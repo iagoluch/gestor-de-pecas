@@ -952,6 +952,7 @@ class FrontendBackendFacade:
             "downtime_seconds": hours.get("downtime_seconds"),
             "planned_downtime_seconds": hours.get("planned_downtime_seconds"),
             "unplanned_downtime_seconds": hours.get("unplanned_downtime_seconds"),
+            "conflicting_state_seconds": hours.get("conflicting_state_seconds"),
             "setup_seconds": hours.get("setup_seconds"),
             "rework_seconds": hours.get("rework_seconds"),
             "activity_without_op_seconds": hours.get("activity_without_op_seconds"),

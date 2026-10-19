@@ -295,8 +295,10 @@ class ManagementService:
         planned_downtime_seconds = float(
             downtime_by_classification.get(StopClassification.PLANNED, 0.0)
         )
-        unplanned_downtime_seconds = float(
-            downtime_by_classification.get(StopClassification.UNPLANNED, 0.0)
+        # Conta única do cartão: parada total menos a planejada. Inclui a parada
+        # ainda sem classificação, que a Gestão precisa ver como não planejada.
+        unplanned_downtime_seconds = max(
+            0.0, float(totals[EventCategory.DOWNTIME]) - planned_downtime_seconds
         )
         resource_planned_downtime = {
             resource: float(

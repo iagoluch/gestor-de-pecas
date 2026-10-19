@@ -101,3 +101,11 @@ Estado após a Fase 1 (16/10/2026):
 - **Aberto (Fase 3):** o custo da Diretoria usa a taxa de hora atual (suposição); se não houver vigência, a explicação de custo de dias passados usaria a taxa de hoje.
 - **Novo, aguardando o Iago:** (a) a média usa só recursos com calendário, mas o total inclui o tempo de recursos sem calendário; a árvore avisa nas notas; (b) a planilha executiva ganhou uma linha "A esclarecer" quando > 0; (c) "Parada não planejada" tem duas contas (cartão/painel = total − planejada; `_perdas_canonicas` = só a classificação não planejada), que diferem só em paradas sem classificação; (d) a linha "Desconhecido" em Operações > Tempo não é clicável e pode divergir de "A esclarecer"; (e) o nome do operador segue para o provedor externo de IA (consistente com o desenho, só registrar).
 - **Fase 2:** Operações > Tempo mistura duas fontes (`physical_inputs` e `physical_consolidation`); unificar. Extrair `_fit_level`/`_truncate`/`_count` de `metric_explanation.py` para módulo próprio.
+
+## 9. Decisões de 19/10/2026 (respostas do Iago às cinco perguntas da fase 1)
+
+- **Parada não planejada = parada total − planejada**, em todo lugar (cartão, composição, explicação, planilha). Aplicado em `ManagementService` (fonte única). Inclui a parada ainda sem classificação.
+- **Linha "A esclarecer"** (`conflicting_state_seconds`) na planilha executiva de perdas, só quando maior que zero. Aplicado em `_perdas_canonicas` e `build_perdas`.
+- **"Desconhecido" em Operações > Tempo continua sem clique.** Nenhuma mudança.
+- **Nome do operador para o provedor de IA externo** (painel só da gestão): aceito pelo Iago. Registrado aqui como decisão consciente.
+- **Média e total de horas só com recursos que têm turno (opção 1A): NÃO aplicada.** Filtrar na consolidação zera todo o tempo dos recursos sem calendário cadastrado, o que também zera OEE, indicadores por recurso e a ficha de custo da Diretoria. O REAL ainda não tem calendários. Hoje a explicação segue com o aviso "recursos sem turno entram no total mas não na média". Aguardando o Iago escolher: (a) manter como está; (b) restringir só a explicação e o cartão de composição; (c) ampliar o divisor para todos os recursos com tempo; (d) cadastrar os calendários no REAL e só então aplicar.

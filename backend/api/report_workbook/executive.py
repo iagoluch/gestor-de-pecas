@@ -923,6 +923,12 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
         Card("Retrabalho", perdas.get("rework_seconds"), "duration_card", "tempo em retrabalho", "warn"),
         Card("Refugo", totais_qualidade.get("refugo"), "int", "peças refugadas", "bad"),
         Card("Peças retrabalhadas", totais_qualidade.get("retrabalho"), "int", "peças em retrabalho", "warn"),
+        # Estados que se contradizem no mesmo recurso: só aparece quando existe.
+        *(
+            [Card("A esclarecer", perdas.get("conflicting_state_seconds"), "duration_card", "estados em conflito", "warn")]
+            if (perdas.get("conflicting_state_seconds") or 0) > 0
+            else []
+        ),
     ])
 
     perdas_oee = _dict(perdas.get("oee_losses"))
