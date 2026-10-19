@@ -460,9 +460,16 @@ function SegmentPage() {
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       {toggle}
-      <div className="metric-grid metric-grid--four">
-        <MetricCard label={`Tempo total de ${isStop ? "parada" : "setup"}`} value={formatHours(data?.total_seconds)} detail={formatAveragePerResource(data?.total_seconds, data?.by_resource?.length ?? 0)} accent={isStop ? "danger" : "teal"} />
-        <MetricCard label="Ocorrências" value={formatNumber(data?.count)} detail={data?.count ? `Média de ${formatDuration((data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
+      <div className={`metric-grid metric-grid--${isStop ? "five" : "four"}`}>
+        {isStop ? (
+          <>
+            <MetricCard label="Parada não planejada" value={formatHours(data?.unplanned_downtime_seconds)} detail={formatAveragePerResource(data?.unplanned_downtime_seconds, data?.resource_count ?? 0)} accent="danger" />
+            <MetricCard label="Parada planejada" value={formatHours(data?.planned_downtime_seconds)} detail={formatAveragePerResource(data?.planned_downtime_seconds, data?.resource_count ?? 0)} accent="warning" />
+          </>
+        ) : (
+          <MetricCard label="Tempo total de setup" value={formatHours(data?.total_seconds)} detail={formatAveragePerResource(data?.total_seconds, data?.by_resource?.length ?? 0)} accent="teal" />
+        )}
+        <MetricCard label="Ocorrências" value={formatNumber(data?.count)} detail={data?.count ? `Média de ${formatDuration((data?.listed_seconds ?? data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
         <MetricCard label={isStop ? "Recurso mais parado" : "Recurso com mais setup"} value={topResource ? displayName(topResource.label) : "Não determinado"} detail={topResource ? formatHours(topResource.value) : undefined} availability={topResource ? "disponivel" : "sem_registros"} accent="warning" />
         <MetricCard
           label={isStop ? "Maior parada" : "Setup mais longo"}

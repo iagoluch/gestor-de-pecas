@@ -465,6 +465,10 @@ describe("Análises > Paradas: diferença para o consolidado", () => {
     periodo: {},
     count: 2,
     total_seconds: 10800,
+    planned_downtime_seconds: 1800,
+    unplanned_downtime_seconds: 9000,
+    listed_seconds: 14400,
+    resource_count: 3,
     raw_attributed_seconds: 14400,
     overlap_removed_seconds: 3600,
     items: [stop(1, "DOBRA1", 7200), stop(2, "DOBRA1", 7200)],
@@ -479,13 +483,20 @@ describe("Análises > Paradas: diferença para o consolidado", () => {
     render(<MemoryRouter><FilterProvider><AnalyticsDowntimesPage /></FilterProvider></MemoryRouter>);
     const line = await screen.findByText(/diferença:/i);
     expect(line).toHaveTextContent("diferença: +1h, motivo: eventos sobrepostos contados uma vez");
-    expect(screen.getByText("Tempo total de parada").closest("article, section, div.metric-card, div")?.parentElement).toHaveTextContent("3h");
+    // Parada sempre em duas linhas; o total consolidado vem do backend (planejada + não planejada).
+    expect(screen.getByText("Parada não planejada").closest(".metric-card, article, div")?.parentElement).toHaveTextContent("2h 30m");
+    expect(screen.getByText("Parada planejada").closest(".metric-card, article, div")?.parentElement).toHaveTextContent("30m");
+    expect(screen.queryByText("Tempo total de parada")).not.toBeInTheDocument();
+    // Média por recurso = consolidado ÷ recursos com calendário; por ocorrência = soma da lista ÷ ocorrências.
+    expect(screen.getByText("Média 50m por recurso (3 recursos)")).toBeInTheDocument();
+    expect(screen.getByText("Média 10m por recurso (3 recursos)")).toBeInTheDocument();
+    expect(screen.getByText("Média de 02:00:00 por ocorrência")).toBeInTheDocument();
   });
 
   it("não mostra a linha quando não há diferença", async () => {
     vi.stubGlobal("fetch", jsonOnce(payload(null)));
     render(<MemoryRouter><FilterProvider><AnalyticsDowntimesPage /></FilterProvider></MemoryRouter>);
-    await screen.findByText("Tempo total de parada");
+    await screen.findByText("Parada não planejada");
     expect(screen.queryByText(/diferença:/i)).not.toBeInTheDocument();
   });
 });

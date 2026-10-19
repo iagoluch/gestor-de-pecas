@@ -974,29 +974,37 @@ class TimeCompositionFacadeTests(unittest.TestCase):
         self.assertEqual(facade.analise("tempos", _day_filters())["resource_count"], 0)
 
 class StopsListDifferenceTests(unittest.TestCase):
-    """Análises > Paradas: o consolidado vence; a lista mostra a diferença."""
+    """Análises > Paradas (tela): o consolidado vence; a lista mostra a diferença."""
 
     @staticmethod
-    def _paradas(estados):
+    def _facade(estados):
         from mes.services.frontend_facade import FrontendBackendFacade
 
         repo = _Repo(estados, _FULL_DAY_TURNOS)
-        facade = FrontendBackendFacade(repo, now_func=lambda: datetime(2026, 8, 21, 12, 0))
-        overview = facade.inicio(_day_filters(), include_insights=False)["hours"]
-        return facade.analise("paradas", _day_filters()), overview
+        return FrontendBackendFacade(repo, now_func=lambda: datetime(2026, 8, 21, 12, 0))
 
-    def test_stops_list_difference_line(self):
+    @classmethod
+    def _paradas(cls, estados):
+        facade = cls._facade(estados)
+        overview = facade.inicio(_day_filters(), include_insights=False)["hours"]
+        return facade.paradas_tela(_day_filters()), overview
+
+    @staticmethod
+    def _overlap_states():
         # Duas paradas sobrepostas no mesmo recurso: 9h-11h e 10h-12h.
-        estados = [
+        return [
             _estado(1, "DOBRA1", "parada", _at(QUARTA, 9), _at(QUARTA, 11),
                     planejado=False, motivo="Falta de material"),
             _estado(2, "DOBRA1", "parada", _at(QUARTA, 10), _at(QUARTA, 12),
                     planejado=False, motivo="Manutenção"),
         ]
-        payload, overview = self._paradas(estados)
+
+    def test_stops_list_difference_line(self):
+        payload, overview = self._paradas(self._overlap_states())
 
         list_sum = sum(item["segundos"] for item in payload["items"])
         self.assertEqual(list_sum, 4 * H)
+        self.assertEqual(payload["listed_seconds"], list_sum)
         # O total exibido é o consolidado do overview, não a soma da lista.
         self.assertEqual(payload["total_seconds"], overview["downtime_seconds"])
         self.assertLess(payload["total_seconds"], list_sum)
@@ -1028,6 +1036,64 @@ class StopsListDifferenceTests(unittest.TestCase):
         self.assertLess(difference["seconds"], 0)
         self.assertTrue(difference["reason"].strip())
         self.assertNotIn("sobrepostos", difference["reason"])
+
+    def test_stops_screen_two_lines_and_resource_count(self):
+        payload, overview = self._paradas(_full_day_states())
+
+        self.assertEqual(payload["planned_downtime_seconds"], 1 * H)
+        self.assertEqual(payload["unplanned_downtime_seconds"], 2 * H)
+        self.assertEqual(
+            payload["planned_downtime_seconds"] + payload["unplanned_downtime_seconds"],
+            payload["total_seconds"],
+        )
+        # Mesmo divisor do painel/Visão Geral: recursos com calendário.
+        self.assertEqual(payload["resource_count"], overview["resource_count"])
+        self.assertEqual(payload["resource_count"], 5)
+        self.assertEqual(payload["listed_seconds"], 3 * H)
+
+    def test_stops_screen_average_inputs_ignore_automatic_breaks(self):
+        # Intervalo automático entra no consolidado, não na lista: a média por
+        # ocorrência usa listed_seconds, não o consolidado.
+        estados = [
+            _estado(1, "DOBRA1", "parada", _at(QUARTA, 9), _at(QUARTA, 10),
+                    planejado=False, motivo="Falta de material"),
+            _estado(2, "DOBRA1", "parada", _at(QUARTA, 12), _at(QUARTA, 14),
+                    planejado=True, automatico=True, motivo="Almoço"),
+        ]
+        payload, _ = self._paradas(estados)
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["listed_seconds"], 1 * H)
+        self.assertGreater(payload["total_seconds"], payload["listed_seconds"])
+
+    def test_other_consumers_keep_list_total(self):
+        # IA, relatório, pacotes e Telegram leem a lista: nada de consolidado
+        # nem `difference` neles.
+        facade = self._facade(self._overlap_states())
+        payload = facade.analise("paradas", _day_filters())
+
+        self.assertNotIn("difference", payload)
+        self.assertNotIn("listed_seconds", payload)
+        self.assertNotIn("planned_downtime_seconds", payload)
+        self.assertEqual(
+            payload["total_seconds"],
+            facade.analytics.downtimes(_day_filters())["total_seconds"],
+        )
+        self.assertEqual(payload["total_seconds"], 3 * H)  # união física da lista, como antes
+
+    def test_screen_route_uses_screen_payload(self):
+        from backend.api.routers import analytics as route
+
+        class _Facade:
+            def paradas_tela(self, _f):
+                return {"screen": True}
+
+            def analise(self, _k, _f):
+                return {"screen": False}
+
+        payload = route.analysis("downtimes", object(), None, _Facade())
+        self.assertEqual(payload, {"screen": True})
+        self.assertEqual(route.analysis("setups", object(), None, _Facade()), {"screen": False})
 
 
 if __name__ == "__main__":

@@ -42,7 +42,9 @@ def analysis(
     key = aliases.get(analysis_type.strip().casefold())
     if key is None:
         raise AppError("unknown_analysis", "Análise solicitada não existe.", status_code=404)
-    payload = facade.analise(key, filters)
+    # Só a tela de Paradas lê o consolidado + diferença; os demais consumidores
+    # de ``analise("paradas")`` (IA, relatório, Telegram) seguem com a lista.
+    payload = facade.paradas_tela(filters) if key == "paradas" else facade.analise(key, filters)
     if key == "oee":
         overview = facade.inicio(filters, include_insights=False)
         oee = payload

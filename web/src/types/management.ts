@@ -217,6 +217,13 @@ export interface SegmentSummary {
   kind: string;
   /** Só em Paradas: soma da lista menos o consolidado (o total exibido é o consolidado). */
   difference?: { seconds: number; reason: string } | null;
+  /** Só em Paradas: parada dividida em planejada + não planejada (soma = total_seconds). */
+  planned_downtime_seconds?: number;
+  unplanned_downtime_seconds?: number;
+  /** Só em Paradas: soma das ocorrências listadas (numerador da média por ocorrência). */
+  listed_seconds?: number;
+  /** Só em Paradas: recursos com calendário (divisor da média por recurso). */
+  resource_count?: number;
 }
 
 export interface TimeBreakdown {

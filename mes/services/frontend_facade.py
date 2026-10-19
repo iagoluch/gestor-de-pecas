@@ -1056,9 +1056,7 @@ class FrontendBackendFacade:
                 payload["simulation"] = self.management.get_overview(filters).get("simulation")
             return payload
         if key == "paradas":
-            return self._stops_with_consolidated_total(
-                self.analytics.downtimes(filters), filters
-            )
+            return self.analytics.downtimes(filters)
         if key == "setup":
             return self.analytics.setups(filters)
         if key == "qualidade":
@@ -1088,16 +1086,23 @@ class FrontendBackendFacade:
             }
         raise ValueError("Análise solicitada não existe.")
 
-    def _stops_with_consolidated_total(self, payload: dict, filters: AnalyticsFilter) -> dict:
-        """Análises > Paradas: o consolidado vence a soma da lista.
+    def paradas_tela(self, filters: AnalyticsFilter) -> dict:
+        """Payload de Análises > Paradas (só a rota da tela usa; IA/relatório/Telegram seguem em ``analise``).
 
-        O total exibido é a parada do tempo físico consolidado (a mesma da Visão
-        Geral). A lista de ocorrências mantém suas linhas; a diferença entre a
-        soma delas e o consolidado vai em ``difference`` com o motivo.
+        O consolidado vence a soma da lista: ``total_seconds`` é a parada do tempo
+        físico consolidado (a da Visão Geral), dividida em planejada + não
+        planejada. A lista mantém suas linhas; a diferença para o consolidado vai
+        em ``difference`` com o motivo. ``listed_seconds`` (soma da lista) é o
+        numerador da média por ocorrência; ``resource_count`` (recursos com
+        calendário) é o divisor da média por recurso, como no painel.
         """
 
-        consolidated = self.management.physical_consolidation(filters)["consolidated"]
+        payload = self.analytics.downtimes(filters)
+        consolidation = self.management.physical_consolidation(filters)
+        consolidated = consolidation["consolidated"]
         downtime = float(consolidated["totals"].get(EventCategory.DOWNTIME, 0.0))
+        by_class = consolidated["totals_by_stop_classification"].get(EventCategory.DOWNTIME, {})
+        planned = min(downtime, float(by_class.get(StopClassification.PLANNED, 0.0)))
         listed = sum(float(row.get("segundos") or 0.0) for row in payload["items"])
         gap = listed - downtime
         difference = None
@@ -1111,7 +1116,15 @@ class FrontendBackendFacade:
                 ),
             }
         # Cópia: o payload do analytics é cacheado e compartilhado.
-        return {**payload, "total_seconds": downtime, "difference": difference}
+        return {
+            **payload,
+            "total_seconds": downtime,
+            "planned_downtime_seconds": planned,
+            "unplanned_downtime_seconds": max(0.0, downtime - planned),
+            "listed_seconds": listed,
+            "resource_count": len(consolidation["calendar_resources"]),
+            "difference": difference,
+        }
 
     def _operations_time_extras(self, payload: dict, filters: AnalyticsFilter) -> dict:
         """Divisor da média e parada planejada/não planejada de Operações > Tempo.
