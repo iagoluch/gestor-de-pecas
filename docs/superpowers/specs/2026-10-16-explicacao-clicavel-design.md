@@ -93,7 +93,11 @@ Não bloqueiam a Fase 1 (tempo + painel + chat). Bloqueiam a Fase 2 (peças) e p
 
 ## 8. Pontos não conferidos
 
-- Se `NO_DEMAND` no overview vem só dos eventos gravados ou também é derivado em parte (`resource_state.py`, `management.py`). O mockup assume que dá para listar os trechos por evento; o construtor precisa confirmar.
-- Se há snapshot histórico da fila. Não é necessário para o sem demanda (já há eventos), mas o inventário o citou como suposição.
-- Itens do inventário marcados "suposição": Telegram digest, Metas, fila manual por área, tela de Corte e Destaque, auditoria.
-- O custo da Diretoria usa a taxa de hora atual (suposição); se não houver vigência, a explicação de custo de dias passados usaria a taxa de hoje.
+Estado após a Fase 1 (16/10/2026):
+
+- **Resolvido:** `NO_DEMAND` vem só dos estados `fila` gravados sem OP; os trechos são listados por evento. Confirmado e coberto por teste.
+- **Resolvido:** a Fase 1 não precisa de snapshot histórico da fila (os eventos bastam).
+- **Aberto (Fase 2/3):** itens do inventário marcados "suposição": Telegram digest, Metas, fila manual por área, tela de Corte e Destaque, auditoria.
+- **Aberto (Fase 3):** o custo da Diretoria usa a taxa de hora atual (suposição); se não houver vigência, a explicação de custo de dias passados usaria a taxa de hoje.
+- **Novo, aguardando o Iago:** (a) a média usa só recursos com calendário, mas o total inclui o tempo de recursos sem calendário; a árvore avisa nas notas; (b) a planilha executiva ganhou uma linha "A esclarecer" quando > 0; (c) "Parada não planejada" tem duas contas (cartão/painel = total − planejada; `_perdas_canonicas` = só a classificação não planejada), que diferem só em paradas sem classificação; (d) a linha "Desconhecido" em Operações > Tempo não é clicável e pode divergir de "A esclarecer"; (e) o nome do operador segue para o provedor externo de IA (consistente com o desenho, só registrar).
+- **Fase 2:** Operações > Tempo mistura duas fontes (`physical_inputs` e `physical_consolidation`); unificar. Extrair `_fit_level`/`_truncate`/`_count` de `metric_explanation.py` para módulo próprio.
