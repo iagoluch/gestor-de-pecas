@@ -284,7 +284,7 @@ describe("Visão Geral: composição do tempo clicável", () => {
     expect(row).toHaveTextContent(/10h/);
     // Topo do cartão: média por recurso (43200 s ÷ 4) em destaque; a soma anda 4x mais rápido que o relógio.
     expect(screen.getByText("3h")).toBeInTheDocument();
-    expect(screen.getByText(/total 12h somado em 4 recursos/)).toBeInTheDocument();
+    expect(screen.getByText(/total 12h somado de 4 máquinas \(sobe 4 min a cada minuto\)/)).toBeInTheDocument();
     fireEvent.click(row);
 
     const dialog = await screen.findByRole("dialog", { name: /Recurso sem demanda/ });

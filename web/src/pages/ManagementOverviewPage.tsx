@@ -9,6 +9,7 @@ import { PageFrame } from "../components/PageFrame";
 import { SectionCard } from "../components/SectionCard";
 import { useManagementFilters } from "../filters/FilterContext";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useOncePerMinute } from "../hooks/useOncePerMinute";
 import { explainableComposition } from "../types/explanation";
 import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
 import { displayName, displayText, formatHours } from "../utils/format";
@@ -100,6 +101,8 @@ export function ManagementOverviewPage() {
   // Painel "de onde vem este número" (composição do tempo): guarda só o id da métrica.
   const [explainedMetric, setExplainedMetric] = useState<string | null>(null);
   const closeExplanation = useCallback(() => setExplainedMetric(null), []);
+  // A composição soma N recursos e sobe N minutos por minuto: só muda na virada do minuto, para não parecer segundos.
+  const heldComposition = useOncePerMinute(query.data?.time_composition, filters.query);
 
   const navigateTo = useCallback((path: string, overrides: Partial<typeof filters.filters> = {}) => {
     filters.setFilters({ ...filters.filters, ...overrides });
@@ -128,7 +131,7 @@ export function ManagementOverviewPage() {
   if (!query.data) return <PageFrame sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro."><EmptyState state="sem_registros" /></PageFrame>;
 
   const data = query.data;
-  const composition = explainableComposition(data.time_composition);
+  const composition = explainableComposition(heldComposition ?? data.time_composition);
   const kpis = data.kpis;
   const simulation = data.simulation;
   const insights = data.insights;
@@ -268,7 +271,7 @@ export function ManagementOverviewPage() {
                     <>
                       {/* A soma de N recursos anda N vezes mais rápido que o relógio; em destaque fica a média, que anda no ritmo do relógio. */}
                       <strong>{formatHours(composition.total_seconds / (composition.resource_count ?? 1))}</strong>
-                      <span>média por recurso · total {formatHours(composition.total_seconds)} somado em {composition.resource_count} recursos</span>
+                      <span>média por recurso · total {formatHours(composition.total_seconds)} somado de {composition.resource_count} máquinas (sobe {composition.resource_count} min a cada minuto)</span>
                     </>
                   ) : (
                     <>
