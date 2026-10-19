@@ -83,6 +83,8 @@ export interface StackPart {
   text: string;
   /** Complemento discreto abaixo do valor (ex.: "média 0,4 h"). */
   hint?: string;
+  /** Valor em destaque na linha, quando difere de `text` (que segue no aria-label). */
+  lead?: string;
   /** Aparece na legenda, mas fica fora da barra e do total (ex.: calendário, parada planejada). */
   outside?: boolean;
   /** Torna a linha da legenda um botão (ex.: abrir "de onde vem este número"). */
@@ -110,7 +112,7 @@ export function StackBar({ parts }: { parts: StackPart[] }) {
               <i style={{ "--c": part.color } as React.CSSProperties} />
               <em>{part.name}</em>
               <small>{part.value > 0 && !part.outside ? `${((part.value / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%` : "—"}</small>
-              <b>{part.text}</b>
+              <b>{part.lead ?? part.text}</b>
               {part.hint ? <small className="legend__hint">{part.hint}</small> : null}
             </>
           );

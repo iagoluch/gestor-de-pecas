@@ -52,15 +52,17 @@ const TIME_COLORS: Record<string, string> = {
 const SERIES_COLORS = { oee: "var(--purple)", availability: "var(--accent)", performance: "var(--warning)", ftt: "var(--teal)", good: "var(--primary)" };
 
 /**
- * Complemento de cada linha da composição. A média vem pronta do backend
- * (total ÷ recursos com turno) e sempre diz quantos recursos; sem média, só
- * quem fica fora do total ganha "não somado".
+ * Destaque e complemento de cada linha da composição. A média por recurso
+ * (total ÷ recursos com turno, vinda do backend) é o destaque: avança no ritmo
+ * do relógio. O total somado vai no complemento, junto com quantos recursos;
+ * ele sobe N vezes mais rápido (N recursos contando ao mesmo tempo). Sem média,
+ * só quem fica fora do total ganha "não somado".
  */
-function averageHint(item: { summed?: boolean; average_seconds?: number | null }, resourceCount: number) {
-  if (item.average_seconds != null && resourceCount > 0) {
-    return `média ${formatHours(item.average_seconds)} (${resourceCount} ${resourceCount === 1 ? "recurso" : "recursos"})`;
+function averageLine(item: { seconds: number; summed?: boolean; average_seconds?: number | null }, resourceCount: number) {
+  if (item.average_seconds != null && resourceCount > 1) {
+    return { lead: `média ${formatHours(item.average_seconds)}`, hint: `total ${formatHours(item.seconds)} em ${resourceCount} recursos` };
   }
-  return item.summed === false ? "não somado" : undefined;
+  return { hint: item.summed === false ? "não somado" : undefined };
 }
 
 function dayLabel(point: OverviewTrendPoint) {
@@ -273,7 +275,7 @@ export function ManagementOverviewPage() {
                     color: TIME_COLORS[item.source_field] ?? "var(--muted)",
                     outside: item.summed === false,
                     text: formatHours(item.seconds),
-                    hint: averageHint(item, composition.resource_count ?? 0),
+                    ...averageLine(item, composition.resource_count ?? 0),
                     ...(item.metric ? { explainMetric: item.metric, onSelect: () => setExplainedMetric(item.metric ?? null) } : {}),
                   }))}
                 />
