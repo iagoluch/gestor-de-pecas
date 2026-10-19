@@ -34,6 +34,9 @@ export interface ResourceRow {
   causa_raiz?: string | null;
   inicio?: string | null;
   duracao_segundos?: number | null;
+  /** Trecho atual da parada (ex.: o almoço) quando ``inicio`` cobre a parada inteira. */
+  inicio_estado_atual?: string | null;
+  duracao_estado_atual_segundos?: number | null;
   planejado?: boolean | null;
   automatico?: boolean;
   tipo_interrupcao?: string | null;

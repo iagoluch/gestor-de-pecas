@@ -6,7 +6,7 @@ consome contratos desta camada, garantindo uma única verdade funcional na Web.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.operator_sectors import is_apontavel_resource, operator_sector_for_level
 from app.core.resource_mapping import (
@@ -59,6 +59,53 @@ FACADE_REPORT_TYPES = (
     "indicadores",
     "dados_analiticos",
 )
+
+
+#: Estados em que o recurso NÃO produz. Trechos seguidos destes formam uma
+#: única parada para quem olha o card: sem demanda → almoço → sem demanda é
+#: o recurso parado desde a volta do turno, não "parado há 5 minutos".
+_STOP_STREAK_CATEGORIES = frozenset({EventCategory.QUEUE.value, EventCategory.DOWNTIME.value})
+#: Folga entre o fim de um estado e o início do seguinte para ainda serem
+#: contíguos (o scheduler fecha e abre no mesmo instante, mas não no mesmo µs).
+_STOP_STREAK_GAP_SECONDS = 60.0
+#: Até onde olhar para trás. Fora de turno quebra a sequência todo dia, então
+#: 36 h cobre qualquer parada contínua real sem varrer o histórico.
+_STOP_STREAK_LOOKBACK_HOURS = 36
+
+
+def _stop_streak_start(current, history):
+    """Início da parada contínua que termina no estado atual ``current``.
+
+    ``history`` são os estados do mesmo recurso ordenados por início. Anda
+    para trás enquanto o estado anterior também é parada/fila e encosta no
+    seguinte; produção, setup, fora de turno ou um buraco encerram a busca.
+    """
+
+    start = current.get("data_inicio")
+    if not isinstance(start, datetime):
+        return start
+    if str(current.get("categoria") or "") not in _STOP_STREAK_CATEGORIES:
+        return start
+    previous = sorted(
+        (
+            row for row in history
+            if isinstance(row.get("data_inicio"), datetime)
+            and row.get("data_inicio") < start
+            and row.get("id") != current.get("id")
+        ),
+        key=lambda row: row["data_inicio"],
+        reverse=True,
+    )
+    for row in previous:
+        end = row.get("data_fim")
+        if not isinstance(end, datetime):
+            break
+        if abs((start - end).total_seconds()) > _STOP_STREAK_GAP_SECONDS:
+            break
+        if str(row.get("categoria") or "") not in _STOP_STREAK_CATEGORIES:
+            break
+        start = row["data_inicio"]
+    return start
 
 
 def _resource_key(resource):
@@ -494,6 +541,18 @@ class FrontendBackendFacade:
                 "inicio": fact.get("data_inicio"),
             })
 
+        history_by_resource = {}
+        history_loader = getattr(self.db, "listar_estados_recurso_periodo", None)
+        if callable(history_loader) and states:
+            for row in history_loader(
+                now - timedelta(hours=_STOP_STREAK_LOOKBACK_HOURS),
+                now,
+                setor=filters.setor,
+                recurso=filters.recurso,
+            ) or []:
+                key = _resource_key(str(row.get("recurso") or "").strip())
+                history_by_resource.setdefault(key, []).append(row)
+
         items = []
         for state in states:
             resource = str(state.get("recurso") or "").strip()
@@ -501,6 +560,14 @@ class FrontendBackendFacade:
             elapsed = None
             if isinstance(start, datetime):
                 elapsed = max(0.0, (now - start).total_seconds())
+            # ``inicio``/``duracao_segundos`` publicam a parada inteira; o
+            # trecho atual (ex.: o almoço) segue separado para quem quiser.
+            stop_start = _stop_streak_start(
+                state, history_by_resource.get(_resource_key(resource), [])
+            )
+            stop_elapsed = elapsed
+            if isinstance(stop_start, datetime):
+                stop_elapsed = max(0.0, (now - stop_start).total_seconds())
             # Classificação e cor decididas uma única vez, no domínio.
             classification = classify_state_row(state)
             ops_ativas = active_by_resource.get(_resource_key(resource), [])
@@ -567,8 +634,10 @@ class FrontendBackendFacade:
                 "tipo_atividade": state.get("tipo_atividade"),
                 "descricao_atividade": state.get("descricao_atividade"),
                 "causa_raiz": state.get("causa_raiz"),
-                "inicio": start,
-                "duracao_segundos": elapsed,
+                "inicio": stop_start,
+                "duracao_segundos": stop_elapsed,
+                "inicio_estado_atual": start,
+                "duracao_estado_atual_segundos": elapsed,
                 "planejado": state.get("planejado"),
                 "automatico": bool(state.get("automatico")),
                 "tipo_interrupcao": state.get("tipo_interrupcao"),

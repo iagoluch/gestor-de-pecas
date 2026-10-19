@@ -5,6 +5,12 @@ import { StatusBadge } from "./StatusBadge";
 
 export function ResourceCard({ resource }: { resource: ResourceRow }) {
   const operation = resource.ops_ativas[0];
+  // ``duracao_segundos`` é a parada inteira; o trecho atual só aparece quando
+  // é outro (ex.: parado desde 08:00 e, agora, no almoço).
+  const currentStretch = resource.duracao_estado_atual_segundos;
+  const showCurrentStretch = currentStretch != null
+    && resource.duracao_segundos != null
+    && resource.duracao_segundos - currentStretch >= 60;
   return (
     <article className="resource-card">
       <header>
@@ -18,6 +24,9 @@ export function ResourceCard({ resource }: { resource: ResourceRow }) {
         <div><dt>Operador</dt><dd>{operation?.operador_inicio ?? "Não disponível"}</dd></div>
         <div><dt>Início</dt><dd>{formatDateTime(resource.inicio ?? operation?.inicio)}</dd></div>
         <div><dt>Duração</dt><dd>{formatDuration(resource.duracao_segundos)}</dd></div>
+        {showCurrentStretch ? (
+          <div><dt>Estado atual</dt><dd>{formatDuration(currentStretch)} desde {formatDateTime(resource.inicio_estado_atual)}</dd></div>
+        ) : null}
       </dl>
       {resource.motivo ? <p>{displayText(resource.motivo)}</p> : null}
     </article>
