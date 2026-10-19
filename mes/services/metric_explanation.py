@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from mes.contracts import AnalyticsFilter
+from mes.analytics.physical_time import restrict_to_resources
 from mes.analytics.resource_state import physical_state_category
 from mes.domain import EventCategory, StopClassification
 
@@ -210,10 +211,17 @@ class MetricExplanationService:
             raise UnknownMetricError(f"Métrica desconhecida: {metric!r}")
 
         consolidation = self.management.physical_consolidation(filters)
-        consolidated = consolidation["consolidated"]
-        segments = consolidated["segments"]
+        full = consolidation["consolidated"]
         calendar_resources = consolidation["calendar_resources"]
         text = RULE_TEXT[metric]
+
+        # Total e média só contam recursos com turno no período (decisão de
+        # 19/10/2026). Sem nenhum calendário cadastrado a regra não se aplica:
+        # o total fica inteiro e só a média some. Fora de turno é número de
+        # calendário e nunca é recortado.
+        scoped = bool(calendar_resources) and metric != "tempo.fora_turno"
+        consolidated = restrict_to_resources(full, calendar_resources) if scoped else full
+        segments = consolidated["segments"]
 
         selected = [seg for seg in segments if _belongs(metric, seg)]
         rows = {
@@ -223,6 +231,13 @@ class MetricExplanationService:
         # Leitura legada (sem estado canônico): o overview soma à produção os
         # nestings que só conhecem a duração; a explicação precisa fechar com ele.
         legacy = consolidation.get("legacy_without_interval") or []
+        if scoped:
+            with_calendar = {name.casefold() for name in calendar_resources}
+            legacy = [
+                item for item in legacy
+                if item.get("has_shift")
+                or (item["resource"] or "").casefold() in with_calendar
+            ]
         legacy_seconds = sum(item["seconds"] for item in legacy)
         legacy_production = legacy if metric == "tempo.producao" else []
         total = _official_total(metric, consolidated) + (
@@ -263,7 +278,14 @@ class MetricExplanationService:
         )
 
         excluded = self._excluded(metric, segments, selected, rows, duplicated)
-        notes = _no_calendar_notes(metric, selected, calendar_resources)
+        notes = (
+            _outside_calendar_notes(
+                metric, [seg for seg in full["segments"] if _belongs(metric, seg)],
+                calendar_resources,
+            )
+            if scoped
+            else _no_calendar_notes(metric, selected, calendar_resources)
+        )
 
         # ``measured_seconds`` do overview inclui os nestings legados.
         in_shift = (
@@ -538,6 +560,23 @@ def _no_calendar_notes(metric, selected, calendar_resources) -> list[str]:
     return [
         f"{count} {plural}, {duration}, entram no total mas não na média."
     ]
+
+
+def _outside_calendar_notes(metric, selected, calendar_resources) -> list[str]:
+    """Aviso dos recursos sem turno que ficaram fora do total e da média."""
+
+    if metric in _NO_AVERAGE_METRICS:
+        return []
+    by_resource: dict[str, float] = defaultdict(float)
+    for seg in selected:
+        if seg.resource not in calendar_resources:
+            by_resource[seg.resource] += seg.seconds
+    if not by_resource:
+        return []
+    duration = _format_hours_ptbr(sum(by_resource.values()))
+    count = len(by_resource)
+    plural = "recurso sem turno cadastrado" if count == 1 else "recursos sem turno cadastrado"
+    return [f"{count} {plural}, {duration}, ficam fora do total e da média."]
 
 
 def _truncate(sector_nodes: list[Node], max_nodes: int) -> tuple[list[Node], bool]:

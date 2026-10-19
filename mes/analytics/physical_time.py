@@ -182,6 +182,46 @@ def consolidate_physical_time(
     }
 
 
+def restrict_to_resources(consolidated: Mapping, resources: Iterable[str]) -> dict:
+    """Recorte de uma consolidação a um conjunto de recursos (visão, não regra).
+
+    Devolve uma cópia com ``segments``, ``totals``, ``totals_by_stop_classification``,
+    ``conflicting_state_seconds``, ``physical_seconds`` e
+    ``out_of_shift_attributed_seconds`` recalculados só para ``resources``. O total
+    de fora de turno (união global de calendário) é preservado: ele não pertence a
+    nenhum recurso em particular. A consolidação original não é alterada.
+    """
+
+    wanted = {str(name) for name in resources}
+    kept = tuple(seg for seg in consolidated["segments"] if seg.resource in wanted)
+    totals: dict = defaultdict(float)
+    stop_totals: dict = defaultdict(lambda: defaultdict(float))
+    out_attributed = 0.0
+    conflict = 0.0
+    for seg in kept:
+        totals[seg.category] += seg.seconds
+        if seg.stop_classification is not None:
+            stop_totals[seg.category][seg.stop_classification] += seg.seconds
+        if seg.category is EventCategory.OUT_OF_SHIFT:
+            out_attributed += seg.seconds
+        if seg.state_conflict:
+            conflict += seg.seconds
+    original_totals = consolidated.get("totals") or {}
+    if EventCategory.OUT_OF_SHIFT in original_totals:
+        totals[EventCategory.OUT_OF_SHIFT] = original_totals[EventCategory.OUT_OF_SHIFT]
+    return {
+        **consolidated,
+        "segments": kept,
+        "totals": dict(totals),
+        "totals_by_stop_classification": {
+            category: dict(value) for category, value in stop_totals.items()
+        },
+        "conflicting_state_seconds": conflict,
+        "physical_seconds": sum(seg.seconds for seg in kept),
+        "out_of_shift_attributed_seconds": out_attributed,
+    }
+
+
 def _normalize(raw, index):
     if isinstance(raw, PhysicalInputSegment):
         return raw

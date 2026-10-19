@@ -13,7 +13,11 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from app.core.resource_mapping import resource_display_name
-from mes.analytics.physical_time import PhysicalInputSegment, consolidate_physical_time
+from mes.analytics.physical_time import (
+    PhysicalInputSegment,
+    consolidate_physical_time,
+    restrict_to_resources,
+)
 from mes.analytics.oee import OEE_CONTRACT, calculate_oee, oee_seconds_by_category
 from mes.analytics.resource_state import build_physical_state_inputs
 from mes.analytics.timeline import build_operator_timeline
@@ -261,6 +265,7 @@ class ManagementService:
         )
         cutting_without_interval_seconds = 0.0
         cutting_without_interval_by_resource = defaultdict(float)
+        cutting_without_interval_names: dict[str, str] = {}
         if not use_canonical_resource_state:
             for row in nesting_without_interval:
                 # Compatibilidade com fontes antigas que conhecem a duração, mas
@@ -273,6 +278,7 @@ class ManagementService:
                 machine = str(row.get("maquina") or "").strip()
                 if machine:
                     cutting_without_interval_by_resource[machine.casefold()] += legacy_seconds
+                    cutting_without_interval_names[machine.casefold()] = machine
                     resource_bucket(machine, "Corte")
 
         consolidation = self._consolidate_physical(
@@ -637,6 +643,17 @@ class ManagementService:
                 # vários dias). ``day_count`` informa a extensão do período.
                 "resource_count": len(consolidation["calendar_resources"]),
                 "day_count": consolidation["days"],
+                # Mesma conta, só com recursos que têm turno no período. Aditivo:
+                # só o cartão "Composição do tempo" lê (decisão de 19/10/2026).
+                "calendar_scope": self._calendar_scope(
+                    physical,
+                    consolidation["calendar_resources"],
+                    cutting_without_interval_by_resource,
+                    {
+                        key for key, name in cutting_without_interval_names.items()
+                        if self._has_shift(name, filters)
+                    },
+                ),
             },
             "kpis": {
                 "availability": availability.to_dict(),
@@ -887,11 +904,56 @@ class ManagementService:
                     "seconds": float(
                         row.get("real_periodo_segundos", row.get("real_segundos")) or 0
                     ),
+                    "has_shift": self._has_shift(
+                        str(row.get("maquina") or "").strip(), filters
+                    ),
                 }
                 for row in without_interval
             ]
         )
         return public
+
+    @staticmethod
+    def _calendar_scope(
+        physical, calendar_resources, legacy_by_resource, legacy_with_shift=frozenset()
+    ) -> dict | None:
+        """Horas da Visão Geral só dos recursos com turno (``None`` sem calendário).
+
+        Não altera a consolidação compartilhada: OEE, KPIs por recurso e custos
+        continuam contando todos os recursos. Nesting legado sem horário não tem
+        trecho consolidado; entra se o recurso tem turno (``legacy_with_shift``).
+        """
+
+        if not calendar_resources:
+            return None
+        scoped = restrict_to_resources(physical, calendar_resources)
+        with_calendar = {name.casefold() for name in calendar_resources} | set(legacy_with_shift)
+        legacy = sum(
+            seconds for key, seconds in legacy_by_resource.items() if key in with_calendar
+        )
+        totals = scoped["totals"]
+        by_class = scoped["totals_by_stop_classification"].get(EventCategory.DOWNTIME, {})
+        planned = float(by_class.get(StopClassification.PLANNED, 0.0))
+        downtime = float(totals.get(EventCategory.DOWNTIME, 0.0))
+        excluded: dict[str, float] = defaultdict(float)
+        for segment in physical["segments"]:
+            if segment.resource not in calendar_resources:
+                excluded[segment.resource] += segment.seconds
+        return {
+            "production_seconds": float(totals.get(EventCategory.PRODUCTION, 0.0)) + legacy,
+            "setup_seconds": float(totals.get(EventCategory.SETUP, 0.0)),
+            "rework_seconds": float(totals.get(EventCategory.REWORK, 0.0)),
+            "downtime_seconds": downtime,
+            "planned_downtime_seconds": planned,
+            "unplanned_downtime_seconds": max(0.0, downtime - planned),
+            "no_demand_seconds": float(totals.get(EventCategory.NO_DEMAND, 0.0)),
+            "activity_without_op_seconds": float(
+                totals.get(EventCategory.ACTIVITY_WITHOUT_OP, 0.0)
+            ),
+            "conflicting_state_seconds": scoped["conflicting_state_seconds"],
+            "excluded_resources": len(excluded),
+            "excluded_seconds": sum(excluded.values()),
+        }
 
     def _consolidate_physical(
         self, filters, *, facts, state_source_available, state_rows, nesting_physical_inputs
@@ -984,6 +1046,16 @@ class ManagementService:
                     continue
             without_interval.append(row)
         return inputs, without_interval
+
+    def _has_shift(self, name: str, filters) -> bool:
+        """O recurso tem algum turno que toca o período."""
+
+        return any(
+            end > filters.inicio and start < filters.fim
+            for start, end in CalendarService(self.db).shift_intervals(
+                name, filters.inicio, filters.fim
+            )
+        )
 
     def _calendar_resources(self, consolidated, filters) -> set:
         """Recursos consolidados que tiveram turno no período.

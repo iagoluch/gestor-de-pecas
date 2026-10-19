@@ -261,6 +261,23 @@ class FrontendBackendFacade:
                 0.0, float(hours.get("downtime_seconds") or 0.0) - float(hours.get("planned_downtime_seconds") or 0.0)
             ),
         }
+        # Cartão só conta recursos com turno no período (decisão de 19/10/2026);
+        # os demais números da tela seguem com todos os recursos. Sem calendário
+        # nenhum, vale o total inteiro (sem média).
+        calendar_scope = hours.get("calendar_scope")
+        scope_note = None
+        if calendar_scope:
+            hours = {
+                **hours,
+                **{
+                    key: value for key, value in calendar_scope.items()
+                    if key.endswith("_seconds") and key != "excluded_seconds"
+                },
+            }
+            excluded = int(calendar_scope.get("excluded_resources") or 0)
+            if excluded:
+                plural = "recurso sem turno cadastrado" if excluded == 1 else "recursos sem turno cadastrado"
+                scope_note = f"{excluded} {plural} ficam fora desta composição."
         # (rótulo, campo de hours, id da métrica explicável em MetricExplanationService)
         composition = (
             ("Produção", "production_seconds", "tempo.producao"),
@@ -303,7 +320,9 @@ class FrontendBackendFacade:
             "items": items,
             "resource_count": resource_count,
             "day_count": int(hours.get("day_count") or 0),
-            "average_note": None if resource_count else "Sem recursos com turno no período.",
+            "average_note": (
+                scope_note if resource_count else "Sem recursos com turno no período."
+            ),
             "total_seconds": total,
             "availability": "disponivel" if any(item["seconds"] > 0 for item in items) else "sem_registros",
         }

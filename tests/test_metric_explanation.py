@@ -558,7 +558,9 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertTrue(tree.reconciliation["ok"])
         self.assertEqual(tree.excluded[0]["seconds"], 8 * H)
 
-    def test_resource_without_calendar_is_flagged_not_dropped(self):
+    def test_resource_without_calendar_is_flagged_and_left_out_of_total(self):
+        # Decisão 19/10/2026 (1A): recurso sem turno no período não entra no
+        # total nem na média da explicação; o aviso diz quanto ficou de fora.
         estados = [
             _estado(1, "DOBRA1", "fila", _at(QUARTA, 8), _at(QUARTA, 10)),
             _estado(2, "SEMTURNO", "fila", _at(QUARTA, 8), _at(QUARTA, 11)),
@@ -566,13 +568,29 @@ class MetricExplanationTests(unittest.TestCase):
         explainer, _repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
         tree = explainer.explain("tempo.sem_demanda", self.filters)
 
-        self.assertEqual(tree.total_seconds, 5 * H)
+        self.assertEqual(tree.total_seconds, 2 * H)
         self.assertEqual(tree.resource_count, 1)
-        self.assertEqual(tree.average_seconds, 5 * H)  # divisor não mudou
+        self.assertEqual(tree.average_seconds, 2 * H)
+        self.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
         self.assertEqual(len(tree.notes), 1)
         self.assertIn("1 recurso sem turno cadastrado", tree.notes[0])
+        self.assertIn("ficam fora do total e da média", tree.notes[0])
         self.assertIn("3h,", tree.notes[0])  # h/m pt-BR, igual ao painel
         self.assertNotIn("3.0", tree.notes[0])
+        labels = {r.label for s in tree.children for r in s.children}
+        self.assertEqual(labels, {"DOBRA1"})
+
+    def test_out_of_shift_metric_is_never_scoped_by_calendar(self):
+        estados = [
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 8), _at(QUARTA, 10)),
+            _estado(2, "SEMTURNO", "fila", _at(QUARTA, 8), _at(QUARTA, 11)),
+        ]
+        explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        hours = _service(repo).get_overview(self.filters)["hours"]
+        tree = explainer.explain("tempo.fora_turno", self.filters)
+
+        self.assertEqual(tree.total_seconds, hours["out_of_shift_seconds"])
+        self.assertTrue(tree.reconciliation["ok"], tree.reconciliation)
 
     def test_unknown_metric_raises(self):
         with self.assertRaises(UnknownMetricError):
@@ -928,6 +946,26 @@ class TimeCompositionFacadeTests(unittest.TestCase):
         self.assertEqual(items["A esclarecer"]["average_seconds"], 1 * H / 5)
         # Fora do turno é número de calendário: sem média.
         self.assertIsNone(items["Fora do turno"]["average_seconds"])
+
+    def test_composition_leaves_out_resource_without_shift_like_the_explanation(self):
+        estados = [
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 8), _at(QUARTA, 10)),
+            _estado(2, "SEMTURNO", "fila", _at(QUARTA, 8), _at(QUARTA, 11)),
+        ]
+        turnos = {"DOBRA1": [_turno(2)]}
+        composition, hours = self._composition(estados, turnos)
+        items = {item["label"]: item for item in composition["items"]}
+        explainer, _ = _explainer(estados, turnos)
+        tree = explainer.explain("tempo.sem_demanda", _day_filters())
+
+        # Cartão e explicação mostram o mesmo número, com o aviso do que ficou de fora.
+        self.assertEqual(items["Recurso sem demanda"]["seconds"], 2 * H)
+        self.assertEqual(items["Recurso sem demanda"]["seconds"], tree.total_seconds)
+        self.assertEqual(items["Recurso sem demanda"]["average_seconds"], 2 * H)
+        self.assertIn("1 recurso sem turno", composition["average_note"])
+        # Os números do resto do sistema (OEE, por recurso) não foram recortados.
+        self.assertEqual(hours["no_demand_seconds"], 5 * H)
+        self.assertEqual(hours["resource_count"], 1)
 
     def test_time_composition_without_calendar_has_no_average(self):
         composition, _ = self._composition(_full_day_states(), {})
