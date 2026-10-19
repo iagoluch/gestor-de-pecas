@@ -18,12 +18,21 @@ from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.explanation import ExplanationResponse, ValueExplanationResponse
 from mes.contracts import AnalyticsFilter
 from mes.services.metric_explanation import MetricExplanationService, UnknownMetricError
+from mes.services.quality_explanation import QualityExplanationService
 from mes.services.value_explanation import ValueExplanationService
 
 
 # Despacho por prefixo do id: ``tempo.*`` fica no serviço de tempo (que também
-# responde 422 para id desconhecido); cada família nova entra aqui.
-_VALUE_PREFIXES = ("qtd.",)
+# responde 422 para id desconhecido); cada família nova entra aqui, com a fonte
+# que a própria tela usa.
+_VALUE_SERVICES = {
+    # Visão Geral (``ManagementService.get_overview``).
+    "qtd.": lambda facade: ValueExplanationService(facade.management, facade.db),
+    # Análises > Qualidade (``facade.analytics.quality``) e Alertas/Auditoria
+    # (``facade.audit_service.run_period``, o mesmo de ``facade.auditoria``).
+    "qld.": lambda facade: QualityExplanationService(facade.analytics, facade.audit_service),
+}
+_VALUE_PREFIXES = tuple(_VALUE_SERVICES)
 
 
 router = APIRouter(
@@ -64,12 +73,15 @@ def explain_for_user(facade, metric: str, filters: AnalyticsFilter, user: Sessio
     uma única fonte da árvore, nunca aceita do cliente.
     """
     metric = metric.strip()
-    service_class = (
-        ValueExplanationService
-        if metric.startswith(_VALUE_PREFIXES)
-        else MetricExplanationService
+    factory = next(
+        (build for prefix, build in _VALUE_SERVICES.items() if metric.startswith(prefix)),
+        None,
     )
-    service = service_class(facade.management, facade.db)
+    service = (
+        factory(facade)
+        if factory is not None
+        else MetricExplanationService(facade.management, facade.db)
+    )
     try:
         tree = service.explain(metric, filters)
     except UnknownMetricError as exc:

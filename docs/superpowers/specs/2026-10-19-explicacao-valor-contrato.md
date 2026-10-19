@@ -25,11 +25,12 @@ O despacho é por prefixo: `tempo.*` continua no `MetricExplanationService`; os 
   "truncated": false,
   "notes": ["avisos de divergência conhecida, em frase simples"]
 }
-Node = {"kind": "sector|resource|op|event|part|input", "label": "...", "value": 5.0,
+Node = {"kind": "sector|resource|op|event|part|input|group", "label": "...", "value": 5.0,
         "children": [Node], "detail": {"chave": "valor"} | null, "truncated": false}
 ```
 
 - `detail` de um registro folha: só o que existe (id do registro, OP, operador, data/hora, motivo, origem). Nunca inventar campo.
+- `kind: "group"` = agrupamento que não é setor (tipo ou gravidade da inconsistência); a soma dos filhos fecha com o valor.
 - `kind: "input"` = entrada de fórmula (ex.: numerador e denominador de uma taxa); a soma dos filhos NÃO precisa bater com o valor, e a `reconciliation` descreve a fórmula (`sum` = resultado recomposto das entradas).
 - Nome de operador: cortado para quem não é gestão (reusa `redact_operator_names`; estenda se `detail.operador` precisar).
 - Corte por tamanho: máx. 200 folhas por recurso, `truncated: true`, total sempre correto.
@@ -49,6 +50,16 @@ Fonte: `eventos_quantidade_producao` pelo MESMO caminho de `ManagementService.ge
 Notas obrigatórias (divergências conhecidas, mostrar e NÃO corrigir):
 - taxa de refugo ignora retrabalho; FTT inclui.
 - os totais da Visão Geral/Produção realizada vêm dos eventos do período; as tabelas "Produção > OPs" e "Planejado x Realizado" somam os apontamentos por OP (não restritos ao período) — podem divergir.
+
+## Lote 2 — qualidade e auditoria (`qld.*`, `mes/services/quality_explanation.py`)
+
+| id | unit | fonte do valor | árvore |
+|---|---|---|---|
+| `qld.boa` / `qld.refugo` / `qld.retrabalho` | pcs | `IndustrialAnalyticsService.quality()["totals"]` (Análises > Qualidade) | setor → recurso → lançamento, com os MESMOS eventos de `_quantity_events` |
+| `qld.auditoria.total` | count | `AuditService.run_period()["count"]` (Alertas e Auditoria) | gravidade → tipo → recurso → registro |
+| `qld.auditoria.critico` / `.erro` / `.aviso` | count | `run_period()["by_severity"][nível]` | tipo → recurso → registro |
+
+Notas obrigatórias: `qld.boa` não inclui as peças boas do Corte (a Visão Geral inclui; pode ser menor que `qtd.boa`); fonte reserva quando não há lançamentos de quantidade; retrabalho parcial; resumo por motivo no refugo/retrabalho. Na auditoria: sem percentual de confiabilidade (sem fórmula oficial); lacunas de calendário são diagnóstico, não alerta; rateio só conferido sem filtro de OP/operação; fonte reserva do estado físico; a tabela da Auditoria mostra 200 linhas, os cartões contam todas. Gravidade não reconhecida entra só no Total (grupo próprio) e vai para `excluded` nos cartões por nível.
 
 ## Totais somados no navegador (Produção > OPs, Planejado x Realizado)
 

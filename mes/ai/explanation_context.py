@@ -223,7 +223,10 @@ def build_explanation_context(tree: dict, *, max_tokens: int) -> str:
         parts.extend(head)
         if body:
             parts.append(
-                "Composição (setor > recurso > lançamento):"
+                # ``count`` = registros de auditoria: o 1º nível é o tipo/gravidade.
+                "Composição (grupo > recurso > registro):"
+                if unit == "count"
+                else "Composição (setor > recurso > lançamento):"
                 if unit
                 else "Composição (setor > recurso > trecho):"
             )

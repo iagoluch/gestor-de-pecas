@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
+import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
@@ -520,13 +521,35 @@ export function AnalyticsQualityPage() {
     label: String(row.motivo ?? row.razao ?? "Não informado"),
     value: Number(row.quantidade ?? row.count ?? 0),
   }));
+  // Só vira clicável o que tem peça para explicar; zero e "Não informado" ficam texto simples.
+  const qualityNode = (metric: string, label: string, value: number | null | undefined) => (
+    typeof value === "number" && value > 0 ? (
+      <ExplainableValue metric={metric} filters={filters.filters} context={`${label} ${formatNumber(value)}`}>{formatNumber(value)}</ExplainableValue>
+    ) : undefined
+  );
+  const sectorCell = (metric: string, sector: string, label: string, value: number | null | undefined) => {
+    const text = formatNumber(value);
+    if (typeof value !== "number" || value <= 0 || !sector || /^nao[_ ]informado$/i.test(sector.normalize("NFD").replace(/[̀-ͯ]/g, "").trim())) return text;
+    return (
+      <ExplainableValue metric={metric} filters={{ ...filters.filters, sector }} context={`${label} em ${displayName(sector)} ${text}`}>{text}</ExplainableValue>
+    );
+  };
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Produção boa" value={formatNumber(data?.totals.boa)} accent="success" />
-        <MetricCard label="Refugo" value={formatNumber(data?.totals.refugo)} accent="danger" />
-        <MetricCard label="Retrabalho" value={formatNumber(data?.totals.retrabalho)} accent="warning" />
-        <MetricCard label="FTT" value={data?.ftt.value === null ? availabilityLabel[data.ftt.availability] : formatPercent(data?.ftt.value)} detail={data?.ftt.reason ?? undefined} accent="teal" availability={metricState(data?.ftt)} />
+        <MetricCard label="Produção boa" value={formatNumber(data?.totals.boa)} valueNode={qualityNode("qld.boa", "Produção boa", data?.totals.boa)} accent="success" />
+        <MetricCard label="Refugo" value={formatNumber(data?.totals.refugo)} valueNode={qualityNode("qld.refugo", "Refugo", data?.totals.refugo)} accent="danger" />
+        <MetricCard label="Retrabalho" value={formatNumber(data?.totals.retrabalho)} valueNode={qualityNode("qld.retrabalho", "Retrabalho", data?.totals.retrabalho)} accent="warning" />
+        <MetricCard
+          label="FTT"
+          value={data?.ftt.value === null ? availabilityLabel[data.ftt.availability] : formatPercent(data?.ftt.value)}
+          valueNode={typeof data?.ftt.value === "number" ? (
+            <ExplainableValue metric="qtd.ftt" filters={filters.filters} context={`FTT ${formatPercent(data.ftt.value)}`}>{formatPercent(data.ftt.value)}</ExplainableValue>
+          ) : undefined}
+          detail={data?.ftt.reason ?? undefined}
+          accent="teal"
+          availability={metricState(data?.ftt)}
+        />
       </div>
       <div className="two-column-grid content-section">
         <SectionCard title="Refugo por motivo">{scrap.length ? <BarList data={scrap} unit=" peças" /> : <EmptyState />}</SectionCard>
@@ -536,9 +559,9 @@ export function AnalyticsQualityPage() {
             rowKey={(row) => row.setor}
             columns={[
               { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
-              { key: "good", label: "Boas", render: (row) => formatNumber(row.boa) },
-              { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
-              { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
+              { key: "good", label: "Boas", render: (row) => sectorCell("qld.boa", row.setor, "Boas", row.boa) },
+              { key: "scrap", label: "Refugo", render: (row) => sectorCell("qld.refugo", row.setor, "Refugo", row.refugo) },
+              { key: "rework", label: "Retrabalho", render: (row) => sectorCell("qld.retrabalho", row.setor, "Retrabalho", row.retrabalho) },
             ]}
           />
         </SectionCard>

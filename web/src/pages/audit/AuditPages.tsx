@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
+import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
@@ -80,13 +81,18 @@ export function AuditIssuesPage() {
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
+  const auditNode = (metric: string, label: string, value: number | undefined) => (
+    typeof value === "number" && value > 0 ? (
+      <ExplainableValue metric={metric} filters={filters.filters} context={`${label} ${formatNumber(value)}`}>{formatNumber(value)}</ExplainableValue>
+    ) : undefined
+  );
   return (
     <PageFrame staleError={query.error} sectionId="audit" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Críticas" value={formatNumber(data?.by_severity.critico ?? 0)} accent="danger" />
-        <MetricCard label="Erros" value={formatNumber(data?.by_severity.erro ?? 0)} accent="danger" />
-        <MetricCard label="Atenções" value={formatNumber(data?.by_severity.aviso ?? 0)} accent="warning" />
-        <MetricCard label="Total" value={formatNumber(data?.count ?? 0)} />
+        <MetricCard label="Críticas" value={formatNumber(data?.by_severity.critico ?? 0)} valueNode={auditNode("qld.auditoria.critico", "Críticas", data?.by_severity.critico)} accent="danger" />
+        <MetricCard label="Erros" value={formatNumber(data?.by_severity.erro ?? 0)} valueNode={auditNode("qld.auditoria.erro", "Erros", data?.by_severity.erro)} accent="danger" />
+        <MetricCard label="Atenções" value={formatNumber(data?.by_severity.aviso ?? 0)} valueNode={auditNode("qld.auditoria.aviso", "Atenções", data?.by_severity.aviso)} accent="warning" />
+        <MetricCard label="Total" value={formatNumber(data?.count ?? 0)} valueNode={auditNode("qld.auditoria.total", "Total", data?.count)} />
       </div>
       <SectionCard title="Inconsistências detectadas" className="content-section section-card--table">
         <DataTable

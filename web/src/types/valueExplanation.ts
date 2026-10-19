@@ -8,7 +8,7 @@ import type { ExplanationTree } from "./explanation";
  */
 export type ValueUnit = "pcs" | "pct" | "brl" | "count" | "hours" | "text";
 
-export type ValueNodeKind = "sector" | "resource" | "op" | "event" | "part" | "input";
+export type ValueNodeKind = "sector" | "resource" | "op" | "event" | "part" | "input" | "group";
 
 export type ValueDetail = Record<string, string | number | boolean | null>;
 
