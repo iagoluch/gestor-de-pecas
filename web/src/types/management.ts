@@ -196,6 +196,8 @@ export interface PagedNestings {
   periodo: Record<string, string | null>;
   items: NestingRow[];
   count: number;
+  /** Somas sobre todos os nestings do filtro (não só a página); são o que os cartões mostram. */
+  totals?: { previsto_segundos: number; real_segundos: number; real_periodo_segundos: number };
   page: PageMeta;
   availability: Availability;
   time_policy: { total_field: string; filtered_period_field: string; reason: string };

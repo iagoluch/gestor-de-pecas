@@ -221,6 +221,8 @@ Rastro: parcial — a ficha mostra por setor/recurso; a regra "participação do
 
 **Lote 4 entregue (20/10/2026):** D1–D9 clicáveis via `GET /api/v1/diretoria/explicacao` (`dir.*`, só admin/diretoria; `/management/explicacao` recusa `dir.*`). Linha de motivo na Ficha abre só aquele motivo (`motivo=`); setor casa sem diferenciar maiúscula. Limites conhecidos: (1) valor da hora não é versionado — o custo usa a taxa atual (confirmado na explicação de D9); (2) pessoa sem crachá aparece como "Cadastrado" na tela de Custos mas a explicação diz "não cadastrado" — divergência só de texto, valor correto.
 
+**Lote 5 entregue (20/10/2026):** só C1 ficou clicável — os 4 cartões de Rastreabilidade > Lote / Material / Nesting (`cut.nestings`, `cut.previsto`, `cut.realizado`, `cut.desvio`; árvore Máquina > Tarefa > Plano > Nesting). `/traceability/nestings` passou a devolver `totals` (soma de TODOS os itens do filtro, não só da página). Cartões só clicam com a busca vazia e sem carregamento (senão o número da tela e o explicado divergem). **Não feitos, de propósito:** C2 (`calcular_dashboard_mes`) não tem tela, só teste; C3/C4/C5 ficam em telas de operador/Destaque (regra: sem novo alvo de clique ali). Limite conhecido: nesting ainda cortando usa "agora", então a explicação pode diferir do cartão por segundos.
+
 ## H. TEMPO PADRÃO
 
 `standard_time.py` (350 linhas) e `StandardTimePage.tsx`.

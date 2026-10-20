@@ -39,8 +39,14 @@ def nestings(
                 for key in ("tarefa", "programa", "nesting", "maquina", "material", "status")
             )
         ]
+    # Somas sobre TODOS os itens filtrados (não só a página): são o que os cartões da tela mostram.
+    totals = {
+        key: sum(float(item.get(key) or 0) for item in items)
+        for key in ("previsto_segundos", "real_segundos", "real_periodo_segundos")
+    }
     return {
         **{key: value for key, value in payload.items() if key not in {"items", "count"}},
+        "totals": totals,
         "items": params.slice(items),
         "page": params.meta(len(items)),
         "count": len(items),

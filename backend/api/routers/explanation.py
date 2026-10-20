@@ -17,6 +17,7 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.explanation import ExplanationResponse, ValueExplanationResponse
 from mes.contracts import AnalyticsFilter
+from mes.services.cut_explanation import CutExplanationService
 from mes.services.kpi_explanation import KpiExplanationService
 from mes.services.metric_explanation import MetricExplanationService, UnknownMetricError
 from mes.services.quality_explanation import QualityExplanationService
@@ -34,6 +35,8 @@ _VALUE_SERVICES = {
     "qld.": lambda facade: QualityExplanationService(facade.analytics, facade.audit_service),
     # OEE e componentes: Visão Geral e Análises > OEE (o mesmo ``get_overview``).
     "kpi.": lambda facade: KpiExplanationService(facade.management),
+    # Rastreabilidade > Lote / Material / Nesting (``management.get_nesting_times``).
+    "cut.": lambda facade: CutExplanationService(facade.management),
 }
 _VALUE_PREFIXES = tuple(_VALUE_SERVICES)
 

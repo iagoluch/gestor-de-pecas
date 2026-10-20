@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DataTable } from "../../components/DataTable";
+import { ExplainableValue } from "../../components/ExplainableValue";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
@@ -146,22 +148,33 @@ export function TraceabilityNestingPage() {
   if (query.loading && !query.data) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}><LoadingState /></PageFrame>;
   if (query.error && !query.data) return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
-  const nesting = (data?.items ?? []).reduce(
-    (acc, row) => ({
-      previsto: acc.previsto + Number(row.previsto_segundos ?? 0),
-      real: acc.real + Number(row.real_segundos ?? 0),
-    }),
-    { previsto: 0, real: 0 },
+  // Soma do filtro inteiro (vem do servidor); sem ela, cai na soma da página carregada.
+  const nesting = data?.totals
+    ? { previsto: data.totals.previsto_segundos, real: data.totals.real_segundos }
+    : (data?.items ?? []).reduce(
+      (acc, row) => ({
+        previsto: acc.previsto + Number(row.previsto_segundos ?? 0),
+        real: acc.real + Number(row.real_segundos ?? 0),
+      }),
+      { previsto: 0, real: 0 },
+    );
+  // A explicação refaz a conta sobre o filtro de período e máquina, sem a busca por texto:
+  // com a busca ativa (ou dados recarregando) os cartões continuam texto simples, para o número clicado ser sempre o explicado.
+  const explainFilters = { ...filters.filters, sector: "", op: "", operation: "", product: "", operator: "" };
+  const explain = (metric: string, label: string, text: string): ReactNode => (
+    search.trim() || deferred || query.loading ? text : <ExplainableValue metric={metric} filters={explainFilters} context={`${label} ${text}`}>{text}</ExplainableValue>
   );
+  const desvioText = nesting.previsto > 0 ? formatPercent((nesting.real - nesting.previsto) / nesting.previsto * 100) : "Sem previsto no filtro";
   return (
     <PageFrame staleError={query.error} sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Nestings no filtro" value={formatNumber(data?.count ?? 0)} />
-        <MetricCard label="Tempo previsto" value={formatDuration(nesting.previsto)} accent="primary" />
-        <MetricCard label="Tempo realizado" value={formatDuration(nesting.real)} accent="success" />
+        <MetricCard label="Nestings no filtro" value={formatNumber(data?.count ?? 0)} valueNode={explain("cut.nestings", "Nestings no filtro", formatNumber(data?.count ?? 0))} />
+        <MetricCard label="Tempo previsto" value={formatDuration(nesting.previsto)} valueNode={explain("cut.previsto", "Tempo previsto", formatDuration(nesting.previsto))} accent="primary" />
+        <MetricCard label="Tempo realizado" value={formatDuration(nesting.real)} valueNode={explain("cut.realizado", "Tempo realizado", formatDuration(nesting.real))} accent="success" />
         <MetricCard
           label="Desvio do previsto"
-          value={nesting.previsto > 0 ? formatPercent((nesting.real - nesting.previsto) / nesting.previsto * 100) : "Sem previsto no filtro"}
+          value={desvioText}
+          valueNode={nesting.previsto > 0 ? explain("cut.desvio", "Desvio do previsto", desvioText) : undefined}
           detail={nesting.previsto > 0 ? formatSignedDuration(nesting.real - nesting.previsto) : undefined}
           availability={nesting.previsto > 0 ? "disponivel" : "dados_insuficientes"}
           accent={nesting.real > nesting.previsto ? "danger" : "teal"}
