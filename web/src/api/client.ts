@@ -111,6 +111,15 @@ export const directorPaths = {
     return `${DIRECTOR_BASE}/ficha?${query.toString()}`;
   },
   costs: `${DIRECTOR_BASE}/custos`,
+  /** Conta aberta de um número da Diretoria (`dir.*`). Só os filtros preenchidos entram na rota. */
+  explain: (metric: string, periodo: DirectorPeriodName, filters: { setor?: string; recurso?: string; pessoa?: string; motivo?: string } = {}) => {
+    const query = new URLSearchParams({ metric, periodo });
+    if (filters.setor) query.set("setor", filters.setor);
+    if (filters.recurso) query.set("recurso", filters.recurso);
+    if (filters.pessoa) query.set("pessoa", filters.pessoa);
+    if (filters.motivo) query.set("motivo", filters.motivo);
+    return `${DIRECTOR_BASE}/explicacao?${query.toString()}`;
+  },
 };
 
 export const getDirectorPanel = (periodo: DirectorPeriodName, signal?: AbortSignal) =>

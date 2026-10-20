@@ -219,6 +219,8 @@ Janelas: `resolve_period` (`director_summary.py:48`): hoje, semana (segunda), m�
 **D9 Valor da hora** — `DirectorCosts.tsx`: taxas por recurso e por operador (cadastro manual).
 Rastro: parcial — a ficha mostra por setor/recurso; a regra "participação do operador com início mais recente vence" decide quem paga a parada. Detalhe: sim (ficha por setor); não há detalhe até o evento. Lacuna: histórico de valor da hora não é versionado (suposição — conferir se `CostRates` guarda vigência); custo usa a taxa atual.
 
+**Lote 4 entregue (20/10/2026):** D1–D9 clicáveis via `GET /api/v1/diretoria/explicacao` (`dir.*`, só admin/diretoria; `/management/explicacao` recusa `dir.*`). Linha de motivo na Ficha abre só aquele motivo (`motivo=`); setor casa sem diferenciar maiúscula. Limites conhecidos: (1) valor da hora não é versionado — o custo usa a taxa atual (confirmado na explicação de D9); (2) pessoa sem crachá aparece como "Cadastrado" na tela de Custos mas a explicação diz "não cadastrado" — divergência só de texto, valor correto.
+
 ## H. TEMPO PADRÃO
 
 `standard_time.py` (350 linhas) e `StandardTimePage.tsx`.

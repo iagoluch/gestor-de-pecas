@@ -6,6 +6,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { DirectorCosts, DirectorPeriodName, DirectorSheet as DirectorSheetData } from "../../types/director";
 import { formatNumber, formatPieces } from "../../utils/format";
+import { DirectorExplainable } from "./DirectorExplainable";
 import { costLine, costText, formatHoursValue } from "./directorFormat";
 
 function sorted(values: Iterable<string>) {
@@ -33,6 +34,11 @@ export function DirectorSheet({ periodo, setor, recurso, onSetor, onRecurso }: {
     ...(recurso ? [recurso] : []),
   ]);
   const data = query.data;
+  const filters = { setor: setor || undefined, recurso: recurso || undefined };
+  // Cada número da ficha abre a conta com o mesmo período e os mesmos filtros da tela.
+  const explain = (metric: string, context: string, text: string, extra: { motivo?: string } = {}) => (
+    <DirectorExplainable context={`${context} ${text}`} target={{ metric, periodo, ...filters, ...extra }}>{text}</DirectorExplainable>
+  );
 
   return (
     <>
@@ -61,22 +67,25 @@ export function DirectorSheet({ periodo, setor, recurso, onSetor, onRecurso }: {
           <p className="director-sheet__text">{data.texto}</p>
 
           <div className="metric-grid metric-grid--five">
-            <MetricCard label="Trabalhou" value={formatHoursValue(data.trabalhou_h)} detail={`de ${formatHoursValue(data.disponivel_h)} disponíveis no turno`} accent="success" />
-            <MetricCard label="Produzido" value={formatPieces(data.produzido)} detail="Peças boas lançadas" accent="teal" />
+            <MetricCard label="Trabalhou" value={formatHoursValue(data.trabalhou_h)} valueNode={explain("dir.trabalhou", "Trabalhou", formatHoursValue(data.trabalhou_h))} detail={`de ${formatHoursValue(data.disponivel_h)} disponíveis no turno`} accent="success" />
+            <MetricCard label="Produzido" value={formatPieces(data.produzido)} valueNode={explain("dir.produzido", "Produzido", formatPieces(data.produzido))} detail="Peças boas lançadas" accent="teal" />
             <MetricCard
               label="Parado"
               value={formatHoursValue(data.parado_h)}
+              valueNode={explain("dir.horas_paradas", "Parado", formatHoursValue(data.parado_h))}
               detail={data.motivo_principal ? `Principal motivo: ${data.motivo_principal}` : "Só paradas que não estavam planejadas"}
               accent="warning"
             />
             <MetricCard
               label="Custo do trabalho"
               value={costText(data.custo_trabalho, data.custo_trabalho_completo)}
+              valueNode={explain("dir.custo_trabalho", "Custo do trabalho", costText(data.custo_trabalho, data.custo_trabalho_completo))}
               detail={missingDetail(data.custo_trabalho_completo, data.custos_faltando_trabalho, "Horas trabalhadas × valor da hora")}
             />
             <MetricCard
               label="Custo das paradas"
               value={costText(data.custo_parada, data.custo_parada_completo)}
+              valueNode={explain("dir.custo_parada", "Custo das paradas", costText(data.custo_parada, data.custo_parada_completo))}
               detail={missingDetail(data.custo_parada_completo, data.custos_faltando_parada, "Horas paradas × valor da hora")}
               accent="danger"
             />
@@ -92,7 +101,7 @@ export function DirectorSheet({ periodo, setor, recurso, onSetor, onRecurso }: {
               {data.paradas_por_motivo.length ? (
                 <ul className="director-list">
                   {data.paradas_por_motivo.map((item) => (
-                    <li key={item.motivo}><span>{item.motivo}</span><strong>{formatHoursValue(item.horas)}</strong></li>
+                    <li key={item.motivo}><span>{item.motivo}</span><strong>{explain("dir.parado_motivo", `Parado por ${item.motivo}`, formatHoursValue(item.horas), { motivo: item.motivo })}</strong></li>
                   ))}
                 </ul>
               ) : (

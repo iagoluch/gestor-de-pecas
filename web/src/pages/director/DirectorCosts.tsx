@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/DataState
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { DirectorCosts as DirectorCostsData } from "../../types/director";
+import { DirectorExplainable, type DirectorExplainTarget } from "./DirectorExplainable";
 import { formatRate, parseRate } from "./directorFormat";
 
 const INVALID_RATE = "Valor inválido. Digite o valor da hora em reais, maior que zero, por exemplo 12,50.";
@@ -33,7 +34,7 @@ export function DirectorCosts() {
           {data.recursos.length ? (
             <ul className="director-rates">
               {data.recursos.map((item) => (
-                <RateRow key={item.recurso} label={item.nome || item.recurso} detail={[item.setor, item.nome && item.nome !== item.recurso ? item.recurso : null].filter(Boolean).join(" · ") || null} initial={item.valor_hora} onSave={(value) => putResourceRate(item.recurso, value)} />
+                <RateRow key={item.recurso} label={item.nome || item.recurso} detail={[item.setor, item.nome && item.nome !== item.recurso ? item.recurso : null].filter(Boolean).join(" · ") || null} initial={item.valor_hora} target={{ metric: "dir.valor_hora", periodo: "hoje", recurso: item.recurso }} onSave={(value) => putResourceRate(item.recurso, value)} />
               ))}
             </ul>
           ) : <EmptyState title="Nenhum recurso cadastrado" />}
@@ -47,6 +48,7 @@ export function DirectorCosts() {
                   label={person.nome || (person.cracha ? `Crachá ${person.cracha}` : `Operador ${person.operador_id}`)}
                   detail={person.nome && person.cracha ? `Crachá ${person.cracha}` : null}
                   initial={person.valor_hora}
+                  target={{ metric: "dir.valor_hora", periodo: "hoje", pessoa: String(person.operador_id) }}
                   onSave={(value) => putOperatorRate(person.operador_id, value)}
                 />
               ))}
@@ -58,13 +60,15 @@ export function DirectorCosts() {
   );
 }
 
-function RateRow({ label, detail, initial, onSave }: {
+function RateRow({ label, detail, initial, target, onSave }: {
   label: string;
   detail: string | null;
   initial: number | null;
+  target: DirectorExplainTarget;
   onSave: (value: number) => Promise<unknown>;
 }) {
   const [draft, setDraft] = useState(formatRate(initial));
+  const [saved, setSaved] = useState(initial);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function save() {
@@ -76,6 +80,7 @@ function RateRow({ label, detail, initial, onSave }: {
     }
     try {
       await onSave(value);
+      setSaved(value);
       setDraft(formatRate(value));
       setStatus({ ok: true, text: "Salvo." });
     } catch (reason) {
@@ -88,6 +93,12 @@ function RateRow({ label, detail, initial, onSave }: {
       <span className="director-rate__name">
         <strong>{label}</strong>
         {detail ? <small>{detail}</small> : null}
+        {saved !== null ? (
+          <small>
+            Cadastrado:{" "}
+            <DirectorExplainable context={`Valor cadastrado de ${label}`} target={target}>{`R$ ${formatRate(saved)}/h`}</DirectorExplainable>
+          </small>
+        ) : null}
       </span>
       <span className="director-rate__field">
         <span aria-hidden="true">R$</span>

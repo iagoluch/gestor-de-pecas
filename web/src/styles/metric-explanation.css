@@ -105,3 +105,35 @@ button.mx-row:focus-visible, .mx-stretch:focus-visible { outline: none; box-shad
 .mx-rule b { color: var(--text); font-weight: 600; }
 /* Número clicável dentro de cartões: herda o tamanho do valor e só ganha o pontilhado. */
 .explainable-value { font-weight: inherit; font-size: inherit; line-height: inherit; padding: 0 2px; }
+
+/* Diretoria: linha do ranking de perdas = ficha do setor (botão) + dois números clicáveis irmãos */
+.director-loss-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  border: 1px solid var(--border, #d9dee5);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.director-loss-row .director-loss {
+  border: 0;
+  background: transparent;
+  min-width: 0;
+}
+.director-loss-row .director-loss__numbers {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  padding-right: 12px;
+}
+.director-loss-row .director-loss { grid-template-columns: auto minmax(0, 1fr); }
+.director-loss-row:hover { border-color: var(--primary); background: var(--primary-soft); }
+.director-loss-row .director-loss:hover:not(:disabled) { border-color: transparent; background: transparent; }
+@media (max-width: 640px) {
+  .director-loss-row { grid-template-columns: 1fr; }
+  .director-loss-row .director-loss__numbers { grid-column: 1; justify-items: start; padding: 0 12px 10px; text-align: left; }
+}
+
+
+.metric-card__value > .explainable-value { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left; }

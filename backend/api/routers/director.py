@@ -18,12 +18,14 @@ from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.clock import request_now_func
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
+from backend.api.schemas.explanation import ValueExplanationResponse
 from backend.api.schemas.director import (
     DirectorCostsResponse,
     DirectorPanelResponse,
     DirectorRateRequest,
     DirectorSheetResponse,
 )
+from mes.services.director_explanation import DirectorExplanationService
 from mes.services.director_summary import DirectorSummaryError, DirectorSummaryService
 
 
@@ -67,6 +69,26 @@ def sheet(
 ):
     try:
         return DirectorSummaryService(database).sheet(periodo, setor, recurso, _now(request))
+    except DirectorSummaryError as error:
+        raise _app_error(error) from error
+
+
+@router.get("/explicacao", response_model=ValueExplanationResponse)
+def explain(
+    request: Request,
+    metric: str = Query(min_length=1, max_length=64),
+    periodo: str = Query(default="hoje", max_length=20),
+    setor: str | None = Query(default=None, max_length=60),
+    recurso: str | None = Query(default=None, max_length=80),
+    pessoa: str | None = Query(default=None, max_length=20),
+    motivo: str | None = Query(default=None, max_length=80),
+    database=Depends(get_database),
+):
+    """Conta aberta dos números em R$ e das horas da Diretoria (única porta dos valores em R$)."""
+    try:
+        return DirectorExplanationService(database).explain(
+            metric.strip(), periodo, setor=setor, recurso=recurso, pessoa=pessoa, motivo=motivo, now=_now(request)
+        ).to_dict()
     except DirectorSummaryError as error:
         raise _app_error(error) from error
 
