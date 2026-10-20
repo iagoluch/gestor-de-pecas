@@ -61,6 +61,23 @@ Notas obrigatórias (divergências conhecidas, mostrar e NÃO corrigir):
 
 Notas obrigatórias: `qld.boa` não inclui as peças boas do Corte (a Visão Geral inclui; pode ser menor que `qtd.boa`); fonte reserva quando não há lançamentos de quantidade; retrabalho parcial; resumo por motivo no refugo/retrabalho. Na auditoria: sem percentual de confiabilidade (sem fórmula oficial); lacunas de calendário são diagnóstico, não alerta; rateio só conferido sem filtro de OP/operação; fonte reserva do estado físico; a tabela da Auditoria mostra 200 linhas, os cartões contam todas. Gravidade não reconhecida entra só no Total (grupo próprio) e vai para `excluded` nos cartões por nível.
 
+## Lote 3 — KPIs de tempo e OEE (`kpi.*`, `mes/services/kpi_explanation.py`)
+
+Lê SOMENTE `management.get_overview(filters)` (mesma fonte do cartão): nada é recalculado por fora.
+
+| id | unit | fonte do valor | árvore |
+|---|---|---|---|
+| `kpi.oee` | pct | `kpis.oee` | entradas Disponibilidade, Performance e FTT (valores do cartão) → setor → recurso; fecha por `produto_dos_componentes` |
+| `kpi.disponibilidade` | pct | `kpis.availability` | Numerador (tempo trabalhado) e Denominador (tempo disponível) → setor → recurso; fecha por `soma_das_bases_dos_recursos` |
+| `kpi.performance` | pct | `kpis.performance` | tempo produtivo líquido ÷ tempo trabalhado (idem) |
+| `kpi.ae` | pct | `kpis_estendidos.ae` | produtivo líquido ÷ disponível (idem) |
+| `kpi.produtividade` | pct | `kpis_estendidos.productivity` | em produção ÷ operacional (idem) |
+| `kpi.utilizacao` | pct | `kpis_estendidos.utilization` | trabalhado ÷ operacional (idem) |
+
+FTT continua sendo `qtd.ftt` (Lote 1). Notas obrigatórias: período todo sem demanda (valor vem da regra, não da conta das horas, com os recursos em `excluded`); alerta `PERFORMANCE_ABOVE_LIMIT_ALERT` (valor mostrado sem corte) e lista de recursos acima de 100%; peças boas sem tempo padrão cadastrado; Performance com tempo estimado; indicador "só no total" para A.E./Produtividade/Utilização; Utilização usa as mesmas bases da Disponibilidade.
+
+Telas ligadas: Análises > OEE (7 cartões), Visão Geral (link "Resultado no filtro" dentro do painel do KPI, porque o cartão inteiro já é um botão), Início > Setores (colunas Produção boa/Refugo/Retrabalho/Produção/Setup, reusando `qtd.*`/`tempo.*` com o filtro de setor). Fora deste lote: coluna "Paradas" dos Setores (mistura planejada, não planejada e sem identificação) e cartões de destaque; Andon/TV (sem botão em TV).
+
 ## Totais somados no navegador (Produção > OPs, Planejado x Realizado)
 
 Não passam pelo backend: o painel recebe a explicação já montada no navegador com as MESMAS linhas que geraram a soma (sem segundo cálculo). Mostrar: uma linha por OP (valor da coluna), `reconciliation` = soma das linhas = número do cartão, e SEMPRE a nota "Soma das N linhas carregadas; o filtro tem M no total" quando N < M (limite de 200). Sem chat de IA nesses (não há métrica no servidor).

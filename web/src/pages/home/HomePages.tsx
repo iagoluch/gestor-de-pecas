@@ -68,6 +68,13 @@ export function HomeSectorsPage() {
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="home" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const rows = query.data?.items ?? [];
+  // Só vira clicável o que tem valor para explicar; zero fica texto simples. "Paradas" fica de fora:
+  // mistura planejada, não planejada e sem identificação, e ainda não tem uma explicação única.
+  const sectorCell = (metric: string, row: SectorSummary, label: string, text: string, value: number) => (
+    value > 0 ? (
+      <ExplainableValue metric={metric} filters={{ ...filters.filters, sector: row.setor }} context={`${label} em ${displayName(row.setor)} ${text}`}>{text}</ExplainableValue>
+    ) : text
+  );
   return (
     <PageFrame staleError={query.error} sectionId="home" title={title} subtitle={subtitle}>
       {/* Sem setores no filtro, os destaques seriam zeros sem setor: o vazio fica só na tabela (GE-13). */}
@@ -89,12 +96,12 @@ export function HomeSectorsPage() {
           emptyTitle="Sem registros para o filtro selecionado"
           columns={[
             { key: "sector", label: "Setor", render: (row) => <Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(row.setor)}`}>{displayName(row.setor)}</Link> },
-            { key: "good", label: "Produção boa", render: (row) => formatNumber(row.producao_boa) },
-            { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
-            { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
+            { key: "good", label: "Produção boa", render: (row) => sectorCell("qtd.boa", row, "Produção boa", formatNumber(row.producao_boa), row.producao_boa) },
+            { key: "scrap", label: "Refugo", render: (row) => sectorCell("qtd.refugo", row, "Refugo", formatNumber(row.refugo), row.refugo) },
+            { key: "rework", label: "Retrabalho", render: (row) => sectorCell("qtd.retrabalho", row, "Retrabalho", formatNumber(row.retrabalho), row.retrabalho) },
             { key: "ops", label: "OPs", render: (row) => row.ops },
-            { key: "production", label: "Produção", render: (row) => formatHours(row.tempo_producao_segundos) },
-            { key: "setup", label: "Setup", render: (row) => formatHours(row.tempo_setup_segundos) },
+            { key: "production", label: "Produção", render: (row) => sectorCell("tempo.producao", row, "Tempo de produção", formatHours(row.tempo_producao_segundos), row.tempo_producao_segundos) },
+            { key: "setup", label: "Setup", render: (row) => sectorCell("tempo.setup", row, "Tempo de setup", formatHours(row.tempo_setup_segundos), row.tempo_setup_segundos) },
             { key: "downtime", label: "Paradas", render: (row) => formatHours(row.tempo_parada_segundos) },
           ]}
         />

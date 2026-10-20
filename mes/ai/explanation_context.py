@@ -99,9 +99,18 @@ def _part_unit(unit: str | None) -> str | None:
     return "count" if unit == "pct" else unit
 
 
+def _in_seconds(item: dict) -> bool:
+    """Entrada/excluído medido em segundos (bases de tempo dos ``kpi.*``)."""
+    return ((item.get("detail") or {}).get("unidade") or item.get("unidade")) == "segundos"
+
+
 def _node_amount(node: dict, unit: str | None) -> str:
     if unit is None:
         return hms(node.get("seconds"))
+    if node.get("kind") == "input" and _in_seconds(node):
+        return hms(node.get("value"))
+    if node.get("kind") == "input" and (node.get("detail") or {}).get("unidade") == "%":
+        return _amount(node.get("value"), "pct")
     return _amount(node.get("value"), _part_unit(unit) if node.get("kind") == "input" else unit)
 
 
@@ -186,7 +195,9 @@ def _footer(tree: dict, *, max_excluded: int = _MAX_EXCLUDED, max_notes: int = _
         lines.append("Itens que ficaram de fora desta métrica (e por quê):")
         for item in excluded[:max_excluded]:
             amount = (
-                _amount(item.get("value"), _part_unit(tree.get("unit")))
+                hms(item.get("value"))
+                if tree.get("kind") == "value" and _in_seconds(item)
+                else _amount(item.get("value"), _part_unit(tree.get("unit")))
                 if tree.get("kind") == "value"
                 else hms(item.get("seconds"))
             )
@@ -213,6 +224,7 @@ def build_explanation_context(tree: dict, *, max_tokens: int) -> str:
     """
     children = list(tree.get("children") or [])
     unit = tree.get("unit") if tree.get("kind") == "value" else None
+    is_kpi = str(tree.get("metric") or "").startswith("kpi.")
     tree_truncated = bool(tree.get("truncated")) or _has_truncated(children)
     head = _header(tree)
     full_foot = _footer(tree)
@@ -226,6 +238,9 @@ def build_explanation_context(tree: dict, *, max_tokens: int) -> str:
                 # ``count`` = registros de auditoria: o 1º nível é o tipo/gravidade.
                 "Composição (grupo > recurso > registro):"
                 if unit == "count"
+                # ``kpi.*``: primeiro as entradas da fórmula, depois setor > recurso.
+                else "Composição (entradas da fórmula, depois setor > recurso):"
+                if is_kpi
                 else "Composição (setor > recurso > lançamento):"
                 if unit
                 else "Composição (setor > recurso > trecho):"

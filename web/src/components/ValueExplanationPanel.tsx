@@ -21,9 +21,22 @@ export function formatValue(value: number | string | null | undefined, unit: Val
   }
 }
 
-/** Entradas de fórmula (numerador/denominador) são quantidades, mesmo quando o resultado é %. */
+/**
+ * Entradas de fórmula (numerador/denominador) não têm a unidade do resultado: o `kpi.*` diz
+ * quando são segundos ("segundos") ou percentuais ("%"); sem aviso, são quantidades.
+ */
+function inputValue(
+  value: number | string | null | undefined,
+  declared: string | number | boolean | null | undefined,
+  unit: ValueUnit,
+): string {
+  if (declared === "segundos" && typeof value === "number" && Number.isFinite(value)) return formatHours(value);
+  if (declared === "%") return formatValue(value, "pct");
+  return formatValue(value, unit === "pct" ? "count" : unit);
+}
+
 function nodeValue(node: ValueNode, unit: ValueUnit) {
-  return formatValue(node.value, node.kind === "input" && unit === "pct" ? "count" : unit);
+  return node.kind === "input" ? inputValue(node.value, node.detail?.unidade, unit) : formatValue(node.value, unit);
 }
 
 const DETAIL_LABELS: Record<string, string> = {
@@ -54,8 +67,13 @@ function detailLabel(key: string) {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+// Chaves técnicas que só orientam a tela (unidade do número, id da métrica): não são dado para o gestor ler.
+const HIDDEN_DETAIL_KEYS = new Set(["unidade", "metric"]);
+
 function detailEntries(detail: ValueDetail | null) {
-  return Object.entries(detail ?? {}).filter(([, value]) => value !== null && value !== undefined && value !== "");
+  return Object.entries(detail ?? {}).filter(
+    ([key, value]) => !HIDDEN_DETAIL_KEYS.has(key) && value !== null && value !== undefined && value !== "",
+  );
 }
 
 function hasTruncated(nodes: ValueNode[]): boolean {
@@ -170,7 +188,7 @@ export function ValueExplanationBody({ explanation }: { explanation: ValueExplan
       {explanation.excluded.length || explanation.notes.length ? (
         <ul className="mx-faint">
           {explanation.excluded.map((item) => (
-            <li key={`${item.label}-${item.value}`}>({item.label} {formatValue(item.value, explanation.unit === "pct" ? "count" : explanation.unit)}: {item.reason})</li>
+            <li key={`${item.label}-${item.value}`}>({item.label} {inputValue(item.value, item.unidade, explanation.unit)}: {item.reason})</li>
           ))}
           {explanation.notes.map((note) => <li key={note}>{note}</li>)}
         </ul>

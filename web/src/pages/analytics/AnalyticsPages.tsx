@@ -340,18 +340,24 @@ export function AnalyticsOeePage() {
   const components = data?.components ?? {};
   const extended = data?.extended_metrics ?? {};
   const losses = data?.losses_breakdown ?? {};
+  // Só vira clicável o que tem número para explicar; "dados insuficientes" fica texto simples.
+  const kpiNode = (id: string, label: string, value: MetricValue | undefined) => (
+    value && typeof value.value === "number" ? (
+      <ExplainableValue metric={id} filters={filters.filters} context={`${label} ${metric(value)}`}>{metric(value)}</ExplainableValue>
+    ) : undefined
+  );
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="OEE" value={metric(components.oee)} detail={components.oee?.reason ?? data?.reason ?? undefined} accent="purple" availability={metricState(components.oee)} />
-        <MetricCard label="Disponibilidade" value={metric(components.availability)} detail={components.availability?.reason ?? undefined} accent="success" availability={metricState(components.availability)} />
-        <MetricCard label="Performance" value={metric(components.performance)} detail={components.performance?.reason ?? undefined} accent="warning" availability={metricState(components.performance)} />
-        <MetricCard label="FTT / Qualidade" value={metric(components.ftt)} detail={components.ftt?.reason ?? undefined} accent="teal" availability={metricState(components.ftt)} />
+        <MetricCard label="OEE" value={metric(components.oee)} valueNode={kpiNode("kpi.oee", "OEE", components.oee)} detail={components.oee?.reason ?? data?.reason ?? undefined} accent="purple" availability={metricState(components.oee)} />
+        <MetricCard label="Disponibilidade" value={metric(components.availability)} valueNode={kpiNode("kpi.disponibilidade", "Disponibilidade", components.availability)} detail={components.availability?.reason ?? undefined} accent="success" availability={metricState(components.availability)} />
+        <MetricCard label="Performance" value={metric(components.performance)} valueNode={kpiNode("kpi.performance", "Performance", components.performance)} detail={components.performance?.reason ?? undefined} accent="warning" availability={metricState(components.performance)} />
+        <MetricCard label="FTT / Qualidade" value={metric(components.ftt)} valueNode={kpiNode("qtd.ftt", "FTT / Qualidade", components.ftt)} detail={components.ftt?.reason ?? undefined} accent="teal" availability={metricState(components.ftt)} />
       </div>
       <div className="metric-grid metric-grid--four content-section">
-        <MetricCard label="AE" value={metric(extended.ae)} detail={extended.ae?.reason ?? "Produtivo líquido sobre tempo disponível."} accent="purple" availability={metricState(extended.ae)} />
-        <MetricCard label="Produtividade" value={metric(extended.productivity)} detail={extended.productivity?.reason ?? "Produtivo bruto sobre tempo operacional."} accent="teal" availability={metricState(extended.productivity)} />
-        <MetricCard label="Utilização" value={metric(extended.utilization)} detail={extended.utilization?.reason ?? "Tempo trabalhado sobre tempo operacional."} accent="warning" availability={metricState(extended.utilization)} />
+        <MetricCard label="AE" value={metric(extended.ae)} valueNode={kpiNode("kpi.ae", "AE", extended.ae)} detail={extended.ae?.reason ?? "Produtivo líquido sobre tempo disponível."} accent="purple" availability={metricState(extended.ae)} />
+        <MetricCard label="Produtividade" value={metric(extended.productivity)} valueNode={kpiNode("kpi.produtividade", "Produtividade", extended.productivity)} detail={extended.productivity?.reason ?? "Produtivo bruto sobre tempo operacional."} accent="teal" availability={metricState(extended.productivity)} />
+        <MetricCard label="Utilização" value={metric(extended.utilization)} valueNode={kpiNode("kpi.utilizacao", "Utilização", extended.utilization)} detail={extended.utilization?.reason ?? "Tempo trabalhado sobre tempo operacional."} accent="warning" availability={metricState(extended.utilization)} />
       </div>
       <div className="two-column-grid content-section">
         <SectionCard title="Evolução do OEE">

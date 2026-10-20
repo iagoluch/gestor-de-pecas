@@ -25,6 +25,8 @@ export interface ValueExcluded {
   label: string;
   value: number | string | null;
   reason: string;
+  /** Só os `kpi.*` informam: "segundos" quando o valor é tempo. */
+  unidade?: string;
 }
 
 export interface ValueReconciliation {

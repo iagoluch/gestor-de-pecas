@@ -40,7 +40,15 @@ function EvidenceList({ evidence }: { evidence: InsightEvidence[] }) {
   );
 }
 
-function KpiBody({ explanation }: { explanation: KpiExplanation }) {
+/** Qual explicação com a conta aberta serve a cada KPI do cartão (o FTT já tem a sua, em peças). */
+const KPI_VALUE_METRIC: Record<KpiExplanation["key"], string> = {
+  oee: "kpi.oee",
+  availability: "kpi.disponibilidade",
+  performance: "kpi.performance",
+  ftt: "qtd.ftt",
+};
+
+function KpiBody({ explanation, onExplain }: { explanation: KpiExplanation; onExplain?: (metric: string) => void }) {
   const metric = explanation.metric;
   const metricValue = metric.value === null
     ? availabilityLabel[metric.availability]
@@ -48,7 +56,12 @@ function KpiBody({ explanation }: { explanation: KpiExplanation }) {
   return (
     <>
       <div className="insight-drawer__summary">
-        <div><span>Resultado no filtro</span><strong>{metricValue}</strong></div>
+        <div>
+          <span>Resultado no filtro</span>
+          <strong>{metric.value !== null && onExplain ? (
+            <button type="button" className="metric-link explainable-value" aria-label={`Ver de onde vem este número: ${explanation.label} ${metricValue}`} aria-haspopup="dialog" onClick={() => onExplain(KPI_VALUE_METRIC[explanation.key])}>{metricValue}</button>
+          ) : metricValue}</strong>
+        </div>
         <div><span>Disponibilidade do dado</span><strong>{availabilityLabel[metric.availability]}</strong></div>
         <p>{explanation.limitation ?? metric.reason ?? "Sem limitação adicional registrada."}</p>
       </div>
@@ -148,10 +161,13 @@ export function ManagementInsightDrawer({
   explanation,
   exception,
   onClose,
+  onExplain,
 }: {
   explanation?: KpiExplanation | null;
   exception?: ManagementException | null;
   onClose: () => void;
+  /** Abre o painel "de onde vem este número" por cima do drawer. */
+  onExplain?: (metric: string) => void;
 }) {
   const drawerRef = useRef<HTMLElement>(null);
   const open = Boolean(explanation || exception);
@@ -171,7 +187,7 @@ export function ManagementInsightDrawer({
           <button type="button" onClick={onClose} aria-label="Fechar explicação">×</button>
         </header>
         <div className="insight-drawer__body">
-          {explanation ? <KpiBody explanation={explanation} /> : exception ? <ExceptionBody exception={exception} /> : null}
+          {explanation ? <KpiBody explanation={explanation} onExplain={onExplain} /> : exception ? <ExceptionBody exception={exception} /> : null}
         </div>
       </aside>
     </div>

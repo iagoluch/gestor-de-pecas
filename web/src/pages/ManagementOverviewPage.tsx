@@ -414,7 +414,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
         </div>
-        <ManagementInsightDrawer explanation={selectedKpi} exception={null} onClose={closeInsight} />
+        <ManagementInsightDrawer explanation={selectedKpi} exception={null} onClose={closeInsight} onExplain={setExplainedMetric} />
         {explainedMetric ? <MetricExplanationPanel metric={explainedMetric} filters={filters.filters} onClose={closeExplanation} /> : null}
     </PageFrame>
   );
