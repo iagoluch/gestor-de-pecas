@@ -223,6 +223,8 @@ Rastro: parcial — a ficha mostra por setor/recurso; a regra "participação do
 
 **Lote 5 entregue (20/10/2026):** só C1 ficou clicável — os 4 cartões de Rastreabilidade > Lote / Material / Nesting (`cut.nestings`, `cut.previsto`, `cut.realizado`, `cut.desvio`; árvore Máquina > Tarefa > Plano > Nesting). `/traceability/nestings` passou a devolver `totals` (soma de TODOS os itens do filtro, não só da página). Cartões só clicam com a busca vazia e sem carregamento (senão o número da tela e o explicado divergem). **Não feitos, de propósito:** C2 (`calcular_dashboard_mes`) não tem tela, só teste; C3/C4/C5 ficam em telas de operador/Destaque (regra: sem novo alvo de clique ali). Limite conhecido: nesting ainda cortando usa "agora", então a explicação pode diferir do cartão por segundos.
 
+**Lote 6 entregue (20/10/2026, 046d8a5):** S1–S6 clicáveis (`std.protheus|manual|estimado|fonte|recalculo` + `std.comparacoes|padrao_acumulado|real_acumulado|desvio` em Análises) via `/management/explicacao`; as 5 primeiras só para admin/manufatura (403 `standard_time_access_denied`), S6 aberta à gestão. Estimado mostra P25, amostra mínima (5), janela e blocos de 14 dias, com conferência arredondada em 3 casas; sem execuções recuperáveis a conferência fica "não bate" de propósito. Fonte em uso devolve texto (o esquema de resposta passou a aceitar `float | str`). Limite: execuções são relidas do histórico, apontamento corrigido depois pode divergir do recálculo gravado.
+
 ## H. TEMPO PADRÃO
 
 `standard_time.py` (350 linhas) e `StandardTimePage.tsx`.
