@@ -251,6 +251,9 @@ Rastro: bom — tentativas por item (`listar_tentativas_outbound_totvs`), chave 
 
 Ver seção de inconsistências 8. **IA1** evidência `[:50]` por lista; **IA2** `kpi_explanations`; **IA3** `exceptions[:12]`; **IA4** `ai_tools.py` (`TOOL_REGISTRY` L83, `_factory_projection` L546, `_kpi_explanation_projection` L675), 100 itens por lista, 10.000 caracteres por resultado, escolha de ferramenta por palavras-chave.
 
+**Lote J (21/10/2026) — feito em IA2, só o que tem a mesma fonte:** no drawer "Entenda o…" (`ManagementInsightDrawer.tsx`), as peças do FTT (boa/refugo/retrabalho) abrem `qld.*` e os três componentes do OEE (disponibilidade/performance/FTT) abrem `kpi.disponibilidade`, `kpi.performance` e `qtd.ftt`. Componente sem id, sem valor ou sem `onExplain` segue texto.
+**Sobras do Lote J (cada uma pede serviço novo ou a fonte não bate):** componentes de Disponibilidade (produção/setup/retrabalho/atividade sem OP/sem demanda/fora de turno) e de Performance — o drawer usa horas sem recorte de calendário e `tempo.*` é recortado; componente de Parada; causas, recursos e `largest_impact`; IA1 evidências (`[:50]`); IA3 Impacto/Desvio das exceções; IA4 `ai_tools.py`.
+
 ## K. OUTROS
 
 **X1** Relatórios: 5 tipos (`gerencial`, `producao`, `perdas`, `indicadores`, `dados_analiticos`) — `ReportsPages.tsx`. Cada um reaproveita overview/analytics.

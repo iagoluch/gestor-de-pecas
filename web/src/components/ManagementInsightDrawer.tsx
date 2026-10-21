@@ -48,6 +48,16 @@ const KPI_VALUE_METRIC: Record<KpiExplanation["key"], string> = {
   ftt: "qtd.ftt",
 };
 
+/**
+ * Componentes do cartão que já têm explicação com a mesma fonte do número mostrado:
+ * as peças do FTT vêm de `analytics.quality` (= `qld.*`) e os três indicadores do OEE de `overview.kpis`.
+ * Disponibilidade e Performance ficam de fora: o tempo do cartão não é o recortado por calendário do `tempo.*`.
+ */
+const COMPONENT_METRIC: Partial<Record<KpiExplanation["key"], Record<string, string>>> = {
+  ftt: { boa: "qld.boa", refugo: "qld.refugo", retrabalho: "qld.retrabalho" },
+  oee: { availability: "kpi.disponibilidade", performance: "kpi.performance", ftt: "qtd.ftt" },
+};
+
 function KpiBody({ explanation, onExplain }: { explanation: KpiExplanation; onExplain?: (metric: string) => void }) {
   const metric = explanation.metric;
   const metricValue = metric.value === null
@@ -69,13 +79,22 @@ function KpiBody({ explanation, onExplain }: { explanation: KpiExplanation; onEx
       <section>
         <h3>Componentes do resultado</h3>
         <div className="insight-component-grid">
-          {explanation.components.map((component, index) => (
+          {explanation.components.map((component, index) => {
+            const componentMetric = onExplain && component.value !== null && component.value !== undefined
+              ? COMPONENT_METRIC[explanation.key]?.[String(component.key)]
+              : undefined;
+            const componentLabel = text(component.label ?? component.key);
+            const componentValue = impact(component.value, component.unit);
+            return (
             <div key={text(component.key, String(index))}>
-              <span>{text(component.label ?? component.key)}</span>
-              <strong>{impact(component.value, component.unit)}</strong>
+              <span>{componentLabel}</span>
+              <strong>{componentMetric ? (
+                <button type="button" className="metric-link explainable-value" aria-label={`Ver de onde vem este número: ${componentLabel} ${componentValue}`} aria-haspopup="dialog" onClick={() => onExplain?.(componentMetric)}>{componentValue}</button>
+              ) : componentValue}</strong>
               {component.availability ? <small>{humanize(text(component.availability))}</small> : null}
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

@@ -149,6 +149,53 @@ describe("Drawer de KPI: conta com valores reais", () => {
   });
 });
 
+describe("Drawer de KPI: componentes clicáveis", () => {
+  function withComponents(key: KpiExplanation["key"], components: Array<Record<string, unknown>>): KpiExplanation {
+    return {
+      key, label: key.toUpperCase(), metric: metricValue(50) as KpiExplanation["metric"], period: {},
+      components, causes: [], resources: [], evidence: [], calculation_policy: "backend_only", simulation_only: false,
+    };
+  }
+  const drawer = (explanation: KpiExplanation, onExplain?: (metric: string) => void) =>
+    render(<MemoryRouter><ManagementInsightDrawer explanation={explanation} onClose={() => undefined} onExplain={onExplain} /></MemoryRouter>);
+
+  it("peças do FTT abrem qld.* e os três indicadores do OEE abrem kpi.*/qtd.ftt", () => {
+    const onExplain = vi.fn();
+    const ftt = drawer(withComponents("ftt", [
+      { key: "boa", label: "Peças boas", value: 90, unit: "peças" },
+      { key: "refugo", label: "Refugo", value: 6, unit: "peças" },
+      { key: "retrabalho", label: "Retrabalho", value: 4, unit: "peças" },
+    ]), onExplain);
+    for (const [label, id] of [["Peças boas", "qld.boa"], ["Refugo", "qld.refugo"], ["Retrabalho", "qld.retrabalho"]]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`Ver de onde vem este número: ${label}`) }));
+      expect(onExplain).toHaveBeenLastCalledWith(id);
+    }
+    ftt.unmount();
+    drawer(withComponents("oee", [
+      { key: "availability", label: "Disponibilidade", value: 80, unit: "%", availability: "available" },
+      { key: "performance", label: "Performance", value: 70, unit: "%", availability: "available" },
+      { key: "ftt", label: "FTT", value: 95, unit: "%", availability: "available" },
+    ]), onExplain);
+    for (const [label, id] of [["Disponibilidade", "kpi.disponibilidade"], ["Performance", "kpi.performance"], ["FTT", "qtd.ftt"]]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`Ver de onde vem este número: ${label} `) }));
+      expect(onExplain).toHaveBeenLastCalledWith(id);
+    }
+  });
+
+  it("componente sem explicação, sem número ou sem onExplain fica texto simples", () => {
+    const { unmount } = drawer(withComponents("availability", [
+      { key: "production", label: "Produção", value: 3600, unit: "s" },
+    ]), vi.fn());
+    expect(screen.queryByRole("button", { name: /Ver de onde vem este número: Produção/ })).not.toBeInTheDocument();
+    unmount();
+    const semNumero = drawer(withComponents("oee", [{ key: "ftt", label: "FTT", value: null, unit: "%" }]), vi.fn());
+    expect(screen.queryByRole("button", { name: /Ver de onde vem este número: FTT/ })).not.toBeInTheDocument();
+    semNumero.unmount();
+    drawer(withComponents("ftt", [{ key: "boa", label: "Peças boas", value: 90, unit: "peças" }]));
+    expect(screen.queryByRole("button", { name: /Ver de onde vem este número: Peças boas/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("Painel: entradas do kpi.* em horas e %", () => {
   const input = (label: string, value: number, unidade: string) => ({
     kind: "input" as const, label, value, children: [], truncated: false,
