@@ -225,6 +225,8 @@ Rastro: parcial — a ficha mostra por setor/recurso; a regra "participação do
 
 **Lote 6 entregue (20/10/2026, 046d8a5):** S1–S6 clicáveis (`std.protheus|manual|estimado|fonte|recalculo` + `std.comparacoes|padrao_acumulado|real_acumulado|desvio` em Análises) via `/management/explicacao`; as 5 primeiras só para admin/manufatura (403 `standard_time_access_denied`), S6 aberta à gestão. Estimado mostra P25, amostra mínima (5), janela e blocos de 14 dias, com conferência arredondada em 3 casas; sem execuções recuperáveis a conferência fica "não bate" de propósito. Fonte em uso devolve texto (o esquema de resposta passou a aceitar `float | str`). Limite: execuções são relidas do histórico, apontamento corrigido depois pode divergir do recálculo gravado.
 
+**Lote 7 encerrado sem alvo (21/10/2026):** I1–I4 não têm onde ficar clicáveis. Não existe tela de Integrações nem rota HTTP com os números da outbox TOTVS — I1–I3 só saem pelo script `scripts/totvs_outbox_admin.py` (`TotvsOutboxAdminService.metrics`), e os contadores de pull/sync (I4) nem existem no código. A regra vale para números em telas de gestão; sem tela, nada a explicar. Se um dia criarem a tela (somente leitura, admin/TI), I1–I3 já têm fonte e rastro (`listar_tentativas_outbound_totvs`) para virar `int.*`. Decisão do usuário em 21/10/2026.
+
 ## H. TEMPO PADRÃO
 
 `standard_time.py` (350 linhas) e `StandardTimePage.tsx`.
@@ -243,7 +245,7 @@ Lacuna: o estimado mostra detalhe curto (L411), mas não lista as execuções qu
 **I2** item mais antigo pendente/retry/enviando e idade em segundos.
 **I3** última falha (código, mensagem, classe de entrega).
 Rastro: bom — tentativas por item (`listar_tentativas_outbound_totvs`), chave de idempotência, payload.
-**I4** contadores de pull/sync (Etapa 7B): (suposição) não lidos.
+**I4** contadores de pull/sync (Etapa 7B): não existem no código (verificado em 21/10/2026). I1–I3 sem tela nem rota HTTP: Lote 7 encerrado sem alvo.
 
 ## J. IA / INSIGHTS
 
