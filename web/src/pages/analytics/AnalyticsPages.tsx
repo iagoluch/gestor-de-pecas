@@ -653,12 +653,33 @@ export function AnalyticsStandardPage() {
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Comparações" value={formatNumber(rows.length)} detail={rows.length ? `${formatNumber(standard.comparable)} com tempo padrão cadastrado` : undefined} />
-        <MetricCard label="Tempo padrão acumulado" value={standard.comparable ? formatHours(standard.expected) : "Não configurado"} availability={standard.comparable ? "disponivel" : "nao_configurado"} accent="warning" />
-        <MetricCard label="Tempo real acumulado" value={standard.comparable ? formatHours(standard.real) : "Dados insuficientes"} availability={standard.comparable ? "disponivel" : "dados_insuficientes"} accent="success" />
+        <MetricCard
+          label="Comparações"
+          value={formatNumber(rows.length)}
+          valueNode={rows.length ? <ExplainableValue metric="std.comparacoes" filters={filters.filters} context={`Comparações: ${formatNumber(rows.length)}`}>{formatNumber(rows.length)}</ExplainableValue> : undefined}
+          detail={rows.length ? `${formatNumber(standard.comparable)} com tempo padrão cadastrado` : undefined} />
+        <MetricCard
+          label="Tempo padrão acumulado"
+          value={standard.comparable ? formatHours(standard.expected) : "Não configurado"}
+          valueNode={standard.comparable ? <ExplainableValue metric="std.padrao_acumulado" filters={filters.filters} context={`Tempo padrão acumulado: ${formatHours(standard.expected)}`}>{formatHours(standard.expected)}</ExplainableValue> : undefined}
+          availability={standard.comparable ? "disponivel" : "nao_configurado"}
+          accent="warning"
+        />
+        <MetricCard
+          label="Tempo real acumulado"
+          value={standard.comparable ? formatHours(standard.real) : "Dados insuficientes"}
+          valueNode={standard.comparable ? <ExplainableValue metric="std.real_acumulado" filters={filters.filters} context={`Tempo real acumulado: ${formatHours(standard.real)}`}>{formatHours(standard.real)}</ExplainableValue> : undefined}
+          availability={standard.comparable ? "disponivel" : "dados_insuficientes"}
+          accent="success"
+        />
         <MetricCard
           label="Desvio do padrão"
           value={standard.comparable && standard.expected > 0 ? formatPercent((standard.real - standard.expected) / standard.expected * 100) : "Dados insuficientes"}
+          valueNode={standard.comparable && standard.expected > 0 ? (
+            <ExplainableValue metric="std.desvio" filters={filters.filters} context={`Desvio do padrão: ${formatPercent((standard.real - standard.expected) / standard.expected * 100)}`}>
+              {formatPercent((standard.real - standard.expected) / standard.expected * 100)}
+            </ExplainableValue>
+          ) : undefined}
           detail={standard.comparable ? formatSignedDuration(standard.real - standard.expected) : undefined}
           availability={standard.comparable && standard.expected > 0 ? "disponivel" : "dados_insuficientes"}
           accent={standard.real > standard.expected ? "danger" : "success"}

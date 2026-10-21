@@ -23,6 +23,7 @@ import type {
 } from "../../types/standardTime";
 import { displayName, formatDateTime, formatNumber } from "../../utils/format";
 import { SETORES } from "../home/PausesPage";
+import { StandardTimeExplainable } from "./StandardTimeExplainable";
 
 const API = "/api/v1/management/standard-times";
 const PAGE_SIZE = 100;
@@ -94,6 +95,13 @@ export function parseSeconds(text: string): { value: number } | { error: string 
   if (value > MAX_SECONDS) return { error: "O tempo máximo é 86.400 segundos por peça (24 horas)." };
   return { value };
 }
+
+const explainTarget = (metric: string, row: StandardTimeRow) => ({
+  metric,
+  produto: row.produto_codigo,
+  operacao: row.numero_operacao,
+  recurso: row.codigo_recurso,
+});
 
 const seconds = (value: number | null | undefined) =>
   value == null ? "—" : `${formatNumber(value, 2)} s`;
@@ -228,9 +236,14 @@ export function StandardTimePage() {
   }
 
   const header = (
-    <AsyncButton type="button" className="button button--primary" pendingLabel="Recalculando…" onClick={recalculate}>
-      Recalcular estimativas
-    </AsyncButton>
+    <>
+      <StandardTimeExplainable context="último recálculo das estimativas" target={{ metric: "std.recalculo" }}>
+        Ver como foi o último recálculo
+      </StandardTimeExplainable>
+      <AsyncButton type="button" className="button button--primary" pendingLabel="Recalculando…" onClick={recalculate}>
+        Recalcular estimativas
+      </AsyncButton>
+    </>
   );
 
   return (
@@ -329,7 +342,15 @@ export function StandardTimePage() {
                   render: (row) => <ManualTimeCell row={row} onSaved={(text) => { setFeedback({ tone: "success", text }); query.reload(); }} onStale={query.reload} />,
                 },
                 { key: "estimado", label: "Estimado", render: (row) => <EstimatedCell row={row} /> },
-                { key: "fonte", label: "Fonte em uso", render: (row) => <SourceBadge source={row.fonte_efetiva} /> },
+                {
+                  key: "fonte",
+                  label: "Fonte em uso",
+                  render: (row) => (
+                    <StandardTimeExplainable context={`Fonte em uso: ${operationLabel(row)}`} target={explainTarget("std.fonte", row)}>
+                      <SourceBadge source={row.fonte_efetiva} />
+                    </StandardTimeExplainable>
+                  ),
+                },
                 {
                   key: "acoes",
                   label: "Ações",
@@ -385,10 +406,15 @@ function SourceBadge({ source }: { source: StandardTimeSource | null }) {
 
 function ProtheusCell({ row }: { row: StandardTimeRow }) {
   const mixed = mixedCoverage(row);
-  if (!mixed) return <>{seconds(row.tempo_protheus_segundos)}</>;
+  const value = row.tempo_protheus_segundos == null ? seconds(null) : (
+    <StandardTimeExplainable context={`Tempo Protheus ${seconds(row.tempo_protheus_segundos)}: ${operationLabel(row)}`} target={explainTarget("std.protheus", row)}>
+      {seconds(row.tempo_protheus_segundos)}
+    </StandardTimeExplainable>
+  );
+  if (!mixed) return <>{value}</>;
   return (
     <span className="std-time__estimated">
-      <strong>{seconds(row.tempo_protheus_segundos)}</strong>
+      <strong>{value}</strong>
       <small className="std-time__mixed">
         {`Manual cobre ${formatNumber(mixed.coberto)} de ${formatNumber(mixed.total)} OPs (as demais usam Protheus)`}
       </small>
@@ -409,7 +435,11 @@ function EstimatedCell({ row }: { row: StandardTimeRow }) {
   ].filter(Boolean).join(" · ");
   return (
     <span className="std-time__estimated" title={detalhe ? `Estimado: ${detalhe}` : "Estimado pelo histórico"}>
-      <strong>{seconds(row.tempo_estimado_segundos)}</strong>
+      <strong>
+        <StandardTimeExplainable context={`Tempo estimado ${seconds(row.tempo_estimado_segundos)}: ${operationLabel(row)}`} target={explainTarget("std.estimado", row)}>
+          {seconds(row.tempo_estimado_segundos)}
+        </StandardTimeExplainable>
+      </strong>
       <small>estimado{amostras != null ? ` · ${formatNumber(amostras)} amostras` : ""}</small>
       {row.estimado_vigente_desde ? <small>vale a partir de {validFromLabel(row.estimado_vigente_desde)}</small> : null}
     </span>
@@ -514,6 +544,13 @@ function ManualTimeCell({ row, onSaved, onStale }: {
       ) : null}
       {!dirty && row.manual_vigente_desde && row.tempo_manual_segundos != null ? (
         <small className="std-time__hint">vale a partir de {validFromLabel(row.manual_vigente_desde)}</small>
+      ) : null}
+      {!dirty && row.tempo_manual_segundos != null ? (
+        <small className="std-time__hint">
+          <StandardTimeExplainable context={`Tempo manual ${seconds(row.tempo_manual_segundos)}: ${operationLabel(row)}`} target={explainTarget("std.manual", row)}>
+            ver de onde vem
+          </StandardTimeExplainable>
+        </small>
       ) : null}
     </form>
   );

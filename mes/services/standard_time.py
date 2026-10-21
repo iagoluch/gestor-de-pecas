@@ -29,6 +29,7 @@ processo da API o upsert idempotente continua seguro, mas o trabalho pode duplic
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import threading
@@ -339,6 +340,8 @@ class StandardTimeService:
                 f"Tempo padrão estimado recalculado: {len(records)} de {len(grouped)} "
                 f"chave(s) com amostra mínima ({len(samples)} execução(ões) elegível(is))."
             ),
+            # JSON para a explicação do resumo (std.recalculo) reler os números sem refazer a conta.
+            detalhes=json.dumps({k: v.isoformat() if isinstance(v, datetime) else v for k, v in summary.items()}),
             data_hora=now,
         )
         return summary

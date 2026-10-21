@@ -38,7 +38,7 @@ class ExplanationResponse(BaseModel):
 class ValueNode(BaseModel):
     kind: str
     label: str
-    value: float | None = None
+    value: float | str | None = None  # str: unidade "text" (ex.: fonte do tempo padrão em uso)
     children: list["ValueNode"] = Field(default_factory=list)
     detail: dict[str, Any] | None = None
     truncated: bool = False
@@ -51,7 +51,7 @@ class ValueExplanationResponse(BaseModel):
     metric: str
     label: str
     unit: str
-    value: float | None = None
+    value: float | str | None = None
     reason: str
     rule: str
     children: list[ValueNode]

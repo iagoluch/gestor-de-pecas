@@ -17,6 +17,7 @@ export function formatValue(value: number | string | null | undefined, unit: Val
     case "pct": return formatPercent(value);
     case "brl": return brl.format(value);
     case "hours": return formatHours(value * 3600);
+    case "seconds": return `${formatNumber(value, 2)} s`;
     default: return formatNumber(value, 2);
   }
 }

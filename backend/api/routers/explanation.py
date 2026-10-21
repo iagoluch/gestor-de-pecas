@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.permissions import can_access_management_web
+from app.core.permissions import can_access_management_web, can_manage_standard_time
 from backend.api.dependencies.auth import require_management_user
 from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.facade import get_frontend_facade
@@ -21,6 +21,7 @@ from mes.services.cut_explanation import CutExplanationService
 from mes.services.kpi_explanation import KpiExplanationService
 from mes.services.metric_explanation import MetricExplanationService, UnknownMetricError
 from mes.services.quality_explanation import QualityExplanationService
+from mes.services.standard_time_explanation import StandardTimeExplanationService
 from mes.services.value_explanation import ValueExplanationService
 
 
@@ -37,8 +38,17 @@ _VALUE_SERVICES = {
     "kpi.": lambda facade: KpiExplanationService(facade.management),
     # Rastreabilidade > Lote / Material / Nesting (``management.get_nesting_times``).
     "cut.": lambda facade: CutExplanationService(facade.management),
+    # Produção > Tempo padrão (``db.listar_tempos_padrao`` e o último recálculo) e
+    # Análises > Padrão x real (``facade.analytics.standard_vs_actual``).
+    "std.": lambda facade: StandardTimeExplanationService(facade.db, facade.analytics),
 }
 _VALUE_PREFIXES = tuple(_VALUE_SERVICES)
+
+# S1–S5 explicam a tela de Tempo padrão, que só a manufatura e o admin abrem;
+# S6 (Padrão x real) é lido pela gestão, como a página de Análises.
+_STANDARD_TIME_LINE_METRICS = frozenset({
+    "std.protheus", "std.manual", "std.estimado", "std.fonte", "std.recalculo",
+})
 
 
 router = APIRouter(
@@ -79,6 +89,12 @@ def explain_for_user(facade, metric: str, filters: AnalyticsFilter, user: Sessio
     uma única fonte da árvore, nunca aceita do cliente.
     """
     metric = metric.strip()
+    if metric in _STANDARD_TIME_LINE_METRICS and not can_manage_standard_time(user.role):
+        raise AppError(
+            "standard_time_access_denied",
+            "Só a engenharia de manufatura e a conta administradora acessam o tempo padrão.",
+            status_code=403,
+        )
     factory = next(
         (build for prefix, build in _VALUE_SERVICES.items() if metric.startswith(prefix)),
         None,

@@ -6,7 +6,7 @@ import type { ExplanationTree } from "./explanation";
  * formato é usado pelo servidor (`GET /management/explicacao?metric=qtd.*`) e
  * pelas somas montadas no navegador (`pages/production/productionExplanations.ts`).
  */
-export type ValueUnit = "pcs" | "pct" | "brl" | "count" | "hours" | "text";
+export type ValueUnit = "pcs" | "pct" | "brl" | "count" | "hours" | "seconds" | "text";
 
 export type ValueNodeKind = "sector" | "resource" | "op" | "event" | "part" | "input" | "group";
 
