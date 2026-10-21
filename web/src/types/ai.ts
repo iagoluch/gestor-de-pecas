@@ -43,6 +43,7 @@ export interface AIReportArtifact {
   size_bytes?: number;
   status: string;
   download_url: string;
+  download_url_simples?: string;
   telegram_available?: boolean;
   telegram_destination_id?: number;
 }

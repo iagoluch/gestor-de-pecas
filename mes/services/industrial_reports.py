@@ -96,6 +96,12 @@ def _count_rows(value: Any) -> int:
     return 0
 
 
+def simple_path(path: Path) -> Path:
+    """Arquivo do formato resumido, ao lado do arquivo técnico."""
+
+    return path.with_name(f"{path.stem}_simples{path.suffix}")
+
+
 class IndustrialReportService:
     """Gera, registra e recupera artifacts XLSX independentes da IA."""
 
@@ -106,6 +112,7 @@ class IndustrialReportService:
         *,
         artifact_dir: str | Path,
         workbook_builder: Callable[[str, Any, Any], bytes],
+        simple_workbook_builder: Callable[[str, Any, Any], bytes] | None = None,
         now_func=None,
         expiration_hours: int = 168,
         max_bytes: int = 50 * 1024 * 1024,
@@ -116,6 +123,8 @@ class IndustrialReportService:
         self.repository = repository
         self.data_builder = ReportDataBuilder(facade)
         self.workbook_builder = workbook_builder
+        # Segundo formato (resumo): gerado junto, a partir dos mesmos dados.
+        self.simple_workbook_builder = simple_workbook_builder
         self._now = now_func or datetime.now
         self.expiration_hours = max(1, int(expiration_hours))
         self.max_bytes = max(1024, int(max_bytes))
@@ -195,10 +204,22 @@ class IndustrialReportService:
             if len(content) > self.max_bytes:
                 raise ReportError("report_too_large", "O relatório excedeu o limite de tamanho.", status_code=413)
 
+            simple_content = None
+            if self.simple_workbook_builder is not None:
+                simple_content = self.simple_workbook_builder(
+                    request.report_type, payload, request.analytics_filter()
+                )
+                if not isinstance(simple_content, (bytes, bytearray)) or not simple_content:
+                    raise ReportError("report_generation_failed", "Não foi possível gerar o relatório.", status_code=500)
+
             temp_path = final_path.with_suffix(".tmp")
             try:
                 temp_path.write_bytes(content)
                 os.replace(temp_path, final_path)
+                if simple_content is not None:
+                    simple_temp = simple_path(final_path).with_suffix(".tmp")
+                    simple_temp.write_bytes(simple_content)
+                    os.replace(simple_temp, simple_path(final_path))
                 elapsed_ms = round((time.monotonic() - started) * 1000)
                 medidas = {
                     "size_bytes": len(content),
@@ -229,6 +250,8 @@ class IndustrialReportService:
             except Exception:
                 temp_path.unlink(missing_ok=True)
                 final_path.unlink(missing_ok=True)
+                simple_path(final_path).unlink(missing_ok=True)
+                simple_path(final_path).with_suffix(".tmp").unlink(missing_ok=True)
                 raise
         except Exception:
             # A reserva vira 'falhou' e a chave fica livre para nova tentativa.
@@ -296,6 +319,8 @@ class IndustrialReportService:
             "source": record.get("source"),
             "download_url": f"/api/v1/reports/artifacts/{record['id']}/download",
         }
+        if simple_path(Path(str(record.get("storage_path") or ""))).is_file():
+            result["download_url_simples"] = f"/api/v1/reports/artifacts/{record['id']}/download?modo=simples"
         if self.messaging_available:
             destinations = self.repository.listar_destinos_mensagem(
                 int(user_id), provider="telegram"
@@ -305,7 +330,9 @@ class IndustrialReportService:
                 result["telegram_destination_id"] = int(destinations[0]["id"])
         return result
 
-    def get(self, report_id: str, *, user_id: int) -> tuple[dict[str, Any], Path]:
+    def get(
+        self, report_id: str, *, user_id: int, modo: str = "tecnico"
+    ) -> tuple[dict[str, Any], Path]:
         record = self.repository.obter_relatorio_gerado(str(report_id), int(user_id))
         if not record or record.get("status") != "pronto":
             raise ReportError("report_not_found", "Relatório não encontrado.", status_code=404)
@@ -313,6 +340,8 @@ class IndustrialReportService:
         if isinstance(expires_at, datetime) and expires_at <= self._now():
             raise ReportError("report_expired", "Este relatório expirou.", status_code=410)
         path = Path(str(record.get("storage_path") or "")).resolve()
+        if modo == "simples":
+            path = simple_path(path)
         if self.artifact_dir not in path.parents or not path.is_file():
             raise ReportError("report_file_unavailable", "O arquivo do relatório não está disponível.", status_code=404)
         return record, path

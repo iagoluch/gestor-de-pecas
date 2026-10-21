@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from contextlib import asynccontextmanager
 from contextlib import suppress
 from datetime import datetime
@@ -179,6 +180,7 @@ def _build_background_scheduler(application: FastAPI) -> ReportScheduler:
         artifact_dir=settings.report_artifact_dir,
         workbook_builder=build_report_workbook,
         now_func=getattr(facade, "_now", None),
+        simple_workbook_builder=partial(build_report_workbook, modo="simples"),
         expiration_hours=settings.report_expiration_hours,
         max_bytes=settings.report_max_bytes,
         messaging_available=settings.telegram_configured,

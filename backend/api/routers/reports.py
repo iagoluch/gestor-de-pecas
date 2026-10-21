@@ -5,6 +5,7 @@ import io
 import json
 from datetime import datetime
 import asyncio
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from fastapi.encoders import jsonable_encoder
@@ -120,16 +121,17 @@ async def send_report_artifact(
 @router.get("/artifacts/{report_id}/download")
 def download_report_artifact(
     report_id: str = ApiPath(min_length=36, max_length=36),
+    modo: Literal["tecnico", "simples"] = "tecnico",
     user: SessionUser = Depends(require_management_user),
     service=Depends(get_report_service),
 ):
     try:
-        record, path = service.get(report_id, user_id=user.id)
+        record, path = service.get(report_id, user_id=user.id, modo=modo)
         service.repository.registrar_download_relatorio(report_id, user.id, service._now())
         return FileResponse(
             path,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=record["filename"],
+            filename=path.name if modo == "simples" else record["filename"],
         )
     except ReportError as exc:
         raise _report_error(exc) from exc
@@ -252,6 +254,7 @@ def export_csv(
 @router.get("/{report_type}/export.xlsx")
 def export_xlsx(
     report_type: str,
+    modo: Literal["tecnico", "simples"] = "tecnico",
     filters: AnalyticsFilter = Depends(analytics_filter),
     _user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
@@ -259,9 +262,10 @@ def export_xlsx(
     """Entrega um Excel normal e formatado com a verdade já calculada no backend."""
 
     payload = facade.relatorio(report_type, filters)
-    content = build_report_workbook(report_type, payload, filters)
+    content = build_report_workbook(report_type, payload, filters, modo=modo)
     safe_type = report_type.strip().casefold().replace("-", "_")
-    filename = f"gestor_{safe_type}_{datetime.now():%Y-%m-%d}.xlsx"
+    sufixo = "_simples" if modo == "simples" else ""
+    filename = f"gestor_{safe_type}_{datetime.now():%Y-%m-%d}{sufixo}.xlsx"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

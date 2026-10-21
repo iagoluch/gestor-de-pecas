@@ -128,3 +128,24 @@ describe("Relatórios: números clicáveis com a conta aberta", () => {
     expect(buttons(/Ordens/)).not.toBeInTheDocument();
   });
 });
+
+describe("Relatórios: dois botões de exportação", () => {
+  it.each([
+    ["gerencial", <ManagementReportPage />],
+    ["producao", <ProductionReportPage />],
+    ["perdas", <LossesReportPage />],
+    ["indicadores", <IndicatorsReportPage />],
+    ["dados_analiticos", <AnalyticalDataReportPage />],
+  ])("%s: 'Export técnico' e 'Export simples' pedem o mesmo relatório em modos diferentes", async (type, node) => {
+    const fetchMock = mountFetch(type as string);
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    page(node);
+    const exportCalls = () => fetchMock.mock.calls.map((call) => String((call as unknown[])[0])).filter((url) => url.includes("/export.xlsx"));
+    fireEvent.click(await screen.findByRole("button", { name: "Export técnico" }));
+    await waitFor(() => expect(exportCalls().some((url) => url.includes(`/reports/${type}/export.xlsx`) && url.includes("modo=tecnico"))).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "Export simples" }));
+    await waitFor(() => expect(exportCalls().some((url) => url.includes("modo=simples"))).toBe(true));
+  });
+});

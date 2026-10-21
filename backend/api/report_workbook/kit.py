@@ -15,8 +15,13 @@ import logging
 import re
 from typing import Any, Sequence
 
-from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.chart import BarChart, LineChart, PieChart, Reference
+from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.series import DataPoint
+from openpyxl.chart.text import RichText
+from openpyxl.drawing.text import CharacterProperties, Paragraph, ParagraphProperties
+from openpyxl.formatting.rule import DataBarRule
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -269,6 +274,9 @@ class Column:
     wrap: bool = False
     # Cor por valor (severidade, status). Discreta e sem julgar desempenho.
     tones: tuple[tuple[str, str], ...] = ()
+    # Quantas colunas da grade a célula ocupa (mesclada). Permite tabela curta
+    # numa aba com cartões sem alargar uma coluna só.
+    span: int = 1
 
     def tone_for(self, value: Any) -> str | None:
         if not self.tones:
@@ -331,9 +339,11 @@ class TableRange:
     columns: list[Column] = field(default_factory=list)
 
     def column_index(self, key: str) -> int:
-        for offset, column in enumerate(self.columns):
+        posicao = self.first_col
+        for column in self.columns:
             if column.key == key:
-                return self.first_col + offset
+                return posicao
+            posicao += max(1, column.span)
         raise KeyError(key)
 
     @property
@@ -547,8 +557,22 @@ class ReportSheet:
     ) -> TableRange:
         ws = self.ws
         header_row = self.row
+        posicoes = []
+        proxima = start_col
+        for column in columns:
+            posicoes.append(proxima)
+            proxima += max(1, column.span)
+        ultima_coluna = proxima - 1
+
+        def mesclar(linha: int, offset: int) -> None:
+            span = max(1, columns[offset].span)
+            if span > 1:
+                ws.merge_cells(start_row=linha, start_column=posicoes[offset],
+                               end_row=linha, end_column=posicoes[offset] + span - 1)
+
         for offset, column in enumerate(columns):
-            cell = ws.cell(header_row, start_col + offset, column.label)
+            mesclar(header_row, offset)
+            cell = ws.cell(header_row, posicoes[offset], column.label)
             cell.fill = PatternFill("solid", fgColor=NAVY)
             cell.font = Font(name=FONT, size=10, bold=True, color=WHITE)
             # Cabeçalho numérico centralizado: alinhado à direita ele fica
@@ -564,7 +588,8 @@ class ReportSheet:
             linha = first_row + index
             fundo = SURFACE if zebra and index % 2 else None
             for offset, column in enumerate(columns):
-                cell = ws.cell(linha, start_col + offset)
+                mesclar(linha, offset)
+                cell = ws.cell(linha, posicoes[offset])
                 write_value(
                     cell, row.get(column.key), column.kind,
                     wrap=column.wrap,
@@ -583,7 +608,8 @@ class ReportSheet:
         if totals:
             linha = last_row + 1
             for offset, column in enumerate(columns):
-                cell = ws.cell(linha, start_col + offset)
+                mesclar(linha, offset)
+                cell = ws.cell(linha, posicoes[offset])
                 if offset == 0:
                     rotulo = totals.get(column.key, "Total")
                     cell.value = safe_text(rotulo) if isinstance(rotulo, str) else rotulo
@@ -601,7 +627,10 @@ class ReportSheet:
             self.row = last_row + 2
 
         for offset, column in enumerate(columns):
-            letra = get_column_letter(start_col + offset)
+            if column.span > 1:
+                # Célula mesclada usa a grade existente: não alarga a coluna.
+                continue
+            letra = get_column_letter(posicoes[offset])
             largura = column.width or self._auto_width(column, rows)
             atual = ws.column_dimensions[letra].width or 0
             ws.column_dimensions[letra].width = max(atual, largura)
@@ -609,7 +638,7 @@ class ReportSheet:
         if rows and autofilter and start_col == 1:
             ws.auto_filter.ref = (
                 f"{get_column_letter(start_col)}{header_row}:"
-                f"{get_column_letter(start_col + len(columns) - 1)}{last_row}"
+                f"{get_column_letter(ultima_coluna)}{last_row}"
             )
         if freeze and start_col == 1:
             ws.freeze_panes = ws.cell(first_row, 1)
@@ -650,12 +679,14 @@ class ReportSheet:
         ws.row_dimensions[self.row].height = 14
         self.row += 2
 
-    def print_setup(self, *, landscape: bool = True, fit_width: int = 1) -> None:
+    def print_setup(self, *, landscape: bool = True, fit_width: int = 1, fit_height: int = 0) -> None:
+        """Impressão A4; ``fit_height=1`` força a aba inteira numa página."""
+
         ws = self.ws
         ws.page_setup.orientation = "landscape" if landscape else "portrait"
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = fit_width
-        ws.page_setup.fitToHeight = 0
+        ws.page_setup.fitToHeight = fit_height
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.print_options.horizontalCentered = True
         ws.page_margins.left = 0.4
@@ -709,14 +740,16 @@ def _base_style(chart, title: str, *, horizontal: bool = False) -> None:
     chart.style = None
     chart.roundedCorners = False
     chart.visible_cells_only = False
-    if chart.x_axis is not None:
+    if getattr(chart, "x_axis", None) is not None:
         chart.x_axis.delete = False
         chart.x_axis.majorGridlines = None
         # Categoria à esquerda na barra horizontal; embaixo nos demais tipos.
         chart.x_axis.axPos = "l" if horizontal else "b"
-    if chart.y_axis is not None:
+    if getattr(chart, "y_axis", None) is not None:
         chart.y_axis.delete = False
         chart.y_axis.axPos = "b" if horizontal else "l"
+        # Grade clara: a padrão do Excel é preta e pesa mais que as barras.
+        chart.y_axis.majorGridlines = ChartLines(spPr=GraphicalProperties(ln=LineProperties(solidFill=LINE, w=6350)))
     if chart.legend is not None:
         # Legenda embaixo: à direita ela rouba largura e corta o texto.
         chart.legend.position = "b"
@@ -765,6 +798,63 @@ def ranking_chart(
     chart.width = width
     chart.height = height
     chart.gapWidth = 60
+    target.add_chart(chart, anchor)
+    return True
+
+
+_PIE_COLORS = (NAVY, BLUE, GREEN, AMBER, RED, MUTED)
+
+
+def pie_chart(
+    target,
+    table: TableRange,
+    *,
+    title: str,
+    label_key: str,
+    value_key: str,
+    anchor: str,
+    first_color: str = BLUE,
+    max_rows: int = 5,
+    width: float = 12.5,
+    height: float = 6.5,
+) -> bool:
+    """Pizza da participação de cada categoria; só faz sentido com valores somáveis."""
+
+    if table.rows < 2:
+        return False
+    source = target.parent[table.sheet_title]
+    last = min(table.last_row, table.first_row + max_rows - 1)
+    chart = PieChart()
+    _base_style(chart, title)
+    chart.legend.position = "r"
+    data = Reference(source, min_col=table.column_index(value_key), min_row=table.header_row, max_row=last)
+    cats = Reference(source, min_col=table.column_index(label_key), min_row=table.first_row, max_row=last)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(cats)
+    cores = [first_color] + [cor for cor in _PIE_COLORS if cor != first_color]
+    serie = chart.series[0]
+    for indice in range(last - table.first_row + 1):
+        fatia = DataPoint(idx=indice)
+        fatia.graphicalProperties = GraphicalProperties(solidFill=cores[indice % len(cores)])
+        fatia.graphicalProperties.line = LineProperties(solidFill="FFFFFF")
+        serie.dPt.append(fatia)
+    # Percentual dentro da fatia; o nome fica na legenda.
+    rotulos = DataLabelList()
+    rotulos.showPercent = True
+    rotulos.showVal = False
+    rotulos.showSerName = False
+    rotulos.showCatName = False
+    rotulos.showLegendKey = False
+    rotulos.showBubbleSize = False
+    rotulos.numFmt = "0%"
+    rotulos.position = "inEnd"
+    # Texto branco: todas as fatias da paleta são escuras.
+    rotulos.txPr = RichText(
+        p=[Paragraph(pPr=ParagraphProperties(defRPr=CharacterProperties(b=True, solidFill="FFFFFF")), endParaRPr=CharacterProperties())]
+    )
+    chart.dataLabels = rotulos
+    chart.width = width
+    chart.height = height
     target.add_chart(chart, anchor)
     return True
 
@@ -945,6 +1035,149 @@ def pareto_chart(
     return True
 
 
+# --- Resumo de uma página (formato simples) ---------------------------------
+# Leitura de diretoria: poucos indicadores, pontos de atenção curtos e um único
+# ranking com gráfico, tudo numa folha A4 paisagem. O detalhe fica no formato
+# técnico; aqui nada é recalculado, só escolhido e ordenado.
+
+RESUMO_SHEET = "Resumo"
+RESUMO_MAX_CARDS = 6
+RESUMO_MAX_POINTS = 5
+RESUMO_TOP = 5
+
+_CHART_FORMATS = {
+    "int": FORMATS["int"],
+    "number": FORMATS["number"],
+    "percent": FORMATS["percent"],
+    "duration": FORMATS["duration"],
+}
+
+
+@dataclass(frozen=True)
+class Ranking:
+    """O ranking principal do relatório: pares (categoria, valor) publicados."""
+
+    title: str
+    label: str
+    value_label: str
+    kind: str
+    rows: Sequence[tuple[Any, Any]] = ()
+    color: str = BLUE
+
+
+def pick_cards(cards: Sequence[Card], labels: Sequence[str]) -> list[Card]:
+    """Escolhe os cartões pelo rótulo, na ordem de importância pedida."""
+
+    por_rotulo = {card.label: card for card in cards}
+    return [por_rotulo[label] for label in labels if label in por_rotulo]
+
+
+def _missing_line(cards: Sequence[Card]) -> str | None:
+    faltantes = [card for card in cards if coerce(card.value, card.kind) is None]
+    if not faltantes:
+        return None
+    if len(faltantes) == 1:
+        card = faltantes[0]
+        motivo = str(card.reason or "Dados insuficientes").strip().rstrip(".")
+        return f"{card.label}: {motivo}."
+    nomes = ", ".join(card.label for card in faltantes)
+    return f"Sem dado no período: {nomes}. O motivo de cada um está na versão detalhada deste relatório."
+
+
+def write_resumo(
+    workbook,
+    *,
+    title: str,
+    filters,
+    generated_at: datetime,
+    cards: Sequence[Card],
+    points: Sequence[tuple[str, str]],
+    ranking: Ranking | None,
+    footer: str | None = None,
+) -> None:
+    """Aba única "Resumo" que cabe numa página A4 paisagem."""
+
+    sheet = ReportSheet(workbook.create_sheet(RESUMO_SHEET), width=12, default_column_width=11)
+    sheet.header(
+        title, filters, generated_at=generated_at,
+        subtitle="Resumo de uma página. O detalhe completo fica na versão detalhada deste relatório.",
+    )
+
+    cartoes = list(cards)[:RESUMO_MAX_CARDS]
+    sheet.section("Indicadores principais")
+    if cartoes:
+        por_linha = len(cartoes) if len(cartoes) <= 4 else 3
+        sheet.kpis(cartoes, per_row=por_linha, card_width=sheet.width // por_linha)
+    else:
+        sheet.empty("Os indicadores do período não estão disponíveis para este relatório.")
+
+    sheet.section("Pontos de atenção")
+    pontos = [ponto for ponto in points if ponto and ponto[1]][:RESUMO_MAX_POINTS]
+    if pontos:
+        sheet.facts(pontos)
+    else:
+        sheet.empty("Nenhum ponto de atenção com os dados do período.")
+
+    if ranking is not None:
+        sheet.section(ranking.title)
+        validas = [
+            {"rotulo": rotulo, "valor": valor}
+            for rotulo, valor in ranking.rows
+            if rotulo not in (None, "")
+            and isinstance(valor, (int, float)) and not isinstance(valor, bool)
+        ]
+        linhas = sorted(validas, key=lambda linha: -float(linha["valor"]))[:RESUMO_TOP]
+        if linhas:
+            tabela = sheet.table(
+                (
+                    Column("rotulo", ranking.label, "text", span=4),
+                    Column("valor", ranking.value_label, ranking.kind, span=2),
+                ),
+                linhas,
+                autofilter=False,
+                freeze=False,
+            )
+            # Barra dentro da célula: dá para ler o ranking sem olhar o gráfico.
+            coluna = get_column_letter(tabela.column_index("valor"))
+            sheet.ws.conditional_formatting.add(
+                f"{coluna}{tabela.first_row}:{coluna}{tabela.last_row}",
+                DataBarRule(
+                    start_type="num", start_value=0,
+                    end_type="num" if ranking.kind == "percent" else "max",
+                    end_value=1 if ranking.kind == "percent" else None,
+                    color=ranking.color, showValue=True,
+                ),
+            )
+            # Pizza só quando os valores somam um todo (peças, tempo, ocorrências).
+            com_pizza = ranking.kind != "percent" and tabela.rows >= 2
+            barras_em = f"G{tabela.header_row}"
+            if com_pizza:
+                # Pizza e barras lado a lado, abaixo da tabela.
+                barras_em = f"G{tabela.last_row + 2}"
+                pie_chart(
+                    sheet.ws, tabela,
+                    title=f"Participação: {ranking.title}", label_key="rotulo", value_key="valor",
+                    anchor=f"A{tabela.last_row + 2}", first_color=ranking.color, max_rows=RESUMO_TOP,
+                )
+            ranking_chart(
+                sheet.ws, tabela,
+                title=ranking.title, label_key="rotulo", value_key="valor",
+                anchor=barras_em, color=ranking.color, max_rows=RESUMO_TOP,
+                number_format=_CHART_FORMATS.get(ranking.kind), width=12.5, height=6.5 if com_pizza else 6.0,
+            )
+            # Os gráficos ocupam cerca de 13 linhas.
+            sheet.row = max(sheet.row, (tabela.last_row + 2 if com_pizza else tabela.header_row) + 13)
+        else:
+            sheet.empty("Sem dados para o ranking no período.")
+
+    aviso = _missing_line(cartoes)
+    if aviso:
+        sheet.notice(aviso, tone="muted")
+    if footer:
+        sheet.footer(footer)
+    sheet.print_setup(fit_height=1)
+
+
 # --- Abas técnicas ----------------------------------------------------------
 
 FRIENDLY = {
@@ -1004,8 +1237,9 @@ def label_for(code: Any, labels: dict[str, str], *, fallback: str = MISSING) -> 
 
 __all__ = [
     "AVAILABILITY_LABELS", "AMBER", "BLUE", "Card", "Column", "FORMATS", "GREEN", "LINE",
-    "MISSING", "MUTED", "Metric", "NAVY", "RED", "ReportSheet", "SURFACE", "TEXT",
+    "MISSING", "MUTED", "Metric", "NAVY", "RED", "RESUMO_SHEET", "Ranking", "ReportSheet", "SURFACE", "TEXT",
     "TableRange", "WHITE", "coerce", "composition_chart", "duration_text", "filters_label",
     "grouped_chart", "humanize", "metric", "number_text", "pareto_chart", "parse_datetime", "period_label",
-    "label_for", "ranking_chart", "readable_code", "safe_text", "sheet_title", "trend_chart",
+    "label_for", "pick_cards", "ranking_chart", "readable_code", "safe_text", "sheet_title", "trend_chart",
+    "write_resumo",
 ]

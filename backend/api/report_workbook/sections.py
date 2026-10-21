@@ -22,6 +22,7 @@ from .executive import (
     SEVERITY_LABELS,
     SEVERITY_TONES,
     STATUS_TONES,
+    _gerencial_destaques,
 )
 from .kit import (
     AMBER,
@@ -31,7 +32,10 @@ from .kit import (
     RED,
     Card,
     Column,
+    Ranking,
     ReportSheet,
+    pick_cards,
+    write_resumo,
     duration_text,
     humanize,
     metric,
@@ -371,15 +375,22 @@ OP_COLUMNS = (
     Column("recurso_planejado", "Recurso planejado", "text", 18),
     Column("recurso_real", "Recurso real", "text", 18),
     Column("status", "Status", "text", 14, tones=STATUS_TONES),
+    Column("prioridade", "Prioridade", "text", 12),
     Column("prazo_entrega", "Prazo de entrega", "date"),
+    Column("inicio_planejado", "Início planejado", "datetime"),
+    Column("fim_planejado", "Fim planejado", "datetime"),
     Column("inicio_real", "Início real", "datetime"),
     Column("fim_real", "Fim real", "datetime"),
+    Column("operador_inicio", "Operador (início)", "text", 20),
+    Column("operador_fim", "Operador (fim)", "text", 20),
     Column("quantidade_planejada", "Qtd. planejada", "int"),
     Column("quantidade_boa", "Qtd. boa", "int"),
     Column("refugo", "Refugo", "int"),
     Column("retrabalho", "Retrabalho", "int"),
+    Column("quantidade_atendida", "Qtd. atendida", "int"),
     Column("saldo_quantidade", "Saldo", "int"),
     Column("progresso_percentual", "Progresso", "percent"),
+    Column("proxima_operacao", "Próxima operação", "text", 14),
 )
 
 
@@ -711,12 +722,9 @@ RENDERERS: dict[str, Callable[[_Sheet, dict[str, Any], _Context], None]] = {
 
 # --- Visão Geral --------------------------------------------------------------
 
-def _overview(workbook, titulo: str, overview: dict[str, Any], filters, generated_at: datetime) -> None:
-    painel = ReportSheet(workbook.create_sheet(OVERVIEW_SHEET))
-    painel.header(titulo, filters, generated_at=generated_at)
+def _overview_cards(overview: dict[str, Any]) -> list[Card]:
     kpis = _dict(overview.get("kpis"))
     production = _dict(overview.get("production"))
-
     cards = []
     if production:
         cards.extend([
@@ -729,6 +737,13 @@ def _overview(workbook, titulo: str, overview: dict[str, Any], filters, generate
         for label, chave in SUMMARY_CARDS:
             item = metric(kpis.get(chave))
             cards.append(Card(label, item.value, "percent", "", "info", item.reason or item.state_label))
+    return cards
+
+
+def _overview(workbook, titulo: str, overview: dict[str, Any], filters, generated_at: datetime) -> None:
+    painel = ReportSheet(workbook.create_sheet(OVERVIEW_SHEET))
+    painel.header(titulo, filters, generated_at=generated_at)
+    cards = _overview_cards(overview)
     if cards:
         painel.section("Indicadores do período")
         painel.kpis(cards)
@@ -762,15 +777,42 @@ def _overview(workbook, titulo: str, overview: dict[str, Any], filters, generate
     painel.print_setup()
 
 
+def build_sections_resumo(workbook, report_type: str, overview: dict[str, Any], filters, generated_at: datetime) -> None:
+    """Formato simples: a Visão Geral reduzida a uma página (cartões, pontos e 1 ranking)."""
+
+    write_resumo(
+        workbook,
+        title=report_title(report_type),
+        filters=filters,
+        generated_at=generated_at,
+        cards=pick_cards(
+            _overview_cards(overview),
+            ("OEE", "Produção boa", "Disponibilidade", "Performance", "Qualidade (FTT)", "Refugo"),
+        ),
+        points=_gerencial_destaques(overview),
+        ranking=Ranking(
+            "Produção boa por setor", "Setor", "Peças boas", "int",
+            [(row.get("setor"), _number(row.get("producao_boa"))) for row in _rows(overview.get("sectors"))],
+            GREEN,
+        ),
+        footer=FOOTER,
+    )
+
+
 def build_sections_workbook(
     workbook,
     report_type: str,
     payload: dict[str, Any],
     filters,
     generated_at: datetime,
+    *,
+    modo: str = "tecnico",
 ) -> None:
     sections = _dict(payload.get("sections"))
     overview = _dict(sections.get("Resumo Executivo"))
+    if modo == "simples":
+        build_sections_resumo(workbook, report_type, overview, filters, generated_at)
+        return
     titulo = report_title(report_type)
     _overview(workbook, titulo, overview, filters, generated_at)
 
@@ -796,4 +838,4 @@ def build_sections_workbook(
         aba.print_setup()
 
 
-__all__ = ["build_sections_workbook", "report_title", "REPORT_TITLES"]
+__all__ = ["build_sections_resumo", "build_sections_workbook", "report_title", "REPORT_TITLES"]

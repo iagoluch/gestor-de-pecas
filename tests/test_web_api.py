@@ -1150,6 +1150,19 @@ class WebApiTests(unittest.TestCase):
         finally:
             workbook.close()
 
+    def test_relatorio_excel_simples_e_uma_pagina_so(self):
+        self.login_manager()
+        response = self.client.get("/api/v1/reports/producao/export.xlsx?modo=simples")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn("_simples.xlsx", response.headers["content-disposition"])
+        workbook = load_workbook(BytesIO(response.content))
+        try:
+            self.assertEqual(workbook.sheetnames, ["Resumo"])
+        finally:
+            workbook.close()
+        invalido = self.client.get("/api/v1/reports/producao/export.xlsx?modo=outro")
+        self.assertEqual(invalido.status_code, 422)
+
     def test_relatorio_gerado_tem_download_autorizado_e_idor_negado(self):
         self.db.criar_usuario("Outro Gestor", "senha-outro", "gestor")
         with tempfile.TemporaryDirectory() as artifact_dir:
@@ -1181,6 +1194,11 @@ class WebApiTests(unittest.TestCase):
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
                 self.assertTrue(download.content.startswith(b"PK"))
+                simples = client.get(artifact["download_url_simples"])
+                self.assertEqual(simples.status_code, 200, simples.text)
+                self.assertTrue(simples.content.startswith(b"PK"))
+                self.assertIn("_simples.xlsx", simples.headers["content-disposition"])
+                self.assertNotEqual(simples.content, download.content)
 
                 client.post(
                     "/api/v1/auth/login",

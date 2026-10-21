@@ -103,7 +103,10 @@ function ReportArtifactCard({ artifact }: { artifact: AIReportArtifact }) {
         <small>{artifactStatusLabel(artifact.status)}</small>
       </div>
       <div className="ai-artifact__actions">
-        <a className="button button--primary" href={artifact.download_url} download>Baixar Excel</a>
+        <a className="button button--primary" href={artifact.download_url} download>Export técnico</a>
+        {artifact.download_url_simples ? (
+          <a className="button button--primary" href={artifact.download_url_simples} download>Export simples</a>
+        ) : null}
         {artifact.telegram_available && artifact.telegram_destination_id ? (
           <button className="button" type="button" onClick={() => void sendToTelegram()} disabled={sending}>
             {sending ? "Enviando…" : "Enviar no Telegram"}

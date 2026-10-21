@@ -91,6 +91,7 @@ describe("IA Industrial gerencial", () => {
       size_bytes: 4096,
       status: "pronto",
       download_url: "/api/v1/reports/artifacts/00000000-0000-0000-0000-000000000021/download",
+      download_url_simples: "/api/v1/reports/artifacts/00000000-0000-0000-0000-000000000021/download?modo=simples",
       telegram_available: true,
       telegram_destination_id: 3,
     };
@@ -116,7 +117,8 @@ describe("IA Industrial gerencial", () => {
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     });
     renderAI(fetchMock);
-    expect(await screen.findByRole("link", { name: "Baixar Excel" }, { timeout: 5000 })).toHaveAttribute("href", artifact.download_url);
+    expect(await screen.findByRole("link", { name: "Export técnico" }, { timeout: 5000 })).toHaveAttribute("href", artifact.download_url);
+    expect(screen.getByRole("link", { name: "Export simples" })).toHaveAttribute("href", artifact.download_url_simples);
     expect(screen.getByRole("button", { name: "Resumir fábrica" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "O que precisa da minha atenção?" })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("-1000000000000");
@@ -160,7 +162,7 @@ describe("IA Industrial gerencial", () => {
       return json({ code: "not_found", message: "Não encontrado" }, 404);
     });
     renderAI(fetchMock);
-    expect(await screen.findByRole("link", { name: "Baixar Excel" }, { timeout: 5000 })).toHaveAttribute("href", artifact.download_url);
+    expect(await screen.findByRole("link", { name: "Export técnico" }, { timeout: 5000 })).toHaveAttribute("href", artifact.download_url);
     expect(screen.queryByRole("button", { name: "Enviar no Telegram" })).toBeNull();
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/send"))).toBe(false);
   });

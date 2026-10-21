@@ -1,3 +1,4 @@
+from functools import partial
 from fastapi import Depends, Request
 
 from backend.api.database import get_database
@@ -17,6 +18,7 @@ def get_report_service(
         database,
         artifact_dir=settings.report_artifact_dir,
         workbook_builder=build_report_workbook,
+        simple_workbook_builder=partial(build_report_workbook, modo="simples"),
         now_func=getattr(facade, "_now", None),
         expiration_hours=settings.report_expiration_hours,
         max_bytes=settings.report_max_bytes,

@@ -74,17 +74,25 @@ function sectorValue(filters: OverviewFilters, metric: string, label: string, ro
 
 function DownloadAction({ type, query }: { type: ReportType; query: string }) {
   const [error, setError] = useState<string | null>(null);
-  async function exportXlsx() {
+
+  async function exportXlsx(modo: "tecnico" | "simples") {
     setError(null);
     try {
-      await api.download(`/api/v1/reports/${type}/export.xlsx?${query}`, `relatorio_${type}.xlsx`);
+      await api.download(
+        `/api/v1/reports/${type}/export.xlsx?${query}&modo=${modo}`,
+        `relatorio_${type}_${modo}.xlsx`,
+      );
     } catch (reason) {
       setError(`Não foi possível gerar o Excel. ${apiErrorMessage(reason)}`);
     }
   }
+
   return (
     <div className="download-action">
-      <AsyncButton className="button button--primary" pendingLabel="Gerando…" title="Baixar em Excel (.xlsx)" onClick={exportXlsx}>Exportar</AsyncButton>
+      <div className="download-action__buttons">
+        <AsyncButton className="button button--primary" pendingLabel="Gerando…" title="Baixar em Excel (.xlsx)" onClick={() => exportXlsx("tecnico")}>Export técnico</AsyncButton>
+        <AsyncButton className="button button--primary" pendingLabel="Gerando…" title="Baixar em Excel (.xlsx)" onClick={() => exportXlsx("simples")}>Export simples</AsyncButton>
+      </div>
       {error ? <span role="alert" className="download-action__error">{error}</span> : null}
     </div>
   );

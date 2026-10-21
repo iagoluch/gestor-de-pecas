@@ -102,6 +102,7 @@ table, .metric-card__value, .insight-drawer__summary strong, .resource-card dd, 
 /* AN-05: carimbo de hora dos painéis de TV, fora do fluxo para não roubar altura do quadro. */
 .snapshot-stamp { position: fixed; z-index: var(--z-fab); right: 12px; bottom: 6px; margin: 0; padding: 2px 8px; border-radius: var(--radius-pill); color: var(--muted); background: var(--surface); font-size: var(--text-sm); font-variant-numeric: tabular-nums; pointer-events: none; }
 .download-action { display: grid; justify-items: end; gap: 6px; }
+.download-action__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .download-action__error { max-width: 320px; color: var(--danger-ink); font-size: var(--text-sm); text-align: right; }
 .skip-link:focus-visible { transform: none; box-shadow: var(--focus-ring); }
 .mobile-menu, .sidebar-scrim { display: none; }
