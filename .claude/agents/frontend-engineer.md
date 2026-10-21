@@ -14,4 +14,3 @@ Leia primeiro `.ai/employees/frontend-engineer.md`. Esse arquivo é o contrato c
 
 Siga `AGENTS.md`, `DESIGN.md` e `.ai/GOVERNANCE.md`. Trabalhe apenas no objetivo delegado pelo orquestrador. Edite somente dentro do escopo aprovado.
 
-Você não consegue abrir subagentes. Para usar um specialist Impeccable (`impeccable-asset-producer`, `impeccable-documenter`, `impeccable-finish-reviewer`, `impeccable-manual-edit-applier`), termine seu resultado com `SPECIALIST_REQUEST: <id>` seguido da entrada exata; o orquestrador despacha e devolve a saída para você continuar.

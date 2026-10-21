@@ -202,15 +202,8 @@
         "integração ERP"
       ],
       "type": "workforce_employee",
-      "can_call_types": [
-        "specialist_subagent"
-      ],
-      "can_call_ids": [
-        "impeccable-asset-producer",
-        "impeccable-documenter",
-        "impeccable-finish-reviewer",
-        "impeccable-manual-edit-applier"
-      ],
+      "can_call_types": [],
+      "can_call_ids": [],
       "authority": [
         "React/HMI",
         "browser interaction",
@@ -1069,48 +1062,7 @@
       "can_call_ids": []
     }
   ],
-  "specialist_subagents": [
-    {
-      "id": "impeccable-asset-producer",
-      "type": "specialist_subagent",
-      "domain": "frontend-design",
-      "parent_ids": [
-        "frontend-engineer"
-      ],
-      "can_call_types": [],
-      "can_call_ids": []
-    },
-    {
-      "id": "impeccable-documenter",
-      "type": "specialist_subagent",
-      "domain": "frontend-design",
-      "parent_ids": [
-        "frontend-engineer"
-      ],
-      "can_call_types": [],
-      "can_call_ids": []
-    },
-    {
-      "id": "impeccable-finish-reviewer",
-      "type": "specialist_subagent",
-      "domain": "frontend-design",
-      "parent_ids": [
-        "frontend-engineer"
-      ],
-      "can_call_types": [],
-      "can_call_ids": []
-    },
-    {
-      "id": "impeccable-manual-edit-applier",
-      "type": "specialist_subagent",
-      "domain": "frontend-design",
-      "parent_ids": [
-        "frontend-engineer"
-      ],
-      "can_call_types": [],
-      "can_call_ids": []
-    }
-  ],
+  "specialist_subagents": [],
   "call_policy": {
     "default_deny": true,
     "rules": [
