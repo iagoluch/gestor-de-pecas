@@ -1129,8 +1129,8 @@ class WebApiTests(unittest.TestCase):
             # Relatório MES em camadas: painel executivo, análise e, por último,
             # a aba técnica oculta que preserva a rastreabilidade.
             self.assertEqual(workbook.sheetnames[0], "Visão Geral")
-            self.assertEqual(workbook.sheetnames[-1], "Dados Técnicos")
-            self.assertEqual(workbook["Dados Técnicos"].sheet_state, "hidden")
+            self.assertNotIn("Dados Técnicos", workbook.sheetnames)
+            self.assertTrue(all(sheet.sheet_state == "visible" for sheet in workbook.worksheets))
             summary = workbook["Visão Geral"]
             self.assertEqual(summary["A1"].value, "GESTOR DE PEÇAS")
             self.assertEqual(summary["A2"].value, "Relatório de Produção")
@@ -1145,9 +1145,8 @@ class WebApiTests(unittest.TestCase):
             )
             self.assertEqual(summary["A10"].value, "—")
             # Nas tabelas o cabeçalho fica congelado e filtrável.
-            tecnica = workbook["Dados Técnicos"]
-            self.assertEqual(tecnica.freeze_panes, "A8")
-            self.assertTrue(tecnica.auto_filter.ref)
+            qualidade = workbook["Qualidade dos Dados"]
+            self.assertEqual(qualidade.freeze_panes, "A10")
         finally:
             workbook.close()
 

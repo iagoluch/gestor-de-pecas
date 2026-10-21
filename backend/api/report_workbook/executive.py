@@ -11,8 +11,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Sequence
 
-from openpyxl.utils import get_column_letter
-
 from .kit import (
     AMBER,
     AVAILABILITY_LABELS,
@@ -25,14 +23,13 @@ from .kit import (
     MUTED,
     RED,
     ReportSheet,
-    TableRange,
     duration_text,
     grouped_chart,
     metric,
     number_text,
     pareto_chart,
     ranking_chart,
-    technical_sheet,
+    readable_code,
     trend_chart,
 )
 
@@ -43,11 +40,10 @@ WIDE_CHART = 28.0
 
 OVERVIEW_SHEET = "Visão Geral"
 QUALITY_SHEET = "Qualidade dos Dados"
-SERIES_SHEET = "Séries dos Gráficos"
 
 FOOTER = (
-    "Indicadores calculados pelos serviços canônicos do Gestor de Peças; esta planilha apresenta o "
-    "resultado e não recalcula regra industrial. “—” indica dado ausente — nunca zero."
+    "Números calculados pelo Gestor de Peças; esta planilha apenas apresenta o resultado, "
+    "sem refazer nenhum cálculo. “—” indica dado não disponível — nunca zero."
 )
 
 ISSUE_LABELS = {
@@ -58,6 +54,16 @@ ISSUE_LABELS = {
     "fim_turno_sem_interrupcao_programada": "Fim de turno sem interrupção programada",
     "rateio_nao_conserva_tempo_fisico": "Rateio não conserva o tempo físico",
     "recurso_em_turno_sem_status": "Turno disponível sem estado registrado (recurso ocioso)",
+    "producao_sem_quantidade_boa": "Produção encerrada sem quantidade boa",
+    "op_sem_operador": "OP sem operador registrado",
+    "op_sem_recurso": "OP sem recurso registrado",
+    "operador_sem_recurso": "Operador sem recurso registrado",
+    "recurso_ativo_sem_op": "Recurso ativo sem OP",
+    "intervalo_invalido": "Intervalo de tempo inválido",
+}
+
+CRITERION_LABELS = {
+    "tempo_fisico_de_parada_no_periodo": "Tempo físico de parada no período",
 }
 
 SOURCE_LABELS = {
@@ -102,14 +108,14 @@ def _estado(availability: Any) -> str:
     """Traduz o código de disponibilidade do backend para linguagem de gestão."""
 
     codigo = str(availability or "").strip()
-    return AVAILABILITY_LABELS.get(codigo, codigo)
+    return AVAILABILITY_LABELS.get(codigo, "Não informado" if not codigo else "Situação não identificada")
 
 
 def _fonte(source: Any) -> str:
-    """Nome de tabela vira descrição legível fora da aba técnica."""
+    """Nome de tabela vira descrição legível; código desconhecido não aparece."""
 
     codigo = str(source or "").strip()
-    return SOURCE_LABELS.get(codigo, codigo or MISSING)
+    return SOURCE_LABELS.get(codigo, "fonte não identificada" if codigo else MISSING)
 
 
 def _rows(value: Any) -> list[dict[str, Any]]:
@@ -182,28 +188,10 @@ def _quality_sheet(workbook, filters, generated_at: datetime, entradas: Sequence
     sheet.print_setup()
 
 
-def _series_sheet(workbook):
-    sheet = ReportSheet(workbook.create_sheet(SERIES_SHEET), width=6, default_column_width=22)
-    return sheet
+def _order_rows(itens: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Status canônico em texto de negócio, sem alterar o dado de origem."""
 
-
-def _hide(workbook, title: str) -> None:
-    """Oculta a aba auxiliar; remove quando nenhum gráfico precisou dela."""
-
-    if title not in workbook.sheetnames:
-        return
-    sheet = workbook[title]
-    if sheet.max_row <= 1 and sheet.max_column <= 1:
-        workbook.remove(sheet)
-        return
-    sheet.sheet_state = "hidden"
-
-
-def _hide_column(sheet: ReportSheet, table: TableRange, key: str) -> None:
-    """Mantém o código técnico rastreável sem ocupar a leitura do usuário."""
-
-    letra = get_column_letter(table.column_index(key))
-    sheet.ws.column_dimensions[letra].hidden = True
+    return [{**item, "status": readable_code(item.get("status"))} for item in itens]
 
 
 def _finish(sheet: ReportSheet, *, footer: bool = True) -> None:
@@ -280,7 +268,6 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     aba_setores = ReportSheet(workbook.create_sheet("Setores"), width=len(SECTOR_COLUMNS))
     aba_recursos = ReportSheet(workbook.create_sheet("Recursos"), width=9)
     aba_perdas = ReportSheet(workbook.create_sheet("Perdas"), width=8)
-    series = _series_sheet(workbook)
 
     # --- Setores -----------------------------------------------------------
     aba_setores.header("Desempenho por setor", filters, generated_at=generated_at)
@@ -292,7 +279,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
         aba_setores.section("Produção e tempos por setor")
         tabela_setores = aba_setores.table(SECTOR_COLUMNS, linhas_setor, totals=totais)
         aba_setores.notice(
-            "FTT e OEE por setor não são publicados pelo backend canônico; eles existem por "
+            "FTT e OEE não são calculados por setor; eles existem por "
             "recurso e para a fábrica. Consulte a aba “Recursos”.",
             tone="muted",
         )
@@ -306,7 +293,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     tabela_recursos = None
     if linhas_recurso:
         aba_recursos.section(
-            "Recursos com indicador canônico no período",
+            "Recursos com indicador no período",
             hint="Ordenados por OEE. Cada indicador vem do mesmo cálculo usado nas telas gerenciais.",
         )
         tabela_recursos = aba_recursos.table(RESOURCE_COLUMNS, linhas_recurso)
@@ -324,10 +311,10 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
         {"componente": "Ritmo (performance)", "segundos": perdas_oee.get("ritmo_segundos")},
     ]
     aba_perdas.section(
-        "Composição canônica das perdas de OEE",
+        "Composição das perdas de OEE",
         hint=(
-            "Mesma decomposição usada pelo cálculo oficial de OEE. Em “Ritmo”, o backend publica a "
-            "diferença entre o numerador e o denominador da performance: valor positivo indica "
+            "Mesma decomposição usada no cálculo oficial de OEE. Em “Ritmo”, aparece a "
+            "diferença entre o realizado e o previsto: valor positivo indica "
             "performance acima de 100%."
         ),
     )
@@ -351,9 +338,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     causas = _rows(insights.get("losses"))
     tabela_causas = None
     # Denominador canônico: tempo de parada já consolidado pela visão gerencial.
-    total_parada = _number(_dict(overview.get("hours")).get("downtime_seconds"))
-    if not total_parada:
-        total_parada = _sum(causas, "impact_value")
+    total_parada = _sum(causas, "impact_value")
     aba_perdas.section("Principais causas de parada")
     if causas:
         acumulado = 0.0
@@ -384,38 +369,41 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
     if criticos:
         aba_perdas.section(
             "Recursos com maior tempo de parada",
-            hint="Critério publicado pelo backend: tempo físico de parada no período, sem escore composto.",
+            hint="Critério: tempo físico de parada no período, sem nota composta.",
         )
         aba_perdas.table(
             (
                 Column("resource", "Recurso", "text", 24),
                 Column("impact_value", "Tempo parado", "duration"),
-                Column("criterion", "Critério", "text", 40),
+                Column("criterio", "Critério", "text", 40),
             ),
-            criticos[:15],
+            [
+                {**item, "criterio": CRITERION_LABELS.get(str(item.get("criterion") or ""), MISSING)}
+                for item in criticos[:15]
+            ],
             autofilter=False,
             freeze=False,
         )
-    _finish(aba_perdas)
-
-    # --- Séries auxiliares --------------------------------------------------
+    # Composição do tempo visível na própria aba Perdas: o gráfico do painel
+    # lê esta tabela, sem aba auxiliar oculta.
     itens_composicao = [
         item for item in _rows(composicao.get("items"))
-        if (_number(item.get("seconds")) or 0.0) > 0
+        if (_number(item.get("seconds")) or 0.0) > 0 and item.get("label")
     ]
     tabela_composicao = None
     if itens_composicao:
-        tabela_composicao = series.table(
+        aba_perdas.section("Composição do tempo físico medido")
+        tabela_composicao = aba_perdas.table(
             (
-                Column("label", "Composição do tempo", "text", 26),
+                Column("label", "Composição do tempo", "text", 30),
                 Column("seconds", "Tempo", "duration"),
                 Column("percentage", "Participação", "percent"),
             ),
             sorted(itens_composicao, key=lambda item: -(_number(item.get("seconds")) or 0.0)),
             autofilter=False,
             freeze=False,
-            zebra=False,
         )
+    _finish(aba_perdas)
 
     # --- Painel -------------------------------------------------------------
     painel.header("Relatório Gerencial", filters, generated_at=generated_at)
@@ -432,7 +420,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
              production.get("reason") or "Sem registros de produção no período"),
         Card("OPs executadas", production.get("ops"), "int", "ordens com apontamento", "neutral"),
         Card("Recursos utilizados", production.get("resources"), "int", "recursos com registro", "neutral"),
-        Card("OEE", oee.value, "percent", "cálculo canônico do Gestor", "info", oee.reason or oee.state_label),
+        Card("OEE", oee.value, "percent", "cálculo oficial do Gestor", "info", oee.reason or oee.state_label),
         Card("Disponibilidade", disponibilidade.value, "percent", "tempo disponível de calendário", "info", disponibilidade.reason or disponibilidade.state_label),
         Card("Performance", performance.value, "percent", "ritmo sobre o tempo padrão", "info", performance.reason or performance.state_label),
         Card("FTT", ftt.value, "percent", "qualidade de primeira passagem", "good", ftt.reason or ftt.state_label),
@@ -529,7 +517,7 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
         "situacao": f"{number_text(data_quality.get('facts'), 0)} apontamentos • {number_text(data_quality.get('physical_state_rows'), 0)} estados físicos",
         "detalhe": (
             f"Fonte física: {_fonte(data_quality.get('physical_state_source'))}. "
-            f"Cobertura declarada pelo backend: {_estado(data_quality.get('status'))}."
+            f"Cobertura da base: {_estado(data_quality.get('status'))}."
         ),
     })
     plano = _dict(overview.get("production_plan"))
@@ -540,11 +528,13 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
             "detalhe": str(plano.get("reason")),
         })
     for item in _rows(insights.get("limitations")):
-        codigo = str(item.get("code") or "").strip()
+        mensagem = str(item.get("message") or "").strip()
+        if not mensagem:
+            continue
         qualidade.append({
-            "assunto": "Limitação declarada pelo backend",
+            "assunto": "Limitação dos dados",
             "situacao": "Informativo",
-            "detalhe": str(item.get("message") or "") + (f" (código: {codigo})" if codigo else ""),
+            "detalhe": mensagem,
         })
     rateio = _dict(overview.get("rateio"))
     if rateio.get("reason"):
@@ -554,8 +544,6 @@ def build_gerencial(workbook, payload: dict[str, Any], filters, generated_at: da
             "detalhe": str(rateio.get("reason")),
         })
     _quality_sheet(workbook, filters, generated_at, qualidade)
-    technical_sheet(workbook, payload, filters, generated_at=generated_at)
-    _hide(workbook, SERIES_SHEET)
 
 
 # --------------------------------------------------------------------------
@@ -652,9 +640,9 @@ def build_producao(workbook, payload: dict[str, Any], filters, generated_at: dat
     if itens_ordens:
         aba_ordens.section(
             "Visão operacional das OPs",
-            hint="IDs internos, operadores e fontes de dado permanecem na aba técnica.",
+            hint="Uma linha por operação da OP com apontamento no período.",
         )
-        aba_ordens.table(ORDER_COLUMNS, itens_ordens)
+        aba_ordens.table(ORDER_COLUMNS, _order_rows(itens_ordens))
     else:
         aba_ordens.empty("Nenhuma ordem com apontamento no período filtrado.")
     _finish(aba_ordens)
@@ -748,11 +736,10 @@ def build_producao(workbook, payload: dict[str, Any], filters, generated_at: dat
     })
     qualidade_linhas.append({
         "assunto": "Produção ao longo do período",
-        "situacao": "Série não publicada",
-        "detalhe": "O backend não publica série temporal de produção; nenhuma curva é estimada nesta planilha.",
+        "situacao": "Sem dados hora a hora",
+        "detalhe": "O sistema não guarda a produção hora a hora; nenhuma curva é estimada nesta planilha.",
     })
     _quality_sheet(workbook, filters, generated_at, qualidade_linhas)
-    technical_sheet(workbook, payload, filters, generated_at=generated_at)
 
 
 # --------------------------------------------------------------------------
@@ -784,7 +771,7 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
     aba_setores = ReportSheet(workbook.create_sheet("Perdas por Setor"), width=8)
     aba_qualidade = ReportSheet(workbook.create_sheet("Refugo e Retrabalho"), width=6)
 
-    total_parada = _number(paradas.get("total_seconds"))
+    total_parada = _sum(_rows(paradas.get("by_reason")), "segundos")
     registros_por_motivo: dict[str, int] = {}
     for item in _rows(paradas.get("items")):
         chave = str(item.get("motivo") or "Não informado")
@@ -810,8 +797,8 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
         aba_motivos.section(
             "Ordenado pelo tempo perdido",
             hint=(
-                "Tempo consolidado sem sobreposição pelo backend. “Registros” é a contagem de estados "
-                "físicos com o mesmo motivo e serve para dimensionar a recorrência."
+                "Tempo somado sem contar duas vezes os períodos que se sobrepõem. “Registros” é quantas "
+                "vezes o mesmo motivo apareceu e mostra a recorrência."
             ),
         )
         tabela_motivos = aba_motivos.table(
@@ -830,19 +817,19 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
 
     # --- Perdas por setor e recurso ----------------------------------------
     aba_setores.header("Perdas por setor e por recurso", filters, generated_at=generated_at)
-    linhas_setor = _sorted(_rows(tempos.get("by_sector")), "parada")
+    linhas_setor = _sorted(_rows(tempos.get("by_sector")), "tempo_parada_segundos")
     tabela_setores = None
     if linhas_setor:
         aba_setores.section("Tempo não produtivo por setor")
         tabela_setores = aba_setores.table(
             (
                 Column("setor", "Setor", "text", 22),
-                Column("parada", "Parada", "duration"),
-                Column("setup", "Setup", "duration"),
-                Column("retrabalho", "Retrabalho", "duration"),
-                Column("sem_demanda", "Recurso sem demanda", "duration"),
-                Column("fora_turno", "Fora de turno", "duration"),
-                Column("producao", "Produção", "duration"),
+                Column("tempo_parada_segundos", "Parada", "duration"),
+                Column("tempo_setup_segundos", "Setup", "duration"),
+                Column("tempo_retrabalho_segundos", "Retrabalho", "duration"),
+                Column("tempo_sem_demanda_segundos", "Recurso sem demanda", "duration"),
+                Column("tempo_fora_turno_segundos", "Fora de turno", "duration"),
+                Column("tempo_producao_segundos", "Produção", "duration"),
             ),
             linhas_setor,
         )
@@ -934,10 +921,10 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
     perdas_oee = _dict(perdas.get("oee_losses"))
     if perdas_oee:
         painel.section(
-            "Composição canônica das perdas de OEE",
+            "Composição das perdas de OEE",
             hint=(
-                "Em “Ritmo”, o backend publica a diferença entre o numerador e o denominador da "
-                "performance: valor positivo indica performance acima de 100%."
+                "Em “Ritmo”, aparece a diferença entre o realizado e o previsto: "
+                "valor positivo indica performance acima de 100%."
             ),
         )
         painel.facts([
@@ -955,7 +942,7 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
         destaques.append(("Maior causa de parada", f"{motivos[0].get('motivo')} — {duration_text(motivos[0].get('segundos'))}"))
     if linhas_recurso:
         destaques.append(("Recurso com maior parada", f"{linhas_recurso[0].get('recurso')} — {duration_text(linhas_recurso[0].get('segundos'))}"))
-    if linhas_setor and (_number(linhas_setor[0].get("parada")) or 0) > 0:
+    if linhas_setor and (_number(linhas_setor[0].get("tempo_parada_segundos")) or 0) > 0:
         destaques.append(("Setor com maior parada", f"{linhas_setor[0].get('setor')} — {duration_text(linhas_setor[0].get('parada'))}"))
     if destaques:
         painel.section("Destaques do período")
@@ -979,11 +966,11 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
             label_key="recurso", value_key="segundos",
             anchor=f"A{ancora}", color=RED, number_format=FORMATS["duration"],
         )
-    if tabela_setores is not None and (_sum(linhas_setor, "parada") or 0) > 0:
+    if tabela_setores is not None and (_sum(linhas_setor, "tempo_parada_segundos") or 0) > 0:
         grouped_chart(
             painel.ws, tabela_setores,
             title="Tempo não produtivo por setor",
-            label_key="setor", value_keys=("parada", "setup", "retrabalho"),
+            label_key="setor", value_keys=("tempo_parada_segundos", "tempo_setup_segundos", "tempo_retrabalho_segundos"),
             anchor=f"G{ancora}", colors=(RED, AMBER, BLUE),
             number_format=FORMATS["duration"], stacked=True,
         )
@@ -1016,11 +1003,10 @@ def build_perdas(workbook, payload: dict[str, Any], filters, generated_at: datet
         })
     qualidade_linhas.append({
         "assunto": "Tendência de perdas no período",
-        "situacao": "Série não publicada",
-        "detalhe": "O backend não publica série temporal de paradas; nenhuma curva de tendência é estimada aqui.",
+        "situacao": "Sem dados hora a hora",
+        "detalhe": "O sistema não guarda as paradas hora a hora; nenhuma curva de tendência é estimada aqui.",
     })
     _quality_sheet(workbook, filters, generated_at, qualidade_linhas)
-    technical_sheet(workbook, payload, filters, generated_at=generated_at)
 
 
 # --------------------------------------------------------------------------
@@ -1053,7 +1039,6 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
     aba_recursos = ReportSheet(workbook.create_sheet("Recursos"), width=9)
     aba_capacidade = ReportSheet(workbook.create_sheet("Utilização"), width=8)
     aba_confiabilidade = ReportSheet(workbook.create_sheet("Confiabilidade"), width=6)
-    series = _series_sheet(workbook)
 
     # --- Indicadores por recurso -------------------------------------------
     linhas_recurso = _resource_rows(_rows(analytics.get("recursos")))
@@ -1115,7 +1100,8 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
             )
     else:
         aba_confiabilidade.empty(str(confiabilidade.get("reason") or "Nenhuma falha de equipamento registrada no período."))
-    aba_confiabilidade.notice(str(confiabilidade.get("taxonomia") or ""), tone="muted")
+    if str(confiabilidade.get("taxonomia") or "").strip():
+        aba_confiabilidade.notice(str(confiabilidade.get("taxonomia")), tone="muted")
     _finish(aba_confiabilidade)
 
     # --- Evolução do OEE ----------------------------------------------------
@@ -1133,7 +1119,7 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
         aba_evolucao.header("Evolução do OEE", filters, generated_at=generated_at)
         aba_evolucao.section(
             "Pontos calculáveis no período",
-            hint=f"Agrupamento de {number_text(evolucao.get('bucket_days'), 0)} dia(s) definido pelo backend.",
+            hint=f"Agrupamento de {number_text(evolucao.get('bucket_days'), 0)} dia(s) definido pelo Gestor.",
         )
         tabela_evolucao = aba_evolucao.table(
             (Column("periodo", "Período", "date", 16), Column("oee", "OEE", "percent")),
@@ -1141,7 +1127,7 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
         )
         _finish(aba_evolucao)
 
-    # --- Comparação de indicadores (série auxiliar) -------------------------
+    # --- Comparação de indicadores (tabela visível no painel) ---------------
     oee_metric = metric(oee)
     disponibilidade = metric(kpis.get("availability"))
     performance = metric(kpis.get("performance"))
@@ -1158,14 +1144,6 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
         if not item.missing
     ]
     tabela_comparacao = None
-    if len(comparacao) >= 2:
-        tabela_comparacao = series.table(
-            (Column("indicador", "Indicador", "text", 22), Column("valor", "Valor", "percent")),
-            comparacao,
-            autofilter=False,
-            freeze=False,
-            zebra=False,
-        )
 
     # --- Painel -------------------------------------------------------------
     painel.header("Relatório de Indicadores", filters, generated_at=generated_at)
@@ -1173,7 +1151,7 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
     mttr = confiabilidade.get("mttr_segundos")
     painel.section("Indicadores do período")
     painel.kpis([
-        Card("OEE", oee_metric.value, "percent", "cálculo canônico do Gestor", "info", oee_metric.reason or oee_metric.state_label),
+        Card("OEE", oee_metric.value, "percent", "cálculo oficial do Gestor", "info", oee_metric.reason or oee_metric.state_label),
         Card("Disponibilidade", disponibilidade.value, "percent", "tempo disponível de calendário", "info", disponibilidade.reason or disponibilidade.state_label),
         Card("Performance", performance.value, "percent", "ritmo sobre o tempo padrão", "info", performance.reason or performance.state_label),
         Card("FTT", ftt.value, "percent", "qualidade de primeira passagem", "good", ftt.reason or ftt.state_label),
@@ -1203,6 +1181,15 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
     if destaques:
         painel.section("Destaques do período", hint="Sem semáforo: não existe meta gerencial configurada no sistema.")
         painel.facts(destaques)
+
+    if len(comparacao) >= 2:
+        painel.section("OEE decomposto", hint="OEE = Disponibilidade × Performance × FTT, como no cálculo oficial.")
+        tabela_comparacao = painel.table(
+            (Column("indicador", "Indicador", "text", 22), Column("valor", "Valor", "percent")),
+            comparacao,
+            autofilter=False,
+            freeze=False,
+        )
 
     painel.section("Gráficos")
     ancora = painel.row
@@ -1269,12 +1256,10 @@ def build_indicadores(workbook, payload: dict[str, Any], filters, generated_at: 
     })
     qualidade_linhas.append({
         "assunto": "OEE por setor",
-        "situacao": "Não publicado",
-        "detalhe": "O backend publica OEE por recurso e para a fábrica; nenhum OEE setorial é derivado aqui.",
+        "situacao": "Não disponível",
+        "detalhe": "O OEE é calculado por recurso e para a fábrica; nenhum OEE por setor é estimado aqui.",
     })
     _quality_sheet(workbook, filters, generated_at, qualidade_linhas)
-    technical_sheet(workbook, payload, filters, generated_at=generated_at)
-    _hide(workbook, SERIES_SHEET)
 
 
 # --------------------------------------------------------------------------
@@ -1292,13 +1277,12 @@ ISSUE_COLUMNS = (
     Column("inicio", "Início", "datetime"),
     Column("fim", "Fim", "datetime"),
     Column("segundos", "Duração", "duration"),
-    Column("codigo", "Código técnico", "text", 38),
 )
 
 NESTING_COLUMNS = (
     Column("nesting", "Nesting", "text", 16),
     Column("maquina", "Recurso", "text", 16),
-    Column("programa", "Programa", "text", 20),
+    Column("programa", "Plano", "text", 20),
     Column("real_segundos", "Tempo real", "duration"),
     Column("real_periodo_segundos", "Tempo no período", "duration"),
 )
@@ -1307,8 +1291,8 @@ NESTING_COLUMNS = (
 def _issue_rows(issues: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
-            "severidade": SEVERITY_LABELS.get(str(item.get("severity")), str(item.get("severity") or "")),
-            "tipo": ISSUE_LABELS.get(str(item.get("type")), str(item.get("type") or "")),
+            "severidade": SEVERITY_LABELS.get(str(item.get("severity")), MISSING),
+            "tipo": ISSUE_LABELS.get(str(item.get("type")), "Ocorrência não classificada"),
             "mensagem": item.get("message"),
             "op": item.get("op"),
             "operacao": item.get("operation"),
@@ -1317,7 +1301,6 @@ def _issue_rows(issues: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             "inicio": item.get("start"),
             "fim": item.get("end"),
             "segundos": item.get("seconds"),
-            "codigo": item.get("type"),
         }
         for item in issues
     ]
@@ -1333,7 +1316,7 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
     inconsistencias = _rows(auditoria.get("issues"))
     lacunas = _rows(diagnosticos.get("calendar_gaps"))
 
-    painel = ReportSheet(workbook.create_sheet("Resumo da Base"), width=12)
+    painel = ReportSheet(workbook.create_sheet(OVERVIEW_SHEET), width=12)
     aba_ordens = ReportSheet(workbook.create_sheet("Ordens"), width=15)
     aba_inconsistencias = ReportSheet(workbook.create_sheet("Inconsistências"), width=11)
     aba_diagnosticos = ReportSheet(workbook.create_sheet("Diagnósticos"), width=8)
@@ -1342,7 +1325,7 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
     aba_ordens.header("Ordens analisadas", filters, generated_at=generated_at)
     if itens_ordens:
         aba_ordens.section("Base operacional do período")
-        aba_ordens.table(ORDER_COLUMNS, itens_ordens)
+        aba_ordens.table(ORDER_COLUMNS, _order_rows(itens_ordens))
     else:
         aba_ordens.empty("Nenhuma ordem com apontamento no período filtrado.")
     _finish(aba_ordens)
@@ -1354,8 +1337,7 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
             "Somente inconsistências reais",
             hint="Recurso ocioso dentro do turno não entra aqui: ele é diagnóstico, não inconsistência.",
         )
-        tabela_incon = aba_inconsistencias.table(ISSUE_COLUMNS, _issue_rows(inconsistencias))
-        _hide_column(aba_inconsistencias, tabela_incon, "codigo")
+        aba_inconsistencias.table(ISSUE_COLUMNS, _issue_rows(inconsistencias))
     else:
         aba_inconsistencias.empty("Nenhuma inconsistência encontrada no período filtrado.")
     _finish(aba_inconsistencias)
@@ -1407,11 +1389,9 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
     if lacunas:
         detalhe = ReportSheet(workbook.create_sheet("Diagnósticos (detalhe)"), width=11)
         detalhe.header("Intervalos sem estado físico", filters, generated_at=generated_at)
-        detalhe.section("Detalhe completo", hint="Aba oculta por padrão: volume alto e uso de conferência.")
-        tabela_detalhe = detalhe.table(ISSUE_COLUMNS, _issue_rows(lacunas))
-        _hide_column(detalhe, tabela_detalhe, "codigo")
+        detalhe.section("Detalhe completo", hint="Um intervalo por linha, para conferência.")
+        detalhe.table(ISSUE_COLUMNS, _issue_rows(lacunas))
         _finish(detalhe)
-        detalhe.ws.sheet_state = "hidden"
 
     # --- Nestings -----------------------------------------------------------
     itens_nesting = _rows(nestings.get("items"))
@@ -1448,7 +1428,7 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
         painel.table(
             (Column("severidade", "Severidade", "text", 20), Column("quantidade", "Ocorrências", "int")),
             [
-                {"severidade": SEVERITY_LABELS.get(chave, chave), "quantidade": valor}
+                {"severidade": SEVERITY_LABELS.get(chave, "Severidade não classificada"), "quantidade": valor}
                 for chave, valor in por_severidade.items()
             ],
             autofilter=False,
@@ -1457,7 +1437,7 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
     if inconsistencias:
         tipos: dict[str, int] = {}
         for item in inconsistencias:
-            chave = ISSUE_LABELS.get(str(item.get("type")), str(item.get("type") or ""))
+            chave = ISSUE_LABELS.get(str(item.get("type")), "Ocorrência não classificada")
             tipos[chave] = tipos.get(chave, 0) + 1
         painel.section("Principais tipos encontrados")
         painel.facts([
@@ -1472,7 +1452,7 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
     if auditoria.get("reliability_reason"):
         qualidade_linhas.append({
             "assunto": "Percentual de confiabilidade da base",
-            "situacao": "Não publicado",
+            "situacao": "Não disponível",
             "detalhe": str(auditoria.get("reliability_reason")),
         })
     if diagnosticos.get("reason"):
@@ -1485,10 +1465,9 @@ def build_dados_analiticos(workbook, payload: dict[str, Any], filters, generated
         qualidade_linhas.append({
             "assunto": "Cobertura das ordens",
             "situacao": _estado(ordens.get("availability")),
-            "detalhe": f"Fonte física declarada pelo backend: {_fonte(auditoria.get('physical_state_source'))}.",
+            "detalhe": f"Fonte dos estados físicos: {_fonte(auditoria.get('physical_state_source'))}.",
         })
     _quality_sheet(workbook, filters, generated_at, qualidade_linhas)
-    technical_sheet(workbook, payload, filters, generated_at=generated_at)
 
 
 BUILDERS = {
@@ -1500,4 +1479,7 @@ BUILDERS = {
 }
 
 
-__all__ = ["BUILDERS", "FOOTER", "ISSUE_LABELS", "OVERVIEW_SHEET", "QUALITY_SHEET", "SEVERITY_LABELS"]
+__all__ = [
+    "BUILDERS", "FOOTER", "ISSUE_LABELS", "OVERVIEW_SHEET", "QUALITY_SHEET", "SEVERITY_LABELS",
+    "SEVERITY_TONES", "STATUS_TONES",
+]

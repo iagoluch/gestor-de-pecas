@@ -3,7 +3,7 @@
 Arquitetura:
 
 * ``kit``      — identidade visual e primitivas (cabeçalho, cartão, tabela,
-                 gráfico, estado sem dado, aba técnica);
+                 gráfico, estado sem dado);
 * ``executive``— os cinco relatórios de gestão (Gerencial, Produção, Perdas,
                  Indicadores e Dados Analíticos);
 * ``sections`` — os artifacts por seção usados pelo chat, pelo agendamento e
@@ -26,21 +26,11 @@ from openpyxl import Workbook
 from mes.contracts import AnalyticsFilter
 
 from .executive import BUILDERS
-from .kit import technical_sheet
 from .sections import REPORT_TITLES, build_sections_workbook, report_title
 
 
 def _normalize(report_type: str) -> str:
     return str(report_type or "").strip().casefold().replace("-", "_")
-
-
-def _abas_tecnicas_ao_final(workbook) -> None:
-    """Abas ocultas (séries e auditoria) ficam depois das abas de leitura."""
-
-    visiveis = [sheet for sheet in workbook.worksheets if sheet.sheet_state == "visible"]
-    ocultas = [sheet for sheet in workbook.worksheets if sheet.sheet_state != "visible"]
-    if visiveis and ocultas:
-        workbook._sheets = visiveis + ocultas
 
 
 def build_report_workbook(
@@ -79,8 +69,9 @@ def build_report_workbook(
                 momento,
             )
         if not workbook.sheetnames:
-            technical_sheet(workbook, dados, filters, generated_at=momento, hidden=False)
-        _abas_tecnicas_ao_final(workbook)
+            # Nunca entrega arquivo sem aba nem despeja o payload: a Visão Geral
+            # diz que não há dado publicado para o relatório.
+            build_sections_workbook(workbook, tipo, {"sections": {}}, filters, momento)
         workbook.calculation.fullCalcOnLoad = True
         output = BytesIO()
         workbook.save(output)

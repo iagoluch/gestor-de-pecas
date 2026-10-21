@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import lru_cache
-import json
+import logging
 import re
 from typing import Any, Sequence
 
@@ -21,6 +21,8 @@ from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+
+_LOG = logging.getLogger(__name__)
 
 
 # --- Paleta -----------------------------------------------------------------
@@ -55,9 +57,10 @@ FORMATS = {
     "text": "@",
     "int": "#,##0",
     "number": "#,##0.0",
-    # Uma casa decimal na leitura executiva; abaixo de 0,1% o valor ganha
-    # precisão em vez de virar "0,0%" e se confundir com zero.
-    "percent": "[<0.001]0.000%;0.0%",
+    # Percentual: inteiro sai sem casas ("96%"); fracionado com duas ("90,45%").
+    # O formato é escolhido por célula em ``percent_format``; estes são só o
+    # padrão de colunas sem valor.
+    "percent": "0.00%",
     "percent_exact": "0.00%",
     "duration": "[h]:mm:ss",
     "duration_card": '[h]"h "mm"min"',
@@ -72,8 +75,22 @@ DURATION_KINDS = frozenset({"duration", "duration_card"})
 AXIS_PERCENT = "0.0%"
 
 
+def percent_format(fraction: float) -> str:
+    """Formato do percentual: sem casas se inteiro, duas casas se fracionado.
+
+    Valor pequeno e não nulo ganha uma casa a mais em vez de virar "0,00%".
+    """
+
+    pct = abs(fraction) * 100.0
+    if pct and round(pct, 2) == 0:
+        return "0.000%"
+    if round(pct, 2) == round(pct):
+        return "0%"
+    return "0.00%"
+
+
 def _chart_format(number_format: str | None) -> str | None:
-    return AXIS_PERCENT if number_format == FORMATS["percent"] else number_format
+    return AXIS_PERCENT if number_format in (FORMATS["percent"], FORMATS["percent_exact"]) else number_format
 
 
 _ISO = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?")
@@ -132,7 +149,7 @@ def coerce(value: Any, kind: str):
     Retorna ``None`` quando o dado está ausente — nunca zero.
     """
 
-    if value is None:
+    if value is None or (isinstance(value, float) and value != value):
         return None
     if kind in {"percent", "percent_exact"}:
         return float(value) / 100.0 if isinstance(value, (int, float)) else None
@@ -151,9 +168,9 @@ def coerce(value: Any, kind: str):
     if isinstance(value, (datetime, date)):
         return value
     if isinstance(value, (dict, list, tuple)):
-        # Estrutura só chega aqui na aba técnica/genérica; JSON compacto é mais
-        # legível e auditável do que o repr do Python.
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+        # Estrutura não tem leitura de negócio numa célula: vira ausência ("—")
+        # em vez de JSON ou repr do Python.
+        return None
     parsed = parse_datetime(value)
     return parsed if parsed is not None else safe_text(value)
 
@@ -292,6 +309,8 @@ def write_value(cell, raw: Any, kind: str, *, size: int = 10, bold: bool = False
     if kind == "text" and isinstance(valor, (datetime, date)):
         # Data reconhecida dentro de um campo textual continua sendo data.
         cell.number_format = FORMATS["datetime"] if isinstance(valor, datetime) else FORMATS["date"]
+    elif kind in {"percent", "percent_exact"}:
+        cell.number_format = percent_format(valor)
     else:
         cell.number_format = FORMATS.get(kind, FORMATS["text"])
     cell.font = font(size=size, bold=bold, color=color)
@@ -375,6 +394,8 @@ class ReportSheet:
         self.ws = worksheet
         self.width = width
         self.row = 1
+        self.title = ""
+        self.issued = ""
         self.ws.sheet_view.showGridLines = False
         for index in range(1, width + 1):
             self.ws.column_dimensions[get_column_letter(index)].width = default_column_width
@@ -396,7 +417,9 @@ class ReportSheet:
         filtros = filters_label(filters)
         if filtros:
             linhas.append(f"Filtros: {filtros}")
-        linhas.append(f"Gerado em: {generated_at:%d/%m/%Y %H:%M}")
+        linhas.append(f"Emitido em: {generated_at:%d/%m/%Y %H:%M}")
+        self.title = title
+        self.issued = f"{generated_at:%d/%m/%Y %H:%M}"
         ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=self.width)
         contexto = ws.cell(3, 1, "   •   ".join(linhas))
         contexto.font = Font(name=FONT, size=9, color=MUTED)
@@ -639,7 +662,17 @@ class ReportSheet:
         ws.page_margins.right = 0.4
         ws.page_margins.top = 0.5
         ws.page_margins.bottom = 0.5
-        ws.oddFooter.left.text = "Gestor de Peças"
+        # Identificação em toda página impressa (documento controlado): marca e
+        # título no cabeçalho, emissão e "Página x de y" no rodapé.
+        titulo = self.title.replace("&", "&&")
+        ws.oddHeader.left.text = "Gestor de Peças"
+        ws.oddHeader.left.size = 8
+        ws.oddHeader.left.color = MUTED
+        if titulo:
+            ws.oddHeader.right.text = titulo
+            ws.oddHeader.right.size = 8
+            ws.oddHeader.right.color = MUTED
+        ws.oddFooter.left.text = f"Emitido em {self.issued}" if self.issued else "Gestor de Peças"
         ws.oddFooter.left.size = 8
         ws.oddFooter.left.color = MUTED
         ws.oddFooter.right.text = "Página &P de &N"
@@ -934,77 +967,39 @@ def humanize(value: str) -> str:
     return " ".join(FRIENDLY.get(parte.casefold(), parte.capitalize()) for parte in partes if parte)
 
 
-TECHNICAL_COLUMNS = (
-    Column("grupo", "Grupo", "text", 38),
-    Column("campo", "Campo", "text", 32),
-    Column("valor", "Valor", "text", 60, wrap=True),
-    Column("caminho", "Caminho canônico", "text", 46),
-)
+def readable_code(value: Any, labels: dict[str, str] | None = None) -> str | None:
+    """Código canônico (``em_processo``) em texto de negócio ("Em processo").
 
-CONVENTIONS = (
-    ("Percentuais", "Uma casa decimal na leitura executiva; abaixo de 0,1% o valor ganha precisão para não se confundir com zero."),
-    ("Durações", "[h]:mm:ss nas tabelas e “0h 00min” nos cartões; duração negativa aparece como texto com sinal, limitação do Excel."),
-    ("Datas", "dd/mm/aaaa e dd/mm/aaaa hh:mm."),
-    ("Ausência de dado", "“—” significa dado ausente e nunca é substituído por zero."),
-    ("Fonte dos números", "Serviços canônicos do Gestor de Peças; a planilha não recalcula indicador industrial."),
-)
+    Usa o rótulo do mapa quando existe; senão troca o sublinhado por espaço e
+    registra em debug, para o código cru nunca chegar à planilha.
+    """
 
-
-def technical_sheet(
-    workbook,
-    payload: dict[str, Any],
-    filters,
-    *,
-    generated_at: datetime,
-    title: str = "Dados Técnicos",
-    hidden: bool = True,
-    limit: int = 4000,
-) -> None:
-    """Rastreabilidade completa fora da experiência do gestor."""
-
-    ws = workbook.create_sheet(title)
-    sheet = ReportSheet(ws, width=4, default_column_width=30)
-    sheet.header(
-        "Dados técnicos e auditoria",
-        filters,
-        generated_at=generated_at,
-        subtitle=(
-            "Campos canônicos do backend preservados para auditoria; esta aba não é a interface de "
-            "leitura do relatório."
-        ),
-    )
-    linhas = [
-        {"grupo": "Convenções de apresentação", "campo": campo, "valor": texto, "caminho": ""}
-        for campo, texto in CONVENTIONS
-    ]
-    for caminho, (grupo, campo, valor) in _flatten_with_path(payload):
-        linhas.append({
-            "grupo": grupo,
-            "campo": campo,
-            "valor": valor if isinstance(valor, (int, float, bool)) or valor is None else safe_text(valor),
-            "caminho": caminho,
-        })
-        if len(linhas) >= limit:
-            break
-    if linhas:
-        sheet.table(TECHNICAL_COLUMNS, linhas, zebra=True)
-    else:
-        sheet.empty("Nenhum campo escalar foi produzido pelo backend neste relatório.")
-    sheet.print_setup()
-    if hidden:
-        ws.sheet_state = "hidden"
+    if value in (None, ""):
+        return None
+    texto = str(value).strip()
+    if labels and texto in labels:
+        return labels[texto]
+    if "_" in texto or texto.islower():
+        _LOG.debug("Código sem rótulo de negócio na exportação: %s", texto)
+        legivel = " ".join(texto.replace("_", " ").split())
+        return legivel[:1].upper() + legivel[1:] if legivel else None
+    return texto
 
 
-def _flatten_with_path(value: Any, path: tuple[str, ...] = ()):
-    if isinstance(value, dict):
-        for key, child in value.items():
-            yield from _flatten_with_path(child, (*path, str(key)))
-        return
-    if isinstance(value, list):
-        return
-    grupo = " › ".join(humanize(parte) for parte in path[:-1]) or "Raiz"
-    campo = humanize(path[-1]) if path else "Valor"
-    yield ".".join(path), (grupo, campo, value)
+def label_for(code: Any, labels: dict[str, str], *, fallback: str = MISSING) -> str:
+    """Traduz um código interno para o rótulo de negócio.
+
+    Código desconhecido nunca vai para a planilha: vira ``fallback`` e fica
+    registrado em debug para alguém incluir o rótulo no mapa.
+    """
+
+    if code in (None, ""):
+        return MISSING
+    texto = str(code)
+    if texto in labels:
+        return labels[texto]
+    _LOG.debug("Código sem rótulo de negócio na exportação: %s", texto)
+    return fallback
 
 
 __all__ = [
@@ -1012,5 +1007,5 @@ __all__ = [
     "MISSING", "MUTED", "Metric", "NAVY", "RED", "ReportSheet", "SURFACE", "TEXT",
     "TableRange", "WHITE", "coerce", "composition_chart", "duration_text", "filters_label",
     "grouped_chart", "humanize", "metric", "number_text", "pareto_chart", "parse_datetime", "period_label",
-    "ranking_chart", "safe_text", "sheet_title", "technical_sheet", "trend_chart",
+    "label_for", "ranking_chart", "readable_code", "safe_text", "sheet_title", "trend_chart",
 ]

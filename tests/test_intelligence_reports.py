@@ -127,16 +127,16 @@ class IndustrialReportTests(unittest.TestCase):
         self.assertTrue(path.is_file())
         workbook = load_workbook(path, data_only=False)
         try:
-            # Abas em português, painel executivo primeiro e auditoria oculta no fim.
+            # Abas em português, painel executivo primeiro e nenhuma aba
+            # técnica (oculta ou não) com o payload bruto.
             self.assertEqual(workbook.sheetnames, [
                 "Visão Geral", "Indicadores", "Produção", "OPs", "Paradas", "Setup",
                 "Qualidade", "Recursos", "Setores", "Nestings", "Exceções", "Auditoria",
-                "Dados Técnicos",
             ])
-            self.assertEqual(workbook["Dados Técnicos"].sheet_state, "hidden")
+            self.assertTrue(all(sheet.sheet_state == "visible" for sheet in workbook.worksheets))
             oee = workbook["Visão Geral"]["A15"]
             self.assertAlmostEqual(oee.value, 0.824)
-            self.assertEqual(oee.number_format, "[<0.001]0.000%;0.0%")
+            self.assertEqual(oee.number_format, "0.00%")
             self.assertEqual(workbook["Paradas"].freeze_panes, "A10")
             values = [cell.value for row in workbook["Paradas"].iter_rows() for cell in row]
             self.assertIn("'=2+2", values)
@@ -191,9 +191,10 @@ class IndustrialReportTests(unittest.TestCase):
         workbook = load_workbook(path, read_only=True)
         try:
             # A seção ainda possui availability e, portanto, é útil; não existe
-            # uma tabela vazia ou planilha padrão sem título. A aba técnica
-            # preserva a rastreabilidade sem aparecer para o gestor.
-            self.assertEqual(workbook.sheetnames, ["Visão Geral", "Nestings", "Dados Técnicos"])
+            # uma tabela vazia, planilha padrão sem título nem aba técnica.
+            self.assertEqual(workbook.sheetnames, ["Visão Geral", "Nestings"])
+            textos = [cell.value for row in workbook["Nestings"].iter_rows() for cell in row if cell.value]
+            self.assertIn("Sem registros no período", textos)
             self.assertNotIn("Sheet", workbook.sheetnames)
         finally:
             workbook.close()
