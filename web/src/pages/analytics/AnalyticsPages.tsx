@@ -10,6 +10,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { buildOccurrencesExplanation, buildRowSumExplanation } from "../operations/operationsExplanations";
 import type { Availability, MetricValue } from "../../types/api";
 import type {
   FirstPieceHistoryResponse,
@@ -464,19 +465,26 @@ function SegmentPage() {
     value: Number(row.seconds ?? row.segundos ?? 0),
   }));
   const topResource = resourceRanking[0];
+  // Mesmos ids de Operações > Tempo (MetricExplanationService): o painel abre a conta do servidor.
+  const timeNode = (id: string, label: string, seconds: number | null | undefined) => {
+    if (seconds === null || seconds === undefined) return undefined;
+    const text = formatHours(seconds);
+    return <ExplainableValue metric={id} filters={filters.filters} context={`${label} ${text}`}>{text}</ExplainableValue>;
+  };
+  const occurrences = buildOccurrencesExplanation(isStop ? "Ocorrências de parada" : "Ocorrências de setup", data?.items ?? [], data?.count);
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       {toggle}
       <div className={`metric-grid metric-grid--${isStop ? "five" : "four"}`}>
         {isStop ? (
           <>
-            <MetricCard label="Parada não planejada" value={formatHours(data?.unplanned_downtime_seconds)} detail={formatAveragePerResource(data?.unplanned_downtime_seconds, data?.resource_count ?? 0)} accent="danger" />
-            <MetricCard label="Parada planejada" value={formatHours(data?.planned_downtime_seconds)} detail={formatAveragePerResource(data?.planned_downtime_seconds, data?.resource_count ?? 0)} accent="warning" />
+            <MetricCard label="Parada não planejada" value={formatHours(data?.unplanned_downtime_seconds)} valueNode={timeNode("tempo.parada_nao_planejada", "Parada não planejada", data?.unplanned_downtime_seconds)} detail={formatAveragePerResource(data?.unplanned_downtime_seconds, data?.resource_count ?? 0)} accent="danger" />
+            <MetricCard label="Parada planejada" value={formatHours(data?.planned_downtime_seconds)} valueNode={timeNode("tempo.parada_planejada", "Parada planejada", data?.planned_downtime_seconds)} detail={formatAveragePerResource(data?.planned_downtime_seconds, data?.resource_count ?? 0)} accent="warning" />
           </>
         ) : (
-          <MetricCard label="Tempo total de setup" value={formatHours(data?.total_seconds)} detail={formatAveragePerResource(data?.total_seconds, data?.by_resource?.length ?? 0)} accent="teal" />
+          <MetricCard label="Tempo total de setup" value={formatHours(data?.total_seconds)} valueNode={timeNode("tempo.setup", "Tempo total de setup", data?.total_seconds)} detail={formatAveragePerResource(data?.total_seconds, data?.by_resource?.length ?? 0)} accent="teal" />
         )}
-        <MetricCard label="Ocorrências" value={formatNumber(data?.count)} detail={data?.count ? `Média de ${formatDuration((data?.listed_seconds ?? data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
+        <MetricCard label="Ocorrências" value={formatNumber(data?.count)} valueNode={data?.count ? <ExplainableValue local={occurrences} context={`${occurrences.label} ${formatNumber(data.count)}`}>{formatNumber(data.count)}</ExplainableValue> : undefined} detail={data?.count ? `Média de ${formatDuration((data?.listed_seconds ?? data?.total_seconds ?? 0) / data.count)} por ocorrência` : undefined} />
         <MetricCard label={isStop ? "Recurso mais parado" : "Recurso com mais setup"} value={topResource ? displayName(topResource.label) : "Não determinado"} detail={topResource ? formatHours(topResource.value) : undefined} availability={topResource ? "disponivel" : "sem_registros"} accent="warning" />
         <MetricCard
           label={isStop ? "Maior parada" : "Setup mais longo"}
@@ -764,6 +772,20 @@ export function AnalyticsCapacityPage() {
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const configured = data?.availability !== "nao_configurado";
+  const capacityNode = (metric: string, label: string, total: number | null | undefined, pick: (row: CapacityItem) => number | null | undefined, rule: string) => {
+    if (!configured || total == null) return undefined;
+    const explanation = buildRowSumExplanation({
+      metric: `local.capacidade.${metric}`,
+      label,
+      unit: "seconds",
+      reason: "É a soma, recurso a recurso, da coluna correspondente da tabela abaixo.",
+      rule,
+      rows: (data?.items ?? []).map((row) => ({ label: displayName(row.nome ?? row.codigo ?? row.recurso), value: pick(row), detail: row.tipo_setor || row.setor ? { setor: row.tipo_setor ?? row.setor ?? "" } : null })),
+      cardValue: total,
+      notes: data?.recursos_sem_calendario ? [`${data.recursos_sem_calendario} recurso(s) sem calendário não entram nesta soma.`] : [],
+    });
+    return <ExplainableValue local={explanation} context={`${label} ${formatHours(total)}`}>{formatHours(total)}</ExplainableValue>;
+  };
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
@@ -777,6 +799,7 @@ export function AnalyticsCapacityPage() {
         <MetricCard
           label="Tempo disponível"
           value={configured && data?.total_capacity_seconds != null ? formatHours(data.total_capacity_seconds) : "Não configurado"}
+          valueNode={capacityNode("disponivel", "Tempo disponível", data?.total_capacity_seconds, (row) => row.capacidade_segundos, "Soma o tempo disponível pelo calendário de cada recurso que tem calendário.")}
           detail={[
             configured ? formatAveragePerResource(data?.total_capacity_seconds, data?.recursos_com_calendario ?? 0) : undefined,
             data?.recursos_sem_calendario ? `${formatNumber(data.recursos_sem_calendario)} recurso(s) sem calendário` : undefined,
@@ -787,6 +810,7 @@ export function AnalyticsCapacityPage() {
         <MetricCard
           label="Capacidade livre"
           value={configured && data?.total_remaining_seconds != null ? formatHours(data.total_remaining_seconds) : "Não configurado"}
+          valueNode={capacityNode("livre", "Capacidade livre", data?.total_remaining_seconds, (row) => row.capacidade_restante_segundos, "Soma o tempo livre (disponível menos ocupado) de cada recurso que tem calendário.")}
           detail={configured ? [
             data?.total_load_seconds != null ? `${formatHours(data.total_load_seconds)} já ocupados` : undefined,
             formatAveragePerResource(data?.total_remaining_seconds, data?.recursos_com_calendario ?? 0),
@@ -832,6 +856,15 @@ export function AnalyticsReliabilityPage() {
   const data = query.data;
   const measurable = data?.availability === "disponivel" || data?.availability === "parcial";
   const critical = data?.por_recurso?.[0];
+  const breakdowns = buildRowSumExplanation({
+    metric: "local.confiabilidade.quebras",
+    label: "Quebras no período",
+    unit: "count",
+    reason: "É quantas vezes um equipamento quebrou no período, somando todos os equipamentos.",
+    rule: "Soma as quebras de cada equipamento da tabela \"Quebras por equipamento\".",
+    rows: (data?.por_recurso ?? []).map((row) => ({ label: displayName(row.recurso), value: row.falhas, detail: { parado: formatHours(row.tempo_reparo_segundos) } })),
+    cardValue: data?.falhas ?? 0,
+  });
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
@@ -852,6 +885,7 @@ export function AnalyticsReliabilityPage() {
         <MetricCard
           label="Quebras no período"
           value={formatNumber(data?.falhas ?? 0)}
+          valueNode={data?.falhas ? <ExplainableValue local={breakdowns} context={`Quebras no período ${formatNumber(data.falhas)}`}>{formatNumber(data.falhas)}</ExplainableValue> : undefined}
           detail={measurable ? `${formatHours(data?.tempo_reparo_segundos ?? 0)} de máquina parada` : undefined}
           accent={(data?.falhas ?? 0) > 0 ? "danger" : "success"}
         />

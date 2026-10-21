@@ -13,6 +13,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
+import { buildResourceCountExplanation, buildStoppedOrdersExplanation, type ResourceCountMetric } from "./operationsExplanations";
 import { buildSumExplanation, ROW_LIMIT, sumQuantities, type ExplanationScope, type SumMetric } from "../production/productionExplanations";
 import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
 import type { OperationsOverview, PagedOrders, ResourceRow, TimeBreakdown } from "../../types/management";
@@ -63,6 +64,12 @@ function producingCount(summary?: ResourceSummary) {
   return (summary?.by_category.producao ?? 0) + (summary?.by_category["produção"] ?? 0);
 }
 
+/** Número de contagem de recursos com a conta aberta (mesmas linhas da tela). */
+export function resourceCountNode(metric: ResourceCountMetric, rows: ResourceRow[], cardValue: number, text: string, scopeNote?: string) {
+  const explanation = buildResourceCountExplanation(metric, rows, cardValue, { scopeNote });
+  return <ExplainableValue local={explanation} context={`${explanation.label} ${text}`}>{text}</ExplainableValue>;
+}
+
 function LoadingPage({ title, subtitle, period = true, filters = true }: { title: string; subtitle: string; period?: boolean; filters?: boolean }) {
   return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={period} filters={filters}><LoadingState /></PageFrame>;
 }
@@ -100,9 +107,9 @@ export function OperationsOverviewPage() {
       actions={<span className={`live-indicator ${stream.connected ? "live-indicator--connected" : ""}`}><i />{stream.connected ? "Atualização ao vivo" : "Reconectando atualizações"}</span>}
     >
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Em produção agora" value={`${formatNumber(producingCount(summary))} de ${formatNumber(summary.resources)}`} detail="Recursos com estado produtivo" accent="success" />
-        <MetricCard label="OPs em execução" value={formatNumber(summary.active_operations)} accent="primary" />
-        <MetricCard label="Recursos parados" value={formatNumber(stoppedCount(summary))} detail={stoppedCount(summary) ? "Exigem ação imediata" : "Nenhuma parada aberta"} accent={stoppedCount(summary) ? "danger" : "success"} />
+        <MetricCard label="Em produção agora" value={`${formatNumber(producingCount(summary))} de ${formatNumber(summary.resources)}`} valueNode={resourceCountNode("producing", resources, producingCount(summary), `${formatNumber(producingCount(summary))} de ${formatNumber(summary.resources)}`)} detail="Recursos com estado produtivo" accent="success" />
+        <MetricCard label="OPs em execução" value={formatNumber(summary.active_operations)} valueNode={resourceCountNode("activeOps", resources, summary.active_operations, formatNumber(summary.active_operations))} accent="primary" />
+        <MetricCard label="Recursos parados" value={formatNumber(stoppedCount(summary))} valueNode={resourceCountNode("stopped", resources, stoppedCount(summary), formatNumber(stoppedCount(summary)))} detail={stoppedCount(summary) ? "Exigem ação imediata" : "Nenhuma parada aberta"} accent={stoppedCount(summary) ? "danger" : "success"} />
         <MetricCard
           label="Maior parada aberta"
           value={summary.longest_stop ? formatDuration(summary.longest_stop.seconds) : "Nenhuma"}
@@ -150,8 +157,8 @@ export function OperationsResourcesPage() {
     <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle} period={false}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Recursos no filtro" value={formatNumber(data?.page.total ?? 0)} />
-        <MetricCard label="Em produção agora" value={formatNumber(producingCount(data?.summary))} accent="success" />
-        <MetricCard label="Parados" value={formatNumber(stoppedCount(data?.summary))} detail={stoppedCount(data?.summary) ? "Verifique o motivo na tabela" : "Nenhuma parada aberta"} accent={stoppedCount(data?.summary) ? "danger" : "success"} />
+        <MetricCard label="Em produção agora" value={formatNumber(producingCount(data?.summary))} valueNode={resourceCountNode("producing", data?.items ?? [], producingCount(data?.summary), formatNumber(producingCount(data?.summary)), data?.items.length !== data?.page.total ? `Lista com ${data?.items.length ?? 0} de ${data?.page.total ?? 0} recursos do filtro.` : undefined)} accent="success" />
+        <MetricCard label="Parados" value={formatNumber(stoppedCount(data?.summary))} valueNode={resourceCountNode("stopped", data?.items ?? [], stoppedCount(data?.summary), formatNumber(stoppedCount(data?.summary)), data?.items.length !== data?.page.total ? `Lista com ${data?.items.length ?? 0} de ${data?.page.total ?? 0} recursos do filtro.` : undefined)} detail={stoppedCount(data?.summary) ? "Verifique o motivo na tabela" : "Nenhuma parada aberta"} accent={stoppedCount(data?.summary) ? "danger" : "success"} />
         <MetricCard
           label="Maior parada aberta"
           value={data?.summary?.longest_stop ? formatDuration(data.summary.longest_stop.seconds) : "Nenhuma"}
@@ -204,7 +211,7 @@ export function OperationsOrdersPage() {
         <MetricCard label="OPs em andamento" value={formatNumber(query.data?.page.total ?? 0)} />
         <MetricCard label="Peças boas hoje" value={formatNumber(totals.good)} valueNode={explained("good", formatNumber(totals.good))} detail="Somente peças boas" accent="success" />
         <MetricCard label="Refugo" value={formatNumber(totals.scrap)} valueNode={explained("scrap", formatNumber(totals.scrap))} detail={totals.good ? `${formatPercent(totals.scrap / Math.max(1, totals.good + totals.scrap) * 100)} da produção` : undefined} accent="danger" />
-        <MetricCard label="OPs paradas" value={formatNumber(totals.stopped)} detail={totals.stopped ? "Verifique o motivo na tabela" : "Nenhuma OP parada"} accent={totals.stopped ? "warning" : "success"} />
+        <MetricCard label="OPs paradas" value={formatNumber(totals.stopped)} valueNode={<ExplainableValue local={buildStoppedOrdersExplanation(rows, query.data?.page.total)} context={`OPs paradas ${formatNumber(totals.stopped)}`}>{formatNumber(totals.stopped)}</ExplainableValue>} detail={totals.stopped ? "Verifique o motivo na tabela" : "Nenhuma OP parada"} accent={totals.stopped ? "warning" : "success"} />
       </div>
       <OrdersTable rows={rows} />
     </PageFrame>

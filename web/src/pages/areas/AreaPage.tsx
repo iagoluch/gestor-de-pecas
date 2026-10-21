@@ -8,6 +8,8 @@ import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { isProducing, isStopped } from "../operations/operationsExplanations";
+import { resourceCountNode } from "../operations/OperationsPages";
 import type { ResourceRow } from "../../types/management";
 import { displayName, formatDateTime, formatDuration, formatNumber, formatResourceName } from "../../utils/format";
 
@@ -45,15 +47,17 @@ export function AreaPage() {
   if (query.error && !query.data) return <PageFrame sectionId={`area-${area.id}`} title={title} subtitle={subtitle} period={false} filters={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const setores = area.setores.map(norm);
   const rows = (query.data?.items ?? []).filter((row) => setores.includes(norm(row.setor)));
-  const producing = rows.filter((row) => ["producao", "produção"].includes(norm(row.categoria))).length;
-  const stopped = rows.filter((row) => norm(row.categoria) === "parada").length;
+  const producing = rows.filter(isProducing).length;
+  const stopped = rows.filter(isStopped).length;
+  const activeOps = rows.reduce((total, row) => total + row.quantidade_ops_ativas, 0);
+  const scopeNote = `Recursos dos setores da área ${area.label}: ${area.setores.join(", ")}.`;
   return (
     <PageFrame staleError={query.error} sectionId={`area-${area.id}`} title={title} subtitle={subtitle} period={false} filters={false}>
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Recursos da área" value={formatNumber(rows.length)} />
-        <MetricCard label="Em produção agora" value={`${formatNumber(producing)} de ${formatNumber(rows.length)}`} accent="success" />
-        <MetricCard label="Parados" value={formatNumber(stopped)} detail={stopped ? "Verifique o motivo na tabela" : "Nenhuma parada aberta"} accent={stopped ? "danger" : "success"} />
-        <MetricCard label="OPs em execução" value={formatNumber(rows.reduce((total, row) => total + row.quantidade_ops_ativas, 0))} accent="primary" />
+        <MetricCard label="Em produção agora" value={`${formatNumber(producing)} de ${formatNumber(rows.length)}`} valueNode={resourceCountNode("producing", rows, producing, `${formatNumber(producing)} de ${formatNumber(rows.length)}`, scopeNote)} accent="success" />
+        <MetricCard label="Parados" value={formatNumber(stopped)} valueNode={resourceCountNode("stopped", rows, stopped, formatNumber(stopped), scopeNote)} detail={stopped ? "Verifique o motivo na tabela" : "Nenhuma parada aberta"} accent={stopped ? "danger" : "success"} />
+        <MetricCard label="OPs em execução" value={formatNumber(activeOps)} valueNode={resourceCountNode("activeOps", rows, activeOps, formatNumber(activeOps), scopeNote)} accent="primary" />
       </div>
       <SectionCard title="Recursos" className="content-section section-card--table">
         <DataTable
