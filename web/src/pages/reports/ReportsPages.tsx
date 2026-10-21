@@ -3,11 +3,13 @@ import { api, apiErrorMessage } from "../../api/client";
 import { AsyncButton } from "../../components/AsyncButton";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
+import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import type { OverviewFilters } from "../../types/explanation";
 import { formatAveragePerResource, formatHours, formatNumber } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 
@@ -50,6 +52,26 @@ function productionValue(production: JsonRecord, field: string) {
     : formatNumber(numeric(production[field]));
 }
 
+/**
+ * Valor com a conta aberta. O número do relatório vem da mesma fonte da explicação (`qtd.*`, `qld.*`, `kpi.*`);
+ * só vira clicável o que tem algo para explicar: zero, ausência e texto de estado ficam simples.
+ */
+function explained(filters: OverviewFilters, metric: string, label: string, value: unknown, text: string, sector?: string) {
+  const amount = numeric(value);
+  if (amount === null || amount <= 0) return undefined;
+  return (
+    <ExplainableValue metric={metric} filters={sector ? { ...filters, sector } : filters} context={`${label}${sector ? ` em ${sector}` : ""} ${text}`}>{text}</ExplainableValue>
+  );
+}
+
+/** Célula de setor: clicável só com setor nomeado ("Não disponível"/"Não informado" não existe como filtro). */
+function sectorValue(filters: OverviewFilters, metric: string, label: string, row: JsonRecord, field: string) {
+  const text = formatNumber(numeric(row[field]));
+  const sector = typeof row.setor === "string" ? row.setor.trim() : "";
+  if (!sector || /^nao[_ ]informado$/i.test(sector.normalize("NFD").replace(/[̀-ͯ]/g, ""))) return text;
+  return explained(filters, metric, label, row[field], text, sector) ?? text;
+}
+
 function DownloadAction({ type, query }: { type: ReportType; query: string }) {
   const [error, setError] = useState<string | null>(null);
   async function exportXlsx() {
@@ -68,24 +90,24 @@ function DownloadAction({ type, query }: { type: ReportType; query: string }) {
   );
 }
 
-function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecord }) {
+function ReportContent({ type, payload, filters }: { type: ReportType; payload: JsonRecord; filters: OverviewFilters }) {
   if (type === "gerencial") {
     const overview = record(payload.overview);
     const production = record(overview.production);
     const kpis = record(overview.kpis);
     return <>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Produção boa" value={productionValue(production, "good")} detail={String(production.reason ?? "")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="success" />
-        <MetricCard label="Refugo" value={productionValue(production, "scrap")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="danger" />
-        <MetricCard label="Retrabalho" value={productionValue(production, "rework")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="warning" />
-        <MetricCard label="OEE" value={metricValue(kpis.oee)} detail={String(record(kpis.oee).reason ?? "")} accent="purple" availability={String(record(kpis.oee).availability ?? "dados_insuficientes") as never} />
+        <MetricCard label="Produção boa" value={productionValue(production, "good")} valueNode={explained(filters, "qtd.boa", "Produção boa", production.good, productionValue(production, "good"))} detail={String(production.reason ?? "")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="success" />
+        <MetricCard label="Refugo" value={productionValue(production, "scrap")} valueNode={explained(filters, "qtd.refugo", "Refugo", production.scrap, productionValue(production, "scrap"))} availability={String(production.availability ?? "dados_insuficientes") as never} accent="danger" />
+        <MetricCard label="Retrabalho" value={productionValue(production, "rework")} valueNode={explained(filters, "qtd.retrabalho", "Retrabalho", production.rework, productionValue(production, "rework"))} availability={String(production.availability ?? "dados_insuficientes") as never} accent="warning" />
+        <MetricCard label="OEE" value={metricValue(kpis.oee)} valueNode={explained(filters, "kpi.oee", "OEE", record(kpis.oee).value, metricValue(kpis.oee))} detail={String(record(kpis.oee).reason ?? "")} accent="purple" availability={String(record(kpis.oee).availability ?? "dados_insuficientes") as never} />
       </div>
       <SectionCard title="Setores" className="content-section section-card--table">
         <DataTable rows={rows(overview.sectors)} rowKey={(row, index) => String(row.setor ?? index)} columns={[
           { key: "sector", label: "Setor", render: (row) => String(row.setor ?? "Não disponível") },
-          { key: "good", label: "Produção boa", render: (row) => formatNumber(numeric(row.producao_boa)) },
-          { key: "scrap", label: "Refugo", render: (row) => formatNumber(numeric(row.refugo)) },
-          { key: "rework", label: "Retrabalho", render: (row) => formatNumber(numeric(row.retrabalho)) },
+          { key: "good", label: "Produção boa", render: (row) => sectorValue(filters, "qtd.boa", "Produção boa", row, "producao_boa") },
+          { key: "scrap", label: "Refugo", render: (row) => sectorValue(filters, "qtd.refugo", "Refugo", row, "refugo") },
+          { key: "rework", label: "Retrabalho", render: (row) => sectorValue(filters, "qtd.retrabalho", "Retrabalho", row, "retrabalho") },
           { key: "production", label: "Tempo produtivo", render: (row) => formatHours(numeric(row.tempo_produtivo_segundos)) },
         ]} />
       </SectionCard>
@@ -96,17 +118,17 @@ function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecor
     const quality = record(payload.quality);
     return <>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Produção boa" value={productionValue(production, "good")} detail={String(production.reason ?? "")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="success" />
-        <MetricCard label="Refugo" value={productionValue(production, "scrap")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="danger" />
-        <MetricCard label="Retrabalho" value={productionValue(production, "rework")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="warning" />
+        <MetricCard label="Produção boa" value={productionValue(production, "good")} valueNode={explained(filters, "qtd.boa", "Produção boa", production.good, productionValue(production, "good"))} detail={String(production.reason ?? "")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="success" />
+        <MetricCard label="Refugo" value={productionValue(production, "scrap")} valueNode={explained(filters, "qtd.refugo", "Refugo", production.scrap, productionValue(production, "scrap"))} availability={String(production.availability ?? "dados_insuficientes") as never} accent="danger" />
+        <MetricCard label="Retrabalho" value={productionValue(production, "rework")} valueNode={explained(filters, "qtd.retrabalho", "Retrabalho", production.rework, productionValue(production, "rework"))} availability={String(production.availability ?? "dados_insuficientes") as never} accent="warning" />
         <MetricCard label="OPs" value={formatNumber(numeric(production.ops))} />
       </div>
       <SectionCard title="Produção por setor" className="content-section section-card--table">
         <DataTable rows={rows(payload.sectors)} rowKey={(row, index) => String(row.setor ?? index)} columns={[
           { key: "sector", label: "Setor", render: (row) => String(row.setor ?? "Não disponível") },
-          { key: "good", label: "Boas", render: (row) => formatNumber(numeric(row.producao_boa)) },
-          { key: "scrap", label: "Refugo", render: (row) => formatNumber(numeric(row.refugo)) },
-          { key: "rework", label: "Retrabalho", render: (row) => formatNumber(numeric(row.retrabalho)) },
+          { key: "good", label: "Boas", render: (row) => sectorValue(filters, "qtd.boa", "Produção boa", row, "producao_boa") },
+          { key: "scrap", label: "Refugo", render: (row) => sectorValue(filters, "qtd.refugo", "Refugo", row, "refugo") },
+          { key: "rework", label: "Retrabalho", render: (row) => sectorValue(filters, "qtd.retrabalho", "Retrabalho", row, "retrabalho") },
           { key: "quality", label: "Fonte de qualidade", render: () => String(quality.reason ?? "Não disponível") },
         ]} />
       </SectionCard>
@@ -120,8 +142,8 @@ function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecor
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Tempo de parada" value={formatHours(numeric(downtimes.total_seconds))} detail={formatAveragePerResource(numeric(downtimes.total_seconds), rows(downtimes.by_resource).length)} accent="danger" />
         <MetricCard label="Ocorrências" value={formatNumber(numeric(downtimes.count))} accent="warning" />
-        <MetricCard label="Refugo" value={formatNumber(numeric(totals.refugo))} accent="danger" />
-        <MetricCard label="Retrabalho" value={formatNumber(numeric(totals.retrabalho))} accent="warning" />
+        <MetricCard label="Refugo" value={formatNumber(numeric(totals.refugo))} valueNode={explained(filters, "qld.refugo", "Refugo", totals.refugo, formatNumber(numeric(totals.refugo)))} accent="danger" />
+        <MetricCard label="Retrabalho" value={formatNumber(numeric(totals.retrabalho))} valueNode={explained(filters, "qld.retrabalho", "Retrabalho", totals.retrabalho, formatNumber(numeric(totals.retrabalho)))} accent="warning" />
       </div>
       <SectionCard title="Paradas por motivo" className="content-section section-card--table">
         <DataTable rows={rows(downtimes.by_reason)} rowKey={(row, index) => String(row.motivo ?? index)} columns={[
@@ -139,8 +161,8 @@ function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecor
     const time = record(analytics.tempos);
     return <>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="OEE" value={metricValue(oee)} detail={String(oee.reason ?? "")} accent="purple" availability={String(oee.availability ?? "nao_configurado") as never} />
-        <MetricCard label="FTT" value={metricValue(ftt)} detail={String(ftt.reason ?? "")} accent="teal" availability={String(ftt.availability ?? "dados_insuficientes") as never} />
+        <MetricCard label="OEE" value={metricValue(oee)} valueNode={explained(filters, "kpi.oee", "OEE", oee.value, metricValue(oee))} detail={String(oee.reason ?? "")} accent="purple" availability={String(oee.availability ?? "nao_configurado") as never} />
+        <MetricCard label="FTT" value={metricValue(ftt)} valueNode={explained(filters, "qtd.ftt", "FTT", ftt.value, metricValue(ftt))} detail={String(ftt.reason ?? "")} accent="teal" availability={String(ftt.availability ?? "dados_insuficientes") as never} />
         <MetricCard label="Tempo físico" value={formatHours(numeric(time.physical_seconds))} detail={formatAveragePerResource(numeric(time.physical_seconds), rows(time.by_resource).length)} accent="success" />
         <MetricCard label="Utilização" value={record(analytics.capacidade).utilizacao_percentual == null ? humanizeSystemState(record(analytics.capacidade).availability ?? "dados_insuficientes", { fallback: "Dados insuficientes" }) : `${formatNumber(numeric(record(analytics.capacidade).utilizacao_percentual), 1)}%`} detail={String(record(analytics.capacidade).reason ?? "")} accent="warning" />
       </div>
@@ -160,7 +182,7 @@ function ReportContent({ type, payload }: { type: ReportType; payload: JsonRecor
   return <>
     <div className="metric-grid metric-grid--four">
       <MetricCard label="Ordens" value={formatNumber(rows(orders.items).length)} />
-      <MetricCard label="Inconsistências" value={formatNumber(numeric(audit.count))} accent="danger" />
+      <MetricCard label="Inconsistências" value={formatNumber(numeric(audit.count))} valueNode={explained(filters, "qld.auditoria.total", "Inconsistências", audit.count, formatNumber(numeric(audit.count)))} accent="danger" />
       <MetricCard label="Nestings" value={formatNumber(numeric(nestings.count))} accent="purple" />
       <MetricCard label="Período" value={String(record(payload.periodo).inicio ?? "").slice(0, 10) || "Filtro atual"} detail={`até ${String(record(payload.periodo).fim ?? "").slice(0, 10) || "hoje"}`} accent="teal" />
     </div>
@@ -185,7 +207,7 @@ function ReportPage({ type }: { type: ReportType }) {
   const copy = labels[type];
   if (query.loading) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}><LoadingState /></PageFrame>;
   if (query.error && !query.data) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
-  return <PageFrame staleError={query.error} sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}>{query.data ? <ReportContent type={type} payload={query.data} /> : <EmptyState />}</PageFrame>;
+  return <PageFrame staleError={query.error} sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}>{query.data ? <ReportContent type={type} payload={query.data} filters={filters.filters} /> : <EmptyState />}</PageFrame>;
 }
 
 export const ManagementReportPage = () => <ReportPage type="gerencial" />;
