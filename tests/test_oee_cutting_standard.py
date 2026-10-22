@@ -68,7 +68,7 @@ class CuttingStandardTests(unittest.TestCase):
         self.assertEqual(performance["availability"], DataAvailability.AVAILABLE.value)
         self.assertAlmostEqual(performance["value"], 1200.0 / 1800.0 * 100.0)
         trace = corte["kpi_calculation"]
-        self.assertEqual(trace["standard_origin"], "sigmanest_previsto")
+        self.assertEqual(trace["standard_origin"], "nesting_previsto")
         self.assertEqual(trace["performance_label"], LABEL)
         self.assertEqual(
             overview["kpi_calculation"]["cutting_standard"]["cut_sheets_with_standard"], 2

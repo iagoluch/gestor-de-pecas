@@ -29,7 +29,7 @@ de corte **do plano**, não o tempo de uma peça.
 | B. Manter NOT_CONFIGURED | Nada muda | É honesto, mas o OEE do Corte fica permanentemente sem P. |
 | C. Tempo padrão por peça vindo do TOTVS | Igual à manufatura | Não existe hoje para o Corte (ver item 3). |
 
-**Recomendação:** **A**, marcada como origem `sigmanest_previsto` no trace (`good_with_standard` separado
+**Recomendação:** **A**, marcada como origem `nesting_previsto` no trace (`good_with_standard` separado
 por origem), para que a tela mostre "Performance baseada no previsto do nesting". Precisa de uma decisão do
 Gabriel: o previsto do CAM é aceito como padrão corporativo?
 

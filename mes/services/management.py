@@ -93,7 +93,7 @@ class ManagementService:
             "standard_run_seconds": 0.0,
             "good_without_standard": 0,
             "planned_downtime_seconds": 0.0,
-            "sigmanest_standard_seconds": 0.0,
+            "nesting_standard_seconds": 0.0,
         })
         resource_inputs = defaultdict(lambda: {
             "resource": None,
@@ -109,7 +109,7 @@ class ManagementService:
             "good_with_estimated_standard": 0,
             "seconds": defaultdict(float),
             "planned_downtime_seconds": 0.0,
-            "sigmanest_standard_seconds": 0.0,
+            "nesting_standard_seconds": 0.0,
         })
 
         def resource_bucket(resource, sector=None):
@@ -274,7 +274,7 @@ class ManagementService:
         # única forma de o rollup gerencial enxergar boa/OPs do setor.
         cutting_production = self.get_cutting_production(filters)
         # Performance do Corte (opção A, manufatura 19/10/2026): o previsto do
-        # SigmaNEST é o tempo padrão do Corte. É padrão oficial de origem
+        # nesting é o tempo padrão do Corte. É padrão oficial de origem
         # própria, nunca tempo manual ou estimado do Gestor.
         cutting_standard = self._cutting_standard(nesting_rows, filters)
         for sheet in cutting_standard["sheets"]:
@@ -282,12 +282,12 @@ class ManagementService:
             standard_run_seconds += seconds
             estimated_run_seconds += seconds
             sectors["Corte"]["standard_run_seconds"] += seconds
-            sectors["Corte"]["sigmanest_standard_seconds"] += seconds
+            sectors["Corte"]["nesting_standard_seconds"] += seconds
             sheet_bucket = resource_bucket(sheet["maquina"], "Corte")
             if sheet_bucket is not None:
                 sheet_bucket["standard_run_seconds"] += seconds
                 sheet_bucket["estimated_run_seconds"] += seconds
-                sheet_bucket["sigmanest_standard_seconds"] += seconds
+                sheet_bucket["nesting_standard_seconds"] += seconds
         for row in cutting_production:
             qty = max(0, int(row.get("quantidade") or 0))
             op = str(row.get("codigo_op") or "").strip()
@@ -546,7 +546,7 @@ class ManagementService:
                     **resource_calculation.trace_dict(),
                     **self._standard_origin_trace(
                         resource_input["standard_run_seconds"],
-                        resource_input["sigmanest_standard_seconds"],
+                        resource_input["nesting_standard_seconds"],
                     ),
                 },
                 "calculation_policy": "canonical_oee",
@@ -622,7 +622,7 @@ class ManagementService:
                     **sector_calculation.trace_dict(),
                     **self._standard_origin_trace(
                         bucket["standard_run_seconds"],
-                        bucket["sigmanest_standard_seconds"],
+                        bucket["nesting_standard_seconds"],
                     ),
                 },
                 "pecas_boas_sem_tempo_padrao": bucket["good_without_standard"],
@@ -1169,7 +1169,7 @@ class ManagementService:
             without_interval.append(row)
         return inputs, without_interval
 
-    CUTTING_STANDARD_ORIGIN = "sigmanest_previsto"
+    CUTTING_STANDARD_ORIGIN = "nesting_previsto"
     CUTTING_PERFORMANCE_LABEL = "Performance baseada no previsto do nesting"
 
     def _cutting_standard(self, nesting_rows, filters) -> dict:
@@ -1223,19 +1223,19 @@ class ManagementService:
         }
 
     @classmethod
-    def _standard_origin_trace(cls, standard_seconds, sigmanest_seconds) -> dict:
+    def _standard_origin_trace(cls, standard_seconds, nesting_seconds) -> dict:
         """Origem do S_boas no trace, com o previsto do nesting separado."""
 
-        if not sigmanest_seconds:
+        if not nesting_seconds:
             return {}
-        other = max(0.0, float(standard_seconds or 0.0) - float(sigmanest_seconds))
+        other = max(0.0, float(standard_seconds or 0.0) - float(nesting_seconds))
         return {
             "standard_origin": (
                 cls.CUTTING_STANDARD_ORIGIN if other <= 0 else "misto"
             ),
             "standard_origins_seconds": {
                 "oficial_protheus_manual": other,
-                cls.CUTTING_STANDARD_ORIGIN: float(sigmanest_seconds),
+                cls.CUTTING_STANDARD_ORIGIN: float(nesting_seconds),
             },
             "performance_label": cls.CUTTING_PERFORMANCE_LABEL,
         }

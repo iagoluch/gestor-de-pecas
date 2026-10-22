@@ -59,7 +59,7 @@ Manufatura (Gabriel Fogaça), regra corporativa `corporativa-2026-09-24` (fórmu
 1. **Sim** — previsto do SigmaNEST vira tempo padrão do Corte (opção A). Implementado em
    `mes/services/management.py` (`_cutting_standard`): soma o previsto das chapas cortadas no período
    (cada chapa física tem o próprio previsto, o que equivale a previsto × cortadas ÷ chapas do plano).
-   Trace com `standard_origin: sigmanest_previsto` e rótulo "Performance baseada no previsto do nesting".
+   Trace com `standard_origin: nesting_previsto` e rótulo "Performance baseada no previsto do nesting".
    Chapa cortada sem previsto deixa a tarefa como "sem tempo padrão".
 2. **Sim / Sim / Sim** — (a) retrabalho fica fora das boas de primeira; (b) a recuperação é registrada,
    mas não soma outra boa, e cada peça entra uma vez na base; (c) no Corte a unidade é a peça
