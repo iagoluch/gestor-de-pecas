@@ -34,6 +34,7 @@ import {
 type DialogState =
   | { kind: "stop" }
   | { kind: "finish" }
+  | { kind: "finishRework" }
   | { kind: "confirm"; action: "Setup" | "Retrabalho" }
   | { kind: "activity"; action: "Início" | "Finalizado" }
   | { kind: "authorization"; action: string; code: string; details?: Record<string, unknown> }
@@ -779,7 +780,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
         <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
-        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>Retrabalho</span></button>
+        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
       </div>
       {canPoint && occupiedBy ? (
         <Notice>
@@ -828,6 +829,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       ) : null}
       {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} cards={stoppableCards} initial={activeCard && stoppableCards.includes(activeCard) ? activeCard : stoppableCards[0]} onCancel={() => setDialog(null)} onConfirm={(code, comment, targets) => stopCards(targets, { stop_reason_code: code, comment })} /> : null}
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => confirmFirstPiece(result, note)} /> : null}
+      {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} sector={sector} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizar Retrabalho", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then(() => { if (action === "Setup" && gateRequired) openGate(); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "activity" ? <OperatorDialog title="Atividade sem OP" size="compact" onCancel={() => setDialog(null)}><p>{dialog.action === "Início" ? "Iniciar uma atividade sem OP neste posto?" : "Finalizar a atividade sem OP em andamento?"}</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={submitting} onClick={() => execute(dialog.action)}>Sim</AsyncButton></div></OperatorDialog> : null}
@@ -1303,6 +1305,63 @@ function FinishDialog({ context, sector, operators, onCancel, onConfirm }: { con
       }) : <p>Nenhum operador adicionado.</p>}
     </div>
     <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar finalização</AsyncButton></div>
+  </OperatorDialog>;
+}
+
+/**
+ * "Finalizar Ret.": encerra o retrabalho e a OP volta a Em processo (não
+ * finaliza a OP). Campo vazio vale 0; 0/0 só devolve a OP à produção. As peças
+ * lançadas aqui entram como recuperadas — quem marca isso é o backend.
+ */
+function FinishReworkDialog({ context, sector, operators, onCancel, onConfirm }: { context: OperationContext; sector: string; operators: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, badges: string[], scrapBadge: string) => unknown }) {
+  const [good, setGood] = useState("");
+  const [scrap, setScrap] = useState("");
+  const [badge, setBadge] = useState("");
+  const [badges, setBadges] = useState<string[]>([]);
+  const [badgeError, setBadgeError] = useState("");
+  const [scrapBadge, setScrapBadge] = useState("");
+  const scrapRequiresApproval = Number(scrap || 0) > 0;
+  const total = Number(good || 0) + Number(scrap || 0);
+  const aboveBalance = context.planned > 0 && total > context.balance;
+  const missing = !badges.length
+    ? "Informe o crachá do operador e toque em + para confirmar."
+    : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
+  function addBadge() {
+    const normalized = badge.trim();
+    if (!normalized) return;
+    const registered = operators.find((item) => item.cracha === normalized && item.ativo !== false);
+    if (!registered) {
+      setBadgeError("Crachá não cadastrado ou inativo.");
+      return;
+    }
+    setBadges((current) => current.includes(normalized) ? current : [...current, normalized]);
+    setBadge("");
+    setBadgeError("");
+  }
+  return <OperatorDialog title="Finalizar retrabalho" context={<ContextLine {...context} />} onCancel={onCancel}>
+    <p className="operator-help">Das peças em retrabalho, quantas ficaram boas e quantas vão para refugo? Campo vazio vale 0. Depois disso a OP volta para Em processo.</p>
+    <div className="operator-quantity-grid"><label>Peças boas (recuperadas)<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Peças para refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
+    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s). Confira antes de confirmar.</p> : null}
+    {scrapRequiresApproval ? <>
+      <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>
+      <ChamadaButton
+        inline
+        label="Chamar responsável"
+        sector={sector}
+        resource={context.resource}
+        defaultReason="Qualidade"
+        defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado ao finalizar o retrabalho; é necessária autorização para o descarte.`)}
+      />
+    </> : null}
+    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
+    {badgeError ? <p className="form-error">{badgeError}</p> : null}
+    <div className="operator-badge-list" aria-label="Operadores adicionados">
+      {badges.length ? badges.map((item) => {
+        const operator = operators.find((candidate) => candidate.cracha === item);
+        return <div key={item}><span><strong>{operator?.nome ?? item}</strong><small>Crachá {item}</small></span><button type="button" aria-label={`Remover ${operator?.nome ?? item}`} onClick={() => setBadges((current) => current.filter((value) => value !== item))}>×</button></div>;
+      }) : <p>Nenhum operador adicionado.</p>}
+    </div>
+    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar</AsyncButton></div>
   </OperatorDialog>;
 }
 

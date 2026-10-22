@@ -70,6 +70,9 @@ class ManagementService:
         )
         totals = defaultdict(float)
         good = scrap = rework_qty = 0
+        # Parte das quantidades que é peça recuperada do retrabalho: segue na
+        # produção física, mas fica fora do FTT (regra da manufatura, 19/10/2026).
+        recovered_good = recovered_scrap = recovered_rework = 0
         standard_run_seconds = 0.0
         good_without_standard = 0
         # Leitura "estimada": mesma fórmula, padrão oficial + estimado do Gestor.
@@ -84,11 +87,13 @@ class ManagementService:
             "good": 0,
             "scrap": 0,
             "rework": 0,
+            "recovered": {"boa": 0, "refugo": 0, "retrabalho": 0},
             "seconds": defaultdict(float),
             "ops": set(),
             "standard_run_seconds": 0.0,
             "good_without_standard": 0,
             "planned_downtime_seconds": 0.0,
+            "sigmanest_standard_seconds": 0.0,
         })
         resource_inputs = defaultdict(lambda: {
             "resource": None,
@@ -96,6 +101,7 @@ class ManagementService:
             "good": 0,
             "scrap": 0,
             "rework": 0,
+            "recovered": {"boa": 0, "refugo": 0, "retrabalho": 0},
             "standard_run_seconds": 0.0,
             "good_without_standard": 0,
             "estimated_run_seconds": 0.0,
@@ -103,6 +109,7 @@ class ManagementService:
             "good_with_estimated_standard": 0,
             "seconds": defaultdict(float),
             "planned_downtime_seconds": 0.0,
+            "sigmanest_standard_seconds": 0.0,
         })
 
         def resource_bucket(resource, sector=None):
@@ -126,6 +133,20 @@ class ManagementService:
                 good += int(row.get("quantidade_boa") or 0)
                 scrap += int(row.get("quantidade_refugo") or 0)
                 rework_qty += int(row.get("quantidade_retrabalho") or 0)
+                if row.get("retorno_retrabalho_qualidade"):
+                    # Apontamento de retorno do retrabalho: tudo o que ele
+                    # lança é peça que já entrou na base do FTT.
+                    recovered_good += int(row.get("quantidade_boa") or 0)
+                    recovered_scrap += int(row.get("quantidade_refugo") or 0)
+                    recovered_rework += int(row.get("quantidade_retrabalho") or 0)
+                    sectors[sector]["recovered"]["boa"] += int(row.get("quantidade_boa") or 0)
+                    sectors[sector]["recovered"]["refugo"] += int(row.get("quantidade_refugo") or 0)
+                    sectors[sector]["recovered"]["retrabalho"] += int(row.get("quantidade_retrabalho") or 0)
+                    if resource:
+                        recovered_bucket = resource_bucket(resource, sector)["recovered"]
+                        recovered_bucket["boa"] += int(row.get("quantidade_boa") or 0)
+                        recovered_bucket["refugo"] += int(row.get("quantidade_refugo") or 0)
+                        recovered_bucket["retrabalho"] += int(row.get("quantidade_retrabalho") or 0)
                 if resource:
                     resource_input = resource_bucket(resource, sector)
                     resource_input["good"] += int(row.get("quantidade_boa") or 0)
@@ -197,6 +218,21 @@ class ManagementService:
                 sector = str(event.get("tipo_setor") or "").strip() or "Não informado"
                 bucket = sectors[sector]
                 resource_input = resource_bucket(event.get("recurso"), sector)
+                recovered = (
+                    max(0, min(qty, int(event.get("quantidade_recuperada") or 0)))
+                    if kind in bucket["recovered"]
+                    else 0
+                )
+                if recovered:
+                    bucket["recovered"][kind] += recovered
+                    if resource_input is not None:
+                        resource_input["recovered"][kind] += recovered
+                    if kind == "boa":
+                        recovered_good += recovered
+                    elif kind == "refugo":
+                        recovered_scrap += recovered
+                    else:
+                        recovered_rework += recovered
                 if kind == "boa":
                     good += qty
                     bucket["good"] += qty
@@ -237,24 +273,43 @@ class ManagementService:
         # `apontamentos_operacionais`, então a projeção canônica de Corte é a
         # única forma de o rollup gerencial enxergar boa/OPs do setor.
         cutting_production = self.get_cutting_production(filters)
+        # Performance do Corte (opção A, manufatura 19/10/2026): o previsto do
+        # SigmaNEST é o tempo padrão do Corte. É padrão oficial de origem
+        # própria, nunca tempo manual ou estimado do Gestor.
+        cutting_standard = self._cutting_standard(nesting_rows, filters)
+        for sheet in cutting_standard["sheets"]:
+            seconds = sheet["standard_seconds"]
+            standard_run_seconds += seconds
+            estimated_run_seconds += seconds
+            sectors["Corte"]["standard_run_seconds"] += seconds
+            sectors["Corte"]["sigmanest_standard_seconds"] += seconds
+            sheet_bucket = resource_bucket(sheet["maquina"], "Corte")
+            if sheet_bucket is not None:
+                sheet_bucket["standard_run_seconds"] += seconds
+                sheet_bucket["estimated_run_seconds"] += seconds
+                sheet_bucket["sigmanest_standard_seconds"] += seconds
         for row in cutting_production:
             qty = max(0, int(row.get("quantidade") or 0))
             op = str(row.get("codigo_op") or "").strip()
             if not qty or not op:
                 continue
             good += qty
-            # O Corte não tem tempo padrão por peça em S_boas: o previsto do
-            # nesting é outra grandeza, ainda não homologada para a Performance.
-            good_without_standard += qty
-            estimated_good_without_standard += qty
             ops.add(op)
             bucket = sectors["Corte"]
             bucket["good"] += qty
-            bucket["good_without_standard"] += qty
             bucket["ops"].add(op)
             resource_input = resource_bucket(row.get("maquina"), "Corte")
             if resource_input is not None:
                 resource_input["good"] += qty
+            task = str(row.get("codigo_tarefa") or "").strip().casefold()
+            if task in cutting_standard["tasks_with_standard"]:
+                continue
+            # Tarefa com chapa sem previsto (ou sem chapa visível): continua
+            # sem padrão; nenhum número é inventado.
+            good_without_standard += qty
+            estimated_good_without_standard += qty
+            bucket["good_without_standard"] += qty
+            if resource_input is not None:
                 resource_input["good_without_standard"] += qty
                 resource_input["estimated_good_without_standard"] += qty
         if cutting_production:
@@ -366,6 +421,9 @@ class ManagementService:
             rework_quantity=rework_qty,
             standard_run_seconds=standard_run_seconds,
             good_without_standard_quantity=good_without_standard,
+            recovered_good_quantity=recovered_good,
+            recovered_scrap_quantity=recovered_scrap,
+            recovered_rework_quantity=recovered_rework,
         )
         availability = oee_calculation.availability
         performance = oee_calculation.performance
@@ -379,6 +437,9 @@ class ManagementService:
                 rework_quantity=rework_qty,
                 standard_run_seconds=estimated_run_seconds,
                 good_without_standard_quantity=estimated_good_without_standard,
+                recovered_good_quantity=recovered_good,
+                recovered_scrap_quantity=recovered_scrap,
+                recovered_rework_quantity=recovered_rework,
             ).performance
             if good_with_estimated_standard
             else performance
@@ -450,6 +511,9 @@ class ManagementService:
                 rework_quantity=resource_input["rework"],
                 standard_run_seconds=resource_input["standard_run_seconds"],
                 good_without_standard_quantity=resource_input["good_without_standard"],
+                recovered_good_quantity=resource_input["recovered"]["boa"],
+                recovered_scrap_quantity=resource_input["recovered"]["refugo"],
+                recovered_rework_quantity=resource_input["recovered"]["retrabalho"],
             )
             if resource_calculation.is_no_demand_exception:
                 no_demand_exception_resources.append(resource_input["resource"])
@@ -464,6 +528,9 @@ class ManagementService:
                     rework_quantity=resource_input["rework"],
                     standard_run_seconds=resource_input["estimated_run_seconds"],
                     good_without_standard_quantity=resource_input["estimated_good_without_standard"],
+                    recovered_good_quantity=resource_input["recovered"]["boa"],
+                    recovered_scrap_quantity=resource_input["recovered"]["refugo"],
+                    recovered_rework_quantity=resource_input["recovered"]["retrabalho"],
                 ).performance
                 if resource_input["good_with_estimated_standard"]
                 else resource_calculation.performance
@@ -475,7 +542,13 @@ class ManagementService:
                 "pecas_boas_tempo_estimado": resource_input["good_with_estimated_standard"],
                 "metrics": resource_calculation.metrics_dict(),
                 "kpi_time_bases": dict(resource_calculation.time_bases),
-                "kpi_calculation": resource_calculation.trace_dict(),
+                "kpi_calculation": {
+                    **resource_calculation.trace_dict(),
+                    **self._standard_origin_trace(
+                        resource_input["standard_run_seconds"],
+                        resource_input["sigmanest_standard_seconds"],
+                    ),
+                },
                 "calculation_policy": "canonical_oee",
             })
         simulation = None
@@ -537,12 +610,21 @@ class ManagementService:
                 rework_quantity=bucket["rework"],
                 standard_run_seconds=bucket["standard_run_seconds"],
                 good_without_standard_quantity=bucket["good_without_standard"],
+                recovered_good_quantity=bucket["recovered"]["boa"],
+                recovered_scrap_quantity=bucket["recovered"]["refugo"],
+                recovered_rework_quantity=bucket["recovered"]["retrabalho"],
             )
             sector_kpis.append({
                 "setor": sector,
                 "metrics": sector_calculation.metrics_dict(),
                 "kpi_time_bases": dict(sector_calculation.time_bases),
-                "kpi_calculation": sector_calculation.trace_dict(),
+                "kpi_calculation": {
+                    **sector_calculation.trace_dict(),
+                    **self._standard_origin_trace(
+                        bucket["standard_run_seconds"],
+                        bucket["sigmanest_standard_seconds"],
+                    ),
+                },
                 "pecas_boas_sem_tempo_padrao": bucket["good_without_standard"],
                 "parada_planejada_segundos": bucket["planned_downtime_seconds"],
                 "calculation_policy": "canonical_oee",
@@ -596,6 +678,13 @@ class ManagementService:
                 "good": good,
                 "scrap": scrap,
                 "rework": rework_qty,
+                # Parte de good/scrap/rework que é peça recuperada do retrabalho:
+                # produção física, mas fora do FTT.
+                "ftt_recovered": {
+                    "good": recovered_good,
+                    "scrap": recovered_scrap,
+                    "rework": recovered_rework,
+                },
                 "ops": len(ops),
                 "resources": len(resources),
                 "availability": (
@@ -676,10 +765,25 @@ class ManagementService:
             "kpi_time_bases": time_bases,
             "kpi_calculation": {
                 **oee_calculation.trace_dict(),
+                **self._standard_origin_trace(
+                    standard_run_seconds,
+                    cutting_standard["standard_seconds"],
+                ),
+                "cutting_standard": {
+                    key: value
+                    for key, value in cutting_standard.items()
+                    if key not in ("sheets", "tasks_with_standard")
+                },
                 # Recursos cujo período foi integralmente sem demanda recebem
                 # 0% por convenção. No consolidado o tempo sem demanda não
-                # entra nas bases, logo esse zero fica segregado. Política de
-                # consolidação homologada por Gabriel Fogaça em 08/10/2026.
+                # entra nas bases, logo esse zero fica segregado.
+                # Homologação completa confirmada pela manufatura (Gabriel
+                # Fogaça) em 19/10/2026, regra corporativa-2026-09-24: somar
+                # numeradores/denominadores e recalcular os percentuais (nunca
+                # média de percentuais); tempos = ocupação física, sem duplicar
+                # OPs simultâneas; recurso todo sem demanda = zero nas bases e
+                # listado em "sem demanda no período"; estado desconhecido =
+                # disponível não trabalhado.
                 "no_demand_exception_resources": no_demand_exception_resources,
                 "consolidation": "SOMA_DE_BASES_SEM_DEMANDA_SEGREGADO",
                 "consolidation_status": "HOMOLOGADO",
@@ -1064,6 +1168,77 @@ class ManagementService:
                     continue
             without_interval.append(row)
         return inputs, without_interval
+
+    CUTTING_STANDARD_ORIGIN = "sigmanest_previsto"
+    CUTTING_PERFORMANCE_LABEL = "Performance baseada no previsto do nesting"
+
+    def _cutting_standard(self, nesting_rows, filters) -> dict:
+        """Tempo padrão do Corte a partir do previsto do SigmaNEST (opção A).
+
+        Regra (manufatura, 19/10/2026): padrão do plano = tempo previsto do
+        plano × (chapas cortadas ÷ chapas do plano). Cada linha de
+        ``apontamentos_corte`` é uma chapa física (programa + chapa +
+        repetição) com o próprio ``tempo_previsto_segundos``; somar o previsto
+        das chapas finalizadas no período é exatamente essa conta, sem
+        depender de chapas fora da janela. Chapa em processo ainda não foi
+        cortada e não credita padrão. Chapa cortada sem previsto não credita
+        nada e deixa a tarefa sem padrão.
+        """
+
+        sheets = []
+        tasks_seen = set()
+        tasks_missing = set()
+        sheets_without_standard = 0
+        for row in nesting_rows:
+            task = str(row.get("tarefa") or "").strip().casefold()
+            if task:
+                tasks_seen.add(task)
+            planned = float(row.get("previsto_segundos") or 0)
+            if planned <= 0 and task:
+                tasks_missing.add(task)
+            if str(row.get("status") or "").strip().casefold() != "finalizado":
+                continue
+            finished = _dt(row.get("fim"))
+            if finished is None or finished < filters.inicio or finished > filters.fim:
+                continue
+            if planned <= 0:
+                sheets_without_standard += 1
+                continue
+            sheets.append({
+                "maquina": str(row.get("maquina") or "").strip(),
+                "standard_seconds": planned,
+            })
+        return {
+            "origin": self.CUTTING_STANDARD_ORIGIN,
+            "label": self.CUTTING_PERFORMANCE_LABEL,
+            "rule": (
+                "padrão do plano = tempo_previsto_segundos × "
+                "(chapas cortadas ÷ chapas do plano)"
+            ),
+            "standard_seconds": sum(item["standard_seconds"] for item in sheets),
+            "cut_sheets_with_standard": len(sheets),
+            "cut_sheets_without_standard": sheets_without_standard,
+            "sheets": sheets,
+            "tasks_with_standard": tasks_seen - tasks_missing,
+        }
+
+    @classmethod
+    def _standard_origin_trace(cls, standard_seconds, sigmanest_seconds) -> dict:
+        """Origem do S_boas no trace, com o previsto do nesting separado."""
+
+        if not sigmanest_seconds:
+            return {}
+        other = max(0.0, float(standard_seconds or 0.0) - float(sigmanest_seconds))
+        return {
+            "standard_origin": (
+                cls.CUTTING_STANDARD_ORIGIN if other <= 0 else "misto"
+            ),
+            "standard_origins_seconds": {
+                "oficial_protheus_manual": other,
+                cls.CUTTING_STANDARD_ORIGIN: float(sigmanest_seconds),
+            },
+            "performance_label": cls.CUTTING_PERFORMANCE_LABEL,
+        }
 
     def _has_shift(self, name: str, filters) -> bool:
         """O recurso tem algum turno que toca o período."""

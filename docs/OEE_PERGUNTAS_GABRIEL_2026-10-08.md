@@ -52,6 +52,23 @@ Com as 3 respostas, gravo a regra no trace do OEE (`FTT_RULE`) para a tela expli
 
 ---
 
+## Respostas recebidas 19/10/2026
+
+Manufatura (Gabriel Fogaça), regra corporativa `corporativa-2026-09-24` (fórmula inalterada):
+
+1. **Sim** — previsto do SigmaNEST vira tempo padrão do Corte (opção A). Implementado em
+   `mes/services/management.py` (`_cutting_standard`): soma o previsto das chapas cortadas no período
+   (cada chapa física tem o próprio previsto, o que equivale a previsto × cortadas ÷ chapas do plano).
+   Trace com `standard_origin: sigmanest_previsto` e rótulo "Performance baseada no previsto do nesting".
+   Chapa cortada sem previsto deixa a tarefa como "sem tempo padrão".
+2. **Sim / Sim / Sim** — (a) retrabalho fica fora das boas de primeira; (b) a recuperação é registrada,
+   mas não soma outra boa, e cada peça entra uma vez na base; (c) no Corte a unidade é a peça
+   efetivamente cortada. Gravado como `ftt_rule` no trace (`mes/analytics/oee.py`).
+3. **Sim** — consolidação homologada (soma de bases, ocupação física sem duplicar OPs simultâneas,
+   recurso todo sem demanda = zero e listado, estado desconhecido = disponível não trabalhado).
+
+---
+
 ## Mensagem pronta para enviar
 
 > Gabriel, preciso de 3 respostas para fechar o OEE no Gestor:

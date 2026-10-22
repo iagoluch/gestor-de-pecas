@@ -1,16 +1,23 @@
 import logo from "../../../assets/branding/logo_gestor_pecas.png";
 import profile from "../../../assets/branding/icone_perfil.png";
-import home from "../../../assets/web/navigation/home.png";
-import operations from "../../../assets/web/navigation/operations.png";
+import home from "../../../assets/web/navigation/home.svg";
+import operations from "../../../assets/web/navigation/operations.svg";
 import production from "../../../assets/web/navigation/production.png";
-import analytics from "../../../assets/web/navigation/analytics.png";
-import audit from "../../../assets/web/navigation/audit.png";
-import reports from "../../../assets/web/navigation/reports.png";
+import analytics from "../../../assets/web/navigation/analytics.svg";
+import audit from "../../../assets/web/navigation/audit.svg";
+import reports from "../../../assets/web/navigation/reports.svg";
 import traceability from "../../../assets/web/navigation/traceability.png";
 import panels from "../../../assets/web/navigation/panels.svg";
 import manufacturing from "../../../assets/web/navigation/manufacturing.svg";
 import quality from "../../../assets/web/navigation/quality.svg";
 import dev from "../../../assets/web/navigation/dev.svg";
+import diretoria from "../../../assets/web/navigation/diretoria.svg";
+import areaDobraCorte from "../../../assets/web/navigation/area-dobra-corte.svg";
+import areaUsinagem from "../../../assets/web/navigation/area-usinagem.svg";
+import areaSerra from "../../../assets/web/navigation/area-serra.svg";
+import areaSolda from "../../../assets/web/navigation/area-solda.svg";
+import areaPintura from "../../../assets/web/navigation/area-pintura.svg";
+import areaPrototipo from "../../../assets/web/navigation/area-prototipo.svg";
 import search from "../../../assets/icons/Pesquisa.svg";
 import clock from "../../../assets/icons/Relógio.svg";
 import trash from "../../../assets/icons/Lixeira.svg";
@@ -114,5 +121,14 @@ export const assets = {
     manufacturing,
     quality,
     dev,
+    diretoria,
+    areas: {
+      "dobra-corte": areaDobraCorte,
+      "usinagem": areaUsinagem,
+      "serra": areaSerra,
+      "solda": areaSolda,
+      "pintura": areaPintura,
+      "prototipo": areaPrototipo,
+    },
   },
 } as const;

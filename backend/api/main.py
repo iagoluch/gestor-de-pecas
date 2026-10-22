@@ -40,14 +40,15 @@ from backend.api.routers import (
     ai,
     andon,
     analytics,
+    area_queue,
     audit,
     auth,
     chamadas,
     cutting,
     dev_observatory,
     director,
-    highlight,
     explanation,
+    highlight,
     management,
     operations,
     operator,
@@ -179,8 +180,8 @@ def _build_background_scheduler(application: FastAPI) -> ReportScheduler:
         database,
         artifact_dir=settings.report_artifact_dir,
         workbook_builder=build_report_workbook,
-        now_func=getattr(facade, "_now", None),
         simple_workbook_builder=partial(build_report_workbook, modo="simples"),
+        now_func=getattr(facade, "_now", None),
         expiration_hours=settings.report_expiration_hours,
         max_bytes=settings.report_max_bytes,
         messaging_available=settings.telegram_configured,
@@ -1009,14 +1010,15 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.include_router(chamadas.router, prefix=prefix)
     application.include_router(ai.router, prefix=prefix)
     application.include_router(operator.router, prefix=prefix)
+    application.include_router(area_queue.router, prefix=prefix)
     application.include_router(quality.router, prefix=prefix)
     application.include_router(cutting.router, prefix=prefix)
     application.include_router(highlight.router, prefix=prefix)
     application.include_router(andon.router, prefix=prefix)
     application.include_router(management.router, prefix=prefix)
+    application.include_router(explanation.router, prefix=prefix)
     application.include_router(operations.router, prefix=prefix)
     application.include_router(orders.router, prefix=prefix)
-    application.include_router(explanation.router, prefix=prefix)
     application.include_router(analytics.router, prefix=prefix)
     application.include_router(audit.router, prefix=prefix)
     application.include_router(traceability.router, prefix=prefix)

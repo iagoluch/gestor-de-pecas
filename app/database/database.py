@@ -26,6 +26,7 @@ from app.database.ai_repository import AIRepositoryMixin
 from app.database.chamada_repository import ChamadaRepositoryMixin
 from app.database.cost_rate_repository import CostRateRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
+from app.database.manual_queue_repository import ManualQueueRepositoryMixin
 from app.database.standard_time_repository import (
     PROTHEUS_TIME_SQL,
     StandardTimeRepositoryMixin,
@@ -214,6 +215,7 @@ class Database(
     StandardTimeRepositoryMixin,
     ReportRepositoryMixin,
     AIRepositoryMixin,
+    ManualQueueRepositoryMixin,
     CostRateRepositoryMixin,
 ):
     def obter_cursor_telegram_bot(self, bot_key):
@@ -1875,13 +1877,16 @@ class Database(
             cursor.execute(query, (codigo,))
             return [dict(row) for row in cursor.fetchall()]
 
-    def listar_proximas_operacoes_roteiro(self, tipo_setor=None):
+    def listar_proximas_operacoes_roteiro(self, tipo_setor=None, *, codigo_op=None, operacao_ids=None):
         """Projeta a próxima operação liberada de cada OP sem criar apontamento.
 
         O roteiro continua sendo a fonte de verdade. Uma etapa anterior de
         Corte é considerada concluída quando todos os nestings ativos que
         contêm a OP foram finalizados; o Destaque contabiliza tempo e não
         participa do avanço do roteiro oficial.
+
+        ``codigo_op`` e ``operacao_ids`` só restringem o resultado (fila manual
+        por recurso); a regra de "próxima" é a mesma.
         """
 
         corte_concluido = _corte_concluido_sql("anterior")
@@ -1981,6 +1986,12 @@ class Database(
         if tipo_setor:
             query += " AND UPPER(operacao.tipo_setor) = UPPER(%s)"
             params.append(str(tipo_setor).strip())
+        if codigo_op:
+            query += " AND operacao.codigo_op = %s"
+            params.append(limpa_codigo(codigo_op))
+        if operacao_ids is not None:
+            query += " AND operacao.id = ANY(%s)"
+            params.append([int(item) for item in operacao_ids])
         query += " ORDER BY operacao.codigo_op, operacao.ordem, operacao.id"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
@@ -2487,8 +2498,15 @@ class Database(
         recurso_exclusivo=False,
         setor_destino="Almoxarifado",
         data_hora=None,
+        encerrar_retrabalho=False,
     ):
-        """Executa uma transição e registra lote, evento e participantes atomicamente."""
+        """Executa uma transição e registra lote, evento e participantes atomicamente.
+
+        ``encerrar_retrabalho`` é a única porta de Retrabalho para Em processo
+        ("Finalizar Ret."): o retrabalho acaba, a OP volta a produzir e as
+        boas/refugo informadas entram como recuperadas, sem finalizar a OP. A
+        regra geral continua recusando Retrabalho -> Produção sem esta marca.
+        """
 
         destino_estado = str(estado or "").strip().lower()
         try:
@@ -2519,7 +2537,13 @@ class Database(
                 return None
             origem = atual["status"]
             origem_estado = operator_state_from_status(origem)
-            if origem_estado is None or not can_transition(origem_estado, destino):
+            if encerrar_retrabalho:
+                if (
+                    origem_estado != OperatorState.REWORK
+                    or destino != OperatorState.PRODUCTION
+                ):
+                    return None
+            elif origem_estado is None or not can_transition(origem_estado, destino):
                 return None
             estado_retorno = return_state_for_transition(
                 origem_estado,
@@ -2550,6 +2574,21 @@ class Database(
             total_boas = int(atual.get("quantidade_boa") or 0)
             total_refugos = int(atual.get("quantidade_refugo") or 0)
             total_retrabalhos = int(atual.get("quantidade_retrabalho") or 0)
+            # Peça que volta do retrabalho já entrou UMA vez na base do FTT
+            # como retrabalho: o que este lançamento registrar dela (boa,
+            # refugo ou nova tentativa) fica fora do FTT. Retorno da Qualidade
+            # é o apontamento de retorno; na própria Qualidade, a reinspeção é
+            # a sessão que vem depois de uma finalização parcial com retrabalho.
+            # "Finalizar Ret." (20/10/2026): o que o operador lança ao encerrar
+            # o retrabalho também é peça que voltou dele, e entra marcada.
+            de_retorno_retrabalho = bool(
+                encerrar_retrabalho
+                or atual.get("retorno_retrabalho_qualidade")
+                or (
+                    str(atual.get("tipo_setor") or "").casefold() == "qualidade"
+                    and total_retrabalhos > 0
+                )
+            )
             if crachas:
                 cursor.execute(
                     """
@@ -2599,11 +2638,22 @@ class Database(
                     )
                 finalizacao_parcial = total_atendido < int(atual["quantidade"])
 
+            if encerrar_retrabalho:
+                total_boas += boas
+                total_refugos += refugos
+                if ManufacturingRules.attended_quantity(
+                    total_boas, total_refugos
+                ) > int(atual["quantidade"]):
+                    raise ValueError(
+                        "A soma de peças boas e refugo excede a quantidade prevista restante."
+                    )
+
             if destino == OperatorState.PRODUCTION:
                 cursor.execute(
                     """
                     UPDATE apontamentos_operacionais
                     SET status = 'Em processo',
+                        quantidade_boa = %s, quantidade_refugo = %s,
                         operador_inicio = COALESCE(operador_inicio, %s),
                         operador_inicio_id = COALESCE(operador_inicio_id, %s),
                         operador_fila_id = COALESCE(operador_fila_id, %s),
@@ -2616,6 +2666,7 @@ class Database(
                     RETURNING *
                     """,
                     (
+                        total_boas, total_refugos,
                         operador,
                         operador_principal_id,
                         operador_principal_id,
@@ -2793,6 +2844,7 @@ class Database(
                 "referencia_origem": source_ref,
                 "connection": connection,
             }
+            quantity_common["recuperada"] = de_retorno_retrabalho
             if boas:
                 self.registrar_evento_quantidade("boa", boas, row["op"], **quantity_common)
             if refugos:
@@ -5005,8 +5057,15 @@ class Database(
         self, tipo, quantidade, op, *, numero_operacao=None, produto_codigo=None,
         recurso=None, tipo_setor=None, operador=None, lote=None, motivo=None,
         causa_raiz=None, comentario=None, data_hora=None, origem="gestor_pecas",
-        referencia_origem=None, connection=None,
+        referencia_origem=None, connection=None, recuperada=False,
     ):
+        """Grava o evento canônico de quantidade.
+
+        ``recuperada`` marca o lançamento como peça que voltou do retrabalho:
+        a quantidade segue contando como produção física, mas fica fora do FTT
+        (``quantidade_recuperada``; regra da manufatura de 19/10/2026).
+        """
+
         kind = str(tipo or "").strip().lower()
         if kind not in {"boa", "refugo", "retrabalho"}:
             raise ValueError(f"Tipo de quantidade inválido: {tipo}")
@@ -5022,15 +5081,16 @@ class Database(
                     INSERT INTO eventos_quantidade_producao (
                         tipo, quantidade, op, numero_operacao, produto_codigo,
                         recurso, tipo_setor, operador, lote, motivo, causa_raiz,
-                        comentario, data_hora, origem, referencia_origem
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        comentario, data_hora, origem, referencia_origem,
+                        quantidade_recuperada
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING *
                     """,
                     (
                         kind, qty, limpa_codigo(op), numero_operacao, produto_codigo,
                         recurso, tipo_setor, operador, lote, motivo, causa_raiz,
                         comentario, instante, str(origem or "gestor_pecas"),
-                        referencia_origem,
+                        referencia_origem, qty if recuperada else 0,
                     ),
                 )
                 return dict(cursor.fetchone())

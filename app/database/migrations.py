@@ -2649,6 +2649,23 @@ CUSTO_HORA_STATEMENTS = (
     """,
 )
 
+# Migration 64 — peça recuperada do retrabalho fica fora do FTT (manufatura,
+# 19/10/2026, regra corporativa-2026-09-24). ``quantidade_recuperada`` marca,
+# dentro de cada evento de quantidade, a parte que pertence a peça que voltou do
+# retrabalho: ela continua somando como produção física (``quantidade``, OT/ERP
+# intactos), mas não entra no numerador nem na base do FTT, porque a peça já
+# entrou uma única vez na base como retrabalho. Default 0 e SEM retroativo: os
+# eventos anteriores continuam como foram gravados (não há como separar, a
+# posteriori, a boa recuperada da boa de primeira). Idempotente.
+# Rollback: ALTER TABLE eventos_quantidade_producao DROP COLUMN quantidade_recuperada;
+# DELETE FROM schema_migrations WHERE version = 64; e voltar SCHEMA_VERSION a 63.
+FTT_RECUPERADA_DESCRIPTION = "quantidade recuperada do retrabalho fora do FTT"
+FTT_RECUPERADA_STATEMENTS = (
+    "ALTER TABLE eventos_quantidade_producao"
+    " ADD COLUMN IF NOT EXISTS quantidade_recuperada INTEGER NOT NULL DEFAULT 0"
+    " CHECK (quantidade_recuperada >= 0 AND quantidade_recuperada <= quantidade)",
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2715,6 +2732,7 @@ MIGRATIONS = {
     61: (NIVEIS_POR_SETOR_DESCRIPTION, NIVEIS_POR_SETOR_STATEMENTS),
     62: (FILA_MANUAL_DESCRIPTION, FILA_MANUAL_STATEMENTS),
     63: (CUSTO_HORA_DESCRIPTION, CUSTO_HORA_STATEMENTS),
+    64: (FTT_RECUPERADA_DESCRIPTION, FTT_RECUPERADA_STATEMENTS),
 }
 
 

@@ -1,5 +1,5 @@
 """Metadados estáveis do schema sem dependência do driver PostgreSQL."""
 
-SCHEMA_VERSION = 63
+SCHEMA_VERSION = 64
 
 __all__ = ["SCHEMA_VERSION"]

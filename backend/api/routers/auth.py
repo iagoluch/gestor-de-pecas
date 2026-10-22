@@ -8,7 +8,7 @@ import anyio.to_thread
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.core.areas import areas_for_user
+from app.core.areas import areas_for_user, queue_areas_for_user
 from app.core.password_policy import password_change_required, password_policy_error
 from app.core.permissions import (
     can_access_andon_web,
@@ -220,6 +220,7 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         operator_resources=operator_sector.resources if operator_sector else (),
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
         areas=areas_for_user(user.get("nivel_atribuido"), role),
+        queue_areas=queue_areas_for_user(user.get("nivel_atribuido"), role),
         # Gestão ainda na senha padrão entra só para definir outra (SEC-05);
         # operador e terminais seguem com a padrão sem mudança nenhuma.
         password_change_required=password_change_required(role, payload.password),

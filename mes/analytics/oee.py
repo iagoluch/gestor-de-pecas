@@ -31,6 +31,30 @@ OEE_CONTRACT = {
     "rule_version": OEE_RULE_VERSION,
 }
 
+# Regras de contagem do FTT confirmadas pela manufatura (Gabriel Fogaça) em
+# 19/10/2026. A fórmula não muda: estas regras dizem o que entra nela.
+FTT_RULE = {
+    "formula": "boas / (boas + refugo + retrabalho)",
+    "unit": "peca",
+    "decided_by": "manufatura (Gabriel Fogaça)",
+    "decided_at": "2026-10-19",
+    "rules": {
+        "a_retrabalho_fora_das_boas_de_primeira": (
+            "Peça que precisou de retrabalho fica fora das boas de primeira, "
+            "mesmo recuperada depois."
+        ),
+        "b_recuperacao_nao_soma_boa": (
+            "A recuperação é registrada, mas não acrescenta outra peça boa ao "
+            "FTT da operação original; cada peça entra uma única vez na base da "
+            "operação, sem duplicar por novas tentativas de retrabalho."
+        ),
+        "c_unidade_no_corte": (
+            "No Corte a unidade é a peça efetivamente cortada do nesting, não a "
+            "chapa nem a quantidade apenas planejada."
+        ),
+    },
+}
+
 _WORKED_CATEGORIES = (
     EventCategory.PRODUCTION,
     EventCategory.SETUP,
@@ -74,6 +98,7 @@ class OeeCalculation:
             "rule_version": OEE_RULE_VERSION,
             "result_origin": self.result_origin,
             "alerts": list(self.alerts),
+            "ftt_rule": {**FTT_RULE, "rules": dict(FTT_RULE["rules"])},
         }
 
 
@@ -110,6 +135,9 @@ def calculate_oee(
     rework_quantity: int,
     standard_run_seconds: float,
     good_without_standard_quantity: int = 0,
+    recovered_good_quantity: int = 0,
+    recovered_scrap_quantity: int = 0,
+    recovered_rework_quantity: int = 0,
 ) -> OeeCalculation:
     """Aplica a metodologia corporativa vigente do Gestor de Peças.
 
@@ -126,6 +154,12 @@ def calculate_oee(
     ``good_without_standard_quantity`` conta as peças boas sem tempo padrão
     cadastrado. Sem padrão, ``S_boas`` subestima o trabalho realizado; a
     Performance é bloqueada (nenhuma cobertura) ou marcada parcial.
+
+    ``recovered_*`` é a parte das quantidades que pertence a peça que voltou do
+    retrabalho (regra FTT da manufatura, 19/10/2026): continua em ``good`` /
+    ``scrap`` / ``rework`` como produção física, mas sai do FTT, porque a peça
+    já entrou uma única vez na base como retrabalho. A Performance usa as
+    boas físicas, inclusive as recuperadas.
     """
 
     def seconds(category: EventCategory) -> float:
@@ -182,10 +216,19 @@ def calculate_oee(
         good_quantity=good,
         good_without_standard_quantity=good_without_standard_quantity,
     )
-    ftt_ratio = good / quality_total if quality_total > 0 else None
+    ftt_good = max(0, good - max(0, int(recovered_good_quantity or 0)))
+    ftt_total = (
+        ftt_good
+        + max(0, int(scrap_quantity) - max(0, int(recovered_scrap_quantity or 0)))
+        + max(0, int(rework_quantity) - max(0, int(recovered_rework_quantity or 0)))
+    )
+    ftt_ratio = ftt_good / ftt_total if ftt_total > 0 else None
     ftt = _percent_metric(
         ftt_ratio,
-        "Não há quantidade boa, refugo ou retrabalho no filtro para calcular o FTT.",
+        "Não há quantidade boa, refugo ou retrabalho no filtro para calcular o FTT."
+        if quality_total <= 0
+        else "As peças do filtro são só recuperações de retrabalho, que já entraram "
+        "na base do FTT quando foram para retrabalho; não há base própria neste período.",
     )
     oee = _oee_metric(availability, performance, ftt)
     return OeeCalculation(

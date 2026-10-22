@@ -25,10 +25,14 @@ class AreasPorNivelTests(unittest.TestCase):
         self.assertEqual(_ids("supervisor_caldeiraria", "supervisor"), ["dobra-corte", "usinagem", "serra"])
         self.assertEqual(_ids("supervisor_almoxarifado_solda_pintura", "supervisor"), ["solda", "pintura"])
 
-    def test_nivel_embutido_e_gerente_veem_todas(self):
+    def test_admin_e_gerente_veem_todas(self):
         self.assertEqual(_ids("admin", "admin"), list(AREAS))
-        self.assertEqual(_ids("gestor", "gestor"), list(AREAS))
         self.assertEqual(_ids("gerente_industrial", "gestor"), list(AREAS))
+
+    def test_areas_sao_exclusivas_de_quem_trabalha_nelas(self):
+        for nivel in ("diretoria", "qualidade", "manufatura", "gestor"):
+            self.assertEqual(_ids(nivel, nivel), [])
+            self.assertEqual(_ids(None, nivel), [])
 
     def test_nivel_personalizado_sem_mapa_nao_ve_areas(self):
         for nome, base in (("pcp", "gestor"), ("controladoria", "gestor"), ("projetos_adm", "supervisor")):

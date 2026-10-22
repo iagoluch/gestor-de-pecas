@@ -29,15 +29,16 @@ AREAS_POR_NIVEL = {
     "lider_solda": ("solda",),
 }
 
-#: Nível personalizado que enxerga todas as áreas.
-NIVEIS_COM_TODAS_AS_AREAS = ("gerente_industrial",)
+#: Únicos níveis que enxergam todas as áreas. As demais contas (Diretoria,
+#: Qualidade, Manufatura, Gestor…) só veem a área que o nível delas mapeia.
+NIVEIS_COM_TODAS_AS_AREAS = ("admin", "gerente_industrial")
 
 
 def areas_for_user(nivel_atribuido, nivel_efetivo):
     """Áreas visíveis para a conta, na ordem de ``AREAS``.
 
-    Nível embutido (admin, gestor, diretoria…) vê todas. Nível personalizado só
-    vê o que está mapeado: PCP, Controladoria etc. não têm área de fábrica.
+    Cada área é exclusiva de quem trabalha nela: só vê o que o nível mapeia.
+    Exceção: admin e gerente industrial veem todas.
     """
 
     if not can_access_management_web(nivel_efetivo):
@@ -45,9 +46,49 @@ def areas_for_user(nivel_atribuido, nivel_efetivo):
     atribuido = nivel_atribuido or nivel_efetivo
     if atribuido in AREAS_POR_NIVEL:
         ids = set(AREAS_POR_NIVEL[atribuido])
-    elif atribuido == nivel_efetivo or atribuido in NIVEIS_COM_TODAS_AS_AREAS:
+    elif atribuido in NIVEIS_COM_TODAS_AS_AREAS:
         ids = set(AREAS)
     else:
         ids = set()
     return [{"id": id_, "label": label, "setores": list(setores)}
             for id_, (label, setores) in AREAS.items() if id_ in ids]
+
+
+def queue_areas_for_user(nivel_atribuido, nivel_efetivo=None):
+    """Ids das áreas cuja fila manual a conta pode ordenar.
+
+    Líder e supervisor, cada um nas áreas do próprio nível, e o admin em todas
+    (decisão de 16/10/2026). Gestor, gerente, Qualidade e Diretoria só enxergam.
+    """
+
+    atribuido = nivel_atribuido or nivel_efetivo
+    if atribuido == "admin":
+        return list(AREAS)
+    return list(AREAS_POR_NIVEL.get(atribuido, ()))
+
+
+def recursos_da_area(area_id):
+    """Recursos apontáveis da área, para a fila manual (``[]`` se a área não existe).
+
+    Vêm dos postos de ``OPERATOR_SECTORS``; a fila automática (Corte) e o
+    Destaque ficam de fora. ``resource`` é a identidade canônica, ``station`` o
+    nome do posto que o operador abre (o que ``listar_cartoes`` recebe).
+    """
+
+    from app.core.operator_sectors import OPERATOR_SECTORS
+    from app.core.resource_mapping import resolve_resource_identity, resource_display_name
+
+    if area_id not in AREAS:
+        return []
+    setores = {setor.casefold() for setor in AREAS[area_id][1]}
+    return [
+        {
+            "resource": resolve_resource_identity(station),
+            "nome": resource_display_name(station),
+            "setor": sector.name,
+            "station": station,
+        }
+        for sector in OPERATOR_SECTORS
+        if sector.name.casefold() in setores and not sector.automatic_queue
+        for station in sector.resources
+    ]

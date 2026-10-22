@@ -29,6 +29,9 @@ class OperatorAction(str, Enum):
     RESUME = "Retomar"
     RETURN = "Retornar"
     FINISH = "Finalizado"
+    # "Finalizar Ret." no posto: encerra o retrabalho e volta a Em processo,
+    # sem finalizar a OP. Única porta de Retrabalho para Produção.
+    END_REWORK = "Finalizar Retrabalho"
 
 
 ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
@@ -132,6 +135,8 @@ def resolve_operator_action(
     except (TypeError, ValueError):
         previous = None
 
+    if parsed_action == OperatorAction.END_REWORK:
+        return OperatorState.PRODUCTION if source == OperatorState.REWORK else None
     if parsed_action == OperatorAction.RESUME:
         if source != OperatorState.STOPPED:
             return None
@@ -213,6 +218,13 @@ def explain_invalid_transition(
             "Esta etapa já foi finalizada e não aceita novos apontamentos.",
             source,
             requested,
+        )
+    if parsed_action == OperatorAction.END_REWORK:
+        return InvalidTransition(
+            "fim_retrabalho_incompativel",
+            f"Só é possível finalizar o retrabalho de um apontamento em retrabalho; ele está {label}.",
+            source,
+            OperatorState.PRODUCTION,
         )
     if parsed_action == OperatorAction.RESUME:
         return InvalidTransition(

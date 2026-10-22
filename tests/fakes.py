@@ -1977,7 +1977,7 @@ class FakeDatabase:
         recurso_apontado=None, recurso_divergente=False,
         setor_roteiro=None, setor_divergente=False,
         recurso_exclusivo=False,
-        setor_destino="Almoxarifado", data_hora=None,
+        setor_destino="Almoxarifado", data_hora=None, encerrar_retrabalho=False,
     ):
         row = next((item for item in self.appointments if item["id"] == apontamento_id), None)
         if not row:
@@ -1987,7 +1987,10 @@ class FakeDatabase:
         except ValueError:
             return None
         source = operator_state_from_status(row.get("status"))
-        if source is None or not can_transition(source, destination):
+        if encerrar_retrabalho:
+            if source != OperatorState.REWORK or destination != OperatorState.PRODUCTION:
+                return None
+        elif source is None or not can_transition(source, destination):
             return None
         target = operator_status_for_state(destination)
         return_state = return_state_for_transition(
@@ -2037,6 +2040,12 @@ class FakeDatabase:
             if attended > int(row["quantidade"]):
                 raise ValueError("A soma de peças boas e refugo excede a quantidade prevista restante.")
             partial = attended < int(row["quantidade"])
+        if encerrar_retrabalho:
+            next_good += int(quantidade_boa or 0)
+            next_scrap += int(quantidade_refugo or 0)
+            if ManufacturingRules.attended_quantity(next_good, next_scrap) > int(row["quantidade"]):
+                raise ValueError("A soma de peças boas e refugo excede a quantidade prevista restante.")
+            row.update(quantidade_boa=next_good, quantidade_refugo=next_scrap)
         row.update(
             status="Aguardando" if partial else target,
             motivo_parada=motivo if target != "Em processo" else None,
@@ -2110,6 +2119,7 @@ class FakeDatabase:
                     "tipo_setor": row.get("tipo_setor"), "operador": operador, "lote": lote,
                     "motivo": reason, "causa_raiz": causa_raiz, "comentario": comentario,
                     "data_hora": now,
+                    "quantidade_recuperada": qty if encerrar_retrabalho else 0,
                 })
         result = dict(row)
         if target == "Finalizado":

@@ -55,6 +55,7 @@ _MENSAGEM_POR_ACAO = {
     "Início": "Produção iniciada.",
     "Retomar": "Produção retomada.",
     "Retornar": "Setup encerrado. Produção retomada.",
+    "Finalizar Retrabalho": "Retrabalho finalizado. Produção retomada.",
 }
 # Estados em que uma linha de apontamento ainda ocupa a operação (a
 # finalização total é tratada à parte: a etapa vira "concluída").
@@ -1182,6 +1183,27 @@ class OperatorFlowService:
                     "operacao_finalizada",
                     finalizada,
                 )
+            paralela = self._execucao_em_outro_recurso(codigo, operacao, recurso)
+            if paralela is not None:
+                onde = str(paralela.get("maquina") or "").strip() or "outro recurso"
+                return OperatorFlowResult(
+                    False,
+                    (
+                        f"Esta operação já está em andamento em {onde}. "
+                        f"Não é possível iniciá-la em {recurso}."
+                    ),
+                    "operacao_em_execucao_em_outro_recurso",
+                    {
+                        "op": codigo,
+                        "recurso_ativo": onde,
+                        "estado_atual": paralela.get("status"),
+                    },
+                )
+            # A ordem do líder (fila manual) vale como autorização do recurso
+            # divergente; o setor divergente continua gravado normalmente.
+            puxada_pelo_lider = bool(
+                divergent_resource and self._entrada_fila_manual(operacao, recurso)
+            )
             etapa_pendente = self._etapa_anterior_pendente(codigo, operacao)
             if etapa_pendente is not None and not confirmar_etapa_anterior_pendente:
                 pending_number = str(
@@ -1236,6 +1258,7 @@ class OperatorFlowService:
                 divergent_resource
                 and not confirmar_recurso_divergente
                 and not sector_exempt_from_resource_confirmation
+                and not puxada_pelo_lider
             ):
                 return OperatorFlowResult(
                     False,
@@ -1258,6 +1281,7 @@ class OperatorFlowService:
                     divergent_resource
                     and confirmar_recurso_divergente
                     and not sector_exempt_from_resource_confirmation
+                    and not puxada_pelo_lider
                 )
                 or (etapa_pendente is not None and confirmar_etapa_anterior_pendente)
             )
@@ -1392,6 +1416,7 @@ class OperatorFlowService:
         )
         if recusa_gate is not None:
             return recusa_gate
+        ending_rework = requested_action == OperatorAction.END_REWORK
 
         try:
             boas = int(pecas_boas or 0)
@@ -1418,7 +1443,7 @@ class OperatorFlowService:
         if inspecao_marcador:
             boas = 0
             refugos = 0
-        if target == OperatorState.FINISHED:
+        if target == OperatorState.FINISHED or ending_rework:
             if not crachas:
                 return OperatorFlowResult(
                     False,
@@ -1430,7 +1455,7 @@ class OperatorFlowService:
             # ativa exige uma duração mínima de segmento (atributo genérico
             # do banco; este serviço não sabe qual integração é nem por quê).
             minimo = getattr(self.db, "minimum_appointment_duration_seconds", None)
-            if minimo:
+            if minimo and not ending_rework:
                 inicio_segmento = self.db.inicio_segmento_producao_apontamento(
                     atual["id"]
                 )
@@ -1458,8 +1483,11 @@ class OperatorFlowService:
                 boas_anteriores, refugos_anteriores
             )
             finalizacao_de_saldo_esgotado = atendimento_previo >= previsto
+            # Encerrar o retrabalho sem lançar peça (0/0) é válido: o operador
+            # só devolve a OP à produção, com o crachá.
             if (
                 total_lote <= 0
+                and not ending_rework
                 and not quality_rework_only
                 and not inspecao_marcador
                 and not finalizacao_de_saldo_esgotado
@@ -1513,8 +1541,10 @@ class OperatorFlowService:
             "operador_id": operador_id,
             "operadores_cracha": crachas,
         }
-        validation = validate_transition(current, target, payload)
-        if not validation.ok:
+        # Retrabalho -> Produção só existe por "Finalizar Ret."; a regra geral
+        # da máquina de estados continua recusando-a.
+        validation = None if ending_rework else validate_transition(current, target, payload)
+        if validation is not None and not validation.ok:
             return OperatorFlowResult(
                 False,
                 validation.message,
@@ -1545,6 +1575,7 @@ class OperatorFlowService:
                 setor_divergente=divergent_sector,
                 recurso_exclusivo=bool(recurso_exclusivo),
                 data_hora=self._now(),
+                **({"encerrar_retrabalho": True} if ending_rework else {}),
             )
         except ValueError as exc:
             return OperatorFlowResult(False, str(exc), "quantidade_invalida")
@@ -1838,7 +1869,40 @@ class OperatorFlowService:
         rows = self.db.listar_apontamentos_operacionais(
             setor, maquina=recurso, somente_ativos=True
         )
-        queue = [self._card(row) for row in rows if row.get("status") == "Aguardando"]
+        # Fila manual do líder (migration 62): as fixadas neste recurso ganham a
+        # posição dele; as fixadas em OUTRO recurso somem desta fila. Sem
+        # entradas (ou com um db sem o loader) o fluxo é exatamente o antigo.
+        manual_loader = getattr(self.db, "listar_fila_manual_ativa", None)
+        manual = list(manual_loader() or []) if callable(manual_loader) else []
+        estacao = self._identidade_estacao(recurso)
+        # Só a OP PUXADA para outro recurso some daqui; a ordem gravada pelo PUT
+        # (puxada=False) vale apenas para o próprio recurso (Solda/Pintura: todas
+        # as estações veem a mesma fila).
+        fora = {
+            e["catalogo_operacao_id"]
+            for e in manual
+            if e.get("puxada") and self._identidade_estacao(e["recurso"]) != estacao
+        }
+        aqui = {
+            e["catalogo_operacao_id"]: e
+            for e in manual
+            if self._identidade_estacao(e["recurso"]) == estacao
+            and e["catalogo_operacao_id"] not in fora
+        }
+
+        queue = []
+        for row in rows:
+            if row.get("status") != "Aguardando":
+                continue
+            row_operation_id = row.get("catalogo_operacao_id")
+            if row_operation_id in fora:
+                continue
+            card = self._card(row)
+            if row_operation_id in aqui:
+                self._marcar_fixada(
+                    card, aqui[row_operation_id], setor, recurso, row.get("codigo_recurso")
+                )
+            queue.append(card)
         production = [self._card(row) for row in rows if row.get("status") != "Aguardando"]
         route_loader = getattr(self.db, "listar_proximas_operacoes_roteiro", None)
         if callable(route_loader):
@@ -1848,12 +1912,26 @@ class OperatorFlowService:
                 for row in rows
                 if row.get("catalogo_operacao_id") is not None
             }
+            ja_projetadas = {
+                operation.get("id") or operation.get("catalogo_operacao_id")
+                for operation in projected
+            }
+            faltam = [
+                operation_id
+                for operation_id in aqui
+                if operation_id not in ja_projetadas and operation_id not in active_operations
+            ]
+            if faltam:
+                # Puxada de outro setor/recurso: mesma regra de "próxima
+                # operação", sem o filtro de setor.
+                projected += list(route_loader(operacao_ids=faltam) or [])
             for operation in projected:
                 operation_id = operation.get("id") or operation.get("catalogo_operacao_id")
-                if operation_id in active_operations:
+                if operation_id in active_operations or operation_id in fora:
                     continue
                 route_code = operation.get("codigo_recurso") or operation.get("recurso")
-                if not station_matches_route(
+                fixada = aqui.get(operation_id)
+                if fixada is None and not station_matches_route(
                     setor,
                     recurso,
                     route_code,
@@ -1871,14 +1949,75 @@ class OperatorFlowService:
                     "quantidade_boa": 0,
                     "quantidade_refugo": 0,
                 }
-                queue.append(self._card(virtual))
+                card = self._card(virtual)
+                if fixada is not None:
+                    self._marcar_fixada(
+                        card,
+                        fixada,
+                        setor,
+                        recurso,
+                        route_code,
+                        operation.get("recurso_tipo_setor"),
+                        operation.get("recurso_nome"),
+                    )
+                queue.append(card)
         queue.sort(
             key=lambda row: (
+                (0, row["posicao_manual"]) if row.get("fixada") else (1, 0),
                 str(row.get("op") or ""),
                 str(row.get("numero_operacao") or row.get("operation") or ""),
             )
         )
         return {"queue": queue, "production": production}
+
+    @staticmethod
+    def _marcar_fixada(
+        card, entrada, setor, recurso, route_code, resource_sector=None, nome=None
+    ):
+        """Sinaliza no card que o líder fixou a operação neste recurso."""
+
+        puxada = bool(route_code) and not station_matches_route(
+            setor, recurso, route_code, resource_sector=resource_sector
+        )
+        card.update(
+            fixada=True,
+            posicao_manual=entrada["posicao"],
+            fila_manual_id=entrada["id"],
+            origem_recurso=resource_display_name(route_code, nome) if puxada else None,
+        )
+
+    def _entrada_fila_manual(self, operacao, recurso):
+        """Entrada viva do líder que PUXOU esta operação para ESTE recurso, ou ``None``."""
+
+        loader = getattr(self.db, "listar_fila_manual_ativa", None)
+        operation_id = operacao.get("id") or operacao.get("catalogo_operacao_id")
+        if not callable(loader) or operation_id is None:
+            return None
+        estacao = self._identidade_estacao(recurso)
+        return next(
+            (
+                e
+                for e in (loader(operation_id) or ())
+                if e.get("puxada") and self._identidade_estacao(e["recurso"]) == estacao
+            ),
+            None,
+        )
+
+    def _execucao_em_outro_recurso(self, codigo, operacao, recurso):
+        """Linha ativa da MESMA operação em outro recurso (qualquer setor)."""
+
+        loader = getattr(self.db, "listar_apontamentos_por_op", None)
+        if not callable(loader):
+            return None
+        estacao = self._identidade_estacao(recurso)
+        for row in loader(codigo) or ():
+            if row.get("status") not in _ESTADOS_ATIVOS or row.get("status") == "Aguardando":
+                continue  # só apontamento em andamento trava; fila não
+            if self._identidade_estacao(row.get("maquina")) == estacao:
+                continue
+            if self._corresponde_operacao(row, operacao):
+                return row
+        return None
 
     def listar_historico(
         self,

@@ -105,7 +105,7 @@ const AREA_SECTIONS: ManagementSection[] = [
 ].map(([area, label]) => ({
   id: `area-${area}`,
   label,
-  icon: assets.navigation.manufacturing,
+  icon: assets.navigation.areas[area as keyof typeof assets.navigation.areas],
   defaultPath: `/areas/${area}`,
   tabs: [{ label: "Recursos", path: `/areas/${area}`, screen: `areas-${area}`, area }],
 }));
@@ -193,7 +193,7 @@ export const managementSections: ManagementSection[] = [
   {
     id: "diretoria",
     label: "Diretoria",
-    icon: assets.navigation.analytics,
+    icon: assets.navigation.diretoria,
     defaultPath: "/diretoria",
     // Aba da diretoria (spec de 16/10/2026): custo de produção por produto.
     // O gestor comum não vê a seção nem a rota.

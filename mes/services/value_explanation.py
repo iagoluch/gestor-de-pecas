@@ -92,7 +92,13 @@ VALUE_TEXT: dict[str, dict[str, str]] = {
         "unit": "pct",
         "kind": None,
         "reason": "Quanto da produção ficou pronta de primeira, sem refugo e sem retrabalho.",
-        "rule": "Boas ÷ (boas + refugo + retrabalho) × 100. O retrabalho entra na base.",
+        "rule": (
+            "Boas ÷ (boas + refugo + retrabalho) × 100. O retrabalho entra na base. "
+            "Peça que foi para retrabalho não é boa de primeira, mesmo recuperada depois: "
+            "a recuperação continua contando como peça boa produzida, mas não entra de "
+            "novo no FTT; cada peça entra uma única vez na base, sem duplicar por novas "
+            "tentativas de retrabalho."
+        ),
     },
 }
 
@@ -241,6 +247,17 @@ class ValueExplanationService:
                 if metric == "qtd.taxa_refugo" and totals["retrabalho"]
                 else []
             )
+            recovered = _ftt_recovered(production) if metric == "qtd.ftt" else {}
+            if sum(recovered.values()):
+                excluded.append({
+                    "label": "Peças recuperadas do retrabalho",
+                    "value": float(sum(recovered.values())),
+                    "reason": (
+                        "Peça que voltou do retrabalho já entrou uma vez na base como "
+                        "retrabalho; a recuperação conta como peça boa produzida, mas "
+                        "não soma outra boa nem nova tentativa ao FTT."
+                    ),
+                })
 
         if metric in ("qtd.taxa_refugo", "qtd.ftt"):
             notes.append(_NOTE_RATES)
@@ -397,10 +414,20 @@ class ValueExplanationService:
             ftt = (overview.get("kpis") or {}).get("ftt") or {}
             raw = ftt.get("value")
             value = float(raw) if raw is not None else None
+            recovered = _ftt_recovered(overview.get("production") or {})
+            good = max(0, good - recovered["good"])
+            scrap = max(0, scrap - recovered["scrap"])
+            rework = max(0, rework - recovered["rework"])
             base = good + scrap + rework
             recomposed = good / base * 100.0 if base > 0 else None
+            fora = sum(recovered.values())
             reason = (
-                f"{good} peças boas em {base} (boas + refugo + retrabalho)."
+                f"{good} peças boas em {base} (boas + refugo + retrabalho)"
+                + (
+                    f", sem as {fora} peças recuperadas do retrabalho (já contadas na base)."
+                    if fora
+                    else "."
+                )
                 if base > 0
                 else (
                     ftt.get("reason")
@@ -419,6 +446,15 @@ class ValueExplanationService:
         return value, inputs, reason, reconciliation
 
 
+
+
+def _ftt_recovered(production: dict) -> dict[str, int]:
+    """Parte de boas/refugo/retrabalho que é peça recuperada do retrabalho."""
+
+    recovered = production.get("ftt_recovered") or {}
+    return {
+        key: max(0, int(recovered.get(key) or 0)) for key in ("good", "scrap", "rework")
+    }
 
 
 def _input_node(kind: str, value: int) -> ValueNode:

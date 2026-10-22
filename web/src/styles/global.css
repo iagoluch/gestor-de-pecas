@@ -1867,6 +1867,11 @@ label:has(> .required-mark) > :is(input, select, textarea, div) { flex-basis: 10
   .operator-workbench .station-state { padding: 20px; }
 }
 
+/* Fila do dia por recurso (AreaQueuePanel): formulário embutido no card e ações por linha. */
+.area-queue__form { margin: var(--space-3) 18px; box-shadow: none; }
+.area-queue__actions, .area-queue__tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
+.area-queue__actions .button { min-height: 32px; padding: 0 10px; }
+
 /* Aba Diretoria: seletores, ranking clicável, texto pronto da ficha e valor da hora por linha. */
 .director-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .director-switch { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }

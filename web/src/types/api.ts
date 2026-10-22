@@ -26,6 +26,8 @@ export interface SessionUser {
   operator_automatic_queue?: boolean;
   /** Áreas da fábrica que a conta enxerga na gestão (menu "Áreas"). */
   areas?: SessionArea[];
+  /** Áreas cuja fila de prioridades a conta pode ordenar (líder/supervisor do setor). */
+  queue_areas?: string[];
   /** Conta de gestão que entrou com a senha padrão: precisa definir outra antes de usar o sistema. */
   password_change_required?: boolean;
 }

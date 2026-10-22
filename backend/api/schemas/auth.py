@@ -32,6 +32,8 @@ class SessionUser(BaseModel):
     operator_automatic_queue: bool = False
     #: Áreas da fábrica que a conta enxerga na gestão (ver app/core/areas.py).
     areas: list[dict] = []
+    #: Áreas cuja fila de prioridades a conta pode ordenar (líder/supervisor).
+    queue_areas: list[str] = []
     #: Entrou com a senha padrão numa conta de gestão: a tela pede uma nova
     #: senha e a API recusa as demais rotas até ela ser definida.
     password_change_required: bool = False

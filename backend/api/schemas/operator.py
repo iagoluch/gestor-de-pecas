@@ -7,7 +7,8 @@ class OperatorActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     action: Literal[
-        "Início", "Parada", "Setup", "Retrabalho", "Retomar", "Retornar", "Finalizado"
+        "Início", "Parada", "Setup", "Retrabalho", "Retomar", "Retornar", "Finalizado",
+        "Finalizar Retrabalho"
     ]
     resource: str = Field(min_length=1, max_length=120)
     op: str | None = Field(default=None, min_length=1, max_length=80)

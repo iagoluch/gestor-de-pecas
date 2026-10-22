@@ -8,6 +8,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { AreaQueuePanel } from "./AreaQueuePanel";
 import { isProducing, isStopped } from "../operations/operationsExplanations";
 import { resourceCountNode } from "../operations/OperationsPages";
 import type { ResourceRow } from "../../types/management";
@@ -76,6 +77,7 @@ export function AreaPage() {
           ]}
         />
       </SectionCard>
+      {user?.queue_areas?.includes(area.id) && <AreaQueuePanel areaId={area.id} />}
     </PageFrame>
   );
 }
