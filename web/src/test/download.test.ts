@@ -22,7 +22,7 @@ describe("api.download — GE-03", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { name = this.download; });
     URL.createObjectURL = vi.fn(() => "blob:x");
     URL.revokeObjectURL = vi.fn();
-    stubFetch(new Response(new Blob(["xlsx"]), {
+    stubFetch(new Response("xlsx", {
       status: 200, headers: { "content-disposition": 'attachment; filename="gestor_gerencial_2026-09-24.xlsx"' },
     }));
     await api.download("/api/v1/reports/gerencial/export.xlsx", "x.xlsx");
