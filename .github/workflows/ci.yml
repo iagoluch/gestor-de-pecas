@@ -59,7 +59,11 @@ jobs:
             echo "::error::requirements.lock desatualizado em relação ao requirements.txt"
             exit 1
           fi
+      # tests/test_standard_time_explanation.py importa pytest e usa estilo
+      # pytest (funções soltas/parametrize), que o unittest discover não executa.
+      - run: pip install pytest
       - run: python -m unittest discover -s tests -p "test_*.py"
+      - run: python -m pytest tests/test_standard_time_explanation.py -q
 
   frontend:
     runs-on: ubuntu-latest
