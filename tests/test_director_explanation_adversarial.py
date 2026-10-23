@@ -8,6 +8,7 @@ quem não é da Diretoria nunca recebe R$.
 
 from __future__ import annotations
 
+import json
 import unittest
 from decimal import Decimal
 
@@ -293,7 +294,9 @@ class DirectorExplanationApiAdversarialTests(_ApiCase):
             ):
                 response = self._get(**params)
                 self.assertEqual(response.status_code, 403, (level, params, response.text))
-                text = response.text
+                # request_id é UUID aleatório: pode conter "8110" por acaso e não é valor vazado.
+                body = {k: v for k, v in response.json().items() if k != "request_id"}
+                text = json.dumps(body, ensure_ascii=False)
                 for leaked in ("2460", "2250", "8110", "valor_hora", '"value"', "R$"):
                     self.assertNotIn(leaked, text, (level, params))
 
