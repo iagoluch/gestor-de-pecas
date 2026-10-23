@@ -9,6 +9,7 @@ export type ManagementSectionId =
   | "quality"
   | "diretoria"
   | "analytics"
+  | "melhoria"
   | "audit"
   | "reports"
   | "traceability"
@@ -102,6 +103,7 @@ const AREA_SECTIONS: ManagementSection[] = [
   ["solda", "Solda"],
   ["pintura", "Pintura"],
   ["prototipo", "Protótipo"],
+  ["projetos-ferramentaria", "Projetos/Ferramentaria"],
 ].map(([area, label]) => ({
   id: `area-${area}`,
   label,
@@ -200,6 +202,17 @@ export const managementSections: ManagementSection[] = [
     levels: DIRECTOR_LEVELS,
     tabs: [
       { label: "Diretoria", path: "/diretoria", screen: "diretoria", levels: DIRECTOR_LEVELS },
+    ],
+  },
+  {
+    id: "melhoria",
+    label: "Melhoria Contínua",
+    icon: assets.navigation.melhoria,
+    defaultPath: "/melhoria-continua",
+    // Visão de oportunidades (23/10/2026): reaproveita as consultas das
+    // Análises, então segue a regra comum da gestão (sem nível próprio).
+    tabs: [
+      { label: "Oportunidades", path: "/melhoria-continua", screen: "melhoria-oportunidades" },
     ],
   },
   {

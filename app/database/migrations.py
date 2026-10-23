@@ -2666,6 +2666,26 @@ FTT_RECUPERADA_STATEMENTS = (
     " CHECK (quantidade_recuperada >= 0 AND quantidade_recuperada <= quantidade)",
 )
 
+# Migration 65 — níveis separados (decisão de 23/10/2026): Líder Pintura e Líder
+# Almoxarifado (o Almoxarifado ainda não tem área/tela) no lugar do combinado, e
+# Líder Projetos/Ferramentaria (área nova com fila manual). Líder copia ``lider``.
+# Aditiva e idempotente; o nível antigo ``lider_pintura_almoxarifado`` continua.
+# Rollback: trocar o nível das contas que usam os nomes abaixo e
+# DELETE FROM niveis_acesso WHERE nome IN ('lider_pintura', 'lider_almoxarifado',
+# 'lider_projetos_ferramentaria');
+# DELETE FROM schema_migrations WHERE version = 65; e voltar SCHEMA_VERSION a 64.
+NIVEIS_LIDER_SEPARADOS_DESCRIPTION = "níveis Líder Pintura, Almoxarifado e Projetos/Ferramentaria"
+NIVEIS_LIDER_SEPARADOS = (
+    ("lider_pintura", "Líder Pintura", "lider"),
+    ("lider_almoxarifado", "Líder Almoxarifado", "lider"),
+    ("lider_projetos_ferramentaria", "Líder Projetos/Ferramentaria", "lider"),
+)
+NIVEIS_LIDER_SEPARADOS_STATEMENTS = tuple(
+    f"INSERT INTO niveis_acesso (nome, rotulo, nivel_base) VALUES ('{nome}', '{rotulo}', '{base}') "  # nosec B608 -- valores vêm só da tupla constante NIVEIS_LIDER_SEPARADOS, nunca de input externo
+    "ON CONFLICT (nome) DO NOTHING"
+    for nome, rotulo, base in NIVEIS_LIDER_SEPARADOS
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2733,6 +2753,7 @@ MIGRATIONS = {
     62: (FILA_MANUAL_DESCRIPTION, FILA_MANUAL_STATEMENTS),
     63: (CUSTO_HORA_DESCRIPTION, CUSTO_HORA_STATEMENTS),
     64: (FTT_RECUPERADA_DESCRIPTION, FTT_RECUPERADA_STATEMENTS),
+    65: (NIVEIS_LIDER_SEPARADOS_DESCRIPTION, NIVEIS_LIDER_SEPARADOS_STATEMENTS),
 }
 
 

@@ -37,6 +37,7 @@ import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
 import { DirectorPage } from "./pages/director/DirectorPage";
+import { ImprovementPage } from "./pages/improvement/ImprovementPage";
 import {
   AnalyticalDataReportPage,
   IndicatorsReportPage,
@@ -169,6 +170,8 @@ export default function App() {
         <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
 
         <Route path="diretoria" element={<RequireDiretoriaAccess><DirectorPage /></RequireDiretoriaAccess>} />
+
+        <Route path="melhoria-continua" element={<ImprovementPage />} />
 
         <Route path="analises/oee" element={<AnalyticsOeePage />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />

@@ -41,8 +41,8 @@ CONTAS = {
     "alan": "lider_dobra_corte",
     "tytio": "lider_usinagem",
     "murilo": "lider_serra",
-    "bruno": "lider_pintura_almoxarifado",
-    "jhonathan": "lider_solda",
+    "bruno": "lider_almoxarifado",
+    "jhonathan": "lider_pintura",
     "sandro": "qualidade",
     "gabriel.fogaca": "manufatura",
     "lucas.santos": "manufatura",
@@ -50,13 +50,12 @@ CONTAS = {
     "joao.thives": "manufatura",
     "joao.nery": "manufatura",
     "luan": "projetos_adm",
-    "guilherme": "projetos_adm",
+    "guilherme": "lider_projetos_ferramentaria",
     "bruna": "pcp",
     "maria": "pcp",
     "adriano": "pcp",
     "felipe": "gerente_industrial",
     "alana": "melhoria_continua",
-    "jose": "controladoria",
 }
 
 

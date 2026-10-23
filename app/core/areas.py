@@ -14,6 +14,7 @@ AREAS = {
     "solda": ("Solda", ("Solda Aço", "Solda Alumínio", "Solda Robô")),
     "pintura": ("Pintura", ("Pintura",)),
     "prototipo": ("Protótipo", ("Protótipo",)),
+    "projetos-ferramentaria": ("Projetos/Ferramentaria", ("Proj. Ferramentaria",)),
 }
 
 #: Nível gravado na conta (migration 61) -> áreas que ele enxerga. O
@@ -26,6 +27,9 @@ AREAS_POR_NIVEL = {
     "lider_usinagem": ("usinagem",),
     "lider_serra": ("serra",),
     "lider_pintura_almoxarifado": ("pintura",),
+    "lider_pintura": ("pintura",),
+    "lider_almoxarifado": (),
+    "lider_projetos_ferramentaria": ("projetos-ferramentaria",),
     "lider_solda": ("solda",),
 }
 

@@ -8,7 +8,7 @@ const visiveis = (role: string, ids: string[]) =>
 describe("menu por área", () => {
   it("tem uma seção por área, com o nome do setor", () => {
     expect(areaSections.map((section) => section.label)).toEqual(
-      ["Dobra e Corte", "Usinagem", "Serra", "Solda", "Pintura", "Protótipo"],
+      ["Dobra e Corte", "Usinagem", "Serra", "Solda", "Pintura", "Protótipo", "Projetos/Ferramentaria"],
     );
   });
 
@@ -20,8 +20,8 @@ describe("menu por área", () => {
     expect(visiveis("supervisor", ["solda", "pintura"])).toEqual(["Solda", "Pintura"]);
   });
 
-  it("admin com todas as áreas enxerga as seis", () => {
-    expect(visiveis("admin", areaSections.map((section) => section.tabs[0].area!))).toHaveLength(6);
+  it("admin com todas as áreas enxerga as sete", () => {
+    expect(visiveis("admin", areaSections.map((section) => section.tabs[0].area!))).toHaveLength(7);
   });
 
   it("conta sem áreas não vê nenhuma", () => {

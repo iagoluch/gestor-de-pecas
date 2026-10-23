@@ -223,7 +223,12 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         queue_areas=queue_areas_for_user(user.get("nivel_atribuido"), role),
         # Gestão ainda na senha padrão entra só para definir outra (SEC-05);
         # operador e terminais seguem com a padrão sem mudança nenhuma.
-        password_change_required=password_change_required(role, payload.password),
+        # No servidor de TESTE (GESTOR_WEB_ENV=development) a gestão pode ficar
+        # na 123456, por decisão do usuário (23/10/2026); só o REAL força a troca.
+        password_change_required=(
+            str(request.app.state.settings.environment).strip().casefold() != "development"
+            and password_change_required(role, payload.password)
+        ),
     )
     return _session_response(request, session_user, int(user.get("session_version") or 0))
 

@@ -4,6 +4,7 @@ import home from "../../../assets/web/navigation/home.svg";
 import operations from "../../../assets/web/navigation/operations.svg";
 import production from "../../../assets/web/navigation/production.png";
 import analytics from "../../../assets/web/navigation/analytics.svg";
+import melhoria from "../../../assets/web/navigation/melhoria.svg";
 import audit from "../../../assets/web/navigation/audit.svg";
 import reports from "../../../assets/web/navigation/reports.svg";
 import traceability from "../../../assets/web/navigation/traceability.png";
@@ -18,6 +19,7 @@ import areaSerra from "../../../assets/web/navigation/area-serra.svg";
 import areaSolda from "../../../assets/web/navigation/area-solda.svg";
 import areaPintura from "../../../assets/web/navigation/area-pintura.svg";
 import areaPrototipo from "../../../assets/web/navigation/area-prototipo.svg";
+import areaProjetosFerramentaria from "../../../assets/web/navigation/area-projetos-ferramentaria.svg";
 import search from "../../../assets/icons/Pesquisa.svg";
 import clock from "../../../assets/icons/Relógio.svg";
 import trash from "../../../assets/icons/Lixeira.svg";
@@ -114,6 +116,7 @@ export const assets = {
     operations,
     production,
     analytics,
+    melhoria,
     audit,
     reports,
     traceability,
@@ -129,6 +132,7 @@ export const assets = {
       "solda": areaSolda,
       "pintura": areaPintura,
       "prototipo": areaPrototipo,
+      "projetos-ferramentaria": areaProjetosFerramentaria,
     },
   },
 } as const;
