@@ -8,7 +8,7 @@ defusedxml>=0.7,<1
 # Carrega o arquivo local .env sem sobrescrever variáveis do sistema.
 python-dotenv>=1.2.4,<2
 # Adaptador HTTP oficial. O domínio e os serviços continuam neutros.
-fastapi>=0.115,<1
+fastapi>=0.161.1,<1
 uvicorn[standard]>=0.54.0,<1
 # Cliente usado pelos testes de contrato HTTP do FastAPI.
 httpx>=0.28.1,<1
