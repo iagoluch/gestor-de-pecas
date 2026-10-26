@@ -143,6 +143,17 @@ class DigestLabelTests(unittest.TestCase):
         self.assertNotIn("12 -", texto)
         self.assertNotIn("Conflito", texto)
 
+    def test_mostra_as_tres_maiores_paradas_em_ordem(self):
+        texto = self._texto("diario", datetime(2026, 9, 29), datetime(2026, 9, 30), [
+            {"motivo": "Troca de ferramenta", "segundos": 600},
+            {"motivo": "Falta de material", "segundos": 3600},
+            {"motivo": "Manutenção", "segundos": 1800},
+            {"motivo": "Setup", "segundos": 300},
+        ])
+        self.assertLess(texto.index("Principal parada: Falta de material"), texto.index("2ª parada: Manutenção"))
+        self.assertLess(texto.index("2ª parada: Manutenção"), texto.index("3ª parada: Troca de ferramenta"))
+        self.assertNotIn("Setup", texto)
+
 
 class DigestConfigTests(unittest.TestCase):
     def _settings(self, **over):

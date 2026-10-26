@@ -164,12 +164,11 @@ def _formatar_resumo(
             f"⏱️ Produtivo: <b>{_formatar_duracao(productive_seconds)}</b> · "
             f"Paradas: <b>{_formatar_duracao(downtime_seconds)}</b>"
         )
-    if top_stops:
-        principal = top_stops[0]
-        motivo = strip_status_code_prefix(principal.get("motivo") or "Não informado")
+    for posicao, parada in enumerate(top_stops[:3]):
+        motivo = strip_status_code_prefix(parada.get("motivo") or "Não informado")
+        rotulo = "🔴 Principal parada" if posicao == 0 else f"▫️ {posicao + 1}ª parada"
         linhas.append(
-            f"🔴 Principal parada: {html(motivo)} · "
-            f"<b>{_formatar_duracao(principal.get('segundos'))}</b>"
+            f"{rotulo}: {html(motivo)} · <b>{_formatar_duracao(parada.get('segundos'))}</b>"
         )
     return fit_telegram_text("\n".join(linhas))
 

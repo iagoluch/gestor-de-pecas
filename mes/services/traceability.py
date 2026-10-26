@@ -70,6 +70,37 @@ def _person_time_summary(participations):
     }
 
 
+def _group_inspected_pieces(rows):
+    """Agrupa as linhas (peça, cota) do repositório em uma lista de peças."""
+
+    pieces = {}
+    for row in rows or ():
+        peca = pieces.setdefault(row.get("peca_id"), {
+            "inspecao_id": row.get("inspecao_id"),
+            "numero_operacao": row.get("numero_operacao"),
+            "numero_peca": row.get("numero_peca"),
+            "resultado": row.get("resultado"),
+            "operador": row.get("operador"),
+            "registrada_em": row.get("registrada_em"),
+            "rnc_id": row.get("rnc_id"),
+            "rnc_codigo": row.get("rnc_codigo"),
+            "cotas": [],
+            "total_cotas_nao_conformes": 0,
+        })
+        if row.get("sequencia") is None:
+            continue
+        peca["cotas"].append({
+            "descricao": row.get("descricao_snapshot"),
+            "padrao": row.get("padrao_snapshot"),
+            "unidade": row.get("unidade_snapshot"),
+            "medida": row.get("medida"),
+            "status": row.get("cota_status"),
+        })
+        if row.get("cota_status") == "NAO_CONFORME":
+            peca["total_cotas_nao_conformes"] += 1
+    return list(pieces.values())
+
+
 class TraceabilityService:
     def __init__(self, db):
         self.db = db
@@ -113,6 +144,9 @@ class TraceabilityService:
         operator_participations = list(participation_loader(
             datetime(2000, 1, 1), datetime(2100, 1, 1), op=code
         ) or []) if callable(participation_loader) else []
+
+        pieces_loader = getattr(self.db, "listar_pecas_inspecionadas_por_op", None)
+        pieces = _group_inspected_pieces(pieces_loader(code)) if callable(pieces_loader) else []
 
         legacy_loader = getattr(self.db, "get_op_timeline", None)
         legacy_timeline = list(legacy_loader(code) or []) if callable(legacy_loader) else []
@@ -279,6 +313,8 @@ class TraceabilityService:
             # não deve ser comparado com ele como se fossem a mesma grandeza.
             "person_time": _person_time_summary(operator_participations),
             "legacy_movements": legacy_timeline,
+            # Genealogia por peça: leitura do que o inspetor já registrou.
+            "pieces": pieces,
             "timeline": timeline,
             "source_refs": {
                 "operations": [row.get("apontamento_id") for row in operations if row.get("apontamento_id")],

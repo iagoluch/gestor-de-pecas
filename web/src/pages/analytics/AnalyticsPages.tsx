@@ -115,6 +115,15 @@ interface CapacityItem {
   calendario_codigo?: string | null;
   calendario_reason?: string | null;
   fila?: number | null;
+  /** Carga futura: horas (em segundos) do saldo da fila × tempo padrão unitário. */
+  fila_horas_segundos?: number | null;
+  /** Parte da fila calculada com tempo ESTIMADO (não oficial). */
+  fila_horas_estimadas_segundos?: number | null;
+  fila_sem_tempo_padrao?: number | null;
+  /** OPs distintas aguardando no recurso; mais de 1 = disputa pela máquina. */
+  fila_ops?: number | null;
+  /** null quando o recurso não tem calendário (não há tempo livre para comparar). */
+  fila_excede_livre?: boolean | null;
 }
 
 interface CapacityResponse {
@@ -772,6 +781,7 @@ export function AnalyticsCapacityPage() {
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const configured = data?.availability !== "nao_configurado";
+  const withoutStandard = (data?.items ?? []).reduce((sum, row) => sum + (row.fila_sem_tempo_padrao ?? 0), 0);
   const capacityNode = (metric: string, label: string, total: number | null | undefined, pick: (row: CapacityItem) => number | null | undefined, rule: string) => {
     if (!configured || total == null) return undefined;
     const explanation = buildRowSumExplanation({
@@ -839,8 +849,22 @@ export function AnalyticsCapacityPage() {
             { key: "remaining", label: "Livre", render: (row) => row.capacidade_restante_segundos == null ? "Não configurado" : formatHours(row.capacidade_restante_segundos) },
             { key: "utilization", label: "Utilização", render: (row) => row.utilizacao_percentual == null ? "Não configurado" : formatPercent(row.utilizacao_percentual) },
             { key: "queue", label: "Fila", render: (row) => formatNumber(row.fila) },
+            {
+              key: "queue-hours",
+              label: "Fila (h)",
+              render: (row) => (
+                <>
+                  {row.fila_horas_segundos == null ? "Não disponível" : formatHours(row.fila_horas_segundos)}
+                  {row.fila_excede_livre ? <> <span className="status-badge status-badge--warning">Fila maior que o tempo livre</span></> : null}
+                  {row.fila_horas_estimadas_segundos ? <small> (inclui {formatHours(row.fila_horas_estimadas_segundos)} de tempo estimado)</small> : null}
+                  {row.fila_sem_tempo_padrao ? <small> (parcial: {formatNumber(row.fila_sem_tempo_padrao)} sem tempo padrão)</small> : null}
+                </>
+              ),
+            },
+            { key: "contention", label: "Disputa", render: (row) => (row.fila_ops ?? 0) > 1 ? `${formatNumber(row.fila_ops)} OPs na mesma máquina` : "—" },
           ]}
         />
+        {withoutStandard > 0 ? <p className="chart-note" style={{ padding: "8px 16px 10px" }}>{formatNumber(withoutStandard)} fato(s) na fila sem tempo padrão não entram na soma de horas.</p> : null}
       </SectionCard>
     </PageFrame>
   );

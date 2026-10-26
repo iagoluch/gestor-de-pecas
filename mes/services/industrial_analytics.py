@@ -616,6 +616,13 @@ class IndustrialAnalyticsService:
         self._cache[cache_key] = catalog
         return catalog
 
+    @staticmethod
+    def _queue_exceeds_free(available, load, queue_seconds, without_standard):
+        if available is None:
+            return None
+        exceeds = queue_seconds > max(0.0, float(available) - load)
+        return True if exceeds else (None if without_standard else False)
+
     def capacity_configuration(self, filters: AnalyticsFilter) -> dict:
         """Capacidade e utilização temporal do recurso no período.
 
@@ -661,6 +668,10 @@ class IndustrialAnalyticsService:
         }
         queue_by_resource = defaultdict(int)
         planned_by_resource = defaultdict(float)
+        queue_ops = defaultdict(set)
+        queue_seconds = defaultdict(float)
+        queue_estimated_seconds = defaultdict(float)
+        queue_without_standard = defaultdict(int)
         for fact in self._facts(filters):
             key = str(fact.get("maquina") or "").strip().casefold()
             planned_by_resource[key] += max(
@@ -673,6 +684,26 @@ class IndustrialAnalyticsService:
             )
             if str(fact.get("status") or "") == "Aguardando":
                 queue_by_resource[key] += 1
+                queue_ops[key].add(str(fact.get("op") or "").strip().casefold())
+                # Carga futura: saldo canônico (planejado - boas - refugo, nunca
+                # negativo) × tempo padrão unitário. Sem padrão, não entra na soma.
+                standard_unit, standard_source = resolve_fact_standard(fact)
+                if standard_unit is None:
+                    queue_without_standard[key] += 1
+                    continue
+                planned = (
+                    fact.get("quantidade_planejada_pcp")
+                    if fact.get("quantidade_planejada_pcp") is not None
+                    else fact.get("quantidade")
+                )
+                seconds = standard_unit * ManufacturingRules.quantity_remaining(
+                    planned,
+                    fact.get("quantidade_boa"),
+                    fact.get("quantidade_refugo"),
+                )
+                queue_seconds[key] += seconds
+                if standard_source == SOURCE_ESTIMATED:
+                    queue_estimated_seconds[key] += seconds
 
         items = []
         com_calendario = 0
@@ -710,6 +741,17 @@ class IndustrialAnalyticsService:
                 "calendario_reason": summary.get("reason"),
                 "fila": queue_by_resource[key],
                 "quantidade_planejada": planned_by_resource[key],
+                # Carga futura (só leitura). ``fila_excede_livre`` é None sem
+                # calendário: não há tempo livre para comparar.
+                "fila_horas_segundos": queue_seconds[key],
+                "fila_horas_estimadas_segundos": queue_estimated_seconds[key],
+                "fila_sem_tempo_padrao": queue_without_standard[key],
+                "fila_ops": len(queue_ops[key]),
+                # None também quando há fila sem tempo padrão e a soma parcial
+                # cabe: "cabe" seria afirmar o que o sistema não sabe.
+                "fila_excede_livre": self._queue_exceeds_free(
+                    available, load, queue_seconds[key], queue_without_standard[key]
+                ),
             })
             if available is not None:
                 com_calendario += 1

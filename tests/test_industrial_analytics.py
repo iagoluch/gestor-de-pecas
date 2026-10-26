@@ -579,6 +579,84 @@ class CapacityTests(unittest.TestCase):
             antes["total_capacity_seconds"], depois["total_capacity_seconds"]
         )
 
+    @staticmethod
+    def _fato(op, maquina, planejada, padrao, *, boa=0, refugo=0, fonte="protheus",
+              status="Aguardando"):
+        return {
+            "id": f"{op}-{maquina}", "op": op, "numero_operacao": "10", "maquina": maquina,
+            "status": status, "quantidade_planejada_pcp": planejada,
+            "quantidade_boa": boa, "quantidade_refugo": refugo,
+            "tempo_padrao_segundos": padrao, "tempo_padrao_fonte": fonte,
+        }
+
+    def _fila(self, fatos, estados=None, **kwargs):
+        class _Repo(_CapacityRepo):
+            def listar_fatos_operacionais_periodo(self, *_a, **_k):
+                return [dict(f) for f in fatos]
+
+        return self._service(_Repo(estados or [], **kwargs)).capacity_configuration(
+            self.filters
+        )
+
+    def test_fila_soma_saldo_vezes_tempo_padrao_e_marca_disputa(self):
+        result = self._fila([
+            # saldo 10 - (3 boas + 1 refugo) = 6 pç × 600 s = 3600 s
+            self._fato("OP1", "DOBRA1", 10, 600, boa=3, refugo=1),
+            # saldo 5 × 360 s = 1800 s, outra OP no mesmo recurso (disputa)
+            self._fato("OP2", "DOBRA1", 5, 360),
+            # fora da fila: não soma
+            self._fato("OP3", "DOBRA1", 100, 600, status="Em Andamento"),
+        ])
+        item = next(i for i in result["items"] if i["codigo"] == "DOBRA1")
+        self.assertEqual(item["fila"], 2)
+        self.assertEqual(item["fila_horas_segundos"], 3600 + 1800)
+        self.assertEqual(item["fila_ops"], 2)
+        self.assertEqual(item["fila_sem_tempo_padrao"], 0)
+        self.assertEqual(item["fila_horas_estimadas_segundos"], 0)
+
+    def test_fila_nunca_negativa_e_fato_sem_tempo_padrao_nao_entra(self):
+        result = self._fila([
+            # apontado acima do planejado: saldo 0, não vira horas negativas
+            self._fato("OP1", "DOBRA1", 2, 600, boa=5),
+            # sem padrão: conta em fila_sem_tempo_padrao, fora da soma
+            self._fato("OP2", "DOBRA1", 4, None, fonte=None),
+            self._fato("OP2", "DOBRA1", 4, 100),
+        ])
+        item = next(i for i in result["items"] if i["codigo"] == "DOBRA1")
+        self.assertEqual(item["fila_horas_segundos"], 400)
+        self.assertEqual(item["fila_sem_tempo_padrao"], 1)
+        self.assertEqual(item["fila"], 3)
+        self.assertEqual(item["fila_ops"], 2)
+
+    def test_fila_com_tempo_estimado_entra_na_soma_e_e_marcada(self):
+        result = self._fila([
+            self._fato("OP1", "DOBRA1", 2, 300, fonte="estimado"),
+            self._fato("OP2", "DOBRA1", 2, 300),
+        ])
+        item = next(i for i in result["items"] if i["codigo"] == "DOBRA1")
+        self.assertEqual(item["fila_horas_segundos"], 1200)
+        self.assertEqual(item["fila_horas_estimadas_segundos"], 600)
+
+    def test_fila_excede_livre_so_com_calendario(self):
+        # DOBRA1: 8 h de turno, 2 h ocupadas -> 6 h livres.
+        estados = [_estado(1, "producao", datetime(2026, 8, 19, 8, 0),
+                           datetime(2026, 8, 19, 10, 0))]
+        cabe = self._fila([self._fato("OP1", "DOBRA1", 1, 6 * 3600)], estados)
+        excede = self._fila([self._fato("OP1", "DOBRA1", 1, 6 * 3600 + 1)], estados)
+        sem_calendario = self._fila([self._fato("OP1", "DOBRA2", 1, 99 * 3600)], estados)
+        pick = lambda r, c: next(i for i in r["items"] if i["codigo"] == c)  # noqa: E731
+        self.assertIs(pick(cabe, "DOBRA1")["fila_excede_livre"], False)  # igual ao livre: cabe
+        self.assertIs(pick(excede, "DOBRA1")["fila_excede_livre"], True)
+        # Sem calendário não há tempo livre: None (não False), a horas continuam.
+        self.assertIsNone(pick(sem_calendario, "DOBRA2")["fila_excede_livre"])
+        # Fila parcial (OP sem tempo padrão) que cabe: desconhecido, não "cabe".
+        parcial = self._fila([
+            self._fato("OP1", "DOBRA1", 1, 3600),
+            self._fato("OP2", "DOBRA1", 1, None, fonte=None),
+        ], estados)
+        self.assertIsNone(pick(parcial, "DOBRA1")["fila_excede_livre"])
+        self.assertEqual(pick(sem_calendario, "DOBRA2")["fila_horas_segundos"], 99 * 3600)
+
     def test_sem_calendario_algum_a_capacidade_permanece_nao_configurada(self):
         repo = _CapacityRepo([], com_calendario=())
         result = self._service(repo).capacity_configuration(self.filters)

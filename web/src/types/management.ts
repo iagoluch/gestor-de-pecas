@@ -179,8 +179,31 @@ export interface TimelineEvent {
   quantity?: number | null;
 }
 
+export interface TracePieceCota {
+  descricao?: string | null;
+  padrao?: string | null;
+  unidade?: string | null;
+  medida?: string | null;
+  status?: "CONFORME" | "NAO_CONFORME" | null;
+}
+
+export interface TracePiece {
+  inspecao_id: number;
+  numero_operacao?: string | null;
+  numero_peca: number;
+  resultado: "APROVADA" | "RETRABALHO" | "REFUGO";
+  operador?: string | null;
+  registrada_em?: string | null;
+  rnc_id?: number | null;
+  rnc_codigo?: string | null;
+  cotas: TracePieceCota[];
+  total_cotas_nao_conformes: number;
+}
+
 export interface TraceabilityResponse {
   op: string;
+  /** Genealogia por peça (inspeção da Qualidade); ausente em respostas antigas. */
+  pieces?: TracePiece[];
   operations: TraceOperation[];
   quantity_events: Array<Record<string, unknown>>;
   cutting_nestings: NestingRow[];

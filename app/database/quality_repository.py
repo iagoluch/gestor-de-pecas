@@ -660,6 +660,33 @@ class QualityRepositoryMixin:
             )
             return _rows(cursor)
 
+    def listar_pecas_inspecionadas_por_op(self, codigo_op):
+        """Peças inspecionadas da OP com suas cotas, numa única consulta.
+
+        Uma linha por (peça, cota); peça sem cota registrada vem com os campos
+        de cota nulos. Somente leitura: alimenta a genealogia por peça.
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT s.id AS inspecao_id, s.numero_operacao,
+                       p.id AS peca_id, p.numero_peca, p.resultado,
+                       p.possui_nao_conformidade, p.rnc_id,
+                       rnc.codigo AS rnc_codigo, p.operador, p.registrada_em,
+                       c.sequencia, c.descricao_snapshot, c.padrao_snapshot,
+                       c.unidade_snapshot, c.medida, c.status AS cota_status
+                FROM qualidade_inspecoes s
+                JOIN qualidade_pecas_inspecionadas p ON p.inspecao_id = s.id
+                LEFT JOIN qualidade_rnc rnc ON rnc.id = p.rnc_id
+                LEFT JOIN qualidade_resultados_cota c ON c.peca_id = p.id
+                WHERE UPPER(s.codigo_op) = UPPER(%s)
+                ORDER BY s.id, p.numero_peca, c.sequencia
+                """,
+                (limpa_codigo(codigo_op),),
+            )
+            return _rows(cursor)
+
     def registrar_peca_inspecionada(
         self,
         inspecao_id,

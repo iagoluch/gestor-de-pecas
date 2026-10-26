@@ -712,6 +712,37 @@ describe("KPIs gerenciais da Wave 2", () => {
     expect(screen.getAllByText("DOBRA1").length).toBeGreaterThan(0);
   });
 
+  it("capacidade mostra a fila em horas, a disputa e avisa quando a fila passa do tempo livre", async () => {
+    vi.stubGlobal("fetch", jsonOnce({
+      periodo: {},
+      items: [
+        { codigo: "DOBRA1", nome: "Gasparini", tipo_setor: "Dobra", capacidade_segundos: 28800, carga_segundos: 14400, capacidade_restante_segundos: 14400, utilizacao_percentual: 50, fila: 3, fila_horas_segundos: 21600, fila_horas_estimadas_segundos: 3600, fila_sem_tempo_padrao: 2, fila_ops: 3, fila_excede_livre: true },
+        { codigo: "DOBRA2", nome: "2204", tipo_setor: "Dobra", capacidade_segundos: 28800, carga_segundos: 0, capacidade_restante_segundos: 28800, utilizacao_percentual: 0, fila: 1, fila_horas_segundos: 7200, fila_horas_estimadas_segundos: 0, fila_sem_tempo_padrao: 0, fila_ops: 1, fila_excede_livre: false },
+      ],
+      unidade: "tempo",
+      availability: "disponivel",
+      reason: "ok",
+      recursos: 2,
+      recursos_com_calendario: 2,
+      recursos_sem_calendario: 0,
+      total_capacity_seconds: 57600,
+      total_load_seconds: 14400,
+      total_remaining_seconds: 43200,
+      utilizacao_percentual: 25,
+      bottleneck_resource: "DOBRA1",
+      bottleneck_utilizacao_percentual: 50,
+    }));
+
+    render(<MemoryRouter><FilterProvider><AnalyticsCapacityPage /></FilterProvider></MemoryRouter>);
+    await screen.findByText("Fila (h)");
+    expect(screen.getByText("Disputa")).toBeInTheDocument();
+    expect(screen.getByText("6h")).toBeInTheDocument();
+    expect(screen.getByText("3 OPs na mesma máquina")).toBeInTheDocument();
+    // O aviso aparece só na linha que excede o tempo livre.
+    expect(screen.getAllByText("Fila maior que o tempo livre")).toHaveLength(1);
+    expect(screen.getByText(/2 fato\(s\) na fila sem tempo padrão não entram na soma/)).toBeInTheDocument();
+  });
+
   it("o filtro de setor continua chegando na consulta gerencial", async () => {
     const fetchMock = jsonOnce({
       periodo: {},
@@ -746,5 +777,30 @@ describe("KPIs gerenciais da Wave 2", () => {
     expect(await screen.findByText("Ana Dobra")).toBeInTheDocument();
     expect(screen.getByText("Bruno Dobra")).toBeInTheDocument();
     expect(screen.queryByText("Ver linha do tempo")).not.toBeInTheDocument();
+  });
+
+  it("lista as peças inspecionadas da OP e mostra as cotas da peça escolhida", async () => {
+    vi.stubGlobal("fetch", jsonOnce({
+      op: "OP9", timeline: [], cutting_nestings: [], operations: [],
+      pieces: [
+        { inspecao_id: 1, numero_peca: 2, resultado: "RETRABALHO", operador: "Ana", registrada_em: "2026-10-26T08:00:00",
+          rnc_id: 5, rnc_codigo: "RNC-5", total_cotas_nao_conformes: 1,
+          cotas: [{ descricao: "Furo A", padrao: "10", unidade: "mm", medida: "10,9", status: "NAO_CONFORME" }] },
+      ],
+    }));
+    render(<MemoryRouter initialEntries={["/rastreabilidade/op-produto?op=OP9"]}><FilterProvider><TraceabilityOrderPage /></FilterProvider></MemoryRouter>);
+    expect(await screen.findByText("Peças inspecionadas")).toBeInTheDocument();
+    expect(screen.getByText("Retrabalho")).toBeInTheDocument();
+    expect(screen.getByText("RNC-5")).toBeInTheDocument();
+    expect(screen.queryByText("Furo A")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ver cotas" }));
+    expect(screen.getByText("Furo A")).toBeInTheDocument();
+    expect(screen.getByText("Não conforme")).toBeInTheDocument();
+  });
+
+  it("mostra estado vazio quando a OP não tem peças inspecionadas", async () => {
+    vi.stubGlobal("fetch", jsonOnce({ op: "OP9", timeline: [], cutting_nestings: [], operations: [], pieces: [] }));
+    render(<MemoryRouter initialEntries={["/rastreabilidade/op-produto?op=OP9"]}><FilterProvider><TraceabilityOrderPage /></FilterProvider></MemoryRouter>);
+    expect(await screen.findByText("Nenhuma peça inspecionada")).toBeInTheDocument();
   });
 });

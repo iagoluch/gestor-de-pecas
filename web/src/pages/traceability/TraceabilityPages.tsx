@@ -13,7 +13,7 @@ import { useManagementFilters } from "../../filters/FilterContext";
 import type { FilterField } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import type { PagedNestings, TraceabilityResponse } from "../../types/management";
+import type { PagedNestings, TraceabilityResponse, TracePiece } from "../../types/management";
 import { displayName, displayText, formatDateTime, formatDuration, formatNumber, formatPercent, formatSignedDuration, humanize } from "../../utils/format";
 
 function useOrderSelection() {
@@ -44,6 +44,79 @@ function TraceLoading({ title, subtitle, search, setSearch }: {
   setSearch: (value: string) => void;
 }) {
   return <PageFrame sectionId="traceability" title={title} subtitle={subtitle} filters={false} actions={<OrderSearch value={search} onChange={setSearch} />}><LoadingState /></PageFrame>;
+}
+
+const PIECE_RESULT: Record<TracePiece["resultado"], { label: string; tone: string }> = {
+  APROVADA: { label: "Aprovada", tone: "success" },
+  RETRABALHO: { label: "Retrabalho", tone: "warning" },
+  REFUGO: { label: "Refugo", tone: "danger" },
+};
+
+function PieceResultBadge({ value }: { value: TracePiece["resultado"] }) {
+  const { label, tone } = PIECE_RESULT[value] ?? { label: humanize(value), tone: "neutral" };
+  return <span className={`status-badge status-badge--${tone}`}>{label}</span>;
+}
+
+function InspectedPiecesSection({ pieces }: { pieces: TracePiece[] }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const pieceKey = (row: TracePiece) => `${row.inspecao_id}-${row.numero_peca}`;
+  const piece = pieces.find((row) => pieceKey(row) === selected);
+  return (
+    <SectionCard title="Peças inspecionadas" className="content-section section-card--table">
+      {pieces.length === 0 ? <EmptyState title="Nenhuma peça inspecionada" detail="Esta OP não tem inspeção registrada pela Qualidade." /> : (
+        <>
+          <DataTable
+            rows={pieces}
+            rowKey={pieceKey}
+            columns={[
+              { key: "number", label: "Peça nº", sortValue: (row) => row.numero_peca, render: (row) => formatNumber(row.numero_peca) },
+              { key: "result", label: "Resultado", render: (row) => <PieceResultBadge value={row.resultado} /> },
+              { key: "operator", label: "Operador", render: (row) => displayName(row.operador) },
+              { key: "date", label: "Data/hora", sortValue: (row) => row.registrada_em, render: (row) => formatDateTime(row.registrada_em) },
+              { key: "outside", label: "Cotas fora do padrão", sortValue: (row) => row.total_cotas_nao_conformes, render: (row) => formatNumber(row.total_cotas_nao_conformes) },
+              { key: "rnc", label: "RNC", render: (row) => row.rnc_id ? (row.rnc_codigo ?? `RNC ${row.rnc_id}`) : "—" },
+              {
+                key: "cotas",
+                label: "Cotas",
+                render: (row) => (
+                  <button
+                    type="button"
+                    className="button"
+                    aria-expanded={selected === pieceKey(row)}
+                    onClick={() => setSelected((current) => current === pieceKey(row) ? null : pieceKey(row))}
+                  >
+                    {selected === pieceKey(row) ? "Ocultar cotas" : "Ver cotas"}
+                  </button>
+                ),
+              },
+            ]}
+          />
+          {piece ? (
+            <div className="trace-piece-cotas">
+              <h3>{`Cotas da peça ${formatNumber(piece.numero_peca)}`}</h3>
+              <DataTable
+                rows={piece.cotas}
+                rowKey={(_, index) => index}
+                emptyTitle="Nenhuma cota medida nesta peça"
+                columns={[
+                  { key: "description", label: "Cota", render: (row) => displayText(row.descricao) },
+                  { key: "standard", label: "Padrão", render: (row) => [row.padrao, row.unidade].filter(Boolean).join(" ") || "—" },
+                  { key: "measured", label: "Medido", render: (row) => displayText(row.medida) },
+                  {
+                    key: "status",
+                    label: "Situação",
+                    render: (row) => row.status === "NAO_CONFORME"
+                      ? <span className="status-badge status-badge--danger">Não conforme</span>
+                      : <span className="status-badge status-badge--success">Conforme</span>,
+                  },
+                ]}
+              />
+            </div>
+          ) : null}
+        </>
+      )}
+    </SectionCard>
+  );
 }
 
 export function TraceabilityOrderPage() {
@@ -89,6 +162,7 @@ export function TraceabilityOrderPage() {
               ]}
             />
           </SectionCard>
+          <InspectedPiecesSection pieces={query.data?.pieces ?? []} />
           <div className="drilldown-actions">
             <Link to={`/rastreabilidade/linha-do-tempo?op=${encodeURIComponent(op)}`}>Abrir linha do tempo completa</Link>
           </div>
