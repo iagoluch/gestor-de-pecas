@@ -17,4 +17,4 @@ playwright==1.64.0
 pytest-playwright==0.10.0
 
 # --- Fuzzing de contrato de API (uso manual, ainda não incorporado ao CI) ---
-schemathesis==4.32.1
+schemathesis==4.32.4
