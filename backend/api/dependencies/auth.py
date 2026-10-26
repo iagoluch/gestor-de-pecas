@@ -10,6 +10,7 @@ from app.core.areas import areas_for_user, queue_areas_for_user
 from app.core.permissions import (
     can_access_andon_web,
     can_access_management_web,
+    can_manage_maintenance,
     can_manage_quality_templates,
     can_manage_standard_time,
     can_view_director_tab,
@@ -78,6 +79,7 @@ def _session_user(request: Request, database, *, allow_password_change_pending: 
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
         areas=areas_for_user(row.get("nivel_atribuido"), role),
         queue_areas=queue_areas_for_user(row.get("nivel_atribuido"), role),
+        assigned_level=row.get("nivel_atribuido"),
         password_change_required=claims.password_change_required,
     )
 
@@ -129,6 +131,19 @@ def require_qualidade_user(user: SessionUser = Depends(get_current_user)) -> Ses
         raise AppError(
             "quality_templates_access_denied",
             "Só a Qualidade e a conta administradora acessam o cadastro de cotas padrão.",
+            status_code=403,
+        )
+    return user
+
+
+def require_manutencao_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    """Conta de Manutenção (nível atribuído ``manutencao``) e admin: sugestões de
+    manutenção. Sem sessão o ``get_current_user`` responde 401; os demais, 403."""
+
+    if not can_manage_maintenance(user.role, user.assigned_level):
+        raise AppError(
+            "maintenance_access_denied",
+            "Só a Manutenção e a conta administradora acessam as sugestões de manutenção.",
             status_code=403,
         )
     return user

@@ -221,6 +221,7 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
         areas=areas_for_user(user.get("nivel_atribuido"), role),
         queue_areas=queue_areas_for_user(user.get("nivel_atribuido"), role),
+        assigned_level=user.get("nivel_atribuido"),
         # Gestão ainda na senha padrão entra só para definir outra (SEC-05);
         # operador e terminais seguem com a padrão sem mudança nenhuma.
         # No servidor de TESTE (GESTOR_WEB_ENV=development) a gestão pode ficar

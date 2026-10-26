@@ -35,7 +35,7 @@ export function AppShell({ children }: PropsWithChildren) {
   // volta ao botão de menu (AX-05). No desktop `open` nunca liga.
   useDialogFocus(drawerRef, open, () => setOpen(false));
   const areaIds = useMemo(() => user?.areas?.map((area) => area.id) ?? [], [user?.areas]);
-  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role, areaIds));
+  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role, areaIds, user?.assigned_level));
   const section = sections.find((item) => isSectionActive(item, location.pathname));
   const tab = section?.tabs.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -89,7 +89,7 @@ export function AppShell({ children }: PropsWithChildren) {
             return (
               <Link
                 key={item.id}
-                to={sectionPathFor(item, user?.role, areaIds)}
+                to={sectionPathFor(item, user?.role, areaIds, user?.assigned_level)}
                 onClick={() => setOpen(false)}
                 aria-current={active ? "page" : undefined}
                 className={`sidebar-link ${active ? "sidebar-link--active" : ""}`}
@@ -127,7 +127,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </header>
         <main id="conteudo" tabIndex={-1} className="app-content">{children ?? <Outlet />}</main>
       </div>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} areaIds={areaIds} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} areaIds={areaIds} assignedLevel={user?.assigned_level} />
       <AssistantDock />
     </div>
   );

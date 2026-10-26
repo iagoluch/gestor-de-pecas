@@ -144,6 +144,12 @@ QUALITY_TEMPLATE_MANAGEMENT_LEVELS = ("admin", "qualidade")
 #: 16/10/2026). O gestor comum não vê o menu nem as rotas.
 DIRECTOR_LEVELS = ("admin", "diretoria")
 
+#: Sugestões de manutenção (migration 68, 26/10/2026): o nível ``manutencao`` é
+#: personalizado (``niveis_acesso``, molde ``lider``), então o nível EFETIVO da
+#: sessão é ``lider`` e só o nível ATRIBUÍDO à conta o distingue de um líder.
+#: Por isso ele não entra em ``USER_LEVELS``: a trava lê o nível atribuído.
+MAINTENANCE_ASSIGNED_LEVEL = "manutencao"
+
 
 def normalize_user_level(level):
     normalized = str(level or "").strip().lower()
@@ -177,6 +183,18 @@ def can_manage_quality_templates(level):
 
 def can_view_director_tab(level):
     return normalize_user_level(level) in DIRECTOR_LEVELS
+
+
+def can_manage_maintenance(level, assigned_level=None):
+    """Lê e decide as sugestões de manutenção: conta ``manutencao`` e admin.
+
+    ``level`` é o nível efetivo da sessão; ``assigned_level`` o gravado na conta.
+    """
+
+    return normalize_user_level(level) == "admin" or (
+        str(assigned_level or "").strip().lower() == MAINTENANCE_ASSIGNED_LEVEL
+        and can_access_management_web(level)
+    )
 
 
 def can_access_management_web(level):

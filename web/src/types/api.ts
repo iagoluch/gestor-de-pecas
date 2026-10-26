@@ -28,6 +28,8 @@ export interface SessionUser {
   areas?: SessionArea[];
   /** Áreas cuja fila de prioridades a conta pode ordenar (líder/supervisor do setor). */
   queue_areas?: string[];
+  /** Nível gravado na conta (o `role` é o efetivo): distingue o mantenedor (`manutencao`) de um líder. */
+  assigned_level?: string | null;
   /** Conta de gestão que entrou com a senha padrão: precisa definir outra antes de usar o sistema. */
   password_change_required?: boolean;
 }

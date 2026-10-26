@@ -1,0 +1,8 @@
+/* Manutenção: sugestões de paradas (aceitar/descartar). */
+.maintenance-tabs { margin-top: 16px; }
+.maintenance-note { margin: 12px 0 0; color: var(--muted); font-size: var(--text-sm); }
+.maintenance-feedback { margin: 12px 0 0; }
+.maintenance-decision { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 280px; }
+.maintenance-decision__note { flex: 1 1 160px; min-width: 120px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-size: var(--text-base); }
+.maintenance-decision__note:focus-visible { border-color: var(--primary); outline: none; box-shadow: var(--focus-ring); }
+.maintenance-decided { display: grid; justify-items: start; gap: 4px; }

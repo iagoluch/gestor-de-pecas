@@ -49,6 +49,7 @@ from backend.api.routers import (
     director,
     explanation,
     highlight,
+    maintenance,
     management,
     operations,
     operator,
@@ -1016,6 +1017,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.include_router(highlight.router, prefix=prefix)
     application.include_router(andon.router, prefix=prefix)
     application.include_router(management.router, prefix=prefix)
+    application.include_router(maintenance.router, prefix=prefix)
     application.include_router(explanation.router, prefix=prefix)
     application.include_router(operations.router, prefix=prefix)
     application.include_router(orders.router, prefix=prefix)

@@ -47,7 +47,7 @@ export function AndonSidebarNav() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [tabsHidden, setTabsHidden] = useState(readStoredHidden);
-  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role, user?.areas?.map((area) => area.id)));
+  const sections = managementSections.filter((section) => sectionVisibleFor(section, user?.role, user?.areas?.map((area) => area.id), user?.assigned_level));
   const panelsSection = sectionById("panels");
 
   function toggleTabs() {
@@ -117,7 +117,7 @@ export function AndonSidebarNav() {
             return (
               <Link
                 key={item.id}
-                to={sectionPathFor(item, user?.role, user?.areas?.map((area) => area.id))}
+                to={sectionPathFor(item, user?.role, user?.areas?.map((area) => area.id), user?.assigned_level)}
                 onClick={() => setOpen(false)}
                 aria-current={active ? "page" : undefined}
                 className={`sidebar-link ${active ? "sidebar-link--active" : ""}`}

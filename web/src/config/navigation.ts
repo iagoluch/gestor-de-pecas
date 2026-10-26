@@ -7,6 +7,7 @@ export type ManagementSectionId =
   | "production"
   | "manufacturing"
   | "quality"
+  | "maintenance"
   | "diretoria"
   | "analytics"
   | "melhoria"
@@ -29,6 +30,12 @@ export interface ManagementTab {
    * da gestão. A autorização de verdade continua no backend.
    */
   levels?: readonly string[];
+  /**
+   * Níveis NÃO distinguíveis pelo nível efetivo da sessão (ex.: `manutencao`,
+   * personalizado com molde `lider`): valem contra `user.assigned_level`, além
+   * de `levels`. A autorização de verdade continua no backend.
+   */
+  assignedLevels?: readonly string[];
 }
 
 /** Níveis do tempo padrão: espelha `STANDARD_TIME_LEVELS` do backend. */
@@ -36,6 +43,21 @@ export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
 
 /** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
 export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
+
+/** Sugestões de manutenção: admin pelo nível efetivo; mantenedor pelo nível atribuído à conta (`assigned_level`). */
+export const MAINTENANCE_LEVELS = ["admin"] as const;
+export const MAINTENANCE_ASSIGNED_LEVELS = ["manutencao"] as const;
+
+/** Passa na trava de nível (`levels`) ou, quando declarado, no nível atribuído (`assignedLevels`)? */
+function levelAllowed(
+  item: { levels?: readonly string[]; assignedLevels?: readonly string[] },
+  role: string | null | undefined,
+  assignedLevel: string | null | undefined,
+) {
+  if (!item.levels) return true;
+  if (role && item.levels.includes(role)) return true;
+  return Boolean(assignedLevel && item.assignedLevels?.includes(assignedLevel));
+}
 
 /** Níveis da aba Diretoria: espelha `DIRECTOR_LEVELS` do backend. */
 export const DIRECTOR_LEVELS = ["admin", "diretoria"] as const;
@@ -48,9 +70,10 @@ export function tabVisibleFor(
   tab: ManagementTab,
   role: string | null | undefined,
   areaIds?: readonly string[],
+  assignedLevel?: string | null,
 ) {
   if (tab.adminOnly && role !== "admin") return false;
-  if (tab.levels && !(role && tab.levels.includes(role))) return false;
+  if (!levelAllowed(tab, role, assignedLevel)) return false;
   if (tab.area && !areaIds?.includes(tab.area)) return false;
   return true;
 }
@@ -65,6 +88,8 @@ export interface ManagementSection {
   adminOnly?: boolean;
   /** Níveis (`usuarios.nivel`) que veem a seção. Omitido, vale a regra comum da gestão. */
   levels?: readonly string[];
+  /** Ver `ManagementTab.assignedLevels`. */
+  assignedLevels?: readonly string[];
 }
 
 /** A seção aparece no menu para este nível? Seção de áreas some se a conta não tem nenhuma. */
@@ -72,10 +97,11 @@ export function sectionVisibleFor(
   section: ManagementSection,
   role: string | null | undefined,
   areaIds?: readonly string[],
+  assignedLevel?: string | null,
 ) {
   if (section.adminOnly && role !== "admin") return false;
-  if (section.levels && !(role && section.levels.includes(role))) return false;
-  if (section.tabs.some((tab) => tab.area) && !section.tabs.some((tab) => tabVisibleFor(tab, role, areaIds))) return false;
+  if (!levelAllowed(section, role, assignedLevel)) return false;
+  if (section.tabs.some((tab) => tab.area) && !section.tabs.some((tab) => tabVisibleFor(tab, role, areaIds, assignedLevel))) return false;
   return true;
 }
 
@@ -84,9 +110,10 @@ export function sectionPathFor(
   section: ManagementSection,
   role: string | null | undefined,
   areaIds?: readonly string[],
+  assignedLevel?: string | null,
 ) {
   if (!section.tabs.some((tab) => tab.area)) return section.defaultPath;
-  return section.tabs.find((tab) => tabVisibleFor(tab, role, areaIds))?.path ?? section.defaultPath;
+  return section.tabs.find((tab) => tabVisibleFor(tab, role, areaIds, assignedLevel))?.path ?? section.defaultPath;
 }
 
 /**
@@ -192,6 +219,20 @@ export const managementSections: ManagementSection[] = [
       { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
       // SPC somente leitura: a API (`GET /quality/spc`) usa a mesma guarda das cotas padrão.
       { label: "SPC", path: "/qualidade/spc", screen: "quality-spc", levels: QUALITY_TEMPLATE_LEVELS },
+    ],
+  },
+  {
+    id: "maintenance",
+    label: "Manutenção",
+    icon: assets.navigation.manufacturing,
+    defaultPath: "/manutencao/sugestoes",
+    // Sugestões de paradas de manutenção (26/10/2026): só o mantenedor
+    // (nível atribuído `manutencao`) e o admin. O gestor comum não vê a seção
+    // nem a rota; a API (`/maintenance/*`) recusa os demais.
+    levels: MAINTENANCE_LEVELS,
+    assignedLevels: MAINTENANCE_ASSIGNED_LEVELS,
+    tabs: [
+      { label: "Sugestões", path: "/manutencao/sugestoes", screen: "maintenance-suggestions", levels: MAINTENANCE_LEVELS, assignedLevels: MAINTENANCE_ASSIGNED_LEVELS },
     ],
   },
   {

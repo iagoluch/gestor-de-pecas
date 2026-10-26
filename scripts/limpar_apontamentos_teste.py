@@ -40,6 +40,9 @@ BASE_FACT_TABLES = frozenset({
     "qualidade_primeira_peca",
     "qualidade_inspecoes",
     "alertas_internos",
+    # Sugestão de manutenção deriva das paradas apagadas aqui (sem FK); sem isso
+    # sobraria sugestão de parada que não existe mais.
+    "manutencao_sugestoes",
 })
 # Exclusivamente tabelas dependentes de fatos, para não deixar vínculos soltos.
 # Qualquer FK nova fora desta lista bloqueia a limpeza, em vez de expandi-la.

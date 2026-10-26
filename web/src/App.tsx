@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { EmptyState, LoadingState } from "./components/DataState";
-import { DIRECTOR_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
+import { DIRECTOR_LEVELS, MAINTENANCE_ASSIGNED_LEVELS, MAINTENANCE_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -34,6 +34,7 @@ import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
 import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
+import { MaintenanceSuggestionsPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
 import { QualitySpcPage } from "./pages/production/QualitySpcPage";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
@@ -118,6 +119,26 @@ function RequireQualityTemplateAccess({ children, detail = "Esta tela é exclusi
 }
 
 /**
+ * Sugestões de manutenção: só o mantenedor e o admin. O mantenedor tem nível
+ * efetivo `lider`; quem o distingue é o nível atribuído à conta (`assigned_level`).
+ * Os demais não veem o item de menu e, pela URL direta, a página nem monta nem
+ * chama a API.
+ */
+function RequireMaintenanceAccess({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  const allowed = Boolean(user && ((MAINTENANCE_LEVELS as readonly string[]).includes(user.role)
+    || (user.assigned_level && (MAINTENANCE_ASSIGNED_LEVELS as readonly string[]).includes(user.assigned_level))));
+  if (allowed) return children;
+  return (
+    <div className="page-wrap">
+      <section className="page-panel">
+        <EmptyState title="Acesso restrito à Manutenção" detail="Esta tela é exclusiva da Manutenção e da administração. Peça a elas se precisar consultar as sugestões de manutenção." />
+      </section>
+    </div>
+  );
+}
+
+/**
  * Aba Diretoria: só a diretoria e o admin. Quem não é desses níveis volta para a
  * tela inicial da gestão (o menu já esconde o item); a API recusa de qualquer forma.
  */
@@ -170,6 +191,7 @@ export default function App() {
         <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
         <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
         <Route path="qualidade/spc" element={<RequireQualityTemplateAccess detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar consultar o SPC."><QualitySpcPage /></RequireQualityTemplateAccess>} />
+        <Route path="manutencao/sugestoes" element={<RequireMaintenanceAccess><MaintenanceSuggestionsPage /></RequireMaintenanceAccess>} />
 
         <Route path="diretoria" element={<RequireDiretoriaAccess><DirectorPage /></RequireDiretoriaAccess>} />
 

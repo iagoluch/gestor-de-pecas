@@ -94,6 +94,8 @@ TRUNCATE_TABLES = (
     "eventos_sistema",
     "historico",
     "inconsistencias_dados",
+    # Derivada das paradas (eventos_estado_recurso) que este reset apaga; sem FK.
+    "manutencao_sugestoes",
     "op_por_tarefa",
     "operadores_evento_apontamento",
     "participacoes_operador",
