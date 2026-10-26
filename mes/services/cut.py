@@ -683,7 +683,9 @@ class CutService:
         Nada é adivinhado: linhas sem programa (projetadas antes desta wave)
         só são atribuídas quando a tarefa tem um único plano — caso em que a
         atribuição é a própria definição de tarefa. Com vários planos elas
-        ficam explicitamente fora, em ``ops_sem_plano``.
+        ficam explicitamente fora, em ``ops_sem_plano``. Linhas com programa
+        fora de ``programs`` pertencem a outro plano (ex.: filtrado pelo status
+        do histórico) e não entram em lugar nenhum.
         """
 
         catalogo = self._catalog_ops(task_code)
@@ -691,11 +693,11 @@ class CutService:
         por_plano = {programa: [] for programa in programs}
         sem_plano = []
         for row in catalogo:
-            programa = indice.get(str(row.get("programa") or "").strip().casefold())
-            if programa is None:
+            chave = str(row.get("programa") or "").strip().casefold()
+            if not chave:
                 sem_plano.append(row)
-            else:
-                por_plano[programa].append(row)
+            elif chave in indice:
+                por_plano[indice[chave]].append(row)
         if sem_plano and len(programs) == 1:
             por_plano[programs[0]].extend(sem_plano)
             sem_plano = []

@@ -452,6 +452,35 @@ class OpsLegadasSemProgramaTests(unittest.TestCase):
         # O contrato plano de OPs da tarefa continua completo.
         self.assertEqual(tarefa["ops_relacionadas"], ["1079689C001"])
 
+    def test_historico_de_um_plano_nao_herda_ops_de_outro_plano(self):
+        self.db.pcp_ops.append(_op_pcp("1079690C001", "PNT002", "PRODUTO B"))
+        self.db.cut_plans.extend([
+            _plano("h-001-1", "001", 1, 1),
+            _plano("h-002-1", "002", 2, 1),
+        ])
+        self.db.sigmanest_ops.extend([
+            _linha_op("001", "1079689C001", "PECA-A"),
+            _linha_op("002", "1079690C001", "PECA-B"),
+        ])
+        iniciado = self.db.iniciar_apontamento_corte(
+            "h-001-1", LASER, "Cortador", "2026-01-01",
+            data_inicio=datetime(2026, 9, 3, 8, 0),
+        )
+        self.db.finalizar_apontamento_corte(
+            iniciado["id"], "Cortador", data_fim=datetime(2026, 9, 3, 9, 0)
+        )
+
+        # Só o plano 001 tem chapa Finalizada: o filtro do histórico deixa o
+        # 002 de fora, e a OP dele não pode ser grudada no 001.
+        tarefa = self.corte.listar_consulta(maquina=LASER, status="Finalizado")[0]
+
+        self.assertEqual([plano["programa"] for plano in tarefa["planos"]], ["001"])
+        self.assertEqual(
+            [op["codigo_op"] for op in tarefa["planos"][0]["ops"]], ["1079689C001"]
+        )
+        self.assertEqual(tarefa["ops_sem_plano"], [])
+        self.assertEqual(tarefa["ops_relacionadas"], ["1079689C001"])
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
