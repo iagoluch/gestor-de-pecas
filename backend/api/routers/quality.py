@@ -25,11 +25,16 @@ from app.core.permissions import (
     quality_sector_for_user_level,
 )
 from backend.api.database import get_database
-from backend.api.dependencies.auth import require_csrf, get_current_user
+from backend.api.dependencies.auth import (
+    require_csrf,
+    require_qualidade_user,
+    get_current_user,
+)
 from backend.api.dependencies.clock import request_now_func
 from backend.api.dependencies.filters import request_now, validated_business_datetime
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
+from backend.api.schemas.quality_spc import SpcResponse
 from backend.api.schemas.quality import (
     QualityDrawingRequest,
     QualityFinishRequest,
@@ -43,6 +48,7 @@ from mes.services.quality import (
     desenho_publico,
     template_publico,
 )
+from mes.services.quality_spc import LIMITE_PADRAO_LINHAS, analisar_medicoes
 
 
 router = APIRouter(prefix="/quality", tags=["Qualidade"])
@@ -300,6 +306,41 @@ def history(
         "page_size": page_size,
         "has_more": len(rows) > page_size,
     }
+
+
+@router.get("/spc", response_model=SpcResponse)
+def spc(
+    request: Request,
+    product: str | None = Query(default=None, max_length=60),
+    cota: int | None = Query(default=None, ge=1, le=200),
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    _user: SessionUser = Depends(require_qualidade_user),
+    database=Depends(get_database),
+):
+    """Cartas de controle e Cpk das cotas já medidas. SOMENTE LEITURA.
+
+    Mesma guarda da listagem gerencial de cotas padrão (``qualidade`` e admin).
+    O Cpk é "dentro da OP/lote" — nunca capacidade da máquina — e amostra
+    curta (< 20 medidas ou < 5 subgrupos) não recebe limites nem Cpk.
+    """
+
+    current = request_now(request)
+    linhas = database.listar_medidas_spc(
+        produto=product,
+        sequencia=cota,
+        inicio=validated_business_datetime(start, current),
+        fim=validated_business_datetime(end, current),
+        limite=LIMITE_PADRAO_LINHAS,
+    )
+    truncado = len(linhas) > LIMITE_PADRAO_LINHAS
+    # O repositório devolve as mais recentes primeiro; o corte descarta as mais antigas
+    # e a inspeção cortada ao meio (a mais antiga mantida) sai inteira.
+    linhas = linhas[:LIMITE_PADRAO_LINHAS]
+    if truncado:
+        parcial = linhas[-1]["inspecao_id"]
+        linhas = [linha for linha in linhas if linha["inspecao_id"] != parcial]
+    return {**analisar_medicoes(linhas), "truncado": truncado}
 
 
 @router.get("/history/pieces/{peca_id}")

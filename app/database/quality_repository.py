@@ -1048,6 +1048,60 @@ class QualityRepositoryMixin:
             )
             return _rows(cursor)
 
+    def listar_medidas_spc(
+        self,
+        *,
+        produto=None,
+        sequencia=None,
+        inicio=None,
+        fim=None,
+        limite=20_000,
+    ):
+        """Medidas gravadas por cota, para o SPC. SOMENTE LEITURA.
+
+        Devolve as ``limite`` medidas mais recentes (ordem decrescente de
+        registro); o chamador reordena. Pede ``limite + 1`` linhas ao banco
+        para que o chamador saiba se houve corte. Interpretar texto da medida e
+        do padrão é trabalho do domínio (``mes.services.quality_spc``).
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    s.produto_codigo,
+                    s.codigo_op,
+                    s.id AS inspecao_id,
+                    s.template_revisao,
+                    p.id AS peca_id,
+                    p.numero_peca,
+                    p.registrada_em,
+                    r.sequencia,
+                    r.descricao_snapshot,
+                    r.padrao_snapshot,
+                    r.medida
+                FROM qualidade_resultados_cota r
+                JOIN qualidade_pecas_inspecionadas p ON p.id = r.peca_id
+                JOIN qualidade_inspecoes s ON s.id = p.inspecao_id
+                WHERE (%(produto)s::TEXT IS NULL
+                       OR UPPER(s.produto_codigo) = UPPER(%(produto)s::TEXT))
+                  AND (%(sequencia)s::INTEGER IS NULL OR r.sequencia = %(sequencia)s::INTEGER)
+                  AND (%(inicio)s::TIMESTAMP IS NULL
+                       OR p.registrada_em >= %(inicio)s::TIMESTAMP)
+                  AND (%(fim)s::TIMESTAMP IS NULL OR p.registrada_em <= %(fim)s::TIMESTAMP)
+                ORDER BY p.registrada_em DESC, p.id DESC, r.sequencia
+                LIMIT %(limite)s
+                """,
+                {
+                    "produto": str(produto or "").strip() or None,
+                    "sequencia": int(sequencia) if sequencia is not None else None,
+                    "inicio": inicio,
+                    "fim": fim,
+                    "limite": int(limite) + 1,
+                },
+            )
+            return _rows(cursor)
+
     # ------------------------------------------------------------------
     # Desenho/PDF do produto
     # ------------------------------------------------------------------
