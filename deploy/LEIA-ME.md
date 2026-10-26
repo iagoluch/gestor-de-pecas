@@ -2,8 +2,8 @@
 
 Roteiro do fluxo inteiro:
 
-1. instalação do zero (Windows Server + PostgreSQL 17 nativo + nginx + NSSM), §1–5. O caminho curto é o `instalar.ps1` (§4), que faz tudo, inclusive o runner e o backup diário;
-2. runner do GitHub Actions, §6;
+1. instalação do zero (Windows Server + PostgreSQL 17 nativo + nginx + NSSM), §1–5. O caminho curto é o `instalar.ps1` (§4), que faz tudo, inclusive o backup diário;
+2. runner do GitHub Actions, §6 (não usado: o deploy é o botão `Publicar na VM.bat` do notebook);
 3. deploys seguintes por tag `v*` (`.github/workflows/deploy.yml`), §7;
 4. o que ainda depende de informação externa, §8.
 
@@ -39,13 +39,11 @@ Pare o servidor logo depois do download.
 
 ## 2. Antes de instalar: o que é compartilhado com o notebook
 
-O `.env` vem do notebook, então a VM usa os **mesmos** Telegram, TOTVS e SigmaNEST:
+O `.env` vem do notebook, então a VM usa o **mesmo** SigmaNEST e o **mesmo** bot do Telegram. O Protheus **não** vem do notebook (lá é o de teste):
 
-- **Telegram:** o instalador grava `TELEGRAM_ENABLED`, `GESTOR_TELEGRAM_BOT_POLLING_ENABLED` e `GESTOR_TELEGRAM_DIGEST_ENABLED` como `false`. O mesmo bot em dois lugares briga pelo polling e duplica o digest nos chats reais. Para testar o bot na VM:
-  1. pare o app do notebook;
-  2. troque as três chaves para `true` em `C:\gestor-pecas\.env`;
-  3. rode `Restart-Service gestor-pecas`.
-- **SOAP de entrada do TOTVS:** continua apontado para o túnel do notebook. Na VM, o receptor fica indisponível até existir `GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS` com o IP do Protheus. O pull de OP sob demanda funciona.
+- **Telegram:** o instalador grava as três chaves (`TELEGRAM_ENABLED`, `GESTOR_TELEGRAM_BOT_POLLING_ENABLED`, `GESTOR_TELEGRAM_DIGEST_ENABLED`) como `true`. O mesmo bot em dois lugares briga pelo polling e duplica o digest nos chats reais. **Antes de instalar, ponha as três em `false` no app do notebook e reinicie-o.**
+- **Protheus REAL:** o pacote não leva o endereço nem as credenciais do teste. Quem monta o pacote preenche `deploy/.env.totvs-real` (modelo: `deploy/totvs-real.env.example`) e o `montar_pacote.py` o inclui. Sem esse arquivo, a VM nasce sem Protheus e o checklist final mostra `[PENDENTE]`. Dá para completar depois no `C:\gestor-pecas\.env`.
+- **SOAP de entrada do TOTVS:** na VM, o receptor fica indisponível até existir `GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS` com o IP do Protheus.
 - **Outbox para o TOTVS:** segue o `.env`; hoje está desligada.
 
 ## 3. Preparar a VM
@@ -79,7 +77,7 @@ O `.env` vem do notebook, então a VM usa os **mesmos** Telegram, TOTVS e SigmaN
 
 ### Caminho único: `instalar.ps1`
 
-Extraia o zip em `C:\instalacao`, gere o token do runner (§6, passo 1) e, num PowerShell **como Administrador**:
+Extraia o zip em `C:\instalacao` e, num PowerShell **como Administrador**:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\instalacao\gestor-pecas-deploy\app\deploy\instalar.ps1
@@ -87,20 +85,19 @@ powershell -ExecutionPolicy Bypass -File C:\instalacao\gestor-pecas-deploy\app\d
 
 As perguntas vêm todas no início; depois o script roda sozinho, e o PostgreSQL leva uns 20 min. Só é perguntado o que ainda falta:
 
-- **token do runner**, sem ecoar. Com Enter, o runner fica para depois;
 - **pasta externa do backup**, por exemplo `\\servidor\backups\gestor-pecas`. Com Enter, o backup fica só local. A tarefa roda como SYSTEM, que entra na rede como a conta do computador (`DOMINIO\VM$`), então o compartilhamento precisa dar escrita a ela.
 
 Em sequência, o script:
 
 1. confere se é Administrador, se o pacote está completo e se há 15 GB livres. Se o fuso não for o de Brasília, ajusta;
-2. roda `instalar_prerequisitos.ps1`, `instalar_vm.ps1` e `instalar_runner.ps1`, que são as §3, §4 e §6 abaixo. Não precisa abrir outro PowerShell: o PATH novo é relido entre eles;
+2. roda `instalar_prerequisitos.ps1` e `instalar_vm.ps1`, que são as §3 e §4 abaixo. Não precisa abrir outro PowerShell: o PATH novo é relido entre eles;
 3. agenda o **backup diário** "Gestor de Pecas - backup diario", às 02:00, como SYSTEM:
    - `pg_dump` em `C:\gestor-pecas\backups\diario-*.dump`, com cópia na pasta externa;
    - retenção de 14 dias dos dois lados. Os `pre-deploy-*.dump` do pipeline não entram nessa retenção;
-   - o script da tarefa fica em `C:\gestor-backup`, fora de `C:\gestor-pecas`, porque o runner escreve lá. O log fica em `C:\gestor-backup\backup.log`;
+   - o script da tarefa fica em `C:\gestor-backup`, fora de `C:\gestor-pecas`. O log fica em `C:\gestor-backup\backup.log`;
    - o script roda o primeiro backup na hora e para se ele falhar;
-4. move o `postgres-senha.txt` para `C:\gestor-backup` (só Administradores) e **apaga o pacote**, com o dump do REAL e a chave TLS, e a pasta `C:\instalacao`. Isso só acontece se o runner estiver registrado; para manter o pacote, use `-ManterPacote`;
-5. imprime um checklist `[OK]`/`[PENDENTE]`: serviços, `/ready` pelo HTTPS, runner, último backup, cópia externa, pacote apagado, senha do `postgres` ainda no disco, e as pendências externas da §8.
+4. move o `postgres-senha.txt` para `C:\gestor-backup` (só Administradores) e **apaga o pacote**, com o dump do REAL e a chave TLS, e a pasta `C:\instalacao`. Para manter o pacote, use `-ManterPacote`;
+5. imprime um checklist `[OK]`/`[PENDENTE]`: serviços, `/ready` pelo HTTPS, Protheus REAL, WinRM, último backup, cópia externa, pacote apagado, senha do `postgres` ainda no disco, e as pendências externas da §8.
 
 Reexecutar é seguro: o que já existe é mantido e nada é perguntado de novo. Parâmetros: `-HoraBackup`, `-RetencaoDias`, `-ManterPacote`.
 
@@ -138,9 +135,9 @@ Pode rodar de novo sem risco:
 - para restaurar um dump mais novo, rode `DROP DATABASE gestor_pecas` como `postgres` e execute de novo. A senha do `.env` é reaproveitada;
 - na reexecução, o nssm imprime `Invalid account name!` antes de cada `Set parameter`: ele não reconhece conta virtual, mas grava o parâmetro. É só aviso.
 
-Regra para quem administra a VM: **nada de `C:\gestor-pecas` roda como Administrador**. O runner (§6) escreve lá, então um script, `pip` ou `.venv` dessa pasta pode ter sido trocado. Por isso o instalador lê o lock e o `nginx.conf` do pacote e recria a `.venv`.
+Regra para quem administra a VM: **nada de `C:\gestor-pecas` roda como Administrador**. Um script, `pip` ou `.venv` dessa pasta pode ter sido trocado. Por isso o instalador lê o lock e o `nginx.conf` do pacote e recria a `.venv`.
 
-Depois do sucesso e do runner (§6), **apague `C:\instalacao`**: o dump do REAL e a chave do certificado ficam lá sem restrição de acesso. Antes, guarde num cofre a senha do `postgres` (`postgres-senha.txt`, se veio do script): ela é necessária para `DROP DATABASE` e manutenção.
+Depois do sucesso, **apague `C:\instalacao`**: o dump do REAL e a chave do certificado ficam lá sem restrição de acesso. Antes, guarde num cofre a senha do `postgres` (`postgres-senha.txt`, se veio do script): ela é necessária para `DROP DATABASE` e manutenção.
 
 ## 5. Acessar
 
@@ -157,7 +154,9 @@ Diagnóstico:
 - log do nginx: `C:\nginx\logs\error.log`;
 - estado dos serviços: `Get-Service gestor-pecas, nginx`.
 
-## 6. Runner do GitHub Actions (uma vez, depois da §4)
+## 6. Runner do GitHub Actions (NÃO USADO)
+
+> Decisão de 23/10/2026: o deploy é **manual**. O instalador não instala mais o runner; as atualizações saem do notebook por `deploy\Publicar na VM.bat` (`publicar_na_vm.ps1`), que exige WinRM na VM (GUIA_TI.md, item 10). Esta seção fica só como referência do caminho automático por tag.
 
 O deploy roda num runner self-hosted instalado na própria VM. Ele busca o job no GitHub de dentro para fora, então a VM não precisa de porta de entrada.
 
@@ -240,4 +239,4 @@ Diagnóstico de um deploy:
 - **`GESTOR_OPERATOR_DRAWING_ROOTS`:** falta o caminho de rede real dos desenhos. A conta virtual do app acessa a rede como a conta de computador da VM (`DOMINIO\VM$`):
   - se o compartilhamento aceitar essa conta, basta dar leitura a ela;
   - se exigir um usuário, troque a conta do serviço por uma conta de domínio dedicada: `nssm set gestor-pecas ObjectName DOMINIO\conta senha`, com as mesmas permissões do §4.
-- **Telegram:** nasce desligado (§2). Ligue só depois de desligar o bot do notebook.
+- **Telegram:** nasce ligado (§2). O app do notebook precisa estar com Telegram desligado.

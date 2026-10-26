@@ -32,9 +32,17 @@ CHAVES_FORA_DO_SERVIDOR = {
     "GESTOR_DEV_OBSERVATORY_ENABLED", "GESTOR_DEVOBS_REAL_DATABASE_URL",
     "GESTOR_DEVOBS_LOGIN_USERNAME", "GESTOR_DEVOBS_LOGIN_PASSWORD",
     "GESTOR_OPERATOR_DRAWING_ROOTS",
-    # Mesmo bot do notebook: ligar só depois de parar o notebook (LEIA-ME §2).
+    # Telegram: o instalar_vm.ps1 liga na VM (mesmo bot do notebook: o do notebook precisa ficar parado).
     "TELEGRAM_ENABLED", "GESTOR_TELEGRAM_BOT_POLLING_ENABLED", "GESTOR_TELEGRAM_DIGEST_ENABLED",
+    # Conexão com o Protheus: o .env do notebook aponta para o TESTE. O REAL vem de TOTVS_REAL.
+    "GESTOR_TOTVS_OUTBOUND_ENDPOINT", "GESTOR_TOTVS_OUTBOUND_EXPECTED_HOST",
+    "GESTOR_TOTVS_OUTBOUND_USERNAME", "GESTOR_TOTVS_OUTBOUND_PASSWORD",
+    "GESTOR_TOTVS_OP_PULL_ENDPOINT", "GESTOR_TOTVS_OP_PULL_USERNAME", "GESTOR_TOTVS_OP_PULL_PASSWORD",
+    "GESTOR_TOTVS_OP_PULL_COMPANY_ID", "GESTOR_TOTVS_OP_PULL_BRANCH_ID",
+    "GESTOR_TOTVS_MODEL_PULL_ENDPOINT",
 }
+# Preenchido pela TI/PCP a partir de deploy/totvs-real.env.example; ignorado pelo git (.env.*).
+TOTVS_REAL = RAIZ / "deploy" / ".env.totvs-real"
 
 
 def rodar(*cmd, **kw):
@@ -44,6 +52,8 @@ def rodar(*cmd, **kw):
 def env_base(texto: str) -> str:
     linhas = []
     for linha in texto.splitlines():
+        if linha.lstrip().startswith("#") and "TESTE" in linha.upper():
+            continue  # comentário descrevendo o ambiente de teste não vai para o REAL
         ativa = "=" in linha and not linha.lstrip().startswith("#")
         chave = linha.split("=", 1)[0].strip()
         if ativa and (chave in CHAVES_FORA_DO_SERVIDOR or chave.startswith("GESTOR_SIMULATION_")):
@@ -76,6 +86,19 @@ def main() -> None:
               "-U", "gestor_app", "gestor_pecas", stdout=destino)
     rodar(shutil.which("npm"), "run", "build", cwd=RAIZ / "web")
     certs = certificado()
+    if TOTVS_REAL.exists():
+        totvs = TOTVS_REAL.read_text(encoding="utf-8")
+        if "TROCAR" in totvs:
+            sys.exit(f"{TOTVS_REAL.name} ainda tem valores 'TROCAR'. Preencha o Protheus REAL.")
+    else:
+        totvs = ""
+
+    if not totvs:
+        sys.exit("Sem deploy/.env.totvs-real: o pacote é 100% REAL, então precisa do Protheus real.")
+    base = env_base((RAIZ / ".env").read_text(encoding="utf-8")) + "\n# --- Protheus REAL ---\n" + totvs
+    for marca in ("gtsdo143182", "CSED4J_DEV"):
+        if marca.lower() in base.lower():
+            sys.exit(f"O .env do pacote ainda aponta para o TESTE ({marca}). Pacote não montado.")
 
     PACOTE.unlink(missing_ok=True)
     rodar("git", "archive", "--format=zip", f"--prefix={PREFIXO}app/", "-o", str(PACOTE), "HEAD", cwd=RAIZ)
@@ -84,7 +107,7 @@ def main() -> None:
         for arquivo in sorted(p for p in dist.rglob("*") if p.is_file()):
             zf.write(arquivo, f"{PREFIXO}app/web/dist/{arquivo.relative_to(dist).as_posix()}")
         zf.write(dump, f"{PREFIXO}gestor_pecas.dump")
-        zf.writestr(f"{PREFIXO}gestor.env.base", env_base((RAIZ / ".env").read_text(encoding="utf-8")))
+        zf.writestr(f"{PREFIXO}gestor.env.base", base)
         for arquivo in certs.iterdir():
             zf.write(arquivo, f"{PREFIXO}certs/{arquivo.name}")
     dump.unlink()  # cópia solta do REAL no notebook: o zip é a única que fica

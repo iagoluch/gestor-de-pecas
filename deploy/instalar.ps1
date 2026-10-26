@@ -1,7 +1,8 @@
-# Instalacao completa da VM num comando so: confere o ambiente, faz no inicio as unicas
-# perguntas que faltam (token do runner e pasta externa do backup) e depois roda sem parar:
-# instalar_prerequisitos.ps1 -> instalar_vm.ps1 -> instalar_runner.ps1 -> backup diario
-# agendado -> apaga o pacote (dump do REAL e chave TLS) -> checklist final.
+# Instalacao completa da VM num comando so: confere o ambiente, faz no inicio a unica
+# pergunta que falta (pasta externa do backup) e depois roda sem parar:
+# instalar_prerequisitos.ps1 -> instalar_vm.ps1 -> backup diario agendado -> apaga o
+# pacote (dump do REAL e chave TLS) -> checklist final.
+# Atualizacoes depois da instalacao: deploy/publicar_na_vm.ps1, rodado no notebook (botao manual).
 #
 #   powershell -ExecutionPolicy Bypass -File C:\instalacao\gestor-pecas-deploy\app\deploy\instalar.ps1
 #
@@ -11,7 +12,6 @@ param(
     [string]$AppDir = "C:\gestor-pecas",
     [string]$BackupDir = "C:\gestor-backup",
     [string]$PgBin = "C:\Program Files\PostgreSQL\17\bin",
-    [string]$RunnerDir = "C:\actions-runner",
     [string]$HoraBackup = "02:00",
     [int]$RetencaoDias = 14,
     [switch]$ManterPacote
@@ -44,12 +44,6 @@ if ((Get-TimeZone).Id -ne "E. South America Standard Time") {
 
 # --- Perguntas (so o que falta) -----------------------------------------------
 Passo "Perguntas"
-$token = $null
-if (-not (Test-Path "$RunnerDir\.runner")) {
-    Write-Host "Token do runner: GitHub > Settings > Actions > Runners > New self-hosted runner (vale 1 h)."
-    $seguro = Read-Host "Token (Enter = instalar o runner depois)" -AsSecureString
-    $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($seguro))
-}
 New-Item -ItemType Directory -Force $BackupDir | Out-Null
 Restringir $BackupDir
 $externaArq = "$BackupDir\copia-externa.txt"
@@ -69,24 +63,15 @@ function Atualizar-Path {
     # O que os instaladores gravaram no PATH da maquina vale ja nesta sessao, sem abrir outro console.
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 }
-Passo "1/4 Pre-requisitos"
+Passo "1/3 Pre-requisitos"
 & "$PSScriptRoot\instalar_prerequisitos.ps1"
 Atualizar-Path
-Passo "2/4 Aplicacao, banco, nginx e servicos"
+Passo "2/3 Aplicacao, banco, nginx e servicos"
 & "$PSScriptRoot\instalar_vm.ps1" -AppDir $AppDir -PgBin $PgBin
 Atualizar-Path
-Passo "3/4 Runner do GitHub Actions"
-if (Test-Path "$RunnerDir\.runner") {
-    & "$PSScriptRoot\instalar_runner.ps1" -RunnerDir $RunnerDir -AppDir $AppDir  # reaplica as permissoes
-} elseif ($token) {
-    & "$PSScriptRoot\instalar_runner.ps1" -Token $token -RunnerDir $RunnerDir -AppDir $AppDir
-} else {
-    Write-Warning "Runner pulado (sem token)."
-}
-$token = $null
 
 # --- Backup diario ------------------------------------------------------------
-Passo "4/4 Backup diario as $HoraBackup (retencao $RetencaoDias dias)"
+Passo "3/3 Backup diario as $HoraBackup (retencao $RetencaoDias dias)"
 Copy-Item "$PSScriptRoot\backup_diario.ps1" "$BackupDir\backup_diario.ps1" -Force
 $acao = New-ScheduledTaskAction -Execute "powershell.exe" -Argument (
     "-NoProfile -ExecutionPolicy Bypass -File `"$BackupDir\backup_diario.ps1`" -AppDir `"$AppDir`" -PgBin `"$PgBin`" -RetencaoDias $RetencaoDias")
@@ -109,9 +94,8 @@ if (Test-Path $senhaArq) {
     # Fora do pacote antes de apaga-lo: DROP DATABASE e manutencao precisam dela.
     Move-Item $senhaArq "$BackupDir\postgres-senha.txt" -Force
 }
-$runnerOk = Test-Path "$RunnerDir\.runner"
-if ($ManterPacote -or -not $runnerOk) {
-    Write-Warning "Pacote mantido em $Pacote (dump do REAL e chave TLS). Apague-o depois do runner."
+if ($ManterPacote) {
+    Write-Warning "Pacote mantido em $Pacote (dump do REAL e chave TLS). Apague-o quando terminar."
 } else {
     Set-Location $env:SystemDrive\
     Remove-Item $Pacote -Recurse -Force
@@ -131,13 +115,14 @@ function Item([bool]$ok, [string]$texto) {
 }
 $https = & curl.exe -k -s -o NUL -w "%{http_code}" "https://localhost/api/v1/system/ready"
 $ultimo = Get-ChildItem "$AppDir\backups" -Filter "diario-*.dump" | Sort-Object LastWriteTime | Select-Object -Last 1
-$runner = Get-Service "actions.runner.*" -ErrorAction SilentlyContinue | Select-Object -First 1
 
 Write-Host "`n===================== CHECKLIST =====================" -ForegroundColor Cyan
 Item ((Get-Service gestor-pecas).Status -eq "Running") "Servico gestor-pecas rodando"
 Item ((Get-Service nginx).Status -eq "Running") "Servico nginx rodando"
+$envTexto = if (Test-Path "$AppDir\.env") { Get-Content "$AppDir\.env" -Raw } else { "" }
+Item (($envTexto -match "(?m)^GESTOR_TOTVS_OP_PULL_ENDPOINT=https?://") -and ($envTexto -notmatch "gtsdo143182")) "Protheus REAL configurado no .env (sem o host de teste)"
 Item ($https -eq "200") "https://localhost/api/v1/system/ready responde 200"
-Item ($runner -and $runner.Status -eq "Running") "Runner do GitHub Actions ativo (confira 'Idle' no GitHub)"
+Item ((Test-WSMan -ErrorAction SilentlyContinue) -ne $null) "Acesso remoto (WinRM) ativo para o botao de publicar do notebook"
 Item ([bool]$ultimo) "Backup diario agendado as $HoraBackup; ultimo: $(if ($ultimo) { $ultimo.Name })"
 Item (Test-Path $externaArq) "Copia externa do backup ($externaArq)"
 Item (-not (Test-Path $Pacote)) "Pacote de instalacao apagado"

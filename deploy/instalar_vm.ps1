@@ -172,10 +172,10 @@ GESTOR_WEB_PUBLIC_HOST=$PublicHost
 GESTOR_WEB_ALLOWED_HOSTS=$($hosts -join ",")
 GESTOR_WEB_ALLOWED_ORIGINS=$origens
 GESTOR_DEV_OBSERVATORY_ENABLED=false
-# Mesmo bot do notebook: ligar (true) só com o app do notebook parado (LEIA-ME §2).
-TELEGRAM_ENABLED=false
-GESTOR_TELEGRAM_BOT_POLLING_ENABLED=false
-GESTOR_TELEGRAM_DIGEST_ENABLED=false
+# Telegram ligado no REAL. Mesmo bot do notebook: o app do notebook precisa ficar com isto em false (LEIA-ME §2).
+TELEGRAM_ENABLED=true
+GESTOR_TELEGRAM_BOT_POLLING_ENABLED=true
+GESTOR_TELEGRAM_DIGEST_ENABLED=true
 # Pastas de rede com os desenhos das peças (separadas por ;). Vazio = posto sem desenho.
 GESTOR_OPERATOR_DRAWING_ROOTS=
 "@

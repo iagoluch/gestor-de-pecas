@@ -10,7 +10,9 @@ $env:GESTOR_WEB_SERVE_STATIC = "1"
 $ips = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like "10.*" }).IPAddress -join ","
 $nome = $env:COMPUTERNAME
 $env:GESTOR_WEB_ALLOWED_HOSTS = "127.0.0.1,localhost,$nome,$nome.gtsdobrasil.com.br,$ips"
-foreach ($v in "GESTOR_TOTVS_ENABLED","GESTOR_TOTVS_SOAP_ENABLED","GESTOR_TOTVS_OUTBOX_WORKER_ENABLED",
+# Consulta de OP no TOTVS (somente leitura) fica ligada; envio (outbox) e recebimento (SOAP) seguem desligados.
+$env:GESTOR_TOTVS_ENABLED = "true"
+foreach ($v in "GESTOR_TOTVS_SOAP_ENABLED","GESTOR_TOTVS_OUTBOX_WORKER_ENABLED",
                "GESTOR_SIGMANEST_SYNC_ENABLED","TELEGRAM_ENABLED","GESTOR_TELEGRAM_BOT_POLLING_ENABLED",
                "GESTOR_TELEGRAM_DIGEST_ENABLED","GESTOR_REPORT_AUTOMATION_ENABLED","GESTOR_DEV_OBSERVATORY_ENABLED") {
     Set-Item -Path "Env:$v" -Value "false"
