@@ -563,7 +563,7 @@ class AreaQueuePermissaoTests(_PostgresCase):
 
     def test_admin_ordena_a_fila_de_todas_as_areas(self):
         cliente, sessao = self._entrar("admin.teste")
-        self.assertEqual(len(sessao["queue_areas"]), 6)
+        self.assertEqual(len(sessao["queue_areas"]), 7)
         self.assertEqual(cliente.get("/api/v1/areas/solda/queue/resources").status_code, 200)
 
     def test_quem_nao_e_lider_nem_supervisor_so_enxerga_a_area(self):
