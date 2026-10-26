@@ -34,6 +34,7 @@ import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
 import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
+import { QualitySpcPage } from "./pages/production/QualitySpcPage";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
 import { DirectorPage } from "./pages/director/DirectorPage";
@@ -104,13 +105,13 @@ function RequireStandardTimeAccess({ children }: PropsWithChildren) {
  * Cotas padrão da Qualidade: só a conta qualidade e o admin. O gestor comum não
  * vê a aba e, pela URL direta, a página nem monta nem chama a API.
  */
-function RequireQualityTemplateAccess({ children }: PropsWithChildren) {
+function RequireQualityTemplateAccess({ children, detail = "Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar de alguma alteração nas cotas padrão." }: PropsWithChildren<{ detail?: string }>) {
   const { user } = useAuth();
   if (user && (QUALITY_TEMPLATE_LEVELS as readonly string[]).includes(user.role)) return children;
   return (
     <div className="page-wrap">
       <section className="page-panel">
-        <EmptyState title="Acesso restrito à Qualidade" detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar de alguma alteração nas cotas padrão." />
+        <EmptyState title="Acesso restrito à Qualidade" detail={detail} />
       </section>
     </div>
   );
@@ -168,6 +169,7 @@ export default function App() {
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
         <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
         <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
+        <Route path="qualidade/spc" element={<RequireQualityTemplateAccess detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar consultar o SPC."><QualitySpcPage /></RequireQualityTemplateAccess>} />
 
         <Route path="diretoria" element={<RequireDiretoriaAccess><DirectorPage /></RequireDiretoriaAccess>} />
 

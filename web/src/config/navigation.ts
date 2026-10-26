@@ -190,6 +190,8 @@ export const managementSections: ManagementSection[] = [
     levels: QUALITY_TEMPLATE_LEVELS,
     tabs: [
       { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
+      // SPC somente leitura: a API (`GET /quality/spc`) usa a mesma guarda das cotas padrão.
+      { label: "SPC", path: "/qualidade/spc", screen: "quality-spc", levels: QUALITY_TEMPLATE_LEVELS },
     ],
   },
   {

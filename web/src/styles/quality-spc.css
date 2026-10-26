@@ -1,0 +1,33 @@
+/* Qualidade: SPC (cartas de controle, somente leitura). */
+.spc-intro { margin: 16px 0 0; color: var(--muted); font-size: var(--text-sm); }
+.spc-filter--narrow { width: 90px; min-width: 0; }
+.spc-list { display: grid; gap: 16px; margin-top: 16px; }
+
+.spc-serie__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; margin: 0 0 12px; }
+.spc-serie__facts div { display: grid; gap: 2px; }
+.spc-serie__facts dt { color: var(--muted); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.spc-serie__facts dd { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; }
+.spc-serie__cpk { font-size: var(--text-xl); font-weight: 800; }
+.spc-serie__label { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--primary); border-radius: var(--radius-control); color: var(--text); background: var(--primary-soft); font-size: var(--text-sm); }
+.spc-serie__note { margin: 8px 0 0; color: var(--muted); font-size: var(--text-sm); }
+
+.spc-chart { margin: 12px 0 0; }
+.spc-chart figcaption { margin-bottom: 4px; color: var(--text); font-size: var(--text-sm); font-weight: 700; }
+.spc-chart svg { display: block; width: 100%; height: auto; max-height: 260px; border: 1px solid var(--divider); border-radius: var(--radius-card); background: var(--surface); }
+.spc-chart__grid { stroke: var(--divider); stroke-width: 1; }
+.spc-chart__axis { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.spc-chart__tag { fill: var(--muted); font-size: 10px; font-weight: 700; }
+.spc-chart__line { fill: none; stroke: var(--primary); stroke-width: 1.6; stroke-linejoin: round; }
+.spc-chart__limit { fill: none; stroke-width: 1.4; }
+.spc-chart__limit--control { stroke: var(--danger); stroke-dasharray: 5 3; }
+.spc-chart__limit--center { stroke: var(--success-ink); }
+.spc-chart__dot { fill: var(--primary); stroke: var(--surface); stroke-width: 1; }
+.spc-chart__dot--outside { fill: var(--danger); stroke: var(--danger-ink); stroke-width: 1.5; }
+.spc-chart__dot--run { fill: var(--warning); stroke: var(--warning-ink); stroke-width: 1.5; }
+
+.spc-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--text-sm); }
+.spc-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.spc-legend__mark { display: inline-block; width: 10px; height: 10px; }
+.spc-legend__mark--dot { border-radius: 50%; background: var(--primary); }
+.spc-legend__mark--outside { border: 1.5px solid var(--danger-ink); border-radius: 50%; background: var(--danger); }
+.spc-legend__mark--run { border: 1.5px solid var(--warning-ink); background: var(--warning); transform: rotate(45deg) scale(.85); }

@@ -94,8 +94,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(50);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(50);
+    expect(managementRoutes).toHaveLength(51);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(51);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
@@ -125,6 +125,8 @@ describe("contrato gerencial Web", () => {
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Turnos", path: "/inicio/turnos", sectionId: "dev" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Confiabilidade", path: "/analises/confiabilidade", sectionId: "analytics" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "IA", path: "/inicio/ia", sectionId: "home" }));
+    // SPC da Qualidade (26/10/2026): aba somente leitura, mesmos níveis das cotas padrão.
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "SPC", path: "/qualidade/spc", sectionId: "quality" }));
   });
 
   it("usa os ícones oficiais em busca e status textual nos badges", () => {

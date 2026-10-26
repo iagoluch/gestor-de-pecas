@@ -10,6 +10,7 @@ import "./styles/ai.css";
 import "./styles/andon.css";
 import "./styles/standard-time.css";
 import "./styles/quality-templates.css";
+import "./styles/quality-spc.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
