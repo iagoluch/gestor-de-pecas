@@ -2,7 +2,7 @@
 
 Uso::
 
-    python reiniciar_build.py
+    python scripts/reiniciar_build.py
 
 O comando falha antes de reiniciar o backend se o build do frontend não passar.
 Assim a porta 8001 nunca fica servindo uma versão parcialmente compilada.
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 
 

@@ -175,7 +175,7 @@ Varredura praticamente limpa nesta rodada:
 - raiz com apenas 13 arquivos legítimos;
 - nenhum artefato de 0 byte no código do projeto (os restantes são `py.typed`
   e `REQUESTED` dentro de `.venv/`, de terceiros);
-- `reiniciar_build.py` (novo na raiz desde a rodada anterior) verificado:
+- `scripts/reiniciar_build.py` (novo na raiz desde a rodada anterior) verificado:
   referência válida para `tools/reiniciar_servidor.py`.
 
 **Um único item movido para `_quarentena_revisar/`:**
