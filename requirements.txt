@@ -14,7 +14,7 @@ uvicorn[standard]>=0.54.0,<1
 httpx>=0.28.1,<1
 # SDK OpenAI-compatível (NVIDIA NIM, Groq, OpenRouter via base_url), usado
 # somente quando a IA gerencial está habilitada.
-openai>=3.28.0,<4
+openai>=3.37.0,<4
 # Driver ODBC usado somente para LER o banco SigmaNEST (planejamento de Corte).
 # O produto importa pyodbc sob demanda: sem ele o Gestor sobe normalmente e
 # apenas a sincronização do Corte fica indisponível.
