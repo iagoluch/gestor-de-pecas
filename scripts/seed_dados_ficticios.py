@@ -40,7 +40,7 @@ DEFAULT_SOURCE = Path(
         PROJECT_ROOT / "dados" / "Relatorio_de_Operacao_OF_com_OPs_Ficticias_CORRIGIDO.xlsx",
     )
 )
-DEFAULT_STATUS_SOURCE = PROJECT_ROOT / "data" / "pcfactory_status_recursos.csv"
+DEFAULT_STATUS_SOURCE = PROJECT_ROOT / "dados" / "pcfactory_status_recursos.csv"
 DEFAULT_RESOURCE_SOURCE = PROJECT_ROOT / "docs" / "pcfactory_recursos_sem_pessoas.csv"
 OP_PATTERN = re.compile(r"[A-Z]{6}\d{5}")
 SECTORS = ("Corte", "Dobra", "Usinagem", "Serra", "Solda", "Pintura")

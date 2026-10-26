@@ -834,7 +834,7 @@ Gate F4/F9 fica reduzido a apenas o CIDR do SOAP (item 8 abaixo).
 
 ### 2.36 F18 — GPOPSYNC não resolve, mas abre um caminho empírico (23/09/2026)
 
-`fontes/10-PCP/GPOPSYNC.prw` (canal de pull homologado, hoje o mecanismo
+`referencias/fontes/10-PCP/GPOPSYNC.prw` (canal de pull homologado, hoje o mecanismo
 principal de sincronização — ver nota abaixo) reaproveita a mesma cadeia
 oficial (`MATA650PPI → PCPa650PPI → MATI650`) que já alimenta o receptor
 SOAP passivo. Não monta `StatusOrderType` por conta própria, então puxar uma

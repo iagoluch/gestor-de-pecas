@@ -1636,7 +1636,7 @@ A investigação cirúrgica dos fontes 12.1.2510 achou o ponto de reaproveitamen
 EAI_MESSAGE_BUSINESS, "2.004")`**, que **devolve o ProductionOrder em memória**
 (`aRet[2]`). A montagem é portanto separável do transporte `PCPWebsPPI`, e o modo
 **inline** é possível — o fallback push não foi necessário. Foi entregue
-`fontes/10-PCP/GPOPSYNC.prw` (`WSRESTFUL gestorpecaspo`,
+`referencias/fontes/10-PCP/GPOPSYNC.prw` (`WSRESTFUL gestorpecaspo`,
 `POST /gestorpecas/v1/production-order`), um adaptador que valida a entrada,
 posiciona a SC2 na filial pedida (troca `cFilAnt` por requisição e restaura
 sempre — o mesmo idioma do padrão TOTVS em `mata650.prx`/`MATA010PPI.prw`), chama
@@ -1645,7 +1645,7 @@ reconstrói XML, não lê SC2/SG2/SHY para montar mensagem e não grava nada: o
 trecho `TRANS_SEND` do `MATI650` não tem `RecLock`/`MsUnLock`/`dbDelete`. Estado
 todo `Local`/`Private` da requisição, sem variável global mutável. Nenhum fonte
 padrão TOTVS foi alterado.
-Documentação e testes em `protheus/README.md`,
+Documentação e testes em `referencias/protheus/README.md`,
 `scripts/homologar_totvs_op_sob_demanda_etapa62.py` e nos testes de contrato de
 `tests/test_totvs_on_demand.py`. O transporte principal do Gestor não precisou
 de alteração; a Etapa 7B acrescentou somente o estado explícito `sem_roteiro`

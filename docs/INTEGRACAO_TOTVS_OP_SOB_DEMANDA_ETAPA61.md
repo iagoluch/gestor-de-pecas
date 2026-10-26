@@ -296,8 +296,8 @@ GESTOR_TOTVS_OP_PULL_PASSWORD=
 
 ## 3. Solução no Protheus — PUBLICADA E HOMOLOGADA (Etapa 6.2)
 
-**O fonte já existe:** `fontes/10-PCP/GPOPSYNC.prw`, com README, contrato,
-instruções de compilação e critérios de homologação em `protheus/README.md`.
+**O fonte já existe:** `referencias/fontes/10-PCP/GPOPSYNC.prw`, com README, contrato,
+instruções de compilação e critérios de homologação em `referencias/protheus/README.md`.
 
 [CONFIRMADO EM 03/09/2026] A correção foi recompilada e publicada no
 `CSED4J_DEV`. O serviço `GESTORPECASPO` abre corretamente SM0/SC2 no contexto da

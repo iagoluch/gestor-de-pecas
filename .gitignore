@@ -63,10 +63,7 @@ _quarentena_revisar/
 docs/evidencias/
 
 # Fontes/segredos do Protheus e dados reais de integração — nunca neste repo Python
-fontes/
-protheus/
-integracao_totvs_referencia/
-data/
+referencias/
 config/simulacao_*.json
 
 # OS/editor

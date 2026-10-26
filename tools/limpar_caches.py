@@ -35,9 +35,8 @@ PODAR = {
     "assets",
     "backups",
     "dados",
-    "data",
     "docs",
-    "integracao_totvs_referencia",
+    "referencias",
     "outputs",
 }
 

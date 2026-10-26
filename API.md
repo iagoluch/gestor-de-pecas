@@ -90,8 +90,8 @@ deixam de ser reconhecidos. O REST `/api/pcp/v1/productionOrders` só devolve
 cabeçalho. Não reabrir essa investigação sem fato novo. A busca sob demanda está
 implementada no Gestor e reutiliza o pipeline inbound canônico; ela liga quando
 `GESTOR_TOTVS_OP_PULL_ENDPOINT` aponta para o endpoint customizado de
-`fontes/10-PCP/GPOPSYNC.prw`, compilado/publicado e homologado no TESTE em
-03/09/2026 (contrato em `protheus/README.md`). Esse fonte reaproveita a montagem oficial
+`referencias/fontes/10-PCP/GPOPSYNC.prw`, compilado/publicado e homologado no TESTE em
+03/09/2026 (contrato em `referencias/protheus/README.md`). Esse fonte reaproveita a montagem oficial
 `MATI650("", TRANS_SEND, EAI_MESSAGE_BUSINESS, "2.004")` — a mesma que o
 `PCPa650PPI` usa — e por isso devolve o ProductionOrder canônico inline.
 **Não criar uma segunda implementação de importação de OP** e não montar
