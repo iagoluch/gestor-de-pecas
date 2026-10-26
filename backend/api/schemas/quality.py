@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -80,3 +82,12 @@ class QualityDrawingRequest(BaseModel):
     produto: str = Field(min_length=1, max_length=60)
     filename: str = Field(min_length=1, max_length=240)
     conteudo_base64: str = Field(min_length=1)
+
+
+class QualityRncDecisionRequest(BaseModel):
+    """Decisão sobre uma RNC existente. A lista fechada espelha ``DECISOES`` do serviço."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    decisao: Literal["usar_como_esta", "retrabalhar", "sucatear", "quarentena"]
+    justificativa: str = Field(min_length=3, max_length=500)

@@ -33,6 +33,7 @@ from app.database.standard_time_repository import (
     StandardTimeRepositoryMixin,
 )
 from app.database.quality_repository import QualityRepositoryMixin
+from app.database.quality_rnc_decision_repository import QualityRncDecisionRepositoryMixin
 from app.database.report_repository import ReportRepositoryMixin
 from app.database.sigmanest_repository import SigmaNestRepositoryMixin
 from app.database.totvs_repository import TotvsRepositoryMixin
@@ -212,6 +213,7 @@ class Database(
     TotvsOpSyncRepositoryMixin,
     ChamadaRepositoryMixin,
     QualityRepositoryMixin,
+    QualityRncDecisionRepositoryMixin,
     FirstPieceRepositoryMixin,
     StandardTimeRepositoryMixin,
     ReportRepositoryMixin,

@@ -41,6 +41,7 @@ from backend.api.schemas.quality import (
     QualityBypassRequest,
     QualityOpenRequest,
     QualityPieceRequest,
+    QualityRncDecisionRequest,
     QualityTemplateRequest,
 )
 from mes.services.quality import (
@@ -48,6 +49,8 @@ from mes.services.quality import (
     desenho_publico,
     template_publico,
 )
+from mes.services.change_audit import auditar
+from mes.services.quality_rnc_decision import QualityRncDecisionService
 from mes.services.quality_spc import LIMITE_PADRAO_LINHAS, analisar_medicoes
 
 
@@ -341,6 +344,81 @@ def spc(
         parcial = linhas[-1]["inspecao_id"]
         linhas = [linha for linha in linhas if linha["inspecao_id"] != parcial]
     return {**analisar_medicoes(linhas), "truncado": truncado}
+
+
+RncId = Annotated[int, ApiPath(ge=1, le=9_223_372_036_854_775_807)]
+
+
+def _rnc_nao_encontrada():
+    return AppError("quality_rnc_not_found", "RNC não encontrada.", status_code=404)
+
+
+@router.post("/rnc/{rnc_id}/decisions", dependencies=[Depends(require_csrf)])
+def register_rnc_decision(
+    rnc_id: RncId,
+    payload: QualityRncDecisionRequest,
+    request: Request,
+    user: SessionUser = Depends(require_qualidade_user),
+    database=Depends(get_database),
+):
+    """Registra a decisão sobre uma RNC existente (Qualidade e admin).
+
+    Só acrescenta uma linha ao histórico: não bloqueia, não cria evento de
+    quantidade e não altera a peça nem a RNC. Se a decisão contradiz o resultado
+    registrado da peça, a resposta traz ``aviso`` (texto em pt-BR) e grava mesmo assim.
+    """
+
+    service = QualityRncDecisionService(
+        database, user.id, user.name, now_func=request_now_func(request)
+    )
+    result = service.registrar(rnc_id, payload.decisao, payload.justificativa)
+    if result is None:
+        raise _rnc_nao_encontrada()
+    resposta = _result(result)["data"]
+    decisao = resposta["decisao"]
+    auditar(
+        database,
+        user,
+        "rnc_decisao",
+        resposta["rnc"]["codigo"],
+        depois={
+            "rnc_id": decisao["rnc_id"],
+            "rnc_codigo": resposta["rnc"]["codigo"],
+            "decisao": decisao["decisao"],
+            "justificativa": decisao["justificativa"],
+        },
+    )
+    return {
+        "ok": True,
+        "decisao": decisao,
+        "resultado_peca": resposta["rnc"]["resultado_peca"],
+        "aviso": resposta["aviso"],
+    }
+
+
+@router.get("/rnc/{rnc_id}/decisions")
+def list_rnc_decisions(
+    rnc_id: RncId,
+    request: Request,
+    user: SessionUser = Depends(require_qualidade_user),
+    database=Depends(get_database),
+):
+    """Histórico de decisões da RNC, da vigente (a última) para a mais antiga."""
+
+    data = QualityRncDecisionService(
+        database, user.id, user.name, now_func=request_now_func(request)
+    ).listar(rnc_id)
+    if data is None:
+        raise _rnc_nao_encontrada()
+    return {
+        "rnc": {
+            "id": data["rnc"]["id"],
+            "codigo": data["rnc"]["codigo"],
+            "resultado_peca": data["rnc"]["resultado_peca"],
+        },
+        "vigente": data["vigente"],
+        "items": data["items"],
+    }
 
 
 @router.get("/history/pieces/{peca_id}")

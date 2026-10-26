@@ -429,13 +429,15 @@ class AuditoriaPostgresTests(unittest.TestCase):
                 cursor.execute(statement)
 
     def test_rollback_documentado_e_reaplicacao(self):
+        from app.database.migrations import SCHEMA_VERSION
+
         self.db.registrar_auditoria(entidade="nivel", chave="x", acao="criar", depois={"nome": "x"})
         with self.db.connection() as connection, connection.cursor() as cursor:
             cursor.execute("DROP TABLE auditoria_alteracoes")
             cursor.execute("DELETE FROM schema_migrations WHERE version = 66")
         self.db.create_tables()
         self.assertEqual(self._scalar("SELECT COUNT(*) FROM auditoria_alteracoes"), 0)
-        self.assertEqual(self.db.obter_schema_version(), 66)
+        self.assertEqual(self.db.obter_schema_version(), SCHEMA_VERSION)
 
     def _rows(self, query, params=()):
         with self.db.connection() as connection, connection.cursor() as cursor:

@@ -101,6 +101,8 @@ TRUNCATE_TABLES = (
     "qualidade_pecas_inspecionadas",
     "qualidade_resultados_cota",
     "qualidade_rnc",
+    # Filha de qualidade_rnc (FK): TRUNCATE exige a filha na mesma instrução.
+    "qualidade_rnc_decisoes",
     "rateios_tempo_op",
     "sessoes_recurso",
     "tarefas",

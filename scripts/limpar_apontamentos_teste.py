@@ -50,6 +50,7 @@ ALLOWED_DEPENDENTS = frozenset({
     "totvs_outbox_attempts",
     "qualidade_primeira_peca_autorizacoes",
     "qualidade_rnc",
+    "qualidade_rnc_decisoes",
     "qualidade_pecas_inspecionadas",
     "qualidade_resultados_cota",
 })

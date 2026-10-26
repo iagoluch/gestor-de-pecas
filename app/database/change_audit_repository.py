@@ -23,6 +23,8 @@ CAMPOS_AUDITAVEIS = {
     "pausa": ("tipo_setor", "nome", "hora_inicio", "hora_fim", "ativo", "ordem"),
     "custo_recurso": ("recurso", "valor_hora"),
     "custo_pessoa": ("operador_id", "valor_hora"),
+    # Decisão sobre RNC (Qualidade): sem dado pessoal além do que já está na RNC.
+    "rnc_decisao": ("rnc_id", "rnc_codigo", "decisao", "justificativa"),
 }
 
 # Entidades em R$: só a aba Diretoria as expõe (``/diretoria/custos/auditoria``).
