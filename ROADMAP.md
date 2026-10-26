@@ -4,12 +4,14 @@
 **Atualizado em:** 11/09/2026 (Wave 6D — acompanhamento gerencial da Solda e ciclo da TV)  
 **Workspace padrão:** `Gestor de Peças - Area de Testes`
 
-> **Aviso de defasagem:** este documento não foi editado desde 11/09/2026
-> (Wave 6E). Trabalho relevante aconteceu depois disso (divisão da Solda em 5
-> setores, auditoria de segurança, pente-fino, validação visual, alinhamento
-> do piloto TOTVS, novos commits) e ainda não foi incorporado aqui. Ler
-> `docs/STATUS_ATUAL.md` **antes** de assumir que a seção 5 abaixo é o estado
-> mais recente do projeto.
+> **Aviso de defasagem (conferido em 26/10/2026):** o corpo deste documento
+> (seção 5 em diante) não é editado desde 11/09/2026 (Wave 6E). De lá para cá o
+> schema do banco foi de v29 para v65 (`app/database/schema.py`) e houve mais de
+> 350 commits (divisão da Solda em 5 setores, auditoria de segurança, OEE
+> reformulado, tempo padrão, Qualidade de cotas, Andon TV, deploy na VM). Nada
+> disso está descrito nas seções abaixo. **O estado atual é
+> `docs/STATUS_ATUAL.md`**; use este arquivo só como histórico de direção e
+> para o vocabulário das waves.
 
 > **Estado em 06/10/2026 (resumo; detalhes em `docs/STATUS_ATUAL.md`):** o
 > REAL (`gestor_pecas`) foi promovido em schema v55 com
