@@ -8,7 +8,7 @@
 .spc-serie__facts dt { color: var(--muted); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-caps); }
 .spc-serie__facts dd { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; }
 .spc-serie__cpk { font-size: var(--text-xl); font-weight: 800; }
-.spc-serie__label { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--primary); border-radius: var(--radius-control); color: var(--text); background: var(--primary-soft); font-size: var(--text-sm); }
+.spc-serie__label { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--divider); border-radius: var(--radius-control); color: var(--text); background: var(--primary-soft); font-size: var(--text-sm); }
 .spc-serie__note { margin: 8px 0 0; color: var(--muted); font-size: var(--text-sm); }
 
 .spc-chart { margin: 12px 0 0; }
