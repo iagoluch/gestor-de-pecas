@@ -24,6 +24,7 @@ from app.core.operator_sectors import (
 from app.database.config import PostgresConfig, load_postgres_config
 from app.database.ai_repository import AIRepositoryMixin
 from app.database.chamada_repository import ChamadaRepositoryMixin
+from app.database.change_audit_repository import ChangeAuditRepositoryMixin
 from app.database.cost_rate_repository import CostRateRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
 from app.database.manual_queue_repository import ManualQueueRepositoryMixin
@@ -217,6 +218,7 @@ class Database(
     AIRepositoryMixin,
     ManualQueueRepositoryMixin,
     CostRateRepositoryMixin,
+    ChangeAuditRepositoryMixin,
 ):
     def obter_cursor_telegram_bot(self, bot_key):
         with self.connection() as connection, connection.cursor() as cursor:

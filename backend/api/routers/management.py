@@ -1,6 +1,7 @@
 import logging
 import re
 import unicodedata
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -24,6 +25,7 @@ from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
+from backend.api.schemas.change_audit import AuditResponse
 from backend.api.schemas.common import (
     AutomaticPauseRequest,
     OperatorBadgeRequest,
@@ -37,6 +39,7 @@ from backend.api.schemas.common import (
 )
 from mes.contracts import AnalyticsFilter
 from mes.integrations.notifications.telegram import deliver_telegram_message, telegram_outbound_allowed
+from mes.services.change_audit import auditar, consultar, encontrar, ler_estado
 from mes.services.internal_alerts import InternalAlertService
 from mes.services.standard_time import (
     RECALCULATION_JOB,
@@ -160,6 +163,7 @@ def save_pause(
     user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
 ):
+    antes = ler_estado(database, "listar_pausas_automaticas", somente_ativas=False)
     try:
         row = database.salvar_pausa_automatica(
             tipo_setor=payload.tipo_setor,
@@ -177,6 +181,7 @@ def save_pause(
         raise AppError("invalid_pause_window", str(exc)) from exc
     if row is None:
         raise AppError("pause_not_found", "Pausa não encontrada.", status_code=404)
+    auditar(database, user, "pausa", row.get("id"), antes=encontrar(antes, "id", row.get("id")), depois=row)
     request.app.state.realtime.publish("automatic_pauses")
     return {"ok": True, "item": row}
 
@@ -185,11 +190,13 @@ def save_pause(
 def delete_pause(
     pause_id: int,
     request: Request,
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
 ):
+    antes = encontrar(ler_estado(database, "listar_pausas_automaticas", somente_ativas=False), "id", pause_id)
     if not database.remover_pausa_automatica(pause_id):
         raise AppError("pause_not_found", "Pausa não encontrada.", status_code=404)
+    auditar(database, user, "pausa", pause_id, antes=antes)
     request.app.state.realtime.publish("automatic_pauses")
     return {"ok": True}
 
@@ -215,9 +222,10 @@ def list_shift_parameters(
 def save_shift_parameter(
     payload: ShiftParameterRequest,
     request: Request,
-    _user: SessionUser = Depends(require_admin_user),
+    user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
+    antes = ler_estado(database, "listar_parametros_turno", somente_ativos=False)
     try:
         row = database.salvar_parametro_turno(
             nome=payload.nome,
@@ -232,6 +240,7 @@ def save_shift_parameter(
         raise AppError("invalid_shift_parameter", str(exc)) from exc
     if row is None:
         raise AppError("shift_parameter_not_found", "Turno não encontrado.", status_code=404)
+    auditar(database, user, "turno", row.get("id"), antes=encontrar(antes, "id", row.get("id")), depois=row)
     request.app.state.realtime.publish("shift_parameters")
     return {"ok": True, "item": row}
 
@@ -240,13 +249,15 @@ def save_shift_parameter(
 def delete_shift_parameter(
     parameter_id: int,
     request: Request,
-    _user: SessionUser = Depends(require_admin_user),
+    user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
+    antes = encontrar(ler_estado(database, "listar_parametros_turno", somente_ativos=False), "id", parameter_id)
     if not database.remover_parametro_turno(parameter_id):
         raise AppError(
             "shift_parameter_not_found", "Turno não encontrado.", status_code=404
         )
+    auditar(database, user, "turno", parameter_id, antes=antes)
     request.app.state.realtime.publish("shift_parameters")
     return {"ok": True}
 
@@ -521,7 +532,7 @@ def _slug_nivel(rotulo: str) -> str:
 @router.post("/levels", dependencies=[Depends(require_csrf)])
 def create_level(
     payload: UserLevelRequest,
-    _user: SessionUser = Depends(require_admin_user),
+    user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
     rotulo = payload.rotulo.strip()
@@ -540,16 +551,19 @@ def create_level(
             "Já existe um nível com esse nome.",
             status_code=409,
         )
-    return {"ok": True, "item": {"nome": nome, "rotulo": rotulo, "nivel_base": payload.nivel_base}}
+    item = {"nome": nome, "rotulo": rotulo, "nivel_base": payload.nivel_base}
+    auditar(database, user, "nivel", nome, depois=item)
+    return {"ok": True, "item": item}
 
 
 @router.delete("/levels/{nome}", dependencies=[Depends(require_csrf)])
 def delete_level(
     # O slug nasce do rótulo (até 60 caracteres) e nunca fica mais longo (SEC-06).
     nome: Annotated[str, ApiPath(max_length=60)],
-    _user: SessionUser = Depends(require_admin_user),
+    user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
+    antes = encontrar(ler_estado(database, "listar_niveis_personalizados"), "nome", nome)
     if not database.excluir_nivel_personalizado(nome):
         existe = any(item["nome"] == nome for item in database.listar_niveis_personalizados() or [])
         if not existe:
@@ -559,6 +573,7 @@ def delete_level(
             "Há contas usando este nível. Troque o nível delas antes de excluir.",
             status_code=409,
         )
+    auditar(database, user, "nivel", nome, antes=antes)
     return {"ok": True}
 
 
@@ -568,6 +583,7 @@ def save_user(
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
+    antes = None if payload.id is None else ler_estado(database, "obter_usuario_por_id", payload.id)
     custom_levels = list(database.listar_niveis_personalizados() or [])
     if payload.nivel not in USER_LEVELS and not any(
         item["nome"] == payload.nivel for item in custom_levels
@@ -633,6 +649,9 @@ def save_user(
     row = database.obter_usuario_por_id(usuario_id)
     if row is None:
         raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
+    # Só nome, nível, unidade e ativo seguem para o log (allowlist do Database):
+    # a senha nunca é lida aqui e ``row`` não a traz.
+    auditar(database, _user, "usuario", usuario_id, antes=antes, depois=row)
     return {"ok": True, "item": row}
 
 
@@ -650,9 +669,34 @@ def delete_user(
             "Você não pode excluir a própria conta. Peça a outro administrador.",
             status_code=409,
         )
+    antes = ler_estado(database, "obter_usuario_por_id", usuario_id)
     if not database.excluir_usuario(usuario_id):
         raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
+    auditar(database, _user, "usuario", usuario_id, antes=antes)
     return {"ok": True}
+
+
+@router.get("/audit", response_model=AuditResponse)
+def list_audit(
+    entidade: str | None = Query(default=None, max_length=40),
+    chave: str | None = Query(default=None, max_length=120),
+    usuario: str | None = Query(default=None, max_length=80, description="Id ou parte do nome"),
+    desde: date | None = None,
+    ate: date | None = None,
+    limite: int = Query(default=100, ge=1, le=500),
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    """Quem mudou o quê (usuários, níveis, turnos, pausas), mais recente primeiro.
+
+    Valores em R$ não passam por aqui: ficam em ``/diretoria/custos/auditoria``.
+    """
+
+    items = consultar(
+        database, custos=False, entidade=entidade, chave=chave, usuario=usuario,
+        desde=desde, ate=ate, limite=limite,
+    )
+    return {"items": items, "count": len(items)}
 
 
 @router.get("/first-pieces")
