@@ -95,5 +95,28 @@ class PermissionMatrixTests(unittest.TestCase):
         self.assertEqual(operator_sector_for_user_level("operador_dobra").resources, ("1303", "2204", "Gasparini"))
 
 
+class MaintenanceOnlyAccessTests(unittest.TestCase):
+    def test_mantenedor_nao_ve_gestao_nem_andon(self):
+        from backend.api.dependencies.auth import access_flags
+        self.assertEqual(
+            access_flags("lider", "manutencao"),
+            {"management_access": False, "andon_access": False, "maintenance_access": True},
+        )
+
+    def test_admin_mantem_tudo_e_lider_comum_nao_decide_manutencao(self):
+        from backend.api.dependencies.auth import access_flags
+        self.assertTrue(all(access_flags("admin", None).values()))
+        flags = access_flags("lider", "lider")
+        self.assertTrue(flags["management_access"])
+        self.assertFalse(flags["maintenance_access"])
+
+    def test_mantenedor_nao_edita_cotas_nem_desenho_da_qualidade(self):
+        from types import SimpleNamespace
+        from backend.api.routers.quality import _pode_editar
+        self.assertFalse(_pode_editar(SimpleNamespace(role="lider", assigned_level="manutencao")))
+        self.assertTrue(_pode_editar(SimpleNamespace(role="lider", assigned_level="lider")))
+        self.assertTrue(_pode_editar(SimpleNamespace(role="admin", assigned_level="admin")))
+
+
 if __name__ == "__main__":
     unittest.main()

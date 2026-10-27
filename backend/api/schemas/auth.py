@@ -37,6 +37,8 @@ class SessionUser(BaseModel):
     #: Nível gravado na conta (pode ser personalizado; ``role`` é o efetivo, de
     #: permissões). A trava das sugestões de manutenção lê este campo.
     assigned_level: str | None = None
+    #: Pode ver e decidir as sugestões de manutenção (conta Manutenção e admin).
+    maintenance_access: bool = False
     #: Entrou com a senha padrão numa conta de gestão: a tela pede uma nova
     #: senha e a API recusa as demais rotas até ela ser definida.
     password_change_required: bool = False

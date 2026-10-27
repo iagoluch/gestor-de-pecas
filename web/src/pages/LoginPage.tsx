@@ -15,9 +15,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const homeFor = (account: { management_access: boolean; andon_access?: boolean }) => {
+  const homeFor = (account: { management_access: boolean; andon_access?: boolean; maintenance_access?: boolean }) => {
     if (account.management_access) return "/inicio/visao-geral";
     if (account.andon_access) return "/andon";
+    if (account.maintenance_access) return "/manutencao";
     return "/operador";
   };
 

@@ -197,6 +197,17 @@ def can_manage_maintenance(level, assigned_level=None):
     )
 
 
+def is_maintenance_only(level, assigned_level=None):
+    """Conta de Manutenção que não é admin: vê só a tela de sugestões.
+
+    O nível personalizado ``manutencao`` herda a base ``lider`` (permissões da
+    sessão), mas a sessão dela não libera gestão nem Andon: ``management_access``
+    e ``andon_access`` saem falsos e todas as rotas gerenciais a recusam.
+    """
+
+    return normalize_user_level(level) != "admin" and can_manage_maintenance(level, assigned_level)
+
+
 def can_access_management_web(level):
     return normalize_user_level(level) in MANAGEMENT_WEB_LEVELS
 

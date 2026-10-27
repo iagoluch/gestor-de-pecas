@@ -34,7 +34,7 @@ import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
 import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
-import { MaintenanceSuggestionsPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
+import { MaintenanceSuggestionsPage, MaintenanceTerminalPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
 import { QualitySpcPage } from "./pages/production/QualitySpcPage";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
@@ -49,13 +49,14 @@ import {
 } from "./pages/reports/ReportsPages";
 import { TraceabilityNestingPage, TraceabilityOrderPage, TraceabilityTimelinePage } from "./pages/traceability/TraceabilityPages";
 
-function roleHome(user: { management_access: boolean; andon_access?: boolean }) {
+function roleHome(user: { management_access: boolean; andon_access?: boolean; maintenance_access?: boolean }) {
   if (user.management_access) return "/inicio/visao-geral";
   if (user.andon_access) return "/andon";
+  if (user.maintenance_access) return "/manutencao";
   return "/operador";
 }
 
-function RequireAuth({ management = false, andon = false, operator = false, children }: PropsWithChildren<{ management?: boolean; andon?: boolean; operator?: boolean }>) {
+function RequireAuth({ management = false, andon = false, operator = false, maintenance = false, children }: PropsWithChildren<{ management?: boolean; andon?: boolean; operator?: boolean; maintenance?: boolean }>) {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) return <div className="app-loading"><LoadingState label="Verificando sessão…" /></div>;
@@ -65,6 +66,7 @@ function RequireAuth({ management = false, andon = false, operator = false, chil
   if (management && !user.management_access) return <Navigate to={roleHome(user)} replace />;
   if (andon && !user.andon_access && !user.management_access) return <Navigate to={roleHome(user)} replace />;
   if (operator && !user.operator_access) return <Navigate to={roleHome(user)} replace />;
+  if (maintenance && !user.maintenance_access) return <Navigate to={roleHome(user)} replace />;
   return children;
 }
 
@@ -221,6 +223,7 @@ export default function App() {
         <Route path="rastreabilidade/lote-material-nesting" element={<TraceabilityNestingPage />} />
       </Route>
       <Route path="/operador/*" element={<RequireAuth operator><OperatorPortalPage /></RequireAuth>} />
+      <Route path="/manutencao" element={<RequireAuth maintenance><MaintenanceTerminalPage /></RequireAuth>} />
       <Route path="*" element={<RoleHome />} />
     </Routes>
   );

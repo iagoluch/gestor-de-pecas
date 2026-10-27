@@ -30,6 +30,7 @@ export interface SessionUser {
   queue_areas?: string[];
   /** Nível gravado na conta (o `role` é o efetivo): distingue o mantenedor (`manutencao`) de um líder. */
   assigned_level?: string | null;
+  maintenance_access?: boolean;
   /** Conta de gestão que entrou com a senha padrão: precisa definir outra antes de usar o sistema. */
   password_change_required?: boolean;
 }

@@ -6,3 +6,5 @@
 .maintenance-decision__note { flex: 1 1 160px; min-width: 120px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-size: var(--text-base); }
 .maintenance-decision__note:focus-visible { border-color: var(--primary); outline: none; box-shadow: var(--focus-ring); }
 .maintenance-decided { display: grid; justify-items: start; gap: 4px; }
+.maintenance-terminal { display: grid; gap: 12px; }
+.maintenance-terminal .data-table td { overflow-wrap: anywhere; }

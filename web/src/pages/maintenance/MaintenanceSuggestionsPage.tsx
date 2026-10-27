@@ -8,6 +8,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { OperatorShell } from "../../layouts/OperatorShell";
 import type {
   MaintenanceAlreadyDecidedDetails,
   MaintenanceDecisionResponse,
@@ -56,7 +57,12 @@ export function decisionErrorMessage(reason: unknown) {
   return "Não foi possível registrar a decisão. Tente novamente.";
 }
 
-export function MaintenanceSuggestionsPage() {
+/** Tela do mantenedor: o mesmo conteúdo no visual do terminal, sem a gestão. */
+export function MaintenanceTerminalPage() {
+  return <MaintenanceSuggestionsPage terminal />;
+}
+
+export function MaintenanceSuggestionsPage({ terminal = false }: { terminal?: boolean }) {
   const [status, setStatus] = useState<MaintenanceSuggestionStatus>("sugerida");
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -130,8 +136,8 @@ export function MaintenanceSuggestionsPage() {
       { key: "nota", label: "Nota", render: (row) => row.nota || "Sem nota" },
     ];
 
-  return (
-    <PageFrame sectionId="maintenance" title={TITLE} subtitle={SUBTITLE} filters={false} staleError={data ? query.error : null}>
+  const body = (
+    <>
       <div className="segment-toggle maintenance-tabs" role="tablist" aria-label="Situação da sugestão">
         {TABS.map((item) => (
           <button
@@ -163,6 +169,23 @@ export function MaintenanceSuggestionsPage() {
           <DataTable columns={[...base, ...decision]} rows={items} rowKey={(row) => row.id} emptyTitle={tab.empty} />
         </SectionCard>
       ) : null}
+    </>
+  );
+
+  if (terminal) {
+    return (
+      <OperatorShell sector="Manutenção" title="Manutenção · Sugestões" calls={false}>
+        <div className="maintenance-terminal">
+          <div className="operator-selection__heading"><h2>Sugestões de manutenção</h2><p>{SUBTITLE}</p></div>
+          {data && query.error ? <Notice tone="error">Não foi possível atualizar a lista. Mostrando a última carregada.</Notice> : null}
+          {body}
+        </div>
+      </OperatorShell>
+    );
+  }
+  return (
+    <PageFrame sectionId="maintenance" title={TITLE} subtitle={SUBTITLE} filters={false} staleError={data ? query.error : null}>
+      {body}
     </PageFrame>
   );
 }

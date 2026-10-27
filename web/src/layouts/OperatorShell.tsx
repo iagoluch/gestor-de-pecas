@@ -19,6 +19,8 @@ export function OperatorShell({
   onBack,
   navigation,
   activeNav,
+  title,
+  calls = true,
   children,
 }: PropsWithChildren<{
   sector: string;
@@ -26,13 +28,17 @@ export function OperatorShell({
   onBack?: () => void;
   navigation?: OperatorNavItem[];
   activeNav?: string;
+  /** Título da aba/tela quando não é um posto de apontamento. */
+  title?: string;
+  /** Botão de chamada da liderança; a Manutenção não o usa. */
+  calls?: boolean;
 }>) {
   const items = navigation ?? [];
   const current = activeNav ?? items[0]?.key;
   const hasTabs = items.length > 1;
   const resourceLabel = sector.toLocaleLowerCase().startsWith("solda") ? "Estação" : "Máquina";
   const selectedResource = resource === sector ? resource : <><span>{sector} - </span><span>{resource}</span></>;
-  const pageTitle = !resource ? `Posto do operador · ${sector}` : resource === sector ? `${resourceLabel} ${resource}` : `${resourceLabel} ${sector} - ${resource}`;
+  const pageTitle = title ?? (!resource ? `Posto do operador · ${sector}` : resource === sector ? `${resourceLabel} ${resource}` : `${resourceLabel} ${sector} - ${resource}`);
   useDocumentTitle(pageTitle);
   return (
     <div className="operator-shell">
@@ -78,7 +84,7 @@ export function OperatorShell({
       <main className="operator-main">
         <div className="operator-content">{children}</div>
       </main>
-      <ChamadaButton sector={sector} resource={resource} />
+      {calls ? <ChamadaButton sector={sector} resource={resource} /> : null}
     </div>
   );
 }

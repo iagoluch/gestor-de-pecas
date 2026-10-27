@@ -170,3 +170,22 @@ describe("Manutenção — sugestões de paradas", () => {
     expect(screen.queryByRole("button", { name: "Tentar novamente" })).not.toBeInTheDocument();
   });
 });
+
+describe("Manutenção — tela do mantenedor (visual de terminal)", () => {
+  const mantenedor = { ...session("lider", "manutencao"), management_access: false, andon_access: false, maintenance_access: true };
+
+  it("abre em /manutencao no visual do terminal, sem apontamento nem botão de chamada", async () => {
+    stub(mantenedor, () => json(lista([item(3)])));
+    renderAt("/manutencao");
+    expect(await screen.findByText("Recurso 3")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Manutenção · Sugestões" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aceitar" })).toBeInTheDocument();
+    expect(screen.queryByText(/Posto do operador/)).not.toBeInTheDocument();
+  });
+
+  it("URL de gestão volta para a tela de manutenção", async () => {
+    stub(mantenedor, () => json(lista([item(4)])));
+    renderAt("/inicio/visao-geral");
+    expect(await screen.findByText("Recurso 4")).toBeInTheDocument();
+  });
+});

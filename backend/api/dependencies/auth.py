@@ -14,6 +14,7 @@ from app.core.permissions import (
     can_manage_quality_templates,
     can_manage_standard_time,
     can_view_director_tab,
+    is_maintenance_only,
     is_sector_operator,
     normalize_user_level,
     operator_sector_for_user_level,
@@ -22,6 +23,18 @@ from backend.api.database import get_database
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.security.sessions import SESSION_FORMAT
+
+
+def access_flags(role: str, assigned_level: str | None) -> dict[str, bool]:
+    """Flags de acesso da sessão. A conta de Manutenção herda a base ``lider``,
+    mas não entra na gestão nem no Andon: só na tela de sugestões."""
+
+    maintenance_only = is_maintenance_only(role, assigned_level)
+    return {
+        "management_access": can_access_management_web(role) and not maintenance_only,
+        "andon_access": can_access_andon_web(role) and not maintenance_only,
+        "maintenance_access": can_manage_maintenance(role, assigned_level),
+    }
 
 
 def _session_user(request: Request, database, *, allow_password_change_pending: bool) -> SessionUser:
@@ -71,8 +84,7 @@ def _session_user(request: Request, database, *, allow_password_change_pending: 
         id=int(row["id"]),
         name=str(row.get("nome") or claims.username),
         role=role,
-        management_access=can_access_management_web(role),
-        andon_access=can_access_andon_web(role),
+        **access_flags(role, row.get("nivel_atribuido")),
         operator_access=is_sector_operator(role),
         operator_sector=operator_sector.name if operator_sector else None,
         operator_resources=operator_sector.resources if operator_sector else (),

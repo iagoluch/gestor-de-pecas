@@ -11,14 +11,13 @@ from fastapi.responses import JSONResponse
 from app.core.areas import areas_for_user, queue_areas_for_user
 from app.core.password_policy import password_change_required, password_policy_error
 from app.core.permissions import (
-    can_access_andon_web,
-    can_access_management_web,
     is_sector_operator,
     normalize_user_level,
     operator_sector_for_user_level,
 )
 from backend.api.database import get_database
 from backend.api.dependencies.auth import (
+    access_flags,
     get_session_user_allow_password_change,
     require_csrf_allow_password_change,
 )
@@ -213,8 +212,7 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
         id=int(user["id"]),
         name=str(user.get("nome") or payload.username),
         role=role,
-        management_access=can_access_management_web(role),
-        andon_access=can_access_andon_web(role),
+        **access_flags(role, user.get("nivel_atribuido")),
         operator_access=is_sector_operator(role),
         operator_sector=operator_sector.name if operator_sector else None,
         operator_resources=operator_sector.resources if operator_sector else (),

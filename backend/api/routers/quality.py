@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse
 
 from app.core.permissions import (
     can_manage_quality_template,
+    is_maintenance_only,
     quality_sector_for_user_level,
 )
 from backend.api.database import get_database
@@ -55,6 +56,15 @@ from mes.services.quality_spc import LIMITE_PADRAO_LINHAS, analisar_medicoes
 
 
 router = APIRouter(prefix="/quality", tags=["Qualidade"])
+
+
+def _pode_editar(user):
+    """Edita template/desenho: nível de edição, exceto a conta só de Manutenção
+    (base ``lider``, mas sem acesso à Qualidade)."""
+
+    return can_manage_quality_template(user.role) and not is_maintenance_only(
+        user.role, user.assigned_level
+    )
 
 PDF_MAGIC = b"%PDF-"
 MAX_DRAWING_BYTES = 20 * 1024 * 1024
@@ -115,7 +125,7 @@ def context(user: SessionUser = Depends(get_current_user)):
         "available": sector is not None,
         "sector": sector.name if sector else None,
         "resources": list(sector.resources) if sector else [],
-        "can_edit_template": can_manage_quality_template(user.role),
+        "can_edit_template": _pode_editar(user),
     }
 
 
@@ -230,9 +240,7 @@ def template(
     user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
-    if quality_sector_for_user_level(user.role) is None and not can_manage_quality_template(
-        user.role
-    ):
+    if quality_sector_for_user_level(user.role) is None and not _pode_editar(user):
         raise AppError(
             "quality_sector_unavailable",
             "Seu setor não possui inspeção de qualidade habilitada.",
@@ -242,7 +250,7 @@ def template(
     return {
         "produto": produto,
         "template": template_publico(template),
-        "can_edit": can_manage_quality_template(user.role) or template is None,
+        "can_edit": _pode_editar(user) or template is None,
     }
 
 
@@ -255,9 +263,7 @@ def save_template(
 ):
     """Primeira definição é do operador; alteração posterior é de Supervisor/Líder."""
 
-    if quality_sector_for_user_level(user.role) is None and not can_manage_quality_template(
-        user.role
-    ):
+    if quality_sector_for_user_level(user.role) is None and not _pode_editar(user):
         raise AppError(
             "quality_sector_unavailable",
             "Seu setor não possui inspeção de qualidade habilitada.",
@@ -268,7 +274,7 @@ def save_template(
         service.definir_template(
             payload.produto,
             [item.model_dump() for item in payload.cotas],
-            pode_editar=can_manage_quality_template(user.role),
+            pode_editar=_pode_editar(user),
         )
     )
     request.app.state.realtime.publish("quality_template_saved")
@@ -491,7 +497,7 @@ def upload_drawing(
 ):
     """Publica uma nova versão do desenho do produto. Exclusivo de Supervisor/Líder."""
 
-    if not can_manage_quality_template(user.role):
+    if not _pode_editar(user):
         raise AppError(
             "quality_drawing_forbidden",
             "Somente Supervisor, Líder ou Qualidade pode publicar o desenho do produto.",
