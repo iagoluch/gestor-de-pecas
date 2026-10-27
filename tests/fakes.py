@@ -1508,9 +1508,11 @@ class FakeDatabase:
 
     def listar_alertas_internos(
         self, *, destinatario=None, tipo=None, codigo_op=None,
-        somente_pendentes=False, limite=200,
+        somente_pendentes=False, limite=200, setores=None,
     ):
         rows = list(reversed(self.internal_alerts))
+        if setores:
+            rows = [row for row in rows if row.get("tipo_setor") in setores]
         if destinatario:
             rows = [row for row in rows if row.get("destinatario") == str(destinatario).upper()]
         if tipo:
@@ -1522,10 +1524,11 @@ class FakeDatabase:
             rows = [row for row in rows if row.get("status_notificacao") == "PENDENTE"]
         return [dict(row) for row in rows[: int(limite)]]
 
-    def resumo_alertas_internos(self):
+    def resumo_alertas_internos(self, *, setores=None):
         contagem = Counter(
             (row.get("tipo"), row.get("destinatario"), row.get("severidade"), row.get("status_notificacao"))
             for row in self.internal_alerts
+            if not setores or row.get("tipo_setor") in setores
         )
         return [
             {

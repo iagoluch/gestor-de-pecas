@@ -22,7 +22,7 @@ from backend.api.dependencies.auth import (
     require_tempo_padrao_user,
 )
 from backend.api.dependencies.facade import get_frontend_facade
-from backend.api.dependencies.filters import analytics_filter
+from backend.api.dependencies.filters import analytics_filter, scoped_sector
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.change_audit import AuditResponse
@@ -469,7 +469,7 @@ def internal_alerts(
     alert_type: str | None = Query(default=None, max_length=120),
     op: str | None = Query(default=None, max_length=80),
     pending_only: bool = False,
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
 ):
     service = InternalAlertService(database)
@@ -478,6 +478,7 @@ def internal_alerts(
         tipo=alert_type,
         codigo_op=op,
         somente_pendentes=pending_only,
+        setores=user.sector_scope,
     )
     return {
         "items": items,
@@ -485,7 +486,7 @@ def internal_alerts(
         "pending": sum(
             1 for row in items if str(row.get("status_notificacao")) == "PENDENTE"
         ),
-        "summary": service.resumo(),
+        "summary": service.resumo(setores=user.sector_scope),
     }
 
 
@@ -707,14 +708,16 @@ def first_pieces(
     sector: str | None = Query(default=None, max_length=120),
     status: str | None = Query(default=None, max_length=120),
     blocked_only: bool = False,
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
 ):
     """Situação da primeira peça por operação, para a gestão e o relatório."""
 
     items = list(
         database.listar_primeiras_pecas(
-            tipo_setor=sector, status=status, somente_bloqueadas=blocked_only
+            tipo_setor=scoped_sector(sector, user.sector_scope),
+            status=status,
+            somente_bloqueadas=blocked_only,
         )
         or []
     )

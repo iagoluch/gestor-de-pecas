@@ -14,6 +14,7 @@ import re
 from typing import Any, Callable
 import unicodedata
 
+from app.core.areas import scoped_sector, trace_in_scope
 from mes.contracts import (
     AIRequestContext,
     AIToolError,
@@ -761,8 +762,11 @@ class AIToolRegistry:
         now_func: Callable[[], datetime] | None = None,
         tool_result_max_chars: int = DEFAULT_TOOL_RESULT_MAX_CHARS,
         report_service=None,
+        sector_scope: list[str] | None = None,
     ):
         self.facade = facade
+        # Setores da conta que conversa: a IA nunca lê dados de outro setor.
+        self.sector_scope = sector_scope
         self._now = now_func or datetime.now
         self.tool_result_max_chars = int(tool_result_max_chars)
         self.report_service = report_service
@@ -778,7 +782,7 @@ class AIToolRegistry:
             "downtimes": lambda _args, filters: self.facade.analise("paradas", filters),
             "quality": lambda _args, filters: self.facade.analise("qualidade", filters),
             "setups": lambda _args, filters: self.facade.analise("setup", filters),
-            "trace_work_order": lambda args, _filters: self.facade.rastreabilidade(args["op"]),
+            "trace_work_order": lambda args, _filters: self._trace(args["op"]),
             "nestings": lambda _args, filters: self.facade.nestings(filters),
             "audit_issues": lambda _args, filters: self.facade.auditoria(filters),
         }
@@ -855,6 +859,15 @@ class AIToolRegistry:
             clean[key] = text
         return clean
 
+    def _trace(self, op: str):
+        trace = self.facade.rastreabilidade(op)
+        if not trace_in_scope(trace, self.sector_scope):
+            raise AIToolError(
+                "ai_tool_permission_denied",
+                "Essa OP não passou pelo seu setor.",
+            )
+        return trace
+
     def _filters(self, arguments: dict[str, Any]) -> AnalyticsFilter:
         end = arguments.get("fim") or self._now().replace(microsecond=0)
         start = arguments.get("inicio") or datetime.combine(end.date(), time.min)
@@ -865,7 +878,7 @@ class AIToolRegistry:
         return AnalyticsFilter(
             inicio=start,
             fim=end,
-            setor=arguments.get("setor"),
+            setor=scoped_sector(arguments.get("setor"), self.sector_scope),
             recurso=arguments.get("recurso"),
             turno=arguments.get("turno"),
             op=arguments.get("op"),
@@ -909,7 +922,7 @@ class AIToolRegistry:
                     report_type=arguments["report_type"],
                     inicio=inicio,
                     fim=fim,
-                    setor=arguments.get("setor"),
+                    setor=scoped_sector(arguments.get("setor"), self.sector_scope),
                     recurso=arguments.get("recurso"),
                     op=arguments.get("op"),
                     indicador=arguments.get("indicador"),

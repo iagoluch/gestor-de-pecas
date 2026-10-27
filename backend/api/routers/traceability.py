@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi import Path as ApiPath
 
+from app.core.areas import trace_in_scope
 from backend.api.dependencies.auth import require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import PageParams, analytics_filter, pagination
+from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 
@@ -14,10 +16,13 @@ router = APIRouter(prefix="/traceability", tags=["Rastreabilidade"])
 @router.get("/orders/{op}")
 def trace_order(
     op: str = ApiPath(max_length=80),
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_management_user),
     facade=Depends(get_frontend_facade),
 ):
-    return facade.rastreabilidade(op)
+    trace = facade.rastreabilidade(op)
+    if not trace_in_scope(trace, user.sector_scope):
+        raise AppError("trace_out_of_scope", "Essa OP não passou pelo seu setor.", status_code=403)
+    return trace
 
 
 @router.get("/nestings")

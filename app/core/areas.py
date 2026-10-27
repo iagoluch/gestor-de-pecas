@@ -74,6 +74,39 @@ def sector_scope_for_user(nivel_atribuido, nivel_efetivo=None):
     return [setor for id_ in ids for setor in AREAS[id_][1]]
 
 
+def scoped_sector(setor, sector_scope):
+    """Trava o setor consultado nos setores da conta (``None`` = fábrica toda).
+
+    Setor pedido fora do escopo (ou ausente) cai no primeiro setor permitido:
+    os dados de outro setor nunca saem do servidor.
+    """
+
+    if not sector_scope:
+        return setor
+    wanted = str(setor or "").strip().casefold()
+    for allowed in sector_scope:
+        if allowed.casefold() == wanted:
+            return allowed
+    return sector_scope[0]
+
+
+def trace_in_scope(trace, sector_scope):
+    """A OP passou por algum setor da conta? (sem escopo = sempre).
+
+    Uma OP atravessa vários setores; quem tem escopo só abre a genealogia
+    das OPs que tiveram operação no próprio setor.
+    """
+
+    if not sector_scope:
+        return True
+    allowed = {setor.casefold() for setor in sector_scope}
+    return any(
+        str(op.get(key) or "").casefold() in allowed
+        for op in (trace or {}).get("operations") or ()
+        for key in ("setor", "setor_roteiro")
+    )
+
+
 def queue_areas_for_user(nivel_atribuido, nivel_efetivo=None):
     """Ids das áreas cuja fila manual a conta pode ordenar.
 

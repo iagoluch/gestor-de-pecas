@@ -218,11 +218,11 @@ class InternalAlertService:
             return []
         return [dict(row) for row in (loader(**filtros) or ())]
 
-    def resumo(self):
+    def resumo(self, *, setores=None):
         loader = getattr(self.db, "resumo_alertas_internos", None)
         if not callable(loader):
             return []
-        return [dict(row) for row in (loader() or ())]
+        return [dict(row) for row in (loader(setores=setores) or ())]
 
 
 def _campos(contexto) -> dict:

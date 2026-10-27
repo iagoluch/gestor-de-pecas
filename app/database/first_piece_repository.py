@@ -542,9 +542,13 @@ class FirstPieceRepositoryMixin:
         codigo_op=None,
         somente_pendentes=False,
         limite=200,
+        setores=None,
     ):
         query = "SELECT * FROM alertas_internos WHERE TRUE"
         params: list = []
+        if setores:
+            query += " AND tipo_setor = ANY(%s)"
+            params.append(list(setores))
         if destinatario:
             query += " AND destinatario = %s"
             params.append(str(destinatario).strip().upper())
@@ -630,7 +634,7 @@ class FirstPieceRepositoryMixin:
             )
             return True
 
-    def resumo_alertas_internos(self):
+    def resumo_alertas_internos(self, *, setores=None):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -638,9 +642,11 @@ class FirstPieceRepositoryMixin:
                        COUNT(*) AS total,
                        COALESCE(SUM(quantidade), 0) AS quantidade_total
                   FROM alertas_internos
+                 WHERE %(setores)s::text[] IS NULL OR tipo_setor = ANY(%(setores)s::text[])
                  GROUP BY tipo, destinatario, severidade, status_notificacao
                  ORDER BY tipo, destinatario
-                """
+                """,
+                {"setores": list(setores) if setores else None},
             )
             return [dict(row) for row in cursor.fetchall()]
 

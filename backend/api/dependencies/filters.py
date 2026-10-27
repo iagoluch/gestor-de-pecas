@@ -9,6 +9,7 @@ import math
 from fastapi import Depends, Query, Request
 
 from backend.api.dependencies.auth import get_current_user
+from app.core.areas import scoped_sector
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
@@ -58,22 +59,6 @@ def validated_business_datetime(value: datetime | None, current: datetime) -> da
 def request_now(request: Request) -> datetime:
     clock = getattr(request.app.state, "clock", None)
     return clock.now() if clock is not None else datetime.now().replace(microsecond=0)
-
-
-def scoped_sector(setor: str | None, sector_scope: list[str] | None) -> str | None:
-    """Trava o setor consultado nos setores da conta (``None`` = fábrica toda).
-
-    Setor pedido fora do escopo (ou ausente) cai no primeiro setor permitido:
-    os dados de outro setor nunca saem do servidor.
-    """
-
-    if not sector_scope:
-        return setor
-    wanted = str(setor or "").strip().casefold()
-    for allowed in sector_scope:
-        if allowed.casefold() == wanted:
-            return allowed
-    return sector_scope[0]
 
 
 def build_analytics_filter(
