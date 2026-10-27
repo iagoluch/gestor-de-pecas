@@ -127,3 +127,23 @@ class QualityRncDecisionService:
             for indice, linha in enumerate(self.db.listar_decisoes_rnc(rnc["id"]))
         ]
         return {"rnc": rnc, "vigente": itens[0] if itens else None, "items": itens}
+
+    def listar_pendencias(self, *, limite=100, somente_sem_decisao=False):
+        """RNCs recentes com a decisão vigente e o ``aviso`` de contradição (ou ``None``)."""
+
+        itens = []
+        for linha in self.db.listar_rncs_para_decisao(
+            limite=limite, somente_sem_decisao=somente_sem_decisao
+        ):
+            vigente = linha.get("decisao_vigente")
+            itens.append(
+                {
+                    **linha,
+                    "aviso": (
+                        aviso_de_contradicao(linha.get("resultado_peca"), vigente["decisao"])
+                        if vigente
+                        else None
+                    ),
+                }
+            )
+        return {"items": itens, "count": len(itens)}

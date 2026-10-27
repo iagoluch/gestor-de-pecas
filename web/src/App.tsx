@@ -15,6 +15,7 @@ import { ManagementBadgesPage } from "./pages/home/BadgesPage";
 import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
 import { DevChamadasContatosPage } from "./pages/home/ChamadasContatosPage";
 import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
+import { ChangeAuditPage } from "./pages/home/ChangeAuditPage";
 import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
 import { AIPage } from "./pages/AIPage";
@@ -35,6 +36,7 @@ import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
 import { MaintenanceSuggestionsPage, MaintenanceTerminalPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
+import { QualityRncDecisionPage } from "./pages/production/QualityRncDecisionPage";
 import { QualitySpcPage } from "./pages/production/QualitySpcPage";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
@@ -176,6 +178,7 @@ export default function App() {
         <Route path="inicio/chamadas" element={<ManagementChamadasPage />} />
         <Route path="inicio/chamadas-dev" element={<RequireAdmin><DevChamadasContatosPage /></RequireAdmin>} />
         <Route path="inicio/turnos" element={<RequireAdmin><ManagementShiftsPage /></RequireAdmin>} />
+        <Route path="inicio/alteracoes" element={<RequireAdmin><ChangeAuditPage /></RequireAdmin>} />
         <Route path="inicio/sistema" element={<RequireAdmin><ManagementSystemPage /></RequireAdmin>} />
         <Route path="inicio/cadastro" element={<RequireAdmin><ManagementUsersPage /></RequireAdmin>} />
         <Route path="inicio/ia" element={<AIPage />} />
@@ -192,6 +195,7 @@ export default function App() {
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
         <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
         <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
+        <Route path="qualidade/rnc" element={<RequireQualityTemplateAccess detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar registrar uma decisão de RNC."><QualityRncDecisionPage /></RequireQualityTemplateAccess>} />
         <Route path="qualidade/spc" element={<RequireQualityTemplateAccess detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar consultar o SPC."><QualitySpcPage /></RequireQualityTemplateAccess>} />
         <Route path="manutencao/sugestoes" element={<RequireMaintenanceAccess><MaintenanceSuggestionsPage /></RequireMaintenanceAccess>} />
 

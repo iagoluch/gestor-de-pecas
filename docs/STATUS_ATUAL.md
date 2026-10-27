@@ -12,6 +12,12 @@ Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
 
+### Telas de auditoria e decisão de RNC — 27/10/2026
+
+- **IagoDev > Alterações** (`/inicio/alteracoes`, só admin): quem mudou usuários, níveis, turnos, pausas, decisões de RNC e sugestões de manutenção (migration 66, `GET /management/audit`). Só leitura; nunca mostra R$.
+- **Qualidade > Decisão de RNC** (`/qualidade/rnc`, Qualidade + admin): lista as RNCs (`GET /quality/rnc`, abas "Sem decisão"/"Todas") e registra a decisão (usar como está, retrabalhar, sucatear, quarentena) com justificativa (migration 67). Histórico só de acréscimo, nunca bloqueia; contradição com o resultado da peça vira aviso.
+- O REAL (v65) recebe as migrations 66+67+68 juntas no primeiro start da API nova. Prova visual: `docs/comprovacao_telas_auditoria_rnc_2026-10-27/`.
+
 ### Simulação contínua em tempo real — 09/10/2026
 
 - FATO: servidor LAN `0.0.0.0:8002` (porta própria desde 13/10/2026: a :8001 é só da API REAL; override `GESTOR_TEST_SIM_PORT`) e simulador persistente usam exclusivamente `gestor_pecas_test` (schema 61), sem relógio acelerado e sem alteração do `.env` operacional. `/andon` responde em `http://10.10.1.248:8002/andon`; API sem sessão retorna 401, login `sim_andon` e leitura autenticada retornam 200. A TV continua somente Andon; acompanhamento gerencial de Solda permanece desativado.

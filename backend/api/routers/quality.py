@@ -359,6 +359,24 @@ def _rnc_nao_encontrada():
     return AppError("quality_rnc_not_found", "RNC não encontrada.", status_code=404)
 
 
+@router.get("/rnc")
+def list_rncs_for_decision(
+    request: Request,
+    limite: int = Query(default=100, ge=1, le=200),
+    somente_sem_decisao: bool = Query(default=False),
+    user: SessionUser = Depends(require_qualidade_user),
+    database=Depends(get_database),
+):
+    """RNCs mais recentes primeiro, com a decisão vigente (se houver). SOMENTE LEITURA.
+
+    Alimenta a escolha da RNC na tela de decisão (Qualidade e admin).
+    """
+
+    return QualityRncDecisionService(
+        database, user.id, user.name, now_func=request_now_func(request)
+    ).listar_pendencias(limite=limite, somente_sem_decisao=somente_sem_decisao)
+
+
 @router.post("/rnc/{rnc_id}/decisions", dependencies=[Depends(require_csrf)])
 def register_rnc_decision(
     rnc_id: RncId,

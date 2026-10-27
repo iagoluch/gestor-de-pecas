@@ -219,6 +219,8 @@ export const managementSections: ManagementSection[] = [
       { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
       // SPC somente leitura: a API (`GET /quality/spc`) usa a mesma guarda das cotas padrão.
       { label: "SPC", path: "/qualidade/spc", screen: "quality-spc", levels: QUALITY_TEMPLATE_LEVELS },
+      // Decisão de RNC: a API (`/quality/rnc`) usa a guarda da Qualidade (Qualidade e admin).
+      { label: "Decisão de RNC", path: "/qualidade/rnc", screen: "quality-rnc", levels: QUALITY_TEMPLATE_LEVELS },
     ],
   },
   {
@@ -329,6 +331,7 @@ export const managementSections: ManagementSection[] = [
       { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users", adminOnly: true },
       { label: "Chamadas do IagoDev", path: "/inicio/chamadas-dev", screen: "dev-chamadas", adminOnly: true },
       { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos", adminOnly: true },
+      { label: "Alterações", path: "/inicio/alteracoes", screen: "dev-alteracoes", adminOnly: true },
       { label: "Sistema", path: "/inicio/sistema", screen: "dev-sistema", adminOnly: true },
     ],
   },

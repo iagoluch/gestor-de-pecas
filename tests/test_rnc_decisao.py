@@ -96,6 +96,25 @@ class _BancoEmMemoria(FakeDatabase):
     def listar_decisoes_rnc(self, rnc_id):
         return [dict(d) for d in reversed(self.decisoes) if d["rnc_id"] == rnc_id]
 
+    def listar_rncs_para_decisao(self, *, limite, somente_sem_decisao=False):
+        self.chamadas.append(("listar_rncs", limite, somente_sem_decisao))
+        itens = []
+        for rnc in self.rncs.values():
+            historico = self.listar_decisoes_rnc(rnc["id"])
+            vigente = None
+            if historico:
+                v = historico[0]
+                vigente = {k: v[k] for k in ("decisao", "justificativa", "decidido_por_nome", "quando")}
+            if somente_sem_decisao and vigente:
+                continue
+            itens.append({
+                "id": rnc["id"], "codigo": rnc["codigo"], "motivo": rnc["motivo"],
+                "resultado_peca": rnc["resultado_peca"], "numero_peca": rnc["numero_peca"],
+                "op": rnc["codigo_op"], "produto": rnc["produto_codigo"], "recurso": "DOBRA1",
+                "criada_em": AGORA, "decisao_vigente": vigente,
+            })
+        return itens[:limite]
+
 
 class PermissaoValidacaoE404Tests(_ApiCase):
     def setUp(self):
@@ -171,6 +190,60 @@ class PermissaoValidacaoE404Tests(_ApiCase):
         self.assertIsNone(resposta.json()["aviso"])
 
 
+class ListagemDeRncsTests(_ApiCase):
+    def setUp(self):
+        self._build(_BancoEmMemoria())
+
+    def test_nao_qualidade_recebe_403_sem_consultar_o_banco(self):
+        for role in NAO_AUTORIZADOS:
+            self._as(role)
+            resposta = self.client.get(f"{Q}/rnc")
+            self.assertEqual(resposta.status_code, 403, role)
+            self.assertEqual(resposta.json()["code"], "quality_templates_access_denied", role)
+        self.assertEqual(self.db.chamadas, [])
+        for role in ("qualidade", "admin"):
+            self._as(role)
+            self.assertEqual(self.client.get(f"{Q}/rnc").status_code, 200, role)
+
+    def test_formato_do_item_e_aviso_so_com_decisao_vigente(self):
+        self._as(QUALIDADE)
+        corpo = self.client.get(f"{Q}/rnc").json()
+        self.assertEqual(corpo["count"], 1)
+        item = corpo["items"][0]
+        self.assertEqual(
+            set(item),
+            {"id", "codigo", "motivo", "resultado_peca", "numero_peca", "op", "produto",
+             "recurso", "criada_em", "decisao_vigente", "aviso"},
+        )
+        self.assertIsNone(item["decisao_vigente"])
+        self.assertIsNone(item["aviso"])
+
+        self.client.post(f"{Q}/rnc/7/decisions",
+                         json={"decisao": "usar_como_esta", "justificativa": "cliente aceitou"})
+        item = self.client.get(f"{Q}/rnc").json()["items"][0]
+        self.assertEqual(item["decisao_vigente"]["decisao"], "usar_como_esta")
+        self.assertEqual(item["decisao_vigente"]["decidido_por_nome"], "Sandro")
+        self.assertEqual(item["aviso"], aviso_de_contradicao("REFUGO", "usar_como_esta"))
+        self.assertIn("REFUGO", item["aviso"])
+
+        self.client.post(f"{Q}/rnc/7/decisions", json={"decisao": "sucatear", "justificativa": "sem conserto"})
+        item = self.client.get(f"{Q}/rnc").json()["items"][0]
+        self.assertEqual(item["decisao_vigente"]["decisao"], "sucatear")  # a última vale
+        self.assertIsNone(item["aviso"])
+
+    def test_filtros_chegam_ao_repositorio_e_limite_e_validado(self):
+        self._as(QUALIDADE)
+        self.client.get(f"{Q}/rnc?limite=5&somente_sem_decisao=true")
+        self.assertIn(("listar_rncs", 5, True), self.db.chamadas)
+        self.client.get(f"{Q}/rnc")
+        self.assertIn(("listar_rncs", 100, False), self.db.chamadas)
+        for invalido in ("limite=0", "limite=201", "limite=abc"):
+            self.assertEqual(self.client.get(f"{Q}/rnc?{invalido}").status_code, 422, invalido)
+        self.client.post(f"{Q}/rnc/7/decisions", json={"decisao": "quarentena", "justificativa": "laudo"})
+        self.assertEqual(self.client.get(f"{Q}/rnc?somente_sem_decisao=true").json(),
+                         {"items": [], "count": 0})
+
+
 class AvisoDeContradicaoTests(unittest.TestCase):
     def test_contradicoes_conhecidas(self):
         for resultado, decisao in (
@@ -217,7 +290,8 @@ class CatalogoDaMigrationTests(unittest.TestCase):
                    if not n.startswith("_")]
         self.assertEqual(
             sorted(metodos),
-            ["buscar_rnc_com_resultado", "listar_decisoes_rnc", "registrar_decisao_rnc"],
+            ["buscar_rnc_com_resultado", "listar_decisoes_rnc", "listar_rncs_para_decisao",
+             "registrar_decisao_rnc"],
         )
 
     def test_allowlist_da_auditoria_cobre_a_entidade_sem_segredos(self):
@@ -355,6 +429,28 @@ class DecisaoPostgresTests(_ApiCase):
                 " decidido_por_id, decidido_por_nome) VALUES (%s, 'jogar_fora', 'abc', 1, 'x')",
                 (rnc_id,),
             )
+
+    def test_listagem_de_rncs_ordem_vigente_filtro_e_limite(self):
+        antiga, recente = self._semear("REFUGO"), self._semear("RETRABALHO")
+        self._decidir(antiga, "quarentena")
+        self._decidir(antiga, "usar_como_esta", "cliente aceitou")
+        corpo = self.client.get(f"{Q}/rnc").json()
+        self.assertEqual(corpo["count"], 2)
+        self.assertEqual([i["id"] for i in corpo["items"]], [recente, antiga])  # mais recente primeiro
+        sem, com = corpo["items"]
+        self.assertIsNone(sem["decisao_vigente"])
+        self.assertIsNone(sem["aviso"])
+        self.assertEqual((sem["resultado_peca"], sem["motivo"], sem["produto"], sem["recurso"]),
+                         ("RETRABALHO", "cota fora", "PRD_X", "DOBRA1"))
+        self.assertEqual(com["decisao_vigente"]["decisao"], "usar_como_esta")  # última decisão
+        self.assertEqual(com["decisao_vigente"]["decidido_por_nome"], "Sandro")
+        self.assertIn("REFUGO", com["aviso"])
+        so_sem = self.client.get(f"{Q}/rnc?somente_sem_decisao=true").json()
+        self.assertEqual([i["id"] for i in so_sem["items"]], [recente])
+        self.assertEqual(self.client.get(f"{Q}/rnc?limite=1").json()["count"], 1)
+        self.assertEqual(self._scalar("SELECT COUNT(*) FROM qualidade_rnc_decisoes"), 2)  # só leitura
+        self._as("gestor")
+        self.assertEqual(self.client.get(f"{Q}/rnc").status_code, 403)
 
     def test_decisoes_de_uma_rnc_nao_aparecem_em_outra(self):
         a, b = self._semear("REFUGO"), self._semear("RETRABALHO")

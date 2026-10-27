@@ -8,3 +8,6 @@
 .maintenance-decided { display: grid; justify-items: start; gap: 4px; }
 .maintenance-terminal { display: grid; gap: 12px; }
 .maintenance-terminal .data-table td { overflow-wrap: anywhere; }
+
+/* Alterações (quem mudou o quê) e Decisão de RNC reaproveitam o visual acima. */
+.change-audit__lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
