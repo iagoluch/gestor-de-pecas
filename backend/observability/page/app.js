@@ -441,7 +441,7 @@ function desenharStatus(dados) {
   const chip = $("chip-ia");
   chip.className = `chip-ia${ia.available ? " ok" : ""}`;
   chip.textContent = ia.available ? `IA: ${texto(ia.model, "modelo")}` : "IA indisponível";
-  chip.title = ia.available ? `Provedor: ${texto(ia.provider)}` : "IA não habilitada nesta instância";
+  chip.title = (ia.available ? `Provedor: ${texto(ia.provider)}. ` : "IA não configurada. ") + "Clique para trocar chave e modelo";
 
   const real = (dados.environments || {}).real || {};
   const faixa = $("faixa-seguranca");
@@ -1879,7 +1879,65 @@ function teclaPaleta(evento) {
 // ---------------------------------------------------------------------------
 // Eventos de interface (delegação)
 // ---------------------------------------------------------------------------
+function preencherModelosIa() {
+  const ia = (estado.status || {}).ai || {};
+  const provedor = $("ia-config-provedor").value;
+  $("ia-config-modelos").innerHTML = ((ia.suggestions || {})[provedor] || [])
+    .map((m) => `<option value="${escapar(m)}"></option>`).join("");
+}
+
+function abrirConfigIa() {
+  const ia = (estado.status || {}).ai || {};
+  $("ia-config-provedor").value = ia.configured_provider || "nvidia";
+  $("ia-config-modelo").value = ia.model || "";
+  $("ia-config-chave").value = "";
+  $("ia-config-erro").textContent = "";
+  $("ia-config-estado").textContent = ia.key_set
+    ? `Chave ${ia.from_screen ? "salva pela tela" : "do .env"} em uso.`
+    : "Nenhuma chave configurada.";
+  preencherModelosIa();
+  abrirDialogo($("dialogo-ia"));
+}
+
+async function salvarConfigIa(evento) {
+  evento.preventDefault();
+  const botao = $("ia-config-salvar");
+  botao.disabled = true;
+  $("ia-config-erro").textContent = "";
+  try {
+    await pedir("/ai/config", {
+      method: "PUT",
+      body: JSON.stringify({
+        provider: $("ia-config-provedor").value,
+        model: $("ia-config-modelo").value,
+        api_key: $("ia-config-chave").value,
+      }),
+    });
+    $("ia-config-chave").value = "";
+    $("dialogo-ia").close();
+    avisar("IA atualizada.", "ok");
+    atualizar();
+  } catch (erro) {
+    $("ia-config-erro").textContent = erro.message;
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+async function voltarIaParaEnv() {
+  try {
+    await pedir("/ai/config", { method: "DELETE" });
+    $("dialogo-ia").close();
+    avisar("IA voltou à configuração do .env.", "ok");
+    atualizar();
+  } catch (erro) {
+    $("ia-config-erro").textContent = erro.message;
+  }
+}
+
 const ACOES = {
+  "ia-config": () => abrirConfigIa(),
+  "ia-config-reset": () => voltarIaParaEnv(),
   ir: (el) => irParaAba(el.dataset.aba, el.dataset.sequence),
   ambiente: (el) => definirAmbiente(el.dataset.ambiente),
   atualizar: () => atualizar(),
@@ -1996,6 +2054,8 @@ function teclaAbas(evento) {
 
 function registrarEventos() {
   document.addEventListener("click", aoClicar);
+  $("ia-config-form").addEventListener("submit", salvarConfigIa);
+  $("ia-config-provedor").addEventListener("change", preencherModelosIa);
   document.addEventListener("keydown", aoPressionar);
   document.addEventListener("submit", (evento) => {
     const tipo = evento.target.dataset && evento.target.dataset.iaForm;

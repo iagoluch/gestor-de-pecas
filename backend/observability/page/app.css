@@ -96,6 +96,10 @@ body[data-ambiente="real"] .cabecalho { border-bottom-color: var(--aviso); backg
   color: var(--suave);
   white-space: nowrap;
 }
+button.chip-ia { background: transparent; cursor: pointer; font: inherit; font-size: var(--text-sm); }
+#ia-config-form label { display: block; margin: 10px 0; }
+#ia-config-form input, #ia-config-form select { display: block; width: 100%; margin-top: 4px; box-sizing: border-box; }
+.erro-texto { color: #fca5a5; min-height: 1.4em; margin: 6px 0; }
 .chip-ia.ok { border-color: #1f6f3d; color: var(--ok); background: #0f2a18; }
 
 .abas { display: flex; gap: 2px; overflow-x: auto; margin-top: 8px; scrollbar-width: thin; }

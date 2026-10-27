@@ -31,7 +31,7 @@
       </select>
       <button id="atualizar" type="button" data-acao="atualizar">Atualizar</button>
       <button type="button" data-acao="paleta" aria-keyshortcuts="Control+K" aria-label="Abrir paleta de comandos (Ctrl+K)">Ctrl+K</button>
-      <span id="chip-ia" class="chip-ia">IA: verificando…</span>
+      <button type="button" id="chip-ia" class="chip-ia" data-acao="ia-config" aria-haspopup="dialog">IA: verificando…</button>
     </div>
   </div>
 
@@ -239,6 +239,34 @@
     </dl>
     <div class="dialogo-acoes"><button type="button" data-acao="fechar-dialogo" data-dialogo="atalhos">Fechar</button></div>
   </div>
+</dialog>
+
+<dialog id="dialogo-ia" class="dialogo" aria-labelledby="ia-config-titulo">
+  <form class="dialogo-corpo" id="ia-config-form" autocomplete="off">
+    <h2 id="ia-config-titulo">Chave e modelo da IA</h2>
+    <p class="suave" id="ia-config-estado"></p>
+    <label>Provedor
+      <select id="ia-config-provedor">
+        <option value="nvidia">NVIDIA</option>
+        <option value="groq">Groq</option>
+        <option value="openrouter">OpenRouter</option>
+      </select>
+    </label>
+    <label>Modelo
+      <input id="ia-config-modelo" list="ia-config-modelos" required maxlength="200" spellcheck="false">
+      <datalist id="ia-config-modelos"></datalist>
+    </label>
+    <label>Chave da API
+      <input id="ia-config-chave" type="password" autocomplete="new-password" maxlength="400" spellcheck="false">
+    </label>
+    <p class="suave">A chave fica só no servidor (pasta dev_reports, fora do Git) e nunca volta para esta tela. Em branco = manter a chave atual.</p>
+    <p id="ia-config-erro" role="alert" class="erro-texto"></p>
+    <div class="dialogo-acoes">
+      <button type="button" data-acao="ia-config-reset">Voltar ao .env</button>
+      <button type="button" data-acao="fechar-dialogo" data-dialogo="dialogo-ia">Cancelar</button>
+      <button type="submit" class="principal" id="ia-config-salvar">Salvar</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog id="dialogo-encerrar" class="dialogo" aria-labelledby="encerrar-titulo">

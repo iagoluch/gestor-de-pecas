@@ -439,6 +439,30 @@ class DevObservatoryApiTests(unittest.TestCase):
         self.assertNotIn("abc123", texto)
         self.assertNotIn("joao", texto)
 
+    def test_chave_e_modelo_da_ia_pela_tela(self):
+        url = "/api/v1/dev-observatory/ai/config"
+        corpo = {"provider": "nvidia", "model": "z-ai/glm-5.3", "api_key": "nvapi-segredo-123"}
+        self._login_dev_observatory()
+        ia_da_gestao = getattr(self.app.state, "ai_provider", None)
+        self.assertEqual(self.client.put(url, json=corpo).status_code, 403)  # sem CSRF
+        sem_chave = dict(corpo, api_key="")
+        self.assertEqual(self.client.put(url, json=sem_chave, headers=self._dev_csrf()).status_code, 422)
+        ok = self.client.put(url, json=corpo, headers=self._dev_csrf())
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertTrue(ok.json()["available"])
+        self.assertEqual(ok.json()["model"], "z-ai/glm-5.3")
+        self.assertNotIn("nvapi-segredo-123", ok.text)
+        status = self.client.get("/api/v1/dev-observatory/status")
+        self.assertEqual(status.json()["ai"]["model"], "z-ai/glm-5.3")
+        self.assertNotIn("nvapi-segredo-123", status.text)
+        # trocar só o modelo mantém a chave salva
+        troca = self.client.put(url, json=dict(corpo, model="nvidia/nemotron-3-ultra", api_key=""), headers=self._dev_csrf())
+        self.assertEqual(troca.json()["model"], "nvidia/nemotron-3-ultra")
+        # A chave da tela vale só no observatório: a IA da gestão segue o .env.
+        self.assertIs(self.app.state.ai_provider, ia_da_gestao)
+        self.assertEqual(self.client.delete(url, headers=self._dev_csrf()).status_code, 200)
+        self.assertIs(self.app.state.ai_provider, ia_da_gestao)
+
     def test_chat_com_ia_sanitiza_limita_historico_e_valida_entrada(self):
         url = "/api/v1/dev-observatory/ai/chat"
         fala = lambda role, texto: {"role": role, "content": texto}

@@ -23,6 +23,7 @@ from datetime import date, datetime
 from pathlib import Path
 import html
 import hmac
+import json
 import logging
 import secrets
 from typing import Literal
@@ -36,7 +37,8 @@ from backend.api.dependencies.auth import (
     decode_dev_observatory_claims,
     require_dev_observatory_user,
 )
-from backend.api.dependencies.filters import analytics_filter
+from backend.api.dependencies.filters import unscoped_analytics_filter
+from backend.ai.provider_profiles import PROFILES_BY_HOST
 from backend.api.database import get_database
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
@@ -406,7 +408,8 @@ def events(
 def viewports(
     request: Request,
     environment: str = Query(default=TEST_ENVIRONMENT, alias="env", pattern="^(test|real)$"),
-    filters: AnalyticsFilter = Depends(analytics_filter),
+    # Sem escopo de setor: o observatório tem sessão própria, não a do MES.
+    filters: AnalyticsFilter = Depends(unscoped_analytics_filter),
     _user: SessionUser = Depends(require_dev_observatory_user),
 ):
     """Estado corrente somente dos postos com apontamento canônico real.
@@ -526,28 +529,180 @@ def _report_file(request: Request, name: str) -> Path:
 _AI_LOCK = asyncio.Lock()  # uma chamada por vez: o provedor tem cota e é compartilhado
 
 
+class AIConfigRequest(BaseModel):
+    """Chave e modelo da IA digitados na tela. A chave nunca volta nas respostas."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    provider: Literal["nvidia", "groq", "openrouter"]
+    model: str = Field(min_length=1, max_length=200, pattern=r"^[\w./:@+-]+$")
+    # Vazia = manter a chave já salva (só trocar o modelo).
+    api_key: str = Field(default="", max_length=400)
+
+
+PROFILES_BY_NAME = {profile.name: profile for profile in PROFILES_BY_HOST.values()}
+
+# Sugestões para o seletor; o campo aceita qualquer id que o provedor ofereça.
+AI_MODEL_SUGGESTIONS = {
+    "nvidia": [
+        "nvidia/nemotron-3-super-120b-a12b",
+        "nvidia/nemotron-3-ultra",
+        "z-ai/glm-5.3",
+        "meta/llama-3.3-70b-instruct",
+    ],
+    "groq": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"],
+    "openrouter": ["openai/gpt-oss-120b", "anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"],
+}
+
+
+def _ai_override_path(settings) -> Path:
+    return Path(settings.dev_observatory_report_dir) / "ai_override.json"
+
+
+def _build_ai_provider(settings, *, api_key: str, model: str, base_url: str):
+    from backend.ai.openai_compatible_provider import OpenAICompatibleProvider
+
+    return OpenAICompatibleProvider(
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        reasoning_effort=settings.ai_reasoning_effort,
+        temperature=settings.ai_temperature,
+        max_completion_tokens=settings.ai_max_completion_tokens,
+        request_token_budget=settings.ai_request_token_budget,
+        timeout_seconds=settings.ai_timeout_seconds,
+    )
+
+
+def _load_ai_override(application) -> None:
+    """Aplica uma vez a chave/modelo salvos pela tela (dev_reports/, fora do Git).
+
+    Vale só para a IA do observatório (``devobs_ai_provider``): a IA Industrial
+    da gestão (``ai_provider``) segue sempre o .env.
+    """
+
+    state = application.state
+    if getattr(state, "devobs_ai_override_loaded", False):
+        return
+    state.devobs_ai_override_loaded = True
+    path = _ai_override_path(state.settings)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        profile = PROFILES_BY_NAME[data["provider"]]
+        state.devobs_ai_override = {
+            "provider": profile.name,
+            "model": str(data["model"]),
+            "api_key": str(data["api_key"]),
+        }
+        state.devobs_ai_provider = _build_ai_provider(
+            state.settings,
+            api_key=state.devobs_ai_override["api_key"],
+            model=state.devobs_ai_override["model"],
+            base_url=profile.default_base_url,
+        )
+    except FileNotFoundError:
+        pass
+    except Exception:
+        LOGGER.warning("ai_override.json inválido; ignorado", exc_info=True)
+
+
 def _ai_provider(request: Request):
-    settings = request.app.state.settings
-    provider = getattr(request.app.state, "ai_provider", None)
-    if not (settings.ai_enabled and settings.ai_configured and getattr(provider, "configured", False)):
+    _load_ai_override(request.app)
+    state = request.app.state
+    provider = getattr(state, "devobs_ai_provider", None)
+    if provider is None:
+        provider = getattr(state, "ai_provider", None)
+        if not (state.settings.ai_enabled and state.settings.ai_configured):
+            provider = None
+    if not getattr(provider, "configured", False):
         raise AppError(
             "dev_observatory_ai_unavailable",
-            "A IA não está habilitada nesta instância (GESTOR_AI_ENABLED e chave do provedor).",
+            "A IA não está configurada. Informe a chave no botão da IA no topo da tela.",
             status_code=409,
         )
     return provider
 
 
 def _ai_status(request: Request) -> dict:
+    _load_ai_override(request.app)
+    provider = getattr(request.app.state, "devobs_ai_provider", None) or getattr(
+        request.app.state, "ai_provider", None
+    )
     try:
-        provider = _ai_provider(request)
+        _ai_provider(request)
+        available = True
     except AppError:
-        return {"available": False, "model": None, "provider": None}
+        available = False
+    profile_name = getattr(getattr(provider, "profile", None), "name", None)
     return {
-        "available": True,
-        "model": provider.model,
-        "provider": getattr(provider.profile, "name", None),
+        "available": available,
+        "model": provider.model if available else None,
+        "provider": profile_name if available else None,
+        "configured_provider": profile_name,
+        "key_set": bool(getattr(provider, "configured", False)),
+        "from_screen": getattr(request.app.state, "devobs_ai_override", None) is not None,
+        "suggestions": AI_MODEL_SUGGESTIONS,
     }
+
+
+@router.put("/ai/config", dependencies=[Depends(_require_dev_observatory_csrf)])
+def ai_config(
+    payload: AIConfigRequest,
+    request: Request,
+    _user: SessionUser = Depends(require_dev_observatory_user),
+):
+    """Troca chave e modelo da IA do observatório (não a da gestão). A chave fica só em dev_reports/."""
+
+    _recorder(request)
+    state = request.app.state
+    _load_ai_override(request.app)
+    profile = PROFILES_BY_NAME[payload.provider]
+    api_key = payload.api_key
+    if not api_key:
+        current = getattr(state, "devobs_ai_override", None)
+        # Chave vazia só vale ao manter o mesmo provedor da chave já salva.
+        if current and current["provider"] == profile.name:
+            api_key = current["api_key"]
+        elif getattr(state.ai_provider, "profile", None) is profile and state.settings.ai_configured:
+            api_key = state.settings.ai_api_key
+        else:
+            raise AppError(
+                "dev_observatory_ai_key_required",
+                "Informe a chave deste provedor.",
+                status_code=422,
+            )
+    provider = _build_ai_provider(
+        state.settings, api_key=api_key, model=payload.model, base_url=profile.default_base_url
+    )
+    if not provider.configured:
+        raise AppError("dev_observatory_ai_key_required", "Chave inválida.", status_code=422)
+    path = _ai_override_path(state.settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"provider": profile.name, "model": payload.model, "api_key": api_key}),
+        encoding="utf-8",
+    )
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    state.devobs_ai_override = {"provider": profile.name, "model": payload.model, "api_key": api_key}
+    state.devobs_ai_provider = provider
+    return _ai_status(request)
+
+
+@router.delete("/ai/config", dependencies=[Depends(_require_dev_observatory_csrf)])
+def ai_config_reset(
+    request: Request,
+    _user: SessionUser = Depends(require_dev_observatory_user),
+):
+    """Descarta a chave da tela: o observatório volta a usar a IA do .env."""
+
+    state = request.app.state
+    _ai_override_path(state.settings).unlink(missing_ok=True)
+    state.devobs_ai_override = None
+    state.devobs_ai_provider = None
+    return _ai_status(request)
 
 
 def _terminate_allowed(settings) -> bool:
