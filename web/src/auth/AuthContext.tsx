@@ -69,3 +69,9 @@ export function useOptionalAuth() {
   return useContext(AuthContext);
 }
 
+
+/** Setores a que os dados da conta ficam restritos (`null` = fábrica toda ou sem login). */
+export function useSectorScope(): string[] | null {
+  const scope = useContext(AuthContext)?.user?.sector_scope;
+  return scope?.length ? scope : null;
+}

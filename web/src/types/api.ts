@@ -28,6 +28,8 @@ export interface SessionUser {
   areas?: SessionArea[];
   /** Áreas cuja fila de prioridades a conta pode ordenar (líder/supervisor do setor). */
   queue_areas?: string[];
+  /** Setores a que os dados da conta ficam restritos; ausente/null = fábrica toda. */
+  sector_scope?: string[] | null;
   /** Nível gravado na conta (o `role` é o efetivo): distingue o mantenedor (`manutencao`) de um líder. */
   assigned_level?: string | null;
   maintenance_access?: boolean;

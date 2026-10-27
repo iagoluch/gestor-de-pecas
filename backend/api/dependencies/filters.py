@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 import math
 
-from fastapi import Query, Request
+from fastapi import Depends, Query, Request
 
+from backend.api.dependencies.auth import get_current_user
 from backend.api.errors import AppError
+from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 
 # Fora desse intervalo a data não representa um período de negócio real
@@ -58,9 +60,26 @@ def request_now(request: Request) -> datetime:
     return clock.now() if clock is not None else datetime.now().replace(microsecond=0)
 
 
+def scoped_sector(setor: str | None, sector_scope: list[str] | None) -> str | None:
+    """Trava o setor consultado nos setores da conta (``None`` = fábrica toda).
+
+    Setor pedido fora do escopo (ou ausente) cai no primeiro setor permitido:
+    os dados de outro setor nunca saem do servidor.
+    """
+
+    if not sector_scope:
+        return setor
+    wanted = str(setor or "").strip().casefold()
+    for allowed in sector_scope:
+        if allowed.casefold() == wanted:
+            return allowed
+    return sector_scope[0]
+
+
 def build_analytics_filter(
     request: Request,
     *,
+    sector_scope: list[str] | None = None,
     inicio: datetime | None = None,
     fim: datetime | None = None,
     setor: str | None = None,
@@ -89,7 +108,7 @@ def build_analytics_filter(
             "O período máximo por consulta é de 366 dias.",
         )
     values = {
-        "setor": setor,
+        "setor": scoped_sector(setor, sector_scope),
         "recurso": recurso,
         "turno": turno,
         "op": op,
@@ -104,7 +123,7 @@ def build_analytics_filter(
     return AnalyticsFilter(inicio=start, fim=end, **values)
 
 
-def analytics_filter(
+def unscoped_analytics_filter(
     request: Request,
     inicio: datetime | None = Query(default=None),
     fim: datetime | None = Query(default=None),
@@ -118,6 +137,27 @@ def analytics_filter(
 ) -> AnalyticsFilter:
     return build_analytics_filter(
         request,
+        inicio=inicio, fim=fim, setor=setor, recurso=recurso, turno=turno,
+        op=op, operacao=operacao, produto=produto, operador=operador,
+    )
+
+
+def analytics_filter(
+    request: Request,
+    inicio: datetime | None = Query(default=None),
+    fim: datetime | None = Query(default=None),
+    setor: str | None = Query(default=None, max_length=120),
+    recurso: str | None = Query(default=None, max_length=120),
+    turno: str | None = Query(default=None, max_length=80),
+    op: str | None = Query(default=None, max_length=120),
+    operacao: str | None = Query(default=None, max_length=120),
+    produto: str | None = Query(default=None, max_length=160),
+    operador: str | None = Query(default=None, max_length=160),
+    user: SessionUser = Depends(get_current_user),
+) -> AnalyticsFilter:
+    """Filtro gerencial com o setor travado no escopo da conta (líder/supervisor)."""
+    return build_analytics_filter(
+        request, sector_scope=user.sector_scope,
         inicio=inicio, fim=fim, setor=setor, recurso=recurso, turno=turno,
         op=op, operacao=operacao, produto=produto, operador=operador,
     )

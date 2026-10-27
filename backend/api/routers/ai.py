@@ -162,7 +162,9 @@ async def message(
                 "ai_conversation_not_found", "Conversa não encontrada.", status_code=404
             )
         ref = payload.explanation
-        filters = build_analytics_filter(request, **ref.filters.model_dump())
+        filters = build_analytics_filter(
+            request, sector_scope=user.sector_scope, **ref.filters.model_dump()
+        )
         # A fachada é a mesma do serviço (já resolvida por get_ai_service): o
         # fluxo sem explicação não constrói nada além do que construía antes.
         explanation_tree = await asyncio.to_thread(

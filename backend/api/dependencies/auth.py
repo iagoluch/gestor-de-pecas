@@ -6,7 +6,7 @@ import hmac
 
 from fastapi import Depends, Request
 
-from app.core.areas import areas_for_user, queue_areas_for_user
+from app.core.areas import areas_for_user, queue_areas_for_user, sector_scope_for_user
 from app.core.permissions import (
     can_access_andon_web,
     can_access_management_web,
@@ -91,6 +91,7 @@ def _session_user(request: Request, database, *, allow_password_change_pending: 
         operator_automatic_queue=operator_sector.automatic_queue if operator_sector else False,
         areas=areas_for_user(row.get("nivel_atribuido"), role),
         queue_areas=queue_areas_for_user(row.get("nivel_atribuido"), role),
+        sector_scope=sector_scope_for_user(row.get("nivel_atribuido"), role),
         assigned_level=row.get("nivel_atribuido"),
         password_change_required=claims.password_change_required,
     )

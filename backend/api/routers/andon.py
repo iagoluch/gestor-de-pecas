@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from backend.api.dependencies.auth import require_andon_user
 from backend.api.dependencies.facade import get_frontend_facade
-from backend.api.dependencies.filters import analytics_filter
+from backend.api.dependencies.filters import unscoped_analytics_filter as analytics_filter
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 

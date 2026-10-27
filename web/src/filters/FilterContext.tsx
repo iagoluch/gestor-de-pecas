@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
+import { useSectorScope } from "../auth/AuthContext";
 import { LoadingState } from "../components/DataState";
 import { localDate, referenceNow, useReferenceClock } from "../system/ReferenceClock";
 
@@ -54,12 +55,12 @@ interface FilterValue {
  * Período padrão ancorado no relógio de referência do backend. Em ambiente
  * normal `reference` é `null` e o relógio real do navegador é usado.
  */
-export function defaultFilters(reference: Date | null): ManagementFilters {
+export function defaultFilters(reference: Date | null, sector = ""): ManagementFilters {
   const today = localDate(referenceNow(reference));
   return {
     startDate: today,
     endDate: today,
-    sector: "",
+    sector,
     resource: "",
     op: "",
     operation: "",
@@ -90,7 +91,9 @@ export function FilterProvider({ children }: PropsWithChildren) {
 }
 
 function ResolvedFilterProvider({ reference, children }: PropsWithChildren<{ reference: Date | null }>) {
-  const [filters, setFilters] = useState<ManagementFilters>(() => defaultFilters(reference));
+  // Conta restrita a um(ns) setor(es): o filtro nasce no primeiro deles, sem "Todos".
+  const scopeSector = useSectorScope()?.[0] ?? "";
+  const [filters, setFilters] = useState<ManagementFilters>(() => defaultFilters(reference, scopeSector));
   const value = useMemo(() => {
     const today = localDate(referenceNow(reference));
     return {
@@ -99,9 +102,9 @@ function ResolvedFilterProvider({ reference, children }: PropsWithChildren<{ ref
       query: toQuery(filters),
       dailyQuery: toQuery({ ...filters, startDate: today, endDate: today }),
       queryFor: (fields: FilterField[]) => toQuery(filters, fields),
-      reset: () => setFilters(defaultFilters(reference)),
+      reset: () => setFilters(defaultFilters(reference, scopeSector)),
     };
-  }, [filters, reference]);
+  }, [filters, reference, scopeSector]);
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
 }
 

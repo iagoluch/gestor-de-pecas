@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, Response
 from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.auth import require_csrf, require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
-from backend.api.dependencies.filters import analytics_filter, validated_business_datetime
+from backend.api.dependencies.filters import analytics_filter, scoped_sector, validated_business_datetime
 from backend.api.dependencies.reports import get_report_service
 from backend.api.dependencies.messaging import get_report_messaging_service
 from backend.api.errors import AppError
@@ -64,7 +64,7 @@ async def generate_report(
             report_type=payload.report_type,
             inicio=inicio,
             fim=fim,
-            setor=payload.setor,
+            setor=scoped_sector(payload.setor, user.sector_scope),
             recurso=payload.recurso,
             op=payload.op,
             indicador=payload.indicador,
@@ -162,7 +162,7 @@ def create_report_schedule(
         report_type=payload.report_type,
         frequency=payload.frequency,
         filters={key: value for key, value in {
-            "setor": payload.setor,
+            "setor": scoped_sector(payload.setor, user.sector_scope),
             "recurso": payload.recurso,
             "op": payload.op,
         }.items() if value},

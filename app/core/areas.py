@@ -58,6 +58,22 @@ def areas_for_user(nivel_atribuido, nivel_efetivo):
             for id_, (label, setores) in AREAS.items() if id_ in ids]
 
 
+def sector_scope_for_user(nivel_atribuido, nivel_efetivo=None):
+    """Setores do catálogo a que os dados da conta ficam restritos, ou ``None``.
+
+    Só quem trabalha numa área (líder/supervisor mapeado em ``AREAS_POR_NIVEL``
+    com ao menos uma área) enxerga apenas o próprio setor (decisão de
+    27/10/2026). Manufatura, PCP, Diretoria, Qualidade, Gestor, Melhoria,
+    Almoxarifado e admin seguem com a fábrica toda (``None``).
+    """
+
+    atribuido = nivel_atribuido or nivel_efetivo
+    ids = AREAS_POR_NIVEL.get(atribuido, ())
+    if not ids:
+        return None
+    return [setor for id_ in ids for setor in AREAS[id_][1]]
+
+
 def queue_areas_for_user(nivel_atribuido, nivel_efetivo=None):
     """Ids das áreas cuja fila manual a conta pode ordenar.
 

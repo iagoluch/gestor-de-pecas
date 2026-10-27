@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { useSectorScope } from "../auth/AuthContext";
 import { ALL_FILTER_FIELDS, useManagementFilters } from "../filters/FilterContext";
 import type { FilterField, ManagementFilters } from "../filters/FilterContext";
 import { localDate, referenceNow, useReferenceClock } from "../system/ReferenceClock";
@@ -37,6 +38,7 @@ export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
   fields?: FilterField[];
 } = {}) {
   const context = useManagementFilters();
+  const scope = useSectorScope();
   const { reference } = useReferenceClock();
   const advanced = ADVANCED.filter((item) => fields.includes(item.field));
   const [draft, setDraft] = useState(context.filters);
@@ -106,11 +108,13 @@ export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
         ) : (
           <p className="filter-bar__scope">Situação do dia corrente</p>
         )}
-        {showSector ? (
+        {showSector && scope?.length === 1 ? (
+          <p className="filter-bar__scope">Setor: {scope[0]}</p>
+        ) : showSector ? (
           <label>Setor
-            <select value={draft.sector} onChange={(event) => update({ sector: event.target.value })}>
-              <option value="">Todos os setores</option>
-              {MANAGEMENT_SECTORS.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+            <select value={scope ? (draft.sector || scope[0]) : draft.sector} onChange={(event) => update({ sector: event.target.value })}>
+              {scope ? null : <option value="">Todos os setores</option>}
+              {(scope ?? MANAGEMENT_SECTORS).map((sector) => <option key={sector} value={sector}>{sector}</option>)}
             </select>
           </label>
         ) : null}

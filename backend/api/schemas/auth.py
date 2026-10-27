@@ -32,6 +32,8 @@ class SessionUser(BaseModel):
     operator_automatic_queue: bool = False
     #: Áreas da fábrica que a conta enxerga na gestão (ver app/core/areas.py).
     areas: list[dict] = []
+    #: Setores a que os dados da conta ficam restritos; ``None`` = fábrica toda.
+    sector_scope: list[str] | None = None
     #: Áreas cuja fila de prioridades a conta pode ordenar (líder/supervisor).
     queue_areas: list[str] = []
     #: Nível gravado na conta (pode ser personalizado; ``role`` é o efetivo, de
