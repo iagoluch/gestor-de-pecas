@@ -144,6 +144,7 @@ class PermissaoValidacaoE404Tests(_ApiCase):
             {"decisao": "sucatear", "justificativa": "   "},
             {"decisao": "sucatear", "justificativa": "ab"},
             {"decisao": "sucatear", "justificativa": "x" * 501},
+            {"decisao": "sucatear", "justificativa": "motivo\x00válido"},  # Postgres recusa NUL
             {"decisao": "sucatear"},
             {"justificativa": "motivo válido"},
             {"decisao": "sucatear", "justificativa": "motivo válido", "resultado": "APROVADA"},

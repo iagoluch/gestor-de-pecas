@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class QualityDimensionInput(BaseModel):
@@ -91,3 +91,10 @@ class QualityRncDecisionRequest(BaseModel):
 
     decisao: Literal["usar_como_esta", "retrabalhar", "sucatear", "quarentena"]
     justificativa: str = Field(min_length=3, max_length=500)
+
+    @field_validator("justificativa")
+    @classmethod
+    def _sem_caractere_nulo(cls, valor: str) -> str:
+        if chr(0) in valor:
+            raise ValueError("A justificativa não pode conter caractere nulo.")
+        return valor
