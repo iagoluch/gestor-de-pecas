@@ -117,6 +117,55 @@ class MaintenanceOnlyAccessTests(unittest.TestCase):
         self.assertTrue(_pode_editar(SimpleNamespace(role="lider", assigned_level="lider")))
         self.assertTrue(_pode_editar(SimpleNamespace(role="admin", assigned_level="admin")))
 
+    def test_lista_de_usuarios_rotula_mantenedor_como_manutencao(self):
+        from backend.api.routers.management import _tela_do_nivel
+        self.assertEqual(_tela_do_nivel("lider", "manutencao"), "manutencao")
+        self.assertEqual(_tela_do_nivel("lider", "lider"), "gestao")
+        self.assertEqual(_tela_do_nivel("admin", "admin"), "gestao")
+
+
+class MaintenanceOnlyApiForbiddenTests(unittest.TestCase):
+    """Rotas reais (só a sessão é simulada): a conta de Manutenção leva 403."""
+
+    def setUp(self):
+        from fastapi.testclient import TestClient
+        from backend.api.config import WebSettings
+        from backend.api.database import get_database
+        from backend.api.dependencies.auth import access_flags, get_current_user, require_csrf
+        from backend.api.main import create_app
+        from backend.api.schemas.auth import SessionUser
+
+        settings = WebSettings(
+            environment="test",
+            session_secret="test-secret-that-is-long-enough-for-session-signatures-123456",
+            allowed_hosts=("testserver",),
+            allowed_origins=("http://testserver",),
+        )
+        app = create_app(settings=settings, database_factory=lambda: None)
+        user = SessionUser(
+            id=9, name="Mantenedor", role="lider", assigned_level="manutencao",
+            operator_access=False, **access_flags("lider", "manutencao"),
+        )
+        app.dependency_overrides[get_database] = lambda: None
+        app.dependency_overrides[require_csrf] = lambda: None
+        app.dependency_overrides[get_current_user] = lambda: user
+        self.client = TestClient(app)
+
+    def test_gestao_andon_qualidade_e_chamada_recusam_o_mantenedor(self):
+        casos = (
+            ("get", "/api/v1/management/users", None),
+            ("get", "/api/v1/andon", None),
+            ("get", "/api/v1/quality/templates/PROD-1", None),
+            ("post", "/api/v1/chamadas", {
+                "contato_id": 1, "motivo": "Manutenção", "comentario": "teste",
+                "solicitante_nome_manual": "Mantenedor", "solicitante_email": "m@x.com",
+            }),
+        )
+        for metodo, rota, corpo in casos:
+            with self.subTest(rota=rota):
+                resposta = getattr(self.client, metodo)(rota, **({"json": corpo} if corpo else {}))
+                self.assertEqual(resposta.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

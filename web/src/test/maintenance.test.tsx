@@ -59,6 +59,12 @@ describe("Manutenção — sugestões de paradas", () => {
     expect(String(calls(mock, "/maintenance/")[0][0])).toContain("/api/v1/maintenance/suggestions?status=sugerida");
   });
 
+  it("avisa quando a lista bateu no limite e está cortada", async () => {
+    stub(session("lider", "manutencao"), () => json({ ...lista([item(1)]), limit: 1 }));
+    renderAt("/manutencao/sugestoes");
+    expect(await screen.findByText(/Mostrando as 1 mais recentes/)).toBeInTheDocument();
+  });
+
   it("Aceitar chama POST /accept com a nota e recarrega a lista", async () => {
     let aceita = false;
     const mock = stub(session("lider", "manutencao"), (path, init) => {

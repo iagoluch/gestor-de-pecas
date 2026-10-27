@@ -166,6 +166,7 @@ export function MaintenanceSuggestionsPage({ terminal = false }: { terminal?: bo
 
       {data ? (
         <SectionCard title={tab.label} className="content-section" action={<span className="section-count">{`${formatNumber(data.count)} sugestão(ões)`}</span>}>
+          {data.count >= data.limit ? <Notice tone="info">{`Mostrando as ${formatNumber(data.limit)} mais recentes. Decida estas para ver as anteriores.`}</Notice> : null}
           <DataTable columns={[...base, ...decision]} rows={items} rowKey={(row) => row.id} emptyTitle={tab.empty} />
         </SectionCard>
       ) : null}

@@ -26,7 +26,7 @@ interface UserAccount {
   nivel_rotulo?: string | null;
   unidade?: string | null;
   /** Tela onde a pessoa entra: gestão, apontamento ou outra (Andon/Almoxarifado). */
-  tela?: "gestao" | "apontamento" | "outro";
+  tela?: "gestao" | "apontamento" | "manutencao" | "outro";
   ativo: boolean;
   data_criacao?: string | null;
 }
@@ -60,6 +60,7 @@ const FILTROS_INICIAIS = { situacao: "", nivel: "", unidade: "", tela: "", busca
 const TELAS = [
   { value: "gestao", label: "Gestão" },
   { value: "apontamento", label: "Apontamento" },
+  { value: "manutencao", label: "Manutenção" },
   { value: "outro", label: "Outras (Andon/Almoxarifado)" },
 ];
 const SEM_UNIDADE = "__sem";

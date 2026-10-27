@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
 
 from app.core.password_policy import password_policy_error
-from app.core.permissions import USER_LEVELS, can_access_management_web, is_sector_operator
+from app.core.permissions import USER_LEVELS, can_access_management_web, is_maintenance_only, is_sector_operator
 from app.database.errors import PauseOrderConflictError
 from app.database.telegram_link_codes import TELEGRAM_LINK_CODE_TTL_SECONDS
 from backend.api.database import get_database
@@ -500,8 +500,11 @@ def internal_alerts(
 UNASSIGNABLE_LEVELS = ("lider", "supervisor", "gestor")
 
 
-def _tela_do_nivel(nivel) -> str:
-    """Onde a pessoa entra: tela de gestão, tela de apontamento ou outra (Andon/Almoxarifado)."""
+def _tela_do_nivel(nivel, nivel_atribuido=None) -> str:
+    """Onde a pessoa entra: gestão, apontamento, Manutenção ou outra (Andon/Almoxarifado)."""
+    # O nível personalizado "manutencao" herda a base "lider" (gestão); a tela dela é só a de sugestões.
+    if is_maintenance_only(nivel, nivel_atribuido):
+        return "manutencao"
     if can_access_management_web(nivel):
         return "gestao"
     return "apontamento" if is_sector_operator(nivel) else "outro"
@@ -512,7 +515,7 @@ def list_users(
     _user: SessionUser = Depends(require_admin_user),
     database=Depends(get_database),
 ):
-    rows = [{**row, "tela": _tela_do_nivel(row.get("nivel"))} for row in database.listar_usuarios() or []]
+    rows = [{**row, "tela": _tela_do_nivel(row.get("nivel"), row.get("nivel_atribuido"))} for row in database.listar_usuarios() or []]
     custom = list(database.listar_niveis_personalizados() or [])
     return {
         "items": rows,
