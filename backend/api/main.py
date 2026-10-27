@@ -18,6 +18,7 @@ import uuid
 import anyio.to_thread
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -986,6 +987,8 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        # Sistema interno exposto por túnel: nenhum buscador deve listá-lo.
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
         # Nenhuma tela usa câmera, microfone, localização ou periféricos do
         # navegador; negar explicitamente limita o estrago de um script injetado.
         response.headers["Permissions-Policy"] = _PERMISSIONS_POLICY
@@ -1003,6 +1006,10 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                 "script-src 'self'; connect-src 'self'; frame-ancestors 'none'"
             )
         return response
+
+    @application.get("/robots.txt", include_in_schema=False)
+    async def robots_txt() -> PlainTextResponse:
+        return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
     register_error_handlers(application)
     prefix = "/api/v1"

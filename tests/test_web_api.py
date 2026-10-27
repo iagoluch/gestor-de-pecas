@@ -294,8 +294,14 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
         self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
         self.assertIn("camera=()", response.headers["Permissions-Policy"])
+        self.assertEqual(response.headers["X-Robots-Tag"], "noindex, nofollow")
         # Implantação sem HTTPS declarado (cookie_secure=False) não recebe HSTS.
         self.assertNotIn("Strict-Transport-Security", response.headers)
+
+    def test_robots_txt_bloqueia_buscadores(self):
+        response = self.client.get("/robots.txt")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Disallow: /", response.text)
 
     def test_hsts_so_quando_implantacao_declara_https(self):
         settings = replace(_settings(), cookie_secure=True)
