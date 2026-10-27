@@ -12,6 +12,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { humanize } from "../../utils/format";
+import { groupLevelsBySector } from "../../utils/userLevelGroups";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useDraft } from "../../hooks/useDraft";
@@ -87,6 +88,7 @@ export function ManagementUsersPage() {
   const personalizados = query.data?.custom_levels ?? [];
   const niveisBase = niveis.filter((nivel) => nivel !== "admin" && !personalizados.some((item) => item.nome === nivel));
   const rotuloNivel = (nivel: string) => personalizados.find((item) => item.nome === nivel)?.rotulo ?? humanize(nivel);
+  const gruposDeNiveis = (lista: string[]) => groupLevelsBySector(lista, (nivel) => nivel, rotuloNivel);
   const [novoNivel, setNovoNivel] = useState<{ rotulo: string; nivel_base: string } | null>(null);
   const unidades = useMemo(
     () => [...new Set(items.map((item) => item.unidade).filter((unidade): unidade is string => Boolean(unidade)))]
@@ -271,11 +273,12 @@ export function ManagementUsersPage() {
             label: "Nível",
             allLabel: "Todos os níveis",
             value: filtros.values.nivel,
-            options: niveis.map((nivel) => ({
+            options: gruposDeNiveis(niveis).flatMap(({ label, levels }) => levels.map((nivel) => ({
               value: nivel,
               label: rotuloNivel(nivel),
+              group: label,
               count: items.filter((item) => (item.nivel_atribuido ?? item.nivel) === nivel).length,
-            })),
+            }))),
             onChange: (value) => filtros.set("nivel", value),
           },
           {
@@ -440,8 +443,10 @@ export function ManagementUsersPage() {
             <label>
               Nível de acesso
               <select value={editando.nivel} disabled={editando.id === user?.id} onChange={(event) => setEditando({ ...editando, nivel: event.target.value })}>
-                {niveis.filter((nivel) => nivel === editando.nivel || !(query.data?.unassignable_levels ?? []).includes(nivel)).map((nivel) => (
-                  <option key={nivel} value={nivel}>{rotuloNivel(nivel)}</option>
+                {gruposDeNiveis(niveis.filter((nivel) => nivel === editando.nivel || !(query.data?.unassignable_levels ?? []).includes(nivel))).map(({ label, levels }) => (
+                  <optgroup key={label} label={label}>
+                    {levels.map((nivel) => <option key={`${label}:${nivel}`} value={nivel}>{rotuloNivel(nivel)}</option>)}
+                  </optgroup>
                 ))}
               </select>
             </label>

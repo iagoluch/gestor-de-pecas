@@ -4,6 +4,8 @@ export interface RecordFilterOption {
   value: string;
   label: string;
   count?: number;
+  /** Quando houver, a opção aparece dentro deste grupo (`<optgroup>`). */
+  group?: string;
 }
 
 export interface RecordFilterSelect {
@@ -13,6 +15,18 @@ export interface RecordFilterSelect {
   value: string;
   options: RecordFilterOption[];
   onChange: (value: string) => void;
+}
+
+/** Junta opções consecutivas do mesmo grupo; opção sem grupo fica solta. */
+function optionGroups(options: RecordFilterOption[]) {
+  const groups: { group: string; options: RecordFilterOption[] }[] = [];
+  for (const option of options) {
+    const group = option.group ?? "";
+    const last = groups[groups.length - 1];
+    if (last && last.group === group) last.options.push(option);
+    else groups.push({ group, options: [option] });
+  }
+  return groups;
 }
 
 /**
@@ -45,11 +59,14 @@ export function RecordToolbar({
             {select.label}
             <select id={select.id} value={select.value} onChange={(event) => select.onChange(event.target.value)}>
               <option value="">{select.allLabel}</option>
-              {select.options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.count === undefined ? option.label : `${option.label} (${option.count})`}
-                </option>
-              ))}
+              {optionGroups(select.options).map(({ group, options }) => {
+                const items = options.map((option) => (
+                  <option key={`${group}:${option.value}`} value={option.value}>
+                    {option.count === undefined ? option.label : `${option.label} (${option.count})`}
+                  </option>
+                ));
+                return group ? <optgroup key={group} label={group}>{items}</optgroup> : items;
+              })}
             </select>
           </label>
         ))}
