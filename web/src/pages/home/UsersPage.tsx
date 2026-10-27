@@ -273,12 +273,12 @@ export function ManagementUsersPage() {
             label: "Nível",
             allLabel: "Todos os níveis",
             value: filtros.values.nivel,
-            options: gruposDeNiveis(niveis).flatMap(({ label, levels }) => levels.map((nivel) => ({
-              value: nivel,
-              label: rotuloNivel(nivel),
-              group: label,
-              count: items.filter((item) => (item.nivel_atribuido ?? item.nivel) === nivel).length,
-            }))),
+            options: gruposDeNiveis(niveis).flatMap(({ label, levels }) => levels.flatMap((nivel) => {
+              const count = items.filter((item) => (item.nivel_atribuido ?? item.nivel) === nivel).length;
+              // Níveis genéricos que não se atribuem a conta só aparecem se ainda houver conta nele.
+              if (!count && (query.data?.unassignable_levels ?? []).includes(nivel)) return [];
+              return [{ value: nivel, label: rotuloNivel(nivel), group: label, count }];
+            })),
             onChange: (value) => filtros.set("nivel", value),
           },
           {
