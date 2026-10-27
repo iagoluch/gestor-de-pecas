@@ -48,6 +48,10 @@ export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
 export const MAINTENANCE_LEVELS = ["admin"] as const;
 export const MAINTENANCE_ASSIGNED_LEVELS = ["manutencao"] as const;
 
+/** Melhoria Contínua: admin pelo nível efetivo; o setor pelo nível atribuído à conta (efetivo `lider`, igual ao de outros líderes). */
+export const IMPROVEMENT_LEVELS = ["admin"] as const;
+export const IMPROVEMENT_ASSIGNED_LEVELS = ["melhoria_continua"] as const;
+
 /** Passa na trava de nível (`levels`) ou, quando declarado, no nível atribuído (`assignedLevels`)? */
 function levelAllowed(
   item: { levels?: readonly string[]; assignedLevels?: readonly string[] },
@@ -254,10 +258,13 @@ export const managementSections: ManagementSection[] = [
     label: "Melhoria Contínua",
     icon: assets.navigation.melhoria,
     defaultPath: "/melhoria-continua",
-    // Visão de oportunidades (23/10/2026): reaproveita as consultas das
-    // Análises, então segue a regra comum da gestão (sem nível próprio).
+    // Visão de oportunidades (23/10/2026), exclusiva do setor de Melhoria
+    // Contínua e do admin (27/10/2026): as consultas são as das Análises, então
+    // o corte é só de menu e rota.
+    levels: IMPROVEMENT_LEVELS,
+    assignedLevels: IMPROVEMENT_ASSIGNED_LEVELS,
     tabs: [
-      { label: "Oportunidades", path: "/melhoria-continua", screen: "melhoria-oportunidades" },
+      { label: "Oportunidades", path: "/melhoria-continua", screen: "melhoria-oportunidades", levels: IMPROVEMENT_LEVELS, assignedLevels: IMPROVEMENT_ASSIGNED_LEVELS },
     ],
   },
   {

@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { EmptyState, LoadingState } from "./components/DataState";
-import { DIRECTOR_LEVELS, MAINTENANCE_ASSIGNED_LEVELS, MAINTENANCE_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
+import { DIRECTOR_LEVELS, IMPROVEMENT_ASSIGNED_LEVELS, IMPROVEMENT_LEVELS, MAINTENANCE_ASSIGNED_LEVELS, MAINTENANCE_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -142,6 +142,21 @@ function RequireMaintenanceAccess({ children }: PropsWithChildren) {
   );
 }
 
+/** Melhoria Contínua: só o setor (nível atribuído `melhoria_continua`) e o admin. */
+function RequireImprovementAccess({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  const allowed = Boolean(user && ((IMPROVEMENT_LEVELS as readonly string[]).includes(user.role)
+    || (user.assigned_level && (IMPROVEMENT_ASSIGNED_LEVELS as readonly string[]).includes(user.assigned_level))));
+  if (allowed) return children;
+  return (
+    <div className="page-wrap">
+      <section className="page-panel">
+        <EmptyState title="Acesso restrito à Melhoria Contínua" detail="Esta tela é exclusiva da Melhoria Contínua e da administração." />
+      </section>
+    </div>
+  );
+}
+
 /**
  * Aba Diretoria: só a diretoria e o admin. Quem não é desses níveis volta para a
  * tela inicial da gestão (o menu já esconde o item); a API recusa de qualquer forma.
@@ -201,7 +216,7 @@ export default function App() {
 
         <Route path="diretoria" element={<RequireDiretoriaAccess><DirectorPage /></RequireDiretoriaAccess>} />
 
-        <Route path="melhoria-continua" element={<ImprovementPage />} />
+        <Route path="melhoria-continua" element={<RequireImprovementAccess><ImprovementPage /></RequireImprovementAccess>} />
 
         <Route path="analises/oee" element={<AnalyticsOeePage />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />
