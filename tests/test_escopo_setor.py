@@ -13,6 +13,7 @@ from backend.api.main import create_app
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AIToolError
 from mes.services.ai_tools import AIToolRegistry
+from mes.services.management import ManagementService
 from tests.fakes import FakeDatabase
 from tests.test_rnc_decisao import _settings
 
@@ -74,6 +75,34 @@ class RotasComEscopo(unittest.TestCase):
         self.assertEqual([row["tipo_setor"] for row in body["items"]], ["Pintura"])
         self.assertEqual(sum(row["total"] for row in body["summary"]), 1)
 
+    def test_alertas_ignoram_maiuscula_do_setor(self):
+        client = self._client(_user("lider", ["Pintura"]))
+        self.db.internal_alerts.append({
+            "tipo": "PRIMEIRA_PECA", "destinatario": "PCP", "severidade": "ALTA",
+            "status_notificacao": "PENDENTE", "tipo_setor": "PINTURA", "quantidade": 1,
+        })
+        self.assertEqual(len(client.get("/api/v1/management/internal-alerts").json()["items"]), 1)
+
+    def _pausa(self, setor):
+        return next(row for row in self.db.automatic_pauses if row["tipo_setor"] == setor)
+
+    def test_lider_so_ve_e_mexe_nas_pausas_do_proprio_setor(self):
+        client = self._client(_user("lider", ["Pintura"]))
+        setores = {row["tipo_setor"] for row in client.get("/api/v1/management/pauses").json()["items"]}
+        self.assertEqual(setores, {"Pintura"})
+        nova = {"tipo_setor": "Solda", "nome": "Café", "hora_inicio": "09:00", "hora_fim": "09:10", "ordem": 9}
+        self.assertEqual(client.post("/api/v1/management/pauses", json=nova).status_code, 403)
+        alheia = self._pausa("Solda")
+        tomada = {**nova, "id": alheia["id"], "tipo_setor": "Pintura"}
+        self.assertEqual(client.post("/api/v1/management/pauses", json=tomada).status_code, 403)
+        self.assertEqual(client.delete(f"/api/v1/management/pauses/{alheia['id']}").status_code, 403)
+        self.assertEqual(client.delete(f"/api/v1/management/pauses/{self._pausa('Pintura')['id']}").status_code, 200)
+
+    def test_gestor_sem_escopo_mexe_em_qualquer_pausa(self):
+        client = self._client(_user("gestor"))
+        alheia = self._pausa("Solda")
+        self.assertEqual(client.delete(f"/api/v1/management/pauses/{alheia['id']}").status_code, 200)
+
     def test_op_de_outro_setor_e_recusada(self):
         self.assertEqual(
             self._client(_user("lider", ["Solda"])).get("/api/v1/traceability/orders/OP1").status_code, 403
@@ -84,6 +113,17 @@ class RotasComEscopo(unittest.TestCase):
         self.assertEqual(
             self._client(_user("gestor")).get("/api/v1/traceability/orders/OP1").status_code, 200
         )
+
+
+class InconsistenciasDaTelaInicial(unittest.TestCase):
+    def test_so_as_do_setor_filtrado(self):
+        db = FakeDatabase()
+        db.listar_inconsistencias_dados = lambda **_kw: [
+            {"id": 1, "recurso": "LASER1"}, {"id": 2, "recurso": "Gasparini"}, {"id": 3, "recurso": None},
+        ]
+        service = ManagementService(db)
+        self.assertEqual([row["id"] for row in service._load_open_issues("Dobra")], [2])
+        self.assertEqual([row["id"] for row in service._load_open_issues(None)], [1, 2, 3])
 
 
 class FerramentasDaIAComEscopo(unittest.TestCase):

@@ -1512,7 +1512,7 @@ class FakeDatabase:
     ):
         rows = list(reversed(self.internal_alerts))
         if setores:
-            rows = [row for row in rows if row.get("tipo_setor") in setores]
+            rows = [row for row in rows if str(row.get("tipo_setor") or "").upper() in {str(s).upper() for s in setores}]
         if destinatario:
             rows = [row for row in rows if row.get("destinatario") == str(destinatario).upper()]
         if tipo:
@@ -1528,7 +1528,7 @@ class FakeDatabase:
         contagem = Counter(
             (row.get("tipo"), row.get("destinatario"), row.get("severidade"), row.get("status_notificacao"))
             for row in self.internal_alerts
-            if not setores or row.get("tipo_setor") in setores
+            if not setores or str(row.get("tipo_setor") or "").upper() in {str(s).upper() for s in setores}
         )
         return [
             {

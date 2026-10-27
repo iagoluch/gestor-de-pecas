@@ -547,8 +547,8 @@ class FirstPieceRepositoryMixin:
         query = "SELECT * FROM alertas_internos WHERE TRUE"
         params: list = []
         if setores:
-            query += " AND tipo_setor = ANY(%s)"
-            params.append(list(setores))
+            query += " AND UPPER(tipo_setor) = ANY(%s)"
+            params.append([str(setor).upper() for setor in setores])
         if destinatario:
             query += " AND destinatario = %s"
             params.append(str(destinatario).strip().upper())
@@ -642,11 +642,11 @@ class FirstPieceRepositoryMixin:
                        COUNT(*) AS total,
                        COALESCE(SUM(quantidade), 0) AS quantidade_total
                   FROM alertas_internos
-                 WHERE %(setores)s::text[] IS NULL OR tipo_setor = ANY(%(setores)s::text[])
+                 WHERE %(setores)s::text[] IS NULL OR UPPER(tipo_setor) = ANY(%(setores)s::text[])
                  GROUP BY tipo, destinatario, severidade, status_notificacao
                  ORDER BY tipo, destinatario
                 """,
-                {"setores": list(setores) if setores else None},
+                {"setores": [str(setor).upper() for setor in setores] if setores else None},
             )
             return [dict(row) for row in cursor.fetchall()]
 

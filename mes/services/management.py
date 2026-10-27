@@ -12,7 +12,8 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Optional
 
-from app.core.resource_mapping import resource_display_name
+from app.core.operator_sectors import OPERATOR_SECTORS
+from app.core.resource_mapping import resolve_resource_identity, resource_canonical_sector, resource_display_name
 from mes.analytics.physical_time import (
     PhysicalInputSegment,
     consolidate_physical_time,
@@ -805,7 +806,7 @@ class ManagementService:
                 "items": nesting_rows,
             },
             "audit": {
-                "open_issues": self._load_open_issues(),
+                "open_issues": self._load_open_issues(filters.setor),
             },
             "data_quality": {
                 "calendar_configured": calendar_available,
@@ -1566,13 +1567,19 @@ class ManagementService:
             prefetch.memo[key] = compute()
         return prefetch.memo[key]
 
-    def _load_open_issues(self):
+    def _load_open_issues(self, setor=None):
         loader = getattr(self.db, "listar_inconsistencias_dados", None)
         if not callable(loader):
             return []
-        return self._prefetch_memo(
+        issues = self._prefetch_memo(
             "open_issues", lambda: list(loader(somente_abertas=True) or [])
         )
+        if not setor:
+            return issues
+        # A tabela não grava setor: a inconsistência é do setor dono do recurso.
+        # Sem recurso identificável ela fica fora do filtro (nunca vaza).
+        wanted = str(setor).strip().casefold()
+        return [issue for issue in issues if _resource_sector(issue.get("recurso")).casefold() == wanted]
 
     def _load_operational_facts(self, filters):
         prefetch = getattr(self, "_prefetch", None)
@@ -1904,6 +1911,23 @@ class _JanelaPrefetch:
             else:
                 resultado.append(row)
         return True, resultado
+
+
+def _resource_sector(recurso) -> str:
+    """Setor dono do recurso: associação oficial, senão o posto de apontamento."""
+
+    code = resolve_resource_identity(recurso)
+    if not code:
+        return ""
+    official = resource_canonical_sector(code)
+    if official:
+        return official
+    key = code.casefold()
+    return next(
+        (sector.name for sector in OPERATOR_SECTORS
+         if any(resolve_resource_identity(station).casefold() == key for station in sector.resources)),
+        "",
+    )
 
 
 def _dt(value) -> Optional[datetime]:

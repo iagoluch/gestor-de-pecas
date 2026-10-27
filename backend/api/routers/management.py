@@ -141,12 +141,28 @@ def kpi_explanation(
 # viviam fixos no domínio; agora são configuração gerencial e o serviço de
 # turno os lê a cada ciclo.
 # ---------------------------------------------------------------------------
+def _pause_in_scope(user: SessionUser, tipo_setor) -> bool:
+    """Líder/supervisor só mexe nas pausas do próprio setor: elas mudam o OEE dele."""
+
+    if not user.sector_scope:
+        return True
+    return str(tipo_setor or "").strip().casefold() in {setor.casefold() for setor in user.sector_scope}
+
+
+def _require_pause_scope(user: SessionUser, tipo_setor) -> None:
+    if not _pause_in_scope(user, tipo_setor):
+        raise AppError("pause_out_of_scope", "Essa pausa é de outro setor.", status_code=403)
+
+
 @router.get("/pauses")
 def list_pauses(
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(require_management_user),
     database=Depends(get_database),
 ):
-    rows = list(database.listar_pausas_automaticas(somente_ativas=False) or [])
+    rows = [
+        row for row in database.listar_pausas_automaticas(somente_ativas=False) or []
+        if _pause_in_scope(user, row.get("tipo_setor"))
+    ]
     setores = sorted({str(row.get("tipo_setor") or "").strip() for row in rows if row.get("tipo_setor")})
     return {
         "items": rows,
@@ -164,6 +180,11 @@ def save_pause(
     database=Depends(get_database),
 ):
     antes = ler_estado(database, "listar_pausas_automaticas", somente_ativas=False)
+    _require_pause_scope(user, payload.tipo_setor)
+    if payload.id is not None:
+        atual = encontrar(antes, "id", payload.id)
+        if atual:
+            _require_pause_scope(user, atual.get("tipo_setor"))
     try:
         row = database.salvar_pausa_automatica(
             tipo_setor=payload.tipo_setor,
@@ -194,6 +215,8 @@ def delete_pause(
     database=Depends(get_database),
 ):
     antes = encontrar(ler_estado(database, "listar_pausas_automaticas", somente_ativas=False), "id", pause_id)
+    if antes:
+        _require_pause_scope(user, antes.get("tipo_setor"))
     if not database.remover_pausa_automatica(pause_id):
         raise AppError("pause_not_found", "Pausa não encontrada.", status_code=404)
     auditar(database, user, "pausa", pause_id, antes=antes)
