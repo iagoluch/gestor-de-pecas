@@ -8,6 +8,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { decisionLabel } from "../production/QualityRncDecisionPage";
 import type { ChangeAction, ChangeAuditEntry, ChangeAuditResponse } from "../../types/changeAudit";
 import { formatDateTime, formatNumber } from "../../utils/format";
 
@@ -55,10 +56,14 @@ export function entityLabel(entity: string) {
   return ENTITIES[entity] ?? entity;
 }
 
-export function fieldValue(value: unknown) {
+const STATUS_LABELS: Record<string, string> = { sugerida: "Sugerida", aceita: "Aceita", descartada: "Descartada" };
+
+export function fieldValue(value: unknown, key?: string) {
   if (value === null || value === undefined || value === "") return "vazio";
   if (typeof value === "boolean") return value ? "Sim" : "Não";
   if (typeof value === "string" && ISO_DATE.test(value)) return formatDateTime(value);
+  if (typeof value === "string" && key === "decisao") return decisionLabel(value);
+  if (typeof value === "string" && key === "status") return STATUS_LABELS[value] ?? value;
   return String(value);
 }
 
@@ -70,11 +75,11 @@ export function changeLines(entry: Pick<ChangeAuditEntry, "acao" | "antes" | "de
   const label = (key: string) => FIELDS[key] ?? key;
   if (entry.acao === "alterar") {
     return keys
-      .filter((key) => fieldValue(antes[key]) !== fieldValue(depois[key]))
-      .map((key) => `${label(key)}: ${fieldValue(antes[key])} → ${fieldValue(depois[key])}`);
+      .filter((key) => fieldValue(antes[key], key) !== fieldValue(depois[key], key))
+      .map((key) => `${label(key)}: ${fieldValue(antes[key], key)} → ${fieldValue(depois[key], key)}`);
   }
   const base = entry.acao === "criar" ? depois : antes;
-  return keys.filter((key) => key in base).map((key) => `${label(key)}: ${fieldValue(base[key])}`);
+  return keys.filter((key) => key in base).map((key) => `${label(key)}: ${fieldValue(base[key], key)}`);
 }
 
 function toQuery(filters: { entidade: string; usuario: string; desde: string; ate: string }) {

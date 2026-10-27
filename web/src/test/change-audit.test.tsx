@@ -44,6 +44,8 @@ describe("Alterações — quem mudou o quê", () => {
     expect(changeLines(entry(2, { acao: "criar", antes: null, depois: { nome: "Turno A", ativo: true } }))).toEqual(["Nome: Turno A", "Ativo: Sim"]);
     expect(changeLines(entry(3, { acao: "excluir", depois: null, antes: { nome: "Pausa 1" } }))).toEqual(["Nome: Pausa 1"]);
     expect(fieldValue(null)).toBe("vazio");
+    expect(fieldValue("usar_como_esta", "decisao")).toBe("Usar como está");
+    expect(fieldValue("aceita", "status")).toBe("Aceita");
   });
 
   it("admin vê a lista; filtrar manda os parâmetros e nunca pede R$", async () => {
