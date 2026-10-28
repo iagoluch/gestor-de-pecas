@@ -57,7 +57,7 @@ export function decisionErrorMessage(reason: unknown) {
   return "Não foi possível registrar a decisão. Tente novamente.";
 }
 
-/** Tela do mantenedor: o mesmo conteúdo no visual do terminal, sem a gestão. */
+/** Tela do perfil de Manutenção: o mesmo conteúdo no visual do terminal, sem a gestão. */
 export function MaintenanceTerminalPage() {
   return <MaintenanceSuggestionsPage terminal />;
 }

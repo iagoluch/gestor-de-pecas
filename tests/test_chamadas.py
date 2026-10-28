@@ -412,6 +412,20 @@ class ChamadaApiTests(unittest.TestCase):
                 self.assertEqual(motivos.json()["items"], list(esperado))
                 self.assertEqual(motivos.json()["prioridades"], list(PRIORIDADES))
 
+    def test_conta_sem_posto_nem_gestao_nao_abre_chamada(self):
+        # Só operador (posto) e gestão têm o botão; Andon, Manutenção etc. levam 403.
+        self._as(SessionUser(
+            id=9, name="Andon W", role="andon",
+            management_access=False, andon_access=True, operator_access=False,
+        ))
+        resposta = self.client.post(
+            "/api/v1/chamadas",
+            json={"contato_id": 1, "motivo": "Manutenção", "comentario": "x"},
+        )
+        self.assertEqual(resposta.status_code, 403)
+        self.assertEqual(resposta.json()["code"], "chamada_sem_permissao")
+        self.assertEqual(self.db.chamadas, [])
+
     def test_criar_chamada_sem_telegram_configurado_registra_mas_nao_envia(self):
         # Canal ligado, mas sem token/chat: distinto de "desligado" (flag).
         self.app = create_app(

@@ -1,5 +1,5 @@
 """Sugestões de manutenção: parada NÃO planejada de manutenção corretiva vira
-ordem SUGERIDA; o mantenedor só aceita ou descarta (Manutenção e admin).
+ordem SUGERIDA; o perfil de Manutenção só aceita ou descarta (Manutenção e admin).
 
 "Aceita" é um carimbo interno: não cria ordem no Protheus nem escreve no outbox.
 Toda a regra está em ``mes/services/maintenance_suggestions.py``; aqui só há

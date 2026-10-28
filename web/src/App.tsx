@@ -123,7 +123,7 @@ function RequireQualityTemplateAccess({ children, detail = "Esta tela é exclusi
 }
 
 /**
- * Sugestões de manutenção: só o mantenedor e o admin. O mantenedor tem nível
+ * Sugestões de manutenção: só o perfil de Manutenção e o admin. O perfil de Manutenção tem nível
  * efetivo `lider`; quem o distingue é o nível atribuído à conta (`assigned_level`).
  * Os demais não veem o item de menu e, pela URL direta, a página nem monta nem
  * chama a API.

@@ -44,7 +44,7 @@ export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
 /** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
 export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
 
-/** Sugestões de manutenção: admin pelo nível efetivo; mantenedor pelo nível atribuído à conta (`assigned_level`). */
+/** Sugestões de manutenção: admin pelo nível efetivo; perfil de Manutenção pelo nível atribuído à conta (`assigned_level`). */
 export const MAINTENANCE_LEVELS = ["admin"] as const;
 export const MAINTENANCE_ASSIGNED_LEVELS = ["manutencao"] as const;
 
@@ -232,7 +232,7 @@ export const managementSections: ManagementSection[] = [
     label: "Manutenção",
     icon: assets.navigation.manufacturing,
     defaultPath: "/manutencao/sugestoes",
-    // Sugestões de paradas de manutenção (26/10/2026): só o mantenedor
+    // Sugestões de paradas de manutenção (26/10/2026): só o perfil de Manutenção
     // (nível atribuído `manutencao`) e o admin. O gestor comum não vê a seção
     // nem a rota; a API (`/maintenance/*`) recusa os demais.
     levels: MAINTENANCE_LEVELS,

@@ -30,7 +30,7 @@ export interface SessionUser {
   queue_areas?: string[];
   /** Setores a que os dados da conta ficam restritos; ausente/null = fábrica toda. */
   sector_scope?: string[] | null;
-  /** Nível gravado na conta (o `role` é o efetivo): distingue o mantenedor (`manutencao`) de um líder. */
+  /** Nível gravado na conta (o `role` é o efetivo): distingue o perfil de Manutenção (`manutencao`) de um líder. */
   assigned_level?: string | null;
   maintenance_access?: boolean;
   /** Conta de gestão que entrou com a senha padrão: precisa definir outra antes de usar o sistema. */

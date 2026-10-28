@@ -25,7 +25,7 @@ CAMPOS_AUDITAVEIS = {
     "custo_pessoa": ("operador_id", "valor_hora"),
     # Decisão sobre RNC (Qualidade): sem dado pessoal além do que já está na RNC.
     "rnc_decisao": ("rnc_id", "rnc_codigo", "decisao", "justificativa"),
-    # Decisão do mantenedor sobre a sugestão de manutenção (sem R$, sem dado pessoal).
+    # Decisão do perfil de Manutenção sobre a sugestão de manutenção (sem R$, sem dado pessoal).
     "manutencao_sugestao": ("sugestao_id", "recurso", "parada_inicio", "status", "nota"),
 }
 

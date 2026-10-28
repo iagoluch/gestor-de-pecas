@@ -18,7 +18,7 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import ChamadaContatoRequest, ChamadaRequest
 from app.core.operator_sectors import OPERATOR_SECTORS
-from app.core.permissions import is_maintenance_only, operator_sector_for_user_level
+from app.core.permissions import operator_sector_for_user_level
 from mes.integrations.notifications.telegram import (
     format_chamada_message,
     telegram_outbound_allowed,
@@ -165,11 +165,12 @@ def criar_chamada(
     user: SessionUser = Depends(get_current_user),
     database=Depends(get_database),
 ):
-    # A tela do mantenedor não tem o botão de chamada; a API também recusa.
-    if is_maintenance_only(user.role, user.assigned_level):
+    # Só operador (posto) e gestão têm o botão; qualquer outra conta, inclusive
+    # a de Manutenção, é recusada também pela API.
+    if not (user.management_access or user.operator_access):
         raise AppError(
             "chamada_sem_permissao",
-            "A conta de Manutenção não abre chamadas.",
+            "Esta conta não abre chamadas.",
             status_code=403,
         )
     _limitar_frequencia(request, user)

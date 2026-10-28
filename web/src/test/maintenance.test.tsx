@@ -46,7 +46,7 @@ const calls = (mock: ReturnType<typeof stub>, fragment: string) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe("Manutenção — sugestões de paradas", () => {
-  it("lista as sugestões com duração humana e o texto de apoio; mantenedor tem nível efetivo lider", async () => {
+  it("lista as sugestões com duração humana e o texto de apoio; perfil de Manutenção tem nível efetivo lider", async () => {
     const mock = stub(session("lider", "manutencao"), () => json(lista([item(1), item(2, { motivo: null, op: null, parada_segundos: 3900 })])));
     renderAt("/manutencao/sugestoes");
     expect(await screen.findByText("Recurso 1")).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("Manutenção — sugestões de paradas", () => {
     }
   });
 
-  it("o item de menu Manutenção aparece para o mantenedor (nível atribuído) e para o admin", async () => {
+  it("o item de menu Manutenção aparece para o perfil de Manutenção (nível atribuído) e para o admin", async () => {
     stub(session("lider", "manutencao"), () => json(lista([])));
     renderAt("/inicio/visao-geral");
     const menu = await screen.findByRole("link", { name: /Manutenção/ });
@@ -177,7 +177,7 @@ describe("Manutenção — sugestões de paradas", () => {
   });
 });
 
-describe("Manutenção — tela do mantenedor (visual de terminal)", () => {
+describe("Manutenção — tela do perfil de Manutenção (visual de terminal)", () => {
   const mantenedor = { ...session("lider", "manutencao"), management_access: false, andon_access: false, maintenance_access: true };
 
   it("abre em /manutencao no visual do terminal, sem apontamento nem botão de chamada", async () => {

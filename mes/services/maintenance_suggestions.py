@@ -1,6 +1,6 @@
 """Parada NÃO planejada do grupo de manutenção vira ordem de manutenção SUGERIDA.
 
-O mantenedor só aceita ou descarta. Esta camada é um REGISTRO interno: não cria
+O perfil de Manutenção só aceita ou descarta. Esta camada é um REGISTRO interno: não cria
 ordem no Protheus, não escreve no outbox, não altera apontamento nem parada e
 não pede nada ao operador. A classificação NÃO é reimplementada aqui:
 

@@ -2759,7 +2759,7 @@ QUALIDADE_RNC_DECISOES_STATEMENTS = (
 )
 
 # Migration 68 — sugestões de manutenção (26/10/2026): parada NÃO planejada do grupo
-# de manutenção corretiva (0003) vira ordem SUGERIDA; o mantenedor só aceita ou
+# de manutenção corretiva (0003) vira ordem SUGERIDA; o perfil de Manutenção só aceita ou
 # descarta. Zero trabalho novo para o operador. "Aceita" é um carimbo INTERNO: não
 # cria ordem no Protheus nem escreve no outbox. Geração lazy (no GET) e idempotente
 # por UNIQUE (recurso, parada_inicio). Uma sugestão decidida nunca volta a
