@@ -14,5 +14,7 @@ regexes = [
   # Segredos de teste com nome explícito indicando fixture, não produção.
   '''segredo-de-teste-com-tamanho-suficiente-123456''',
   '''devobs-secret-that-is-long-enough-for-signatures-123456''',
+  # Chave fictícia do teste da tela do Observatório (não é credencial).
+  '''nvapi-segredo-123''',
   '''scheduler\-test\-secret\-32\-bytes\-long''',
 ]

@@ -107,6 +107,7 @@ class OperationsStreamTests(unittest.TestCase):
         )
         self.app.dependency_overrides[get_database] = lambda: object()
         self.app.dependency_overrides[require_management_user] = _gestor
+        self.app.dependency_overrides[get_current_user] = _gestor  # analytics_filter também lê a sessão
         self.app.dependency_overrides[get_frontend_facade] = _Facade
         self.client = TestClient(self.app)
 
