@@ -10,6 +10,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { OperationsTimeSection } from "../operations/OperationsPages";
 import { buildOccurrencesExplanation, buildRowSumExplanation } from "../operations/operationsExplanations";
 import type { Availability, MetricValue } from "../../types/api";
 import type {
@@ -22,6 +23,7 @@ import type {
 import {
   availabilityLabel,
   displayName,
+  displayText,
   formatDateTime,
   formatAveragePerResource,
   formatRecordedTimeDetail,
@@ -327,7 +329,7 @@ function OeeEvolutionChart({ evolution }: { evolution: NonNullable<OeeResponse["
           </g>
         ) : null}
       </svg>
-      {evolution.reason ? <p className="oee-evolution__note">{evolution.reason}</p> : null}
+      {evolution.reason ? <p className="oee-evolution__note">{displayText(evolution.reason)}</p> : null}
       <ul className="visually-hidden">
         {points.map((point) => <li key={point.at}>{pointLabel(point)}</li>)}
       </ul>
@@ -407,7 +409,7 @@ export function AnalyticsHoursPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<TimeBreakdown>(`/api/v1/analytics/hours-utilization?${filters.query}`);
   const title = "Análises — Horas & Utilização";
-  const subtitle = "Tempo registrado consolidado, sem multiplicar a máquina por OPs simultâneas.";
+  const subtitle = "Tempo registrado consolidado, sem multiplicar a máquina por OPs simultâneas, e o Tempo MES por categoria, setor e recurso.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
@@ -441,6 +443,7 @@ export function AnalyticsHoursPage() {
           />
         </SectionCard>
       </div>
+      <OperationsTimeSection />
     </PageFrame>
   );
 }
@@ -509,7 +512,7 @@ function SegmentPage() {
         <SectionCard title="Ocorrências" className="section-card--table">
           {isStop && data?.difference ? (
             <p className="chart-note" style={{ padding: "8px 16px 10px" }}>
-              diferença: {data.difference.seconds < 0 ? "−" : "+"}{formatHours(Math.abs(data.difference.seconds))}, motivo: {data.difference.reason}
+              diferença: {data.difference.seconds < 0 ? "−" : "+"}{formatHours(Math.abs(data.difference.seconds))}, motivo: {displayText(data.difference.reason)}
             </p>
           ) : null}
           <DataTable
@@ -545,6 +548,10 @@ export function AnalyticsQualityPage() {
     label: String(row.motivo ?? row.razao ?? "Não informado"),
     value: Number(row.quantidade ?? row.count ?? 0),
   }));
+  const rework = (data?.rework_reasons ?? []).map((row) => ({
+    label: String(row.motivo ?? row.razao ?? "Não informado"),
+    value: Number(row.quantidade ?? row.count ?? 0),
+  }));
   // Só vira clicável o que tem peça para explicar; zero e "Não informado" ficam texto simples.
   const qualityNode = (metric: string, label: string, value: number | null | undefined) => (
     typeof value === "number" && value > 0 ? (
@@ -577,6 +584,9 @@ export function AnalyticsQualityPage() {
       </div>
       <div className="two-column-grid content-section">
         <SectionCard title="Refugo por motivo">{scrap.length ? <BarList data={scrap} unit=" peças" /> : <EmptyState />}</SectionCard>
+        <SectionCard title="Retrabalho por motivo">{rework.length ? <BarList data={rework} unit=" peças" /> : <EmptyState />}</SectionCard>
+      </div>
+      <div className="two-column-grid content-section">
         <SectionCard title="Qualidade por setor">
           <DataTable
             rows={data?.by_sector ?? []}
@@ -586,6 +596,18 @@ export function AnalyticsQualityPage() {
               { key: "good", label: "Boas", render: (row) => sectorCell("qld.boa", row.setor, "Boas", row.boa) },
               { key: "scrap", label: "Refugo", render: (row) => sectorCell("qld.refugo", row.setor, "Refugo", row.refugo) },
               { key: "rework", label: "Retrabalho", render: (row) => sectorCell("qld.retrabalho", row.setor, "Retrabalho", row.retrabalho) },
+            ]}
+          />
+        </SectionCard>
+        <SectionCard title="Qualidade por produto">
+          <DataTable
+            rows={data?.by_product ?? []}
+            rowKey={(row) => row.produto}
+            columns={[
+              { key: "product", label: "Produto", sortValue: (row) => row.produto, render: (row) => row.produto },
+              { key: "good", label: "Boas", sortValue: (row) => row.boa, render: (row) => formatNumber(row.boa) },
+              { key: "scrap", label: "Refugo", sortValue: (row) => row.refugo, render: (row) => formatNumber(row.refugo) },
+              { key: "rework", label: "Retrabalho", sortValue: (row) => row.retrabalho, render: (row) => formatNumber(row.retrabalho) },
             ]}
           />
         </SectionCard>

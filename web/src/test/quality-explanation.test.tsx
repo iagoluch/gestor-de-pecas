@@ -4,8 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterProvider } from "../filters/FilterContext";
 import { AnalyticsQualityPage } from "../pages/analytics/AnalyticsPages";
-import { AuditIssuesPage } from "../pages/audit/AuditPages";
-import { HomeAlertsPage } from "../pages/home/HomePages";
+import { AuditAlertsIssuesPage } from "../pages/audit/AuditPages";
 
 afterEach(() => {
   cleanup();
@@ -119,22 +118,22 @@ describe("Qualidade: números clicáveis", () => {
 
 describe("Alertas e Auditoria: contagens clicáveis", () => {
   it("Alertas: cada severidade e o total abrem qld.auditoria.*; zero não vira botão", async () => {
-    const fetchMock = renderPage(<HomeAlertsPage />);
-    const total = await screen.findByRole("button", { name: "Ver de onde vem este número: Total 4" });
+    const fetchMock = renderPage(<AuditAlertsIssuesPage />);
+    const total = await screen.findByRole("button", { name: "Ver de onde vem este número: Total de alertas 4" });
     fireEvent.click(total);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByTestId("explanation-total")).toBeInTheDocument();
     expect(explanationCalls(fetchMock)[0]).toContain("metric=qld.auditoria.total");
     fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
 
-    expect(screen.getByRole("button", { name: "Ver de onde vem este número: Críticos 1" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ver de onde vem este número: Erros 3" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Atenções/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver de onde vem este número: Alertas críticos 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver de onde vem este número: Alertas com erro 3" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Alertas de atenção/ })).not.toBeInTheDocument();
   });
 
-  it("Auditoria usa os mesmos ids das Alertas", async () => {
-    const fetchMock = renderPage(<AuditIssuesPage />);
-    const errors = await screen.findByRole("button", { name: "Ver de onde vem este número: Erros 3" });
+  it("Inconsistências usam os mesmos ids dos Alertas", async () => {
+    const fetchMock = renderPage(<AuditAlertsIssuesPage />);
+    const errors = await screen.findByRole("button", { name: "Ver de onde vem este número: Inconsistências com erro 3" });
     fireEvent.click(errors);
     await screen.findByRole("dialog");
     await waitFor(() => expect(explanationCalls(fetchMock)[0]).toContain("metric=qld.auditoria.erro"));

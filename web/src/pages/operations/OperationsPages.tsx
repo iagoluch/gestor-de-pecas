@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useOptionalAuth } from "../../auth/AuthContext";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { MetricExplanationPanel } from "../../components/MetricExplanationPanel";
+import { Notice } from "../../components/Notice";
 import { PageFrame } from "../../components/PageFrame";
 import { ResourceCard } from "../../components/ResourceCard";
 import { SectionCard } from "../../components/SectionCard";
@@ -13,6 +15,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
+import { AreaQueuePanel } from "../areas/AreaQueuePanel";
 import { buildResourceCountExplanation, buildStoppedOrdersExplanation, type ResourceCountMetric } from "./operationsExplanations";
 import { buildSumExplanation, ROW_LIMIT, sumQuantities, type ExplanationScope, type SumMetric } from "../production/productionExplanations";
 import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
@@ -138,6 +141,7 @@ export function OperationsOverviewPage() {
 
 export function OperationsResourcesPage() {
   const filters = useManagementFilters();
+  const user = useOptionalAuth()?.user;
   const [params, setParams] = useSearchParams();
   const sector = params.get("setor");
   // O link "?setor=X" (Início) vira o filtro da barra: assim o seletor mostra
@@ -153,6 +157,12 @@ export function OperationsResourcesPage() {
   if (query.loading || sector !== null) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
   if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
+  // Fila de prioridades da área (antes só na seção do setor): aparece quando o filtro de setor é
+  // um setor de área cuja fila a conta pode ordenar (`queue_areas`: líder/supervisor e admin).
+  const filteredSector = filters.filters.sector.trim().toLocaleLowerCase("pt-BR");
+  const queueArea = filteredSector
+    ? user?.areas?.find((area) => user.queue_areas?.includes(area.id) && area.setores.some((setor) => setor.toLocaleLowerCase("pt-BR") === filteredSector))
+    : undefined;
   return (
     <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle} period={false}>
       <div className="metric-grid metric-grid--four">
@@ -184,6 +194,7 @@ export function OperationsResourcesPage() {
           ]}
         />
       </SectionCard>
+      {queueArea ? <AreaQueuePanel key={queueArea.id} areaId={queueArea.id} /> : null}
     </PageFrame>
   );
 }
@@ -241,14 +252,17 @@ function OrdersTable({ rows }: { rows: PagedOrders["items"] }) {
   );
 }
 
-export function OperationsTimePage() {
+/**
+ * Bloco "Tempo MES" (tempo registrado por categoria, setor e recurso). Vive dentro
+ * de Análises > Horas & Utilização; usa o mesmo filtro de período da página.
+ */
+export function OperationsTimeSection() {
   const filters = useManagementFilters();
   const query = useApiQuery<TimeBreakdown>(`/api/v1/operations/time?${filters.query}`);
   const [explainedMetric, setExplainedMetric] = useState<string | null>(null);
-  const title = "Consulta Operacional — Tempo MES";
-  const subtitle = "Tempo registrado consolidado por categoria, setor e recurso.";
-  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  const sectionTitle = "Tempo MES — tempo registrado por categoria, setor e recurso";
+  if (query.loading) return <SectionCard title={sectionTitle} className="content-section"><LoadingState /></SectionCard>;
+  if (query.error && !query.data) return <SectionCard title={sectionTitle} className="content-section"><ErrorState error={query.error} onRetry={query.reload} /></SectionCard>;
   const data = query.data;
   const sectorBars = (data?.by_sector ?? []).map((row) => ({
     label: String(row.setor ?? "Não informado"),
@@ -294,7 +308,8 @@ export function OperationsTimePage() {
   const measured = resourceCount ? categories.reduce((acc, key) => acc + categoryTotal(key), 0) : Number(data?.physical_seconds ?? 0);
   const measuredAverage = resourceCount ? categories.reduce((acc, key) => acc + categoryAverage(key), 0) : measured;
   return (
-    <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle}>
+    <SectionCard title={sectionTitle} className="content-section">
+      {query.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
       <div className="metric-grid metric-grid--five">
         <MetricCard label="Tempo produtivo" value={perResource(productive)} detail={totalDetail(productive) ?? "Produção e setup"} accent="success" />
         <MetricCard label="Parada não planejada" value={perResource(unplannedStop)} detail={totalDetail(unplannedStop)} accent="danger" />
@@ -317,7 +332,7 @@ export function OperationsTimePage() {
         </SectionCard>
       </div>
       {explainedMetric ? <MetricExplanationPanel metric={explainedMetric} filters={filters.filters} onClose={() => setExplainedMetric(null)} /> : null}
-    </PageFrame>
+    </SectionCard>
   );
 }
 

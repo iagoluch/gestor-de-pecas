@@ -4050,6 +4050,8 @@ class Database(
                 sequencia_nesting AS nesting,
                 maquina,
                 material,
+                area_usada,
+                fracao_sucata,
                 espessura,
                 data_inicio AS inicio,
                 data_fim AS fim,
@@ -4181,7 +4183,8 @@ class Database(
             SELECT
                 ac.id AS apontamento_id, ac.plano_hash, ac.codigo_tarefa AS tarefa,
                 ac.programa, ac.sequencia_nesting AS nesting, ac.maquina,
-                ac.material, ac.espessura, ac.data_inicio AS inicio, ac.data_fim AS fim,
+                ac.material, ac.espessura, ac.area_usada, ac.fracao_sucata,
+                ac.data_inicio AS inicio, ac.data_fim AS fim,
                 ac.tempo_previsto_segundos AS previsto_segundos,
                 EXTRACT(EPOCH FROM (COALESCE(ac.data_fim, %s) - ac.data_inicio))
                     AS real_segundos,

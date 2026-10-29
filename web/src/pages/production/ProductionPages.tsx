@@ -15,6 +15,7 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { PageMeta, PagedOrders, ProductionResponse } from "../../types/management";
 import { displayName, formatDateTime, formatNumber, formatPercent } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
+import { DownloadAction } from "../reports/ReportsPages";
 import { buildAttendanceExplanation, buildSumExplanation, ROW_LIMIT, sumQuantities, type ExplanationScope, type SumMetric } from "./productionExplanations";
 
 interface PlanActualRow {
@@ -108,8 +109,9 @@ export function ProductionCompletedPage() {
   const query = useApiQuery<ProductionResponse>(`/api/v1/orders/production?${filters.query}`);
   const title = "Produção — Produção realizada";
   const subtitle = "Somente peças boas compõem a produção; perdas permanecem em grandezas separadas.";
-  if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  const exportAction = <DownloadAction type="producao" query={filters.query} />;
+  if (query.loading) return <PageFrame sectionId="production" title={title} subtitle={subtitle} actions={exportAction}><LoadingState /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle} actions={exportAction}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const sectors = data?.sectors ?? [];
   const productionAvailability = data?.production.availability ?? "dados_insuficientes";
@@ -126,8 +128,8 @@ export function ProductionCompletedPage() {
   const showRate = hasQuantityRecords && lossBase > 0;
   const rateText = showRate ? formatPercent((data?.production.scrap ?? 0) / lossBase * 100) : humanizeSystemState("sem_registros");
   return (
-    <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle}>
-      <div className="metric-grid metric-grid--four">
+    <PageFrame staleError={query.error} sectionId="production" title={title} subtitle={subtitle} actions={exportAction}>
+      <div className="metric-grid metric-grid--five">
         <MetricCard label="Produção boa" value={goodText} valueNode={serverExplained("qtd.boa", "Produção boa", goodText)} detail={data?.production.reason ?? undefined} availability={productionAvailability} accent="success" />
         <MetricCard label="Refugo" value={scrapText} valueNode={serverExplained("qtd.refugo", "Refugo", scrapText)} availability={productionAvailability} accent="danger" />
         <MetricCard label="Retrabalho" value={reworkText} valueNode={serverExplained("qtd.retrabalho", "Retrabalho", reworkText)} availability={productionAvailability} accent="warning" />
@@ -139,6 +141,7 @@ export function ProductionCompletedPage() {
           availability={showRate ? "disponivel" : "sem_registros"}
           accent="teal"
         />
+        <MetricCard label="OPs" value={formatNumber(data?.production.ops)} />
       </div>
       <div className="two-column-grid content-section">
         <SectionCard title="Peças boas por setor">
@@ -155,6 +158,7 @@ export function ProductionCompletedPage() {
               { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
             ]}
           /> : <EmptyState detail={data?.production.reason ?? undefined} />}
+          <p className="section-note">Fonte de qualidade: {data?.quality?.reason ?? "Não disponível"}</p>
         </SectionCard>
       </div>
     </PageFrame>

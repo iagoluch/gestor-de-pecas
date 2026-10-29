@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { managementSections, sectionPathFor, sectionVisibleFor } from "../config/navigation";
+import { managementSections, sectionPathFor, sectionVisibleFor, tabVisibleFor } from "../config/navigation";
 
 const areaSections = managementSections.filter((section) => section.id.startsWith("area-"));
 const visiveis = (role: string, ids: string[]) =>
@@ -20,8 +20,16 @@ describe("menu por área", () => {
     expect(visiveis("supervisor", ["solda", "pintura"])).toEqual(["Solda", "Pintura"]);
   });
 
-  it("admin com todas as áreas enxerga as sete", () => {
-    expect(visiveis("admin", areaSections.map((section) => section.tabs[0].area!))).toHaveLength(7);
+  it("quem tem todas as áreas (admin, gerente) não ganha 7 seções: o setor vira filtro em Recursos", () => {
+    const todas = areaSections.map((section) => section.tabs[0].area!);
+    expect(visiveis("admin", todas)).toEqual([]);
+    expect(visiveis("gerente_industrial", todas)).toEqual([]);
+    // O guarda de rota e a busca (Ctrl+K) seguem liberando /areas/<setor>.
+    expect(areaSections.every((section) => tabVisibleFor(section.tabs[0], "admin", todas))).toBe(true);
+  });
+
+  it("quem tem só algumas áreas mantém as seções delas", () => {
+    expect(visiveis("supervisor", ["solda", "pintura", "serra", "usinagem", "prototipo", "dobra-corte"])).toHaveLength(6);
   });
 
   it("conta sem áreas não vê nenhuma", () => {

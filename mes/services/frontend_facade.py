@@ -40,7 +40,9 @@ from mes.domain import (
 from mes.services.audit import AuditService
 from mes.services.andon import AndonService
 from mes.services.calendar import CalendarService
+from mes.services.cut_utilization import com_aproveitamento
 from mes.services.industrial_analytics import IndustrialAnalyticsService
+from mes.services.inspection_waivers import InspectionWaiverService
 from mes.services.management import ManagementService
 from mes.services.management_insights import ManagementInsightsService
 from mes.services.shift_parameters import load_manufacturing_rules
@@ -206,6 +208,7 @@ class FrontendBackendFacade:
         self.analytics.rules = self.rules
         self.audit_service.rules = self.rules
         self.traceability = TraceabilityService(db)
+        self.inspection_waivers = InspectionWaiverService(db)
         self.andon_service = AndonService(
             db,
             simulation_mode=self.simulation_mode,
@@ -928,6 +931,21 @@ class FrontendBackendFacade:
             "nestings": self.management.get_nesting_times(filters),
         }
 
+    @staticmethod
+    def _resource_divergence(fact: dict) -> tuple[bool, str | None]:
+        """Divergência de recurso já gravada nos eventos do apontamento.
+
+        Divergente se algum evento foi gravado como tal; o recurso apontado é o
+        do evento divergente mais recente (ou, sem divergência, o último evento
+        que o informou).
+        """
+
+        events = [e for e in (fact.get("eventos") or ()) if isinstance(e, dict)]
+        divergent = [e for e in events if e.get("recurso_divergente")]
+        pool = divergent or [e for e in events if e.get("recurso_apontado")]
+        pointed = str(pool[-1].get("recurso_apontado") or "").strip() if pool else ""
+        return bool(divergent), pointed or None
+
     def ordens_producao(self, filters: AnalyticsFilter):
         """Projeção de OPs para a Web sem deslocar regra para o React."""
 
@@ -945,6 +963,7 @@ class FrontendBackendFacade:
 
         items = []
         for fact in facts:
+            resource_divergent, resource_pointed = self._resource_divergence(fact)
             planned = (
                 fact.get("quantidade_planejada_pcp")
                 if fact.get("quantidade_planejada_pcp") is not None
@@ -972,6 +991,10 @@ class FrontendBackendFacade:
                 "setor": fact.get("tipo_setor"),
                 "recurso_planejado": fact.get("codigo_recurso"),
                 "recurso_real": fact.get("maquina"),
+                # Lidos de eventos_apontamento_operador (gravados no apontamento);
+                # nenhuma regra de divergência é recalculada aqui.
+                "recurso_divergente": resource_divergent,
+                "recurso_apontado": resource_pointed,
                 "prioridade": fact.get("prioridade"),
                 "inicio_planejado": fact.get("inicio_planejado"),
                 "fim_planejado": fact.get("fim_planejado"),
@@ -1016,7 +1039,7 @@ class FrontendBackendFacade:
         }
 
     def nestings(self, filters: AnalyticsFilter):
-        items = self.management.get_nesting_times(filters)
+        items = [com_aproveitamento(row) for row in self.management.get_nesting_times(filters)]
         return {
             "periodo": filters.to_dict(),
             "items": items,
@@ -1247,3 +1270,6 @@ class FrontendBackendFacade:
 
     def rastreabilidade(self, op: str):
         return self.traceability.trace_op(op)
+
+    def inspecoes_dispensadas(self, filters: AnalyticsFilter):
+        return self.inspection_waivers.no_periodo(filters)

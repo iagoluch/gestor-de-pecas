@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MetricExplanationPanel } from "../components/MetricExplanationPanel";
 import { defaultFilters, FilterProvider } from "../filters/FilterContext";
 import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
-import { OperationsTimePage } from "../pages/operations/OperationsPages";
+import { OperationsTimeSection } from "../pages/operations/OperationsPages";
 import type { ExplanationTree } from "../types/explanation";
 
 afterEach(() => vi.restoreAllMocks());
@@ -337,7 +337,7 @@ describe("Operações > Tempo: categorias clicáveis", () => {
       String(input).includes("/management/explicacao") ? respond(tree()) : respond(time)
     ));
     vi.stubGlobal("fetch", fetchMock);
-    render(<MemoryRouter><FilterProvider><OperationsTimePage /></FilterProvider></MemoryRouter>);
+    render(<MemoryRouter><FilterProvider><OperationsTimeSection /></FilterProvider></MemoryRouter>);
     return fetchMock;
   }
 
@@ -384,7 +384,7 @@ describe("Operações > Tempo: categorias clicáveis", () => {
   it("sem resource_count (resposta antiga) mostra só o tempo físico, sem dividir", async () => {
     const { resource_count: _omit, ...old } = time;
     vi.stubGlobal("fetch", vi.fn(async () => respond(old)));
-    render(<MemoryRouter><FilterProvider><OperationsTimePage /></FilterProvider></MemoryRouter>);
+    render(<MemoryRouter><FilterProvider><OperationsTimeSection /></FilterProvider></MemoryRouter>);
     await screen.findByText("Tempo registrado");
     expect(document.body).not.toHaveTextContent("NaN");
   });

@@ -8,6 +8,7 @@ from backend.api.dependencies.filters import PageParams, analytics_filter, pagin
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
+from mes.services.cut_utilization import resumir_aproveitamento
 
 
 router = APIRouter(prefix="/traceability", tags=["Rastreabilidade"])
@@ -52,8 +53,39 @@ def nestings(
     return {
         **{key: value for key, value in payload.items() if key not in {"items", "count"}},
         "totals": totals,
+        # Aproveitamento da chapa sobre os mesmos itens filtrados dos totais.
+        "aproveitamento": resumir_aproveitamento(items),
         "items": params.slice(items),
         "page": params.meta(len(items)),
         "count": len(items),
     }
 
+
+
+@router.get("/inspection-waivers")
+def inspection_waivers(
+    filters: AnalyticsFilter = Depends(analytics_filter),
+    params: PageParams = Depends(pagination),
+    search: str | None = Query(default=None, max_length=160),
+    _user: SessionUser = Depends(require_management_user),
+    facade=Depends(get_frontend_facade),
+):
+    """Inspeções dispensadas no período (quem autorizou, motivo, crachá, quando)."""
+
+    payload = facade.inspecoes_dispensadas(filters)
+    items = list(payload.get("items", []))
+    if search:
+        query = search.strip().casefold()
+        items = [
+            item for item in items
+            if any(
+                query in str(item.get(key) or "").casefold()
+                for key in ("op", "produto", "recurso", "motivo", "autorizado_por", "cracha")
+            )
+        ]
+    return {
+        **{key: value for key, value in payload.items() if key not in {"items", "count"}},
+        "items": params.slice(items),
+        "page": params.meta(len(items)),
+        "count": len(items),
+    }

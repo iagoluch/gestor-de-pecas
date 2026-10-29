@@ -14,7 +14,6 @@ import { AnalyticsCapacityPage, AnalyticsDowntimesPage, AnalyticsOeePage, Analyt
 import { OperationsOverviewPage, OperationsResourcesPage } from "../pages/operations/OperationsPages";
 import { ProductionOrdersPage } from "../pages/production/ProductionPages";
 import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
-import { HomeSectorsPage } from "../pages/home/HomePages";
 import { TraceabilityOrderPage } from "../pages/traceability/TraceabilityPages";
 
 afterEach(() => vi.restoreAllMocks());
@@ -94,8 +93,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(54);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(54);
+    expect(managementRoutes).toHaveLength(46);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(46);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
@@ -333,14 +332,14 @@ describe("contrato gerencial Web", () => {
     expect(screen.getByRole("button", { name: "Abrir análise das maiores perdas" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Abrir análise dos recursos com maior impacto" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Abrir Produção: Planejado versus Realizado" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Abrir Consulta Operacional: Tempo MES" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Análises: Horas & Utilização" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Abrir Consulta Operacional: Recursos" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Abrir Auditoria: Inconsistências" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Auditoria: Alertas e inconsistências" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /OEE: Dados insuficientes.*Ver explicação/i }));
     expect(screen.getByRole("dialog", { name: "Entenda o OEE" })).toBeInTheDocument();
     expect(screen.getByText("Componentes do resultado")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Rastrear OP" })).toHaveAttribute("href", "/rastreabilidade/linha-do-tempo?op=OP-17");
+    expect(screen.getByRole("link", { name: "Rastrear OP" })).toHaveAttribute("href", "/rastreabilidade/op-produto?op=OP-17");
     fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Ver análise relacionada a DOBRA-01 está em parada não programada/i }));
@@ -442,14 +441,52 @@ describe("GE-13 — KPI sem meta canônica", () => {
   });
 
   it("Setores sem registro: um único vazio, na tabela, e nenhum destaque zerado sem setor", async () => {
-    vi.stubGlobal("fetch", jsonOnce({
-      items: [],
-      highlights: [{ key: "best_good", label: "Maior produção boa", value: 0, unit: "pcs", sector: null }],
-    }));
-    const { container } = render(<MemoryRouter><FilterProvider><HomeSectorsPage /></FilterProvider></MemoryRouter>);
-    expect(await screen.findAllByText("Sem registros para o filtro selecionado")).toHaveLength(1);
-    expect(container.querySelector(".metric-card")).toBeNull();
+    renderOverview({
+      ...overviewWith([]),
+      sectors: [],
+      sector_highlights: [{ key: "best_good", label: "Maior produção boa", value: 0, unit: "peças", sector: null }],
+    });
+    await screen.findByText("Setores — leitura rápida e execução real");
     expect(screen.queryByText("Maior produção boa")).not.toBeInTheDocument();
+  });
+
+  it("Setores: boa, retrabalho e tempo de produção abrem a explicação com o setor; zero e Paradas ficam texto", async () => {
+    const setor = {
+      setor: "corte", producao_boa: 120, refugo: 0, retrabalho: 3, ops: 4,
+      tempo_produtivo_segundos: 7200, tempo_producao_segundos: 7200, tempo_setup_segundos: 0, tempo_parada_segundos: 1800,
+    };
+    const body = { ...overviewWith([]), production: { ...overviewWith([]).production, good: 120, availability: "disponivel" }, sectors: [setor], sector_highlights: [] };
+    const explanation = (metric: string) => ({
+      kind: "value", metric, label: `Explicação ${metric}`, unit: "pct", value: 50, reason: "Teste.", rule: "Regra de teste.",
+      children: [], excluded: [], reconciliation: { ok: true, sum: 50, diff: 0 }, calculated_at: "2026-10-21T10:00:00", truncated: false, notes: [],
+    });
+    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/management/explicacao")) return json(explanation(new URL(path, "http://x").searchParams.get("metric") ?? ""));
+      if (path.includes("/overview/trend")) return json({ detail: "indisponível" }, 500);
+      return json(body);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter><FilterProvider><ManagementOverviewPage /></FilterProvider></MemoryRouter>);
+
+    const expected: Array<[RegExp, string]> = [
+      [/Ver de onde vem este número: Produção boa em .* 120/, "qtd.boa"],
+      [/Ver de onde vem este número: Retrabalho em .* 3/, "qtd.retrabalho"],
+      [/Ver de onde vem este número: Tempo de produção em /, "tempo.producao"],
+    ];
+    const explanationUrls = () => fetchMock.mock.calls.map((call) => String(call[0])).filter((url) => url.includes("/management/explicacao"));
+    for (const [name, id] of expected) {
+      fireEvent.click(await screen.findByRole("button", { name }));
+      await screen.findByRole("dialog");
+      await waitFor(() => expect(explanationUrls().some((url) => url.includes(`metric=${id}`) && url.includes("setor=corte"))).toBe(true));
+      fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    }
+    expect(screen.queryByRole("button", { name: /Refugo em / })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Tempo de setup em / })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Paradas em / })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^corte$/i })).toHaveAttribute("href", "/consulta-operacional/recursos?setor=corte");
   });
 });
 

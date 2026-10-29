@@ -3,6 +3,8 @@
 from datetime import datetime
 
 from app.core.operator_sectors import sector_display_label
+from mes.services.cut_utilization import com_aproveitamento
+from mes.services.inspection_waivers import InspectionWaiverService
 
 
 def _dt(value):
@@ -128,7 +130,10 @@ class TraceabilityService:
             ) or [])
 
         nesting_loader = getattr(self.db, "listar_nestings_corte_por_op", None)
-        nestings = list(nesting_loader(code) or []) if callable(nesting_loader) else []
+        nestings = [
+            com_aproveitamento(row)
+            for row in (nesting_loader(code) or [])
+        ] if callable(nesting_loader) else []
 
         states_loader = getattr(self.db, "listar_estados_recurso_periodo", None)
         physical_states = list(states_loader(
@@ -147,6 +152,8 @@ class TraceabilityService:
 
         pieces_loader = getattr(self.db, "listar_pecas_inspecionadas_por_op", None)
         pieces = _group_inspected_pieces(pieces_loader(code)) if callable(pieces_loader) else []
+
+        waivers = InspectionWaiverService(self.db).da_op(code)
 
         legacy_loader = getattr(self.db, "get_op_timeline", None)
         legacy_timeline = list(legacy_loader(code) or []) if callable(legacy_loader) else []
@@ -315,6 +322,9 @@ class TraceabilityService:
             "legacy_movements": legacy_timeline,
             # Genealogia por peça: leitura do que o inspetor já registrou.
             "pieces": pieces,
+            # Inspeção pulada com autorização: quem, por quê e quando.
+            "inspection_waived": bool(waivers),
+            "inspection_waivers": waivers,
             "timeline": timeline,
             "source_refs": {
                 "operations": [row.get("apontamento_id") for row in operations if row.get("apontamento_id")],

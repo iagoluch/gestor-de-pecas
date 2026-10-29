@@ -30,10 +30,9 @@ import {
   AnalyticsReliabilityPage,
   AnalyticsStandardPage,
 } from "./pages/analytics/AnalyticsPages";
-import { AuditAppointmentsPage, AuditIssuesPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
-import { HomeAlertsPage, HomeSectorsPage } from "./pages/home/HomePages";
+import { AuditAlertsIssuesPage, AuditAppointmentsPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
 import { AreaPage } from "./pages/areas/AreaPage";
-import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage, OperationsTimePage } from "./pages/operations/OperationsPages";
+import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage } from "./pages/operations/OperationsPages";
 import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
 import { MaintenanceSuggestionsPage, MaintenanceTerminalPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
 import { QualityRncDecisionPage } from "./pages/production/QualityRncDecisionPage";
@@ -42,14 +41,14 @@ import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
 import { StandardTimePage } from "./pages/production/StandardTimePage";
 import { DirectorPage } from "./pages/director/DirectorPage";
 import { ImprovementPage } from "./pages/improvement/ImprovementPage";
-import {
-  AnalyticalDataReportPage,
-  IndicatorsReportPage,
-  LossesReportPage,
-  ManagementReportPage,
-  ProductionReportPage,
-} from "./pages/reports/ReportsPages";
-import { TraceabilityNestingPage, TraceabilityOrderPage, TraceabilityTimelinePage } from "./pages/traceability/TraceabilityPages";
+import { ReportsPage } from "./pages/reports/ReportsPages";
+import { TraceabilityNestingPage, TraceabilityOrderPage } from "./pages/traceability/TraceabilityPages";
+
+/** Rota antiga que virou aba de outra tela: leva junto a query string (ex.: `?op=`). */
+function RedirectKeepingSearch({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
 
 function roleHome(user: { management_access: boolean; andon_access?: boolean; maintenance_access?: boolean }) {
   if (user.management_access) return "/inicio/visao-geral";
@@ -183,8 +182,8 @@ export default function App() {
       >
         <Route index element={<Navigate to="/inicio/visao-geral" replace />} />
         <Route path="inicio/visao-geral" element={<ManagementOverviewPage />} />
-        <Route path="inicio/setores" element={<HomeSectorsPage />} />
-        <Route path="inicio/alertas" element={<HomeAlertsPage />} />
+        <Route path="inicio/setores" element={<Navigate to="/inicio/visao-geral" replace />} />
+        <Route path="inicio/alertas" element={<Navigate to="/auditoria/alertas-inconsistencias" replace />} />
         <Route path="inicio/andon" element={<Navigate to="/andon" replace />} />
         <Route path="inicio/mapa-fabrica" element={<Navigate to="/mapa-fabrica" replace />} />
         <Route path="inicio/metas" element={<ManagementGoalsPage />} />
@@ -201,7 +200,7 @@ export default function App() {
         <Route path="consulta-operacional/visao-geral" element={<OperationsOverviewPage />} />
         <Route path="consulta-operacional/recursos" element={<OperationsResourcesPage />} />
         <Route path="consulta-operacional/ops-em-andamento" element={<OperationsOrdersPage />} />
-        <Route path="consulta-operacional/tempo-mes" element={<OperationsTimePage />} />
+        <Route path="consulta-operacional/tempo-mes" element={<Navigate to="/analises/horas-utilizacao" replace />} />
 
         <Route path="areas/:areaId" element={<AreaPage />} />
 
@@ -228,17 +227,19 @@ export default function App() {
         <Route path="analises/confiabilidade" element={<AnalyticsReliabilityPage />} />
 
         <Route path="auditoria/apontamentos" element={<AuditAppointmentsPage />} />
-        <Route path="auditoria/inconsistencias" element={<AuditIssuesPage />} />
+        <Route path="auditoria/alertas-inconsistencias" element={<AuditAlertsIssuesPage />} />
+        <Route path="auditoria/inconsistencias" element={<Navigate to="/auditoria/alertas-inconsistencias" replace />} />
         <Route path="auditoria/confiabilidade" element={<AuditReliabilityPage />} />
 
-        <Route path="relatorios/gerencial" element={<ManagementReportPage />} />
-        <Route path="relatorios/producao" element={<ProductionReportPage />} />
-        <Route path="relatorios/perdas" element={<LossesReportPage />} />
-        <Route path="relatorios/indicadores" element={<IndicatorsReportPage />} />
-        <Route path="relatorios/dados-analiticos" element={<AnalyticalDataReportPage />} />
+        <Route path="relatorios" element={<ReportsPage />} />
+        <Route path="relatorios/gerencial" element={<Navigate to="/relatorios?tipo=gerencial" replace />} />
+        <Route path="relatorios/producao" element={<Navigate to="/producao/realizada" replace />} />
+        <Route path="relatorios/perdas" element={<Navigate to="/relatorios?tipo=perdas" replace />} />
+        <Route path="relatorios/indicadores" element={<Navigate to="/relatorios?tipo=indicadores" replace />} />
+        <Route path="relatorios/dados-analiticos" element={<Navigate to="/relatorios?tipo=dados_analiticos" replace />} />
 
         <Route path="rastreabilidade/op-produto" element={<TraceabilityOrderPage />} />
-        <Route path="rastreabilidade/linha-do-tempo" element={<TraceabilityTimelinePage />} />
+        <Route path="rastreabilidade/linha-do-tempo" element={<RedirectKeepingSearch to="/rastreabilidade/op-produto" />} />
         <Route path="rastreabilidade/lote-material-nesting" element={<TraceabilityNestingPage />} />
       </Route>
       <Route path="/operador/*" element={<RequireAuth operator><OperatorPortalPage /></RequireAuth>} />

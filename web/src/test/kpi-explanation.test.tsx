@@ -6,7 +6,6 @@ import { ValueExplanationBody } from "../components/ValueExplanationPanel";
 import type { ValueExplanation } from "../types/valueExplanation";
 import { FilterProvider } from "../filters/FilterContext";
 import { AnalyticsOeePage } from "../pages/analytics/AnalyticsPages";
-import { HomeSectorsPage } from "../pages/home/HomePages";
 import type { KpiExplanation } from "../types/api";
 
 afterEach(() => {
@@ -218,39 +217,5 @@ describe("Painel: entradas do kpi.* em horas e %", () => {
     expect(screen.queryByText("Unidade")).not.toBeInTheDocument();
     expect(screen.queryByText("Metric")).not.toBeInTheDocument();
     expect(screen.getByText("Tempo")).toBeInTheDocument();
-  });
-});
-
-describe("Tela inicial / Setores: células clicáveis por setor", () => {
-  const SECTOR = {
-    setor: "corte", producao_boa: 120, refugo: 0, retrabalho: 3, ops: 4,
-    tempo_producao_segundos: 7200, tempo_setup_segundos: 0, tempo_parada_segundos: 1800,
-  };
-
-  it("boa, retrabalho e tempo de produção abrem a explicação com o setor; zero e Paradas ficam texto", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path.includes("/management/explicacao")) return respond(valueExplanation(new URL(path, "http://x").searchParams.get("metric") ?? ""));
-      if (path.includes("/management/sectors")) return respond({ items: [SECTOR], highlights: [], count: 1, data_quality: {} });
-      return respond({ items: [] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<MemoryRouter><FilterProvider><HomeSectorsPage /></FilterProvider></MemoryRouter>);
-
-    const expected: Array<[RegExp, string]> = [
-      [/Ver de onde vem este número: Produção boa em .* 120/, "qtd.boa"],
-      [/Ver de onde vem este número: Retrabalho em .* 3/, "qtd.retrabalho"],
-      [/Ver de onde vem este número: Tempo de produção em /, "tempo.producao"],
-    ];
-    for (const [name, id] of expected) {
-      fireEvent.click(await screen.findByRole("button", { name }));
-      await screen.findByRole("dialog");
-      await waitFor(() => expect(explanationCalls(fetchMock as ReturnType<typeof mountFetch>).some((url) => url.includes(`metric=${id}`) && url.includes("setor=corte"))).toBe(true));
-      fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    }
-    expect(screen.queryByRole("button", { name: /Refugo em / })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Tempo de setup em / })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Paradas/ })).not.toBeInTheDocument();
   });
 });

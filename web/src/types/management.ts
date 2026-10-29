@@ -68,6 +68,9 @@ export interface OrderRow {
   setor?: string | null;
   recurso_planejado?: string | null;
   recurso_real?: string | null;
+  /** Só presente quando o backend resume o evento de recurso divergente na linha. */
+  recurso_divergente?: boolean | null;
+  recurso_apontado?: string | null;
   prioridade?: string | number | null;
   inicio_planejado?: string | null;
   fim_planejado?: string | null;
@@ -163,6 +166,14 @@ export interface TraceOperation {
   refugo: number;
   retrabalho: number;
   lote?: string | null;
+  /** Eventos do apontamento; só os campos de recurso divergente são lidos pela tela. */
+  eventos?: Array<{
+    id?: number | null;
+    recurso_divergente?: boolean | null;
+    recurso_apontado?: string | null;
+    recurso_roteiro_codigo?: string | null;
+    recurso_roteiro_nome?: string | null;
+  }>;
 }
 
 export interface TimelineEvent {
@@ -207,6 +218,9 @@ export interface TraceabilityResponse {
   operations: TraceOperation[];
   quantity_events: Array<Record<string, unknown>>;
   cutting_nestings: NestingRow[];
+  /** Verdadeiro quando alguma inspeção da OP foi dispensada; ausente em respostas antigas. */
+  inspection_waived?: boolean;
+  inspection_waivers?: InspectionWaiver[];
   physical_states: Array<Record<string, unknown>>;
   rateio_sessions: Array<Record<string, unknown>>;
   operator_participations: Array<Record<string, unknown>>;
@@ -221,6 +235,8 @@ export interface PagedNestings {
   count: number;
   /** Somas sobre todos os nestings do filtro (não só a página); são o que os cartões mostram. */
   totals?: { previsto_segundos: number; real_segundos: number; real_periodo_segundos: number };
+  /** Aproveitamento da chapa sobre os mesmos nestings filtrados; ausente em respostas antigas. */
+  aproveitamento?: NestingUtilization;
   page: PageMeta;
   availability: Availability;
   time_policy: { total_field: string; filtered_period_field: string; reason: string };
@@ -374,6 +390,54 @@ export interface NestingRow {
   operador_inicio?: string | null;
   operador_fim?: string | null;
   ops_relacionadas?: string[];
+  area_usada?: number | null;
+  fracao_sucata?: number | null;
+  /** Percentual aproveitado da chapa; null quando o SigmaNEST não informou um dado válido. */
+  aproveitamento_percentual?: number | null;
+}
+
+export interface NestingUtilizationTask {
+  tarefa?: string | null;
+  nestings: number;
+  nestings_com_dado: number;
+  area_usada: number;
+  aproveitamento_medio_percentual: number | null;
+}
+
+export interface NestingUtilization {
+  nestings: number;
+  nestings_com_dado: number;
+  nestings_sem_dado: number;
+  area_usada_total: number;
+  aproveitamento_medio_percentual: number | null;
+  por_tarefa: NestingUtilizationTask[];
+  regra: string;
+}
+
+export interface InspectionWaiver {
+  inspecao_id?: number | null;
+  dispensada?: boolean;
+  op?: string | null;
+  operacao?: string | number | null;
+  recurso?: string | null;
+  setor?: string | null;
+  produto?: string | null;
+  descricao?: string | null;
+  quantidade?: number | null;
+  motivo?: string | null;
+  autorizado_por?: string | null;
+  cracha?: string | null;
+  /** ISO. */
+  dispensada_em?: string | null;
+  registrada_por?: string | null;
+}
+
+export interface PagedInspectionWaivers {
+  periodo: Record<string, string | null>;
+  items: InspectionWaiver[];
+  count: number;
+  availability: Availability;
+  page?: PageMeta;
 }
 
 export interface ProductionResponse {

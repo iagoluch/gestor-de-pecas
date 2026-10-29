@@ -2,13 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterProvider } from "../filters/FilterContext";
-import {
-  AnalyticalDataReportPage,
-  IndicatorsReportPage,
-  LossesReportPage,
-  ManagementReportPage,
-  ProductionReportPage,
-} from "../pages/reports/ReportsPages";
+import { ProductionCompletedPage } from "../pages/production/ProductionPages";
+import { ReportsPage } from "../pages/reports/ReportsPages";
 
 afterEach(() => {
   cleanup();
@@ -36,7 +31,7 @@ const PAYLOADS: Record<string, unknown> = {
   gerencial: {
     overview: { production: PRODUCTION, kpis: { oee: { value: 40, unit: "%", availability: "disponivel" } }, sectors: SECTORS },
   },
-  producao: { production: PRODUCTION, quality: {}, sectors: SECTORS },
+  producao: { production: PRODUCTION, quality: { reason: "Fonte de teste" }, sectors: SECTORS },
   perdas: {
     paradas: { total_seconds: 7200, count: 5, by_resource: [], by_reason: [] },
     qualidade: { totals: { refugo: 6, retrabalho: 0 } },
@@ -58,6 +53,7 @@ function mountFetch(type: string) {
     const path = String(input);
     if (path.includes("/management/explicacao")) return respond(valueExplanation(new URL(path, "http://x").searchParams.get("metric") ?? ""));
     if (path.includes(`/reports/${type}`)) return respond(PAYLOADS[type]);
+    if (path.includes("/orders/production")) return respond(PAYLOADS.producao);
     return respond({ items: [] });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -76,13 +72,14 @@ async function opens(fetchMock: ReturnType<typeof mountFetch>, name: RegExp, met
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 }
 
-const page = (node: React.ReactNode) => render(<MemoryRouter><FilterProvider>{node}</FilterProvider></MemoryRouter>);
+const page = (node: React.ReactNode, url = "/") => render(<MemoryRouter initialEntries={[url]}><FilterProvider>{node}</FilterProvider></MemoryRouter>);
+const reportPage = (type: string) => page(<ReportsPage />, `/relatorios?tipo=${type}`);
 const buttons = (name: RegExp) => screen.queryByRole("button", { name });
 
 describe("Relatórios: números clicáveis com a conta aberta", () => {
   it("Gerencial: cartões e células de setor abrem qtd.* / kpi.oee; zero e 'Não informado' ficam texto", async () => {
     const fetchMock = mountFetch("gerencial");
-    page(<ManagementReportPage />);
+    reportPage("gerencial");
     await opens(fetchMock, /Ver de onde vem este número: Produção boa 120/, "qtd.boa");
     await opens(fetchMock, /Ver de onde vem este número: Retrabalho 3/, "qtd.retrabalho");
     await opens(fetchMock, /Ver de onde vem este número: OEE 40/, "kpi.oee");
@@ -93,18 +90,9 @@ describe("Relatórios: números clicáveis com a conta aberta", () => {
     expect(buttons(/Tempo produtivo/)).not.toBeInTheDocument();
   });
 
-  it("Produção: cartões e setor; o cartão de OPs continua texto", async () => {
-    const fetchMock = mountFetch("producao");
-    page(<ProductionReportPage />);
-    await opens(fetchMock, /Ver de onde vem este número: Produção boa 120/, "qtd.boa");
-    await opens(fetchMock, /Ver de onde vem este número: Retrabalho em corte 3/, "qtd.retrabalho", "corte");
-    expect(buttons(/OPs/)).not.toBeInTheDocument();
-    expect(buttons(/Refugo/)).not.toBeInTheDocument();
-  });
-
   it("Perdas: refugo e retrabalho abrem qld.*; parada e ocorrências ficam texto; retrabalho zero fica texto", async () => {
     const fetchMock = mountFetch("perdas");
-    page(<LossesReportPage />);
+    reportPage("perdas");
     await opens(fetchMock, /Ver de onde vem este número: Refugo 6/, "qld.refugo");
     expect(buttons(/Retrabalho/)).not.toBeInTheDocument();
     expect(buttons(/Tempo de parada/)).not.toBeInTheDocument();
@@ -113,7 +101,7 @@ describe("Relatórios: números clicáveis com a conta aberta", () => {
 
   it("Indicadores: OEE e FTT abrem a explicação; Utilização e Tempo registrado ficam texto (fonte diferente)", async () => {
     const fetchMock = mountFetch("indicadores");
-    page(<IndicatorsReportPage />);
+    reportPage("indicadores");
     await opens(fetchMock, /Ver de onde vem este número: OEE 40/, "kpi.oee");
     await opens(fetchMock, /Ver de onde vem este número: FTT 95/, "qtd.ftt");
     expect(buttons(/Utilização/)).not.toBeInTheDocument();
@@ -122,7 +110,7 @@ describe("Relatórios: números clicáveis com a conta aberta", () => {
 
   it("Dados analíticos: só Inconsistências abre qld.auditoria.total", async () => {
     const fetchMock = mountFetch("dados_analiticos");
-    page(<AnalyticalDataReportPage />);
+    reportPage("dados_analiticos");
     await opens(fetchMock, /Ver de onde vem este número: Inconsistências 7/, "qld.auditoria.total");
     expect(buttons(/Nestings/)).not.toBeInTheDocument();
     expect(buttons(/Ordens/)).not.toBeInTheDocument();
@@ -131,21 +119,41 @@ describe("Relatórios: números clicáveis com a conta aberta", () => {
 
 describe("Relatórios: dois botões de exportação", () => {
   it.each([
-    ["gerencial", <ManagementReportPage />],
-    ["producao", <ProductionReportPage />],
-    ["perdas", <LossesReportPage />],
-    ["indicadores", <IndicatorsReportPage />],
-    ["dados_analiticos", <AnalyticalDataReportPage />],
-  ])("%s: 'Export técnico' e 'Export simples' pedem o mesmo relatório em modos diferentes", async (type, node) => {
+    ["gerencial", () => reportPage("gerencial")],
+    ["producao", () => page(<ProductionCompletedPage />)],
+    ["perdas", () => reportPage("perdas")],
+    ["indicadores", () => reportPage("indicadores")],
+    ["dados_analiticos", () => reportPage("dados_analiticos")],
+  ])("%s: 'Export técnico' e 'Export simples' pedem o mesmo relatório em modos diferentes", async (type, renderNode) => {
     const fetchMock = mountFetch(type as string);
     URL.createObjectURL = vi.fn(() => "blob:x");
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    page(node);
+    renderNode();
     const exportCalls = () => fetchMock.mock.calls.map((call) => String((call as unknown[])[0])).filter((url) => url.includes("/export.xlsx"));
     fireEvent.click(await screen.findByRole("button", { name: "Export técnico" }));
     await waitFor(() => expect(exportCalls().some((url) => url.includes(`/reports/${type}/export.xlsx`) && url.includes("modo=tecnico"))).toBe(true));
     fireEvent.click(screen.getByRole("button", { name: "Export simples" }));
     await waitFor(() => expect(exportCalls().some((url) => url.includes("modo=simples"))).toBe(true));
+  });
+});
+
+describe("Relatórios: uma aba só, com seletor de tipo", () => {
+  it("o seletor troca o relatório e mantém os quatro tipos", async () => {
+    mountFetch("gerencial");
+    reportPage("gerencial");
+    await screen.findByRole("heading", { name: /Relatórios/ });
+    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Gerencial", "Perdas", "Indicadores", "Dados analíticos"]);
+    expect(screen.getByRole("tab", { name: "Gerencial" })).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+describe("Produção realizada: traz o que era exclusivo do relatório de Produção", () => {
+  it("cartão de OPs e a fonte de qualidade continuam visíveis", async () => {
+    mountFetch("producao");
+    page(<ProductionCompletedPage />);
+    expect(await screen.findByText("OPs")).toBeInTheDocument();
+    expect(screen.getByText("Fonte de qualidade: Fonte de teste")).toBeInTheDocument();
   });
 });

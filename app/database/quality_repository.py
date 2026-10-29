@@ -598,6 +598,87 @@ class QualityRepositoryMixin:
             linha = cursor.fetchone()
             return dict(linha) if linha else None
 
+    def listar_dispensas_inspecao(
+        self,
+        *,
+        setor_origem=None,
+        inicio=None,
+        fim=None,
+        op=None,
+        op_exata=False,
+        operacao=None,
+        produto=None,
+        recurso=None,
+        limite=1000,
+    ):
+        """Inspeções dispensadas, mais recentes primeiro (somente leitura).
+
+        Alimenta a gestão (Rastreabilidade/Auditoria). O período filtra pelo
+        instante da dispensa (``finalizada_em``) e o setor é o de **origem** da
+        OP, o mesmo recorte usado no histórico de inspeção. Com ``op_exata`` a
+        OP casa por igualdade (genealogia); sem ele, por prefixo (filtro).
+        """
+
+        params = {
+            "setor_origem": str(setor_origem or "").strip() or None,
+            "inicio": inicio,
+            "fim": fim,
+            "op": limpa_codigo(op) if op else None,
+            "operacao": str(operacao or "").strip() or None,
+            "produto": str(produto or "").strip() or None,
+            "recurso": str(recurso or "").strip() or None,
+            "limite": int(limite),
+        }
+        clauses = [
+            "s.status = 'DISPENSADA'",
+            (
+                "(%(setor_origem)s::TEXT IS NULL"
+                f" OR UPPER({self._SETOR_ORIGEM_SQL}) = UPPER(%(setor_origem)s::TEXT))"
+            ),
+            "(%(inicio)s::TIMESTAMP IS NULL OR s.finalizada_em >= %(inicio)s::TIMESTAMP)",
+            "(%(fim)s::TIMESTAMP IS NULL OR s.finalizada_em <= %(fim)s::TIMESTAMP)",
+            (
+                "(%(op)s::TEXT IS NULL OR UPPER(s.codigo_op) = UPPER(%(op)s::TEXT))"
+                if op_exata
+                else "(%(op)s::TEXT IS NULL"
+                " OR UPPER(s.codigo_op) LIKE UPPER(%(op)s::TEXT) || '%%')"
+            ),
+            "(%(operacao)s::TEXT IS NULL OR s.numero_operacao = %(operacao)s::TEXT)",
+            (
+                "(%(produto)s::TEXT IS NULL"
+                " OR UPPER(s.produto_codigo) LIKE UPPER(%(produto)s::TEXT) || '%%')"
+            ),
+            (
+                "(%(recurso)s::TEXT IS NULL"
+                " OR UPPER(s.codigo_recurso) = UPPER(%(recurso)s::TEXT))"
+            ),
+        ]
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    s.id AS inspecao_id,
+                    s.codigo_op,
+                    s.numero_operacao,
+                    s.produto_codigo,
+                    s.produto_descricao,
+                    s.codigo_recurso,
+                    {self._SETOR_ORIGEM_SQL} AS setor_origem,
+                    s.quantidade_total,
+                    s.operador,
+                    s.finalizada_em AS dispensada_em,
+                    s.dispensa_motivo,
+                    s.dispensa_autorizada_por,
+                    s.dispensa_cracha
+                FROM qualidade_inspecoes s
+                WHERE {' AND '.join(clauses)}
+                ORDER BY s.finalizada_em DESC, s.id DESC
+                LIMIT %(limite)s
+                """,  # nosec B608 -- colunas vêm de constante do módulo, valores via %(...)s
+                params,
+            )
+            return _rows(cursor)
+
     def buscar_inspecao_qualidade(self, inspecao_id):
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(

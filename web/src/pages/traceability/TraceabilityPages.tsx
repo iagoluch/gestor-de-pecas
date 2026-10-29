@@ -6,6 +6,7 @@ import { ExplainableValue } from "../../components/ExplainableValue";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
+import { divergentEvent, ResourceDivergenceBadge, routeResourceLabel } from "../../components/ResourceDivergenceBadge";
 import { SearchInput } from "../../components/SearchInput";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -13,8 +14,8 @@ import { useManagementFilters } from "../../filters/FilterContext";
 import type { FilterField } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import type { PagedNestings, TraceabilityResponse, TracePiece } from "../../types/management";
-import { displayName, displayText, formatDateTime, formatDuration, formatNumber, formatPercent, formatSignedDuration, humanize } from "../../utils/format";
+import type { InspectionWaiver, PagedNestings, TraceabilityResponse, TracePiece } from "../../types/management";
+import { displayName, displayText, formatDateTime, formatDuration, formatNumber, formatPercent, formatPercentOneDecimal, formatSignedDuration, humanize } from "../../utils/format";
 
 function useOrderSelection() {
   const [params, setParams] = useSearchParams();
@@ -119,11 +120,46 @@ function InspectedPiecesSection({ pieces }: { pieces: TracePiece[] }) {
   );
 }
 
+/**
+ * Dispensa de inspeção registrada pela Qualidade. O selo só aparece quando o
+ * backend informa a dispensa; motivo, autorizador, crachá e data são os que
+ * foram gravados — campo ausente fica "—", nunca é preenchido aqui.
+ */
+function InspectionWaiverNotice({ waivers }: { waivers: InspectionWaiver[] }) {
+  return (
+    <SectionCard title="Inspeção dispensada" className="content-section section-card--table">
+      <div role="status" style={{ padding: "12px 16px 4px" }}>
+        <span className="status-badge status-badge--warning">Inspeção dispensada</span>
+        <p className="chart-note">
+          {waivers.length > 1
+            ? `${formatNumber(waivers.length)} inspeções desta OP foram dispensadas, sem medição de peças.`
+            : "A inspeção desta OP foi dispensada, sem medição de peças."}
+        </p>
+      </div>
+      {waivers.length ? (
+        <DataTable
+          rows={waivers}
+          rowKey={(row, index) => row.inspecao_id ?? index}
+          columns={[
+            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao == null ? null : String(row.operacao), "—") },
+            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso, "—") },
+            { key: "quantity", label: "Quantidade", render: (row) => row.quantidade == null ? "—" : formatNumber(row.quantidade) },
+            { key: "reason", label: "Motivo", render: (row) => displayText(row.motivo, "—") },
+            { key: "by", label: "Autorizado por", render: (row) => displayName(row.autorizado_por, "—") },
+            { key: "badge", label: "Crachá", render: (row) => row.cracha || "—" },
+            { key: "date", label: "Data", sortValue: (row) => row.dispensada_em, render: (row) => row.dispensada_em ? formatDateTime(row.dispensada_em) : "—" },
+          ]}
+        />
+      ) : null}
+    </SectionCard>
+  );
+}
+
 export function TraceabilityOrderPage() {
   const { search, setSearch, op } = useOrderSelection();
   const query = useApiQuery<TraceabilityResponse>(op ? `/api/v1/traceability/orders/${encodeURIComponent(op)}` : null);
   const title = "Rastreabilidade — OP / Produto";
-  const subtitle = "Drill-down da OP até operação, recurso, quantidades e referências de origem.";
+  const subtitle = "Drill-down da OP até operação, recurso, quantidades, referências de origem e linha do tempo dos eventos.";
   const trace = (query.data?.operations ?? []).reduce(
     (acc, row) => ({
       good: acc.good + Number(row.quantidade_boa ?? 0),
@@ -143,6 +179,7 @@ export function TraceabilityOrderPage() {
             <MetricCard label="Perdas" value={formatNumber(trace.scrap + trace.rework)} detail={`${formatNumber(trace.scrap)} refugo · ${formatNumber(trace.rework)} retrabalho`} accent={trace.scrap + trace.rework > 0 ? "danger" : "teal"} />
             <MetricCard label="Eventos registrados" value={formatNumber(query.data?.timeline.length ?? 0)} detail={`${formatNumber(query.data?.cutting_nestings.length ?? 0)} nesting(s) de Corte vinculado(s)`} accent="purple" />
           </div>
+          {query.data?.inspection_waived || query.data?.inspection_waivers?.length ? <InspectionWaiverNotice waivers={query.data?.inspection_waivers ?? []} /> : null}
           <SectionCard title="Operações e produto" className="content-section section-card--table">
             <DataTable
               rows={query.data?.operations ?? []}
@@ -153,6 +190,15 @@ export function TraceabilityOrderPage() {
                 { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
                 { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
                 { key: "resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
+                {
+                  key: "divergence",
+                  label: "Recurso divergente",
+                  render: (row) => {
+                    const event = divergentEvent(row.eventos);
+                    if (!event) return "—";
+                    return <ResourceDivergenceBadge planned={routeResourceLabel(event) || row.recurso_previsto} actual={event.recurso_apontado || row.recurso_real} />;
+                  },
+                },
                 { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "Não disponível" },
                 { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
                 { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
@@ -162,43 +208,41 @@ export function TraceabilityOrderPage() {
               ]}
             />
           </SectionCard>
+          {(query.data?.cutting_nestings ?? []).length ? (
+            <SectionCard title="Nestings de Corte da OP" className="content-section section-card--table">
+              <DataTable
+                rows={query.data?.cutting_nestings ?? []}
+                rowKey={(row, index) => row.apontamento_id ?? `${row.plano_hash}-${index}`}
+                columns={[
+                  { key: "task", label: "Tarefa / lote", render: (row) => row.tarefa ?? "Não disponível" },
+                  { key: "program", label: "Programa", render: (row) => row.programa ?? "Não disponível" },
+                  { key: "nesting", label: "Nesting", render: (row) => row.nesting ?? "Não disponível" },
+                  { key: "machine", label: "Máquina", render: (row) => row.maquina ?? "Não disponível" },
+                  { key: "utilization", label: "Aproveitamento", sortValue: (row) => row.aproveitamento_percentual ?? -1, render: (row) => formatPercentOneDecimal(row.aproveitamento_percentual) },
+                ]}
+              />
+            </SectionCard>
+          ) : null}
           <InspectedPiecesSection pieces={query.data?.pieces ?? []} />
-          <div className="drilldown-actions">
-            <Link to={`/rastreabilidade/linha-do-tempo?op=${encodeURIComponent(op)}`}>Abrir linha do tempo completa</Link>
-          </div>
+          <SectionCard title={`Linha do tempo da OP ${op} — eventos em ordem cronológica`} className="content-section section-card--table">
+            <DataTable
+              rows={query.data?.timeline ?? []}
+              rowKey={(row, index) => `${row.source}-${row.record_id ?? index}-${row.type}`}
+              columns={[
+                { key: "timestamp", label: "Data e hora", render: (row) => formatDateTime(row.timestamp) },
+                { key: "resource", label: "Máquina / recurso", render: (row) => displayName(row.resource) },
+                { key: "op", label: "OP", render: () => op },
+                { key: "operation", label: "Operação", render: (row) => displayName(row.operation) },
+                { key: "event", label: "Evento", render: (row) => humanize(row.type) },
+                { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status ?? row.type} /> },
+                { key: "operator", label: "Operador", render: (row) => row.operator ?? "Não disponível" },
+                { key: "quantity", label: "Quantidade", render: (row) => formatNumber(row.quantity) },
+                { key: "reason", label: "Motivo / detalhe", render: (row) => displayName(row.reason) },
+                { key: "origin", label: "Registro original", render: (row) => displayName(row.source, "Fonte não disponível") },
+              ]}
+            />
+          </SectionCard>
         </>
-      )}
-    </PageFrame>
-  );
-}
-
-export function TraceabilityTimelinePage() {
-  const { search, setSearch, op } = useOrderSelection();
-  const query = useApiQuery<TraceabilityResponse>(op ? `/api/v1/traceability/orders/${encodeURIComponent(op)}` : null);
-  const title = "Rastreabilidade — Linha do tempo";
-  const subtitle = "Máquina → OP → operação → evento → operador → registro original, em ordem cronológica.";
-  if (query.loading) return <TraceLoading title={title} subtitle={subtitle} search={search} setSearch={setSearch} />;
-  return (
-    <PageFrame staleError={query.error} sectionId="traceability" title={title} subtitle={subtitle} filters={false} actions={<OrderSearch value={search} onChange={setSearch} />}>
-      {!op ? <EmptyState title="Informe uma OP" detail="A linha do tempo não combina registros de OPs diferentes." /> : query.error && !query.data ? <ErrorState error={query.error} onRetry={query.reload} /> : (
-        <SectionCard title={`Eventos cronológicos da OP ${op}`} className="section-card--table">
-          <DataTable
-            rows={query.data?.timeline ?? []}
-            rowKey={(row, index) => `${row.source}-${row.record_id ?? index}-${row.type}`}
-            columns={[
-              { key: "timestamp", label: "Data e hora", render: (row) => formatDateTime(row.timestamp) },
-              { key: "resource", label: "Máquina / recurso", render: (row) => displayName(row.resource) },
-              { key: "op", label: "OP", render: () => op },
-              { key: "operation", label: "Operação", render: (row) => displayName(row.operation) },
-              { key: "event", label: "Evento", render: (row) => humanize(row.type) },
-              { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status ?? row.type} /> },
-              { key: "operator", label: "Operador", render: (row) => row.operator ?? "Não disponível" },
-              { key: "quantity", label: "Quantidade", render: (row) => formatNumber(row.quantity) },
-              { key: "reason", label: "Motivo / detalhe", render: (row) => displayName(row.reason) },
-              { key: "origin", label: "Registro original", render: (row) => `${row.source ?? "Fonte não disponível"} #${row.record_id ?? "—"}` },
-            ]}
-          />
-        </SectionCard>
       )}
     </PageFrame>
   );
@@ -239,6 +283,7 @@ export function TraceabilityNestingPage() {
     search.trim() || deferred || query.loading ? text : <ExplainableValue metric={metric} filters={explainFilters} context={`${label} ${text}`}>{text}</ExplainableValue>
   );
   const desvioText = nesting.previsto > 0 ? formatPercent((nesting.real - nesting.previsto) / nesting.previsto * 100) : "Sem previsto no filtro";
+  const utilization = data?.aproveitamento;
   return (
     <PageFrame staleError={query.error} sectionId="traceability" title={title} subtitle={subtitle} filterFields={NESTING_FILTER_FIELDS} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar tarefa, material ou nesting" />}>
       <div className="metric-grid metric-grid--four">
@@ -254,6 +299,16 @@ export function TraceabilityNestingPage() {
           accent={nesting.real > nesting.previsto ? "danger" : "teal"}
         />
       </div>
+      {utilization ? (
+        <SectionCard title="Aproveitamento da chapa" className="content-section">
+          <div className="metric-grid metric-grid--four" role="group" aria-label="Aproveitamento da chapa">
+            <MetricCard label="Aproveitamento médio" value={formatPercentOneDecimal(utilization.aproveitamento_medio_percentual)} detail={utilization.aproveitamento_medio_percentual == null ? "Sem nesting com dado no filtro" : undefined} accent="success" />
+            <MetricCard label="Nestings com dado" value={formatNumber(utilization.nestings_com_dado)} detail={`de ${formatNumber(utilization.nestings)} no filtro`} accent="primary" />
+            <MetricCard label="Nestings sem dado" value={formatNumber(utilization.nestings_sem_dado)} detail="Não entram na média" accent={utilization.nestings_sem_dado > 0 ? "warning" : "teal"} />
+          </div>
+          <p className="chart-note" style={{ padding: "8px 16px 10px" }}>{utilization.regra}</p>
+        </SectionCard>
+      ) : null}
       <SectionCard title="Lotes, materiais e nestings" className="content-section section-card--table">
         <DataTable
           rows={data?.items ?? []}
@@ -269,12 +324,27 @@ export function TraceabilityNestingPage() {
             { key: "total", label: "Tempo total", render: (row) => formatDuration(row.real_segundos) },
             { key: "period", label: "Tempo no período", render: (row) => formatDuration(row.real_periodo_segundos) },
             { key: "deviation", label: "Desvio", render: (row) => `${formatSignedDuration(row.desvio_segundos)} (${formatPercent(row.desvio_percentual)})` },
+            { key: "utilization", label: "Aproveitamento", sortValue: (row) => row.aproveitamento_percentual ?? -1, render: (row) => formatPercentOneDecimal(row.aproveitamento_percentual) },
             { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "Não disponível" },
             { key: "ops", label: "OPs relacionadas", render: (row) => row.ops_relacionadas?.length ? row.ops_relacionadas.map((op) => <Link key={op} className="inline-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(op)}`}>{op}</Link>) : "Não disponível" },
             { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status} /> },
           ]}
         />
       </SectionCard>
+      {utilization?.por_tarefa?.length ? (
+        <SectionCard title="Aproveitamento por tarefa" className="content-section section-card--table">
+          <DataTable
+            rows={utilization.por_tarefa}
+            rowKey={(row, index) => row.tarefa ?? index}
+            columns={[
+              { key: "task", label: "Tarefa / lote", render: (row) => row.tarefa ?? "Não disponível" },
+              { key: "nestings", label: "Nestings", sortValue: (row) => row.nestings, render: (row) => formatNumber(row.nestings) },
+              { key: "withData", label: "Com dado", sortValue: (row) => row.nestings_com_dado, render: (row) => formatNumber(row.nestings_com_dado) },
+              { key: "utilization", label: "Aproveitamento médio", sortValue: (row) => row.aproveitamento_medio_percentual ?? -1, render: (row) => formatPercentOneDecimal(row.aproveitamento_medio_percentual) },
+            ]}
+          />
+        </SectionCard>
+      ) : null}
     </PageFrame>
   );
 }

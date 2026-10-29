@@ -1,9 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterProvider } from "../filters/FilterContext";
-import { AuditIssuesPage } from "../pages/audit/AuditPages";
-import { HomeAlertsPage } from "../pages/home/HomePages";
+import { AuditAlertsIssuesPage } from "../pages/audit/AuditPages";
 import { formatPieces } from "../utils/format";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -22,30 +21,25 @@ function stubFetch(byUrl: Record<string, unknown>) {
   }));
 }
 
-function cardValue(label: string) {
-  return screen.getByText(label).closest(".metric-card")?.querySelector(".metric-card__value")?.textContent;
+function cardValue(group: string, label: string) {
+  return within(screen.getByRole("group", { name: group })).getByText(label).closest(".metric-card")?.querySelector(".metric-card__value")?.textContent;
 }
 
 describe("cartões de severidade leem as chaves do backend", () => {
-  it("Tela inicial — Alertas", async () => {
+  it("Auditoria — Alertas e inconsistências", async () => {
     stubFetch({
       "/api/v1/management/internal-alerts": { items: [], count: 0, pending: 0 },
       "/api/v1/management/alerts": { items: [], count: 14, by_severity: BY_SEVERITY },
+      "/api/v1/audit": { issues: [], count: 14, by_severity: BY_SEVERITY },
     });
-    render(<MemoryRouter><FilterProvider><HomeAlertsPage /></FilterProvider></MemoryRouter>);
+    render(<MemoryRouter><FilterProvider><AuditAlertsIssuesPage /></FilterProvider></MemoryRouter>);
     await screen.findByText("Críticos");
-    expect(cardValue("Críticos")).toBe("2");
-    expect(cardValue("Erros")).toBe("8");
-    expect(cardValue("Atenções")).toBe("3");
-  });
-
-  it("Auditoria — Inconsistências", async () => {
-    stubFetch({ "/api/v1/audit": { issues: [], count: 14, by_severity: BY_SEVERITY } });
-    render(<MemoryRouter><FilterProvider><AuditIssuesPage /></FilterProvider></MemoryRouter>);
-    await screen.findByText("Críticas");
-    expect(cardValue("Críticas")).toBe("2");
-    expect(cardValue("Erros")).toBe("8");
-    expect(cardValue("Atenções")).toBe("3");
+    expect(cardValue("Resumo dos alertas", "Críticos")).toBe("2");
+    expect(cardValue("Resumo dos alertas", "Erros")).toBe("8");
+    expect(cardValue("Resumo dos alertas", "Atenções")).toBe("3");
+    expect(cardValue("Resumo das inconsistências", "Críticas")).toBe("2");
+    expect(cardValue("Resumo das inconsistências", "Erros")).toBe("8");
+    expect(cardValue("Resumo das inconsistências", "Atenções")).toBe("3");
   });
 });
 

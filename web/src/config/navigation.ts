@@ -96,7 +96,16 @@ export interface ManagementSection {
   assignedLevels?: readonly string[];
 }
 
-/** A seção aparece no menu para este nível? Seção de áreas some se a conta não tem nenhuma. */
+/**
+ * Quem enxerga todas as áreas (admin, gerente industrial) não precisa de 7 seções no
+ * menu: o setor vira filtro em Consulta Operacional > Recursos (`?setor=`). A rota
+ * `/areas/<setor>` e o guarda de rota seguem iguais (usam `tabVisibleFor`).
+ */
+function seesAllAreas(areaIds?: readonly string[]) {
+  return Boolean(areaIds) && AREA_SECTIONS.every((area) => areaIds!.includes(area.id.replace("area-", "")));
+}
+
+/** A seção aparece no menu para este nível? Seção de áreas some se a conta não tem nenhuma (ou tem todas). */
 export function sectionVisibleFor(
   section: ManagementSection,
   role: string | null | undefined,
@@ -105,7 +114,10 @@ export function sectionVisibleFor(
 ) {
   if (section.adminOnly && role !== "admin") return false;
   if (!levelAllowed(section, role, assignedLevel)) return false;
-  if (section.tabs.some((tab) => tab.area) && !section.tabs.some((tab) => tabVisibleFor(tab, role, areaIds, assignedLevel))) return false;
+  if (section.tabs.some((tab) => tab.area)) {
+    if (seesAllAreas(areaIds)) return false;
+    if (!section.tabs.some((tab) => tabVisibleFor(tab, role, areaIds, assignedLevel))) return false;
+  }
   return true;
 }
 
@@ -151,8 +163,6 @@ export const managementSections: ManagementSection[] = [
     defaultPath: "/inicio/visao-geral",
     tabs: [
       { label: "Visão Geral", path: "/inicio/visao-geral", screen: "home-overview" },
-      { label: "Setores", path: "/inicio/setores", screen: "home-sectors" },
-      { label: "Alertas", path: "/inicio/alertas", screen: "home-alerts" },
       { label: "IA", path: "/inicio/ia", screen: "home-ai" },
       // Histórico de chamadas visto pela gestão (e pelo sininho). Separado da
       // aba do IagoDev, que cuida só do cadastro de contatos (admin).
@@ -183,7 +193,6 @@ export const managementSections: ManagementSection[] = [
       { label: "Visão Geral", path: "/consulta-operacional/visao-geral", screen: "operations-overview" },
       { label: "Recursos", path: "/consulta-operacional/recursos", screen: "operations-resources" },
       { label: "OPs em andamento", path: "/consulta-operacional/ops-em-andamento", screen: "operations-orders" },
-      { label: "Tempo MES", path: "/consulta-operacional/tempo-mes", screen: "operations-time" },
     ],
   },
   {
@@ -290,7 +299,7 @@ export const managementSections: ManagementSection[] = [
     defaultPath: "/auditoria/apontamentos",
     tabs: [
       { label: "Apontamentos", path: "/auditoria/apontamentos", screen: "audit-appointments" },
-      { label: "Inconsistências", path: "/auditoria/inconsistencias", screen: "audit-issues" },
+      { label: "Alertas e inconsistências", path: "/auditoria/alertas-inconsistencias", screen: "audit-alerts-issues" },
       { label: "Confiabilidade dos dados", path: "/auditoria/confiabilidade", screen: "audit-reliability" },
     ],
   },
@@ -298,13 +307,9 @@ export const managementSections: ManagementSection[] = [
     id: "reports",
     label: "Relatórios",
     icon: assets.navigation.reports,
-    defaultPath: "/relatorios/gerencial",
+    defaultPath: "/relatorios",
     tabs: [
-      { label: "Gerencial", path: "/relatorios/gerencial", screen: "reports-management" },
-      { label: "Produção", path: "/relatorios/producao", screen: "reports-production" },
-      { label: "Perdas", path: "/relatorios/perdas", screen: "reports-losses" },
-      { label: "Indicadores", path: "/relatorios/indicadores", screen: "reports-indicators" },
-      { label: "Dados analíticos", path: "/relatorios/dados-analiticos", screen: "reports-analytics" },
+      { label: "Relatórios", path: "/relatorios", screen: "reports" },
     ],
   },
   {
@@ -314,7 +319,6 @@ export const managementSections: ManagementSection[] = [
     defaultPath: "/rastreabilidade/op-produto",
     tabs: [
       { label: "OP / Produto", path: "/rastreabilidade/op-produto", screen: "traceability-order" },
-      { label: "Linha do tempo", path: "/rastreabilidade/linha-do-tempo", screen: "traceability-timeline" },
       { label: "Lote / Material / Nesting", path: "/rastreabilidade/lote-material-nesting", screen: "traceability-nesting" },
     ],
   },

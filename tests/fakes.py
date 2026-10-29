@@ -2350,6 +2350,7 @@ class FakeDatabase:
                 "tarefa": row.get("codigo_tarefa"), "programa": row.get("programa"),
                 "nesting": row.get("sequencia_nesting"), "maquina": row.get("maquina"),
                 "material": row.get("material"), "espessura": row.get("espessura"),
+                "area_usada": row.get("area_usada"), "fracao_sucata": row.get("fracao_sucata"),
                 "inicio": row.get("data_inicio"), "fim": row.get("data_fim"),
                 "previsto_segundos": planned, "real_segundos": real,
                 "real_periodo_segundos": real_period, "desvio_segundos": deviation,

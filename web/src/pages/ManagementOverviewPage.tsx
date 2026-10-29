@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
 import { ManagementInsightDrawer } from "../components/ManagementInsightDrawer";
@@ -13,7 +13,8 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { useOncePerMinute } from "../hooks/useOncePerMinute";
 import { explainableComposition } from "../types/explanation";
 import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
-import { displayName, displayText, formatHours } from "../utils/format";
+import type { SectorSummary } from "../types/api";
+import { displayName, displayText, formatHours, formatNumber } from "../utils/format";
 import { humanizeSystemState } from "../utils/systemState";
 
 function metricText(metric: MetricValue) {
@@ -153,6 +154,13 @@ export function ManagementOverviewPage() {
   const lastPoint = trend?.points[trend.points.length - 1];
   const periodOpen = lastPoint ? new Date(lastPoint.period_end).getTime() > Date.now() : false;
   const quantityText = (value: number) => hasQuantityRecords ? value.toLocaleString("pt-BR") : humanizeSystemState("sem_registros");
+  // Só vira clicável o que tem valor para explicar; zero fica texto simples. "Paradas" fica de fora:
+  // mistura planejada, não planejada e sem identificação, e ainda não tem uma explicação única.
+  const sectorCell = (metric: string, row: SectorSummary, label: string, text: string, value: number) => (
+    value > 0 ? (
+      <ExplainableValue metric={metric} filters={{ ...filters.filters, sector: row.setor }} context={`${label} em ${displayName(row.setor)} ${text}`}>{text}</ExplainableValue>
+    ) : text
+  );
   return (
     <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
         <div className="metric-grid metric-grid--five">
@@ -264,7 +272,7 @@ export function ManagementOverviewPage() {
         <div className="management-insight-grid management-insight-grid--three">
           <SectionCard
             title="Composição do tempo"
-            navigation={{ label: "Abrir Consulta Operacional: Tempo MES", onNavigate: () => navigateTo("/consulta-operacional/tempo-mes") }}
+            navigation={{ label: "Abrir Análises: Horas & Utilização", onNavigate: () => navigateTo("/analises/horas-utilizacao") }}
           >
             {composition.availability === "sem_registros" ? (
               <EmptyState state={composition.availability} />
@@ -332,21 +340,33 @@ export function ManagementOverviewPage() {
         </div>
         <div className="overview-grid overview-grid--single">
           <SectionCard
-            title="Setores — leitura rápida"
+            title="Setores — leitura rápida e execução real"
             className="overview-grid__table"
             navigation={{ label: "Abrir Consulta Operacional: Recursos", onNavigate: () => navigateTo("/consulta-operacional/recursos") }}
           >
             {data.sectors.length === 0 ? <EmptyState /> : (
+              <>
+              <div className="metric-grid metric-grid--four">
+                {(data.sector_highlights ?? []).map((highlight, index) => (
+                  <MetricCard
+                    key={highlight.key}
+                    label={highlight.label}
+                    value={highlight.unit === "s" ? formatHours(highlight.value) : `${formatNumber(highlight.value)} peças`}
+                    detail={displayName(highlight.sector, "")}
+                    accent={(["success", "warning", "primary", "teal"] as const)[index % 4]}
+                  />
+                ))}
+              </div>
               <div className="table-scroll">
                 <table>
-                  <thead><tr><th>Setor</th>{trend ? <th>OEE</th> : null}{trend ? <th>Recursos produzindo</th> : null}<th>Produção boa</th><th>Refugo</th><th>Retrabalho</th><th>OPs</th><th>Tempo produtivo</th>{trend ? <th>Tendência</th> : null}</tr></thead>
+                  <thead><tr><th>Setor</th>{trend ? <th>OEE</th> : null}{trend ? <th>Recursos produzindo</th> : null}<th>Produção boa</th><th>Refugo</th><th>Retrabalho</th><th>OPs</th><th>Tempo produtivo</th><th>Produção</th><th>Setup</th><th>Paradas</th>{trend ? <th>Tendência</th> : null}</tr></thead>
                   <tbody>
                     {data.sectors.map((sector) => {
                       const summary = sectorSummary.get(sector.setor);
                       const oee = data.sector_kpis?.find((item) => item.setor === sector.setor)?.metrics.oee?.value ?? null;
                       return (
                         <tr key={sector.setor}>
-                          <th>{displayName(sector.setor)}</th>
+                          <th><Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(sector.setor)}`}>{displayName(sector.setor)}</Link></th>
                           {trend ? (
                             <td>
                               {oee === null ? "—" : (
@@ -355,11 +375,14 @@ export function ManagementOverviewPage() {
                             </td>
                           ) : null}
                           {trend ? <td>{summary && summary.resources_total > 0 ? `${summary.resources_with_production} de ${summary.resources_total}` : "—"}</td> : null}
-                          <td>{quantityText(sector.producao_boa)}</td>
-                          <td>{quantityText(sector.refugo)}</td>
-                          <td>{quantityText(sector.retrabalho)}</td>
+                          <td>{sectorCell("qtd.boa", sector, "Produção boa", quantityText(sector.producao_boa), hasQuantityRecords ? sector.producao_boa : 0)}</td>
+                          <td>{sectorCell("qtd.refugo", sector, "Refugo", quantityText(sector.refugo), hasQuantityRecords ? sector.refugo : 0)}</td>
+                          <td>{sectorCell("qtd.retrabalho", sector, "Retrabalho", quantityText(sector.retrabalho), hasQuantityRecords ? sector.retrabalho : 0)}</td>
                           <td>{sector.ops}</td>
                           <td>{hours(sector.tempo_produtivo_segundos)}</td>
+                          <td>{sectorCell("tempo.producao", sector, "Tempo de produção", formatHours(sector.tempo_producao_segundos), sector.tempo_producao_segundos)}</td>
+                          <td>{sectorCell("tempo.setup", sector, "Tempo de setup", formatHours(sector.tempo_setup_segundos), sector.tempo_setup_segundos)}</td>
+                          <td>{formatHours(sector.tempo_parada_segundos)}</td>
                           {trend ? (
                             <td className="sector-spark">
                               <Sparkline values={trend.points.map((point) => point.sectors.find((item) => item.setor === sector.setor)?.producao_boa ?? null)} color="var(--primary)" />
@@ -371,6 +394,7 @@ export function ManagementOverviewPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </SectionCard>
         </div>
@@ -398,7 +422,7 @@ export function ManagementOverviewPage() {
           </SectionCard>
           <SectionCard
             title="Inconsistências de dados"
-            navigation={{ label: "Abrir Auditoria: Inconsistências", onNavigate: () => navigateTo("/auditoria/inconsistencias") }}
+            navigation={{ label: "Abrir Auditoria: Alertas e inconsistências", onNavigate: () => navigateTo("/auditoria/alertas-inconsistencias") }}
           >
             {data.audit.open_issues.length === 0 ? (
               <EmptyState title="Sem inconsistências abertas" />

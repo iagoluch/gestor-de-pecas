@@ -55,11 +55,11 @@ describe("IA Industrial gerencial", () => {
         return json({ code: "not_found", message: "Não encontrado" }, 404);
       }));
       const view = render(
-        <MemoryRouter initialEntries={["/inicio/alertas"]}>
+        <MemoryRouter initialEntries={["/inicio/visao-geral"]}>
           <AuthProvider><App /></AuthProvider>
         </MemoryRouter>,
       );
-      await screen.findByRole("link", { name: "Alertas" });
+      await screen.findByRole("link", { name: "Chamadas da Gestão" });
       await waitFor(() => expect(Boolean(screen.queryByRole("link", { name: "IA" }))).toBe(enabled));
       view.unmount();
     }

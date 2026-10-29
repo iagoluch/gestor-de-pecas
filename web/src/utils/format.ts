@@ -126,3 +126,9 @@ export function formatResourceName(value: string | null | undefined) {
   const normalized = value.trim().toLocaleLowerCase("pt-BR");
   return normalized ? `${normalized[0].toLocaleUpperCase("pt-BR")}${normalized.slice(1)}` : "Não disponível";
 }
+
+/** Percentual com exatamente 1 casa decimal; ausente vira "—" (nunca um zero inventado). */
+export function formatPercentOneDecimal(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}

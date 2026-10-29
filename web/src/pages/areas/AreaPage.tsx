@@ -77,7 +77,7 @@ export function AreaPage() {
           ]}
         />
       </SectionCard>
-      {user?.queue_areas?.includes(area.id) && <AreaQueuePanel areaId={area.id} />}
+      {user?.queue_areas?.includes(area.id) && <AreaQueuePanel key={area.id} areaId={area.id} />}
     </PageFrame>
   );
 }

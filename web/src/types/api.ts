@@ -495,6 +495,8 @@ export interface ManagementOverview {
   };
   kpi_time_bases: Record<string, number>;
   sectors: SectorSummary[];
+  /** Destaques por setor (maior produção, maior refugo…): os mesmos de `/management/sectors`. */
+  sector_highlights?: Array<{ key: string; label: string; sector: string; value: number; unit: "peças" | "s" }>;
   sector_kpis?: Array<{ setor: string; metrics: Record<string, MetricValue> }>;
   time_composition: {
     items: TimeCompositionItem[];

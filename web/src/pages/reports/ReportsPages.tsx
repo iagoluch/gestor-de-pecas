@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import { AsyncButton } from "../../components/AsyncButton";
 import { DataTable } from "../../components/DataTable";
@@ -13,15 +14,16 @@ import type { OverviewFilters } from "../../types/explanation";
 import { formatAveragePerResource, formatHours, formatNumber, formatRecordedTimeDetail } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 
-type ReportType = "gerencial" | "producao" | "perdas" | "indicadores" | "dados_analiticos";
+/** "producao" só existe para a exportação .xlsx usada por Produção > Produção realizada. */
+export type ReportType = "gerencial" | "producao" | "perdas" | "indicadores" | "dados_analiticos";
+type ReportPageType = Exclude<ReportType, "producao">;
 type JsonRecord = Record<string, unknown>;
 
-const labels: Record<ReportType, { title: string; subtitle: string }> = {
-  gerencial: { title: "Relatórios — Gerencial", subtitle: "Resumo executivo a partir das mesmas fontes das telas gerenciais." },
-  producao: { title: "Relatórios — Produção", subtitle: "Produção boa, refugo e retrabalho preservados em campos independentes." },
-  perdas: { title: "Relatórios — Perdas", subtitle: "Paradas e qualidade sem conversão silenciosa de ausência em zero." },
-  indicadores: { title: "Relatórios — Indicadores", subtitle: "Indicadores com disponibilidade e justificativa explícitas." },
-  dados_analiticos: { title: "Relatórios — Dados analíticos", subtitle: "Conjunto analítico para conferência e exportação, sem editar a origem." },
+const labels: Record<ReportPageType, { title: string; subtitle: string; tab: string }> = {
+  gerencial: { tab: "Gerencial", title: "Relatórios — Gerencial", subtitle: "Resumo executivo a partir das mesmas fontes das telas gerenciais." },
+  perdas: { tab: "Perdas", title: "Relatórios — Perdas", subtitle: "Paradas e qualidade sem conversão silenciosa de ausência em zero." },
+  indicadores: { tab: "Indicadores", title: "Relatórios — Indicadores", subtitle: "Indicadores com disponibilidade e justificativa explícitas." },
+  dados_analiticos: { tab: "Dados analíticos", title: "Relatórios — Dados analíticos", subtitle: "Conjunto analítico para conferência e exportação, sem editar a origem." },
 };
 
 function record(value: unknown): JsonRecord {
@@ -72,7 +74,7 @@ function sectorValue(filters: OverviewFilters, metric: string, label: string, ro
   return explained(filters, metric, label, row[field], text, sector) ?? text;
 }
 
-function DownloadAction({ type, query }: { type: ReportType; query: string }) {
+export function DownloadAction({ type, query }: { type: ReportType; query: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function exportXlsx(modo: "tecnico" | "simples") {
@@ -98,7 +100,7 @@ function DownloadAction({ type, query }: { type: ReportType; query: string }) {
   );
 }
 
-function ReportContent({ type, payload, filters }: { type: ReportType; payload: JsonRecord; filters: OverviewFilters }) {
+function ReportContent({ type, payload, filters }: { type: ReportPageType; payload: JsonRecord; filters: OverviewFilters }) {
   if (type === "gerencial") {
     const overview = record(payload.overview);
     const production = record(overview.production);
@@ -118,27 +120,6 @@ function ReportContent({ type, payload, filters }: { type: ReportType; payload: 
           { key: "rework", label: "Retrabalho", render: (row) => sectorValue(filters, "qtd.retrabalho", "Retrabalho", row, "retrabalho") },
           { key: "production", label: "Tempo produtivo", render: (row) => formatHours(numeric(row.tempo_produtivo_segundos)) },
         ]} />
-      </SectionCard>
-    </>;
-  }
-  if (type === "producao") {
-    const production = record(payload.production);
-    const quality = record(payload.quality);
-    return <>
-      <div className="metric-grid metric-grid--four">
-        <MetricCard label="Produção boa" value={productionValue(production, "good")} valueNode={explained(filters, "qtd.boa", "Produção boa", production.good, productionValue(production, "good"))} detail={String(production.reason ?? "")} availability={String(production.availability ?? "dados_insuficientes") as never} accent="success" />
-        <MetricCard label="Refugo" value={productionValue(production, "scrap")} valueNode={explained(filters, "qtd.refugo", "Refugo", production.scrap, productionValue(production, "scrap"))} availability={String(production.availability ?? "dados_insuficientes") as never} accent="danger" />
-        <MetricCard label="Retrabalho" value={productionValue(production, "rework")} valueNode={explained(filters, "qtd.retrabalho", "Retrabalho", production.rework, productionValue(production, "rework"))} availability={String(production.availability ?? "dados_insuficientes") as never} accent="warning" />
-        <MetricCard label="OPs" value={formatNumber(numeric(production.ops))} />
-      </div>
-      <SectionCard title="Produção por setor" className="content-section section-card--table">
-        <DataTable rows={rows(payload.sectors)} rowKey={(row, index) => String(row.setor ?? index)} columns={[
-          { key: "sector", label: "Setor", render: (row) => String(row.setor ?? "Não disponível") },
-          { key: "good", label: "Boas", render: (row) => sectorValue(filters, "qtd.boa", "Produção boa", row, "producao_boa") },
-          { key: "scrap", label: "Refugo", render: (row) => sectorValue(filters, "qtd.refugo", "Refugo", row, "refugo") },
-          { key: "rework", label: "Retrabalho", render: (row) => sectorValue(filters, "qtd.retrabalho", "Retrabalho", row, "retrabalho") },
-        ]} />
-        <p className="section-note">Fonte de qualidade: {String(quality.reason ?? "Não disponível")}</p>
       </SectionCard>
     </>;
   }
@@ -209,17 +190,25 @@ function ReportContent({ type, payload, filters }: { type: ReportType; payload: 
   </>;
 }
 
-function ReportPage({ type }: { type: ReportType }) {
+const REPORT_TYPES: ReportPageType[] = ["gerencial", "perdas", "indicadores", "dados_analiticos"];
+
+/** Uma aba só: o tipo do relatório vem de `?tipo=` (as rotas antigas /relatorios/<tipo> redirecionam para cá). */
+export function ReportsPage() {
+  const [params, setParams] = useSearchParams();
+  const type = REPORT_TYPES.find((item) => item === params.get("tipo")) ?? "gerencial";
   const filters = useManagementFilters();
   const query = useApiQuery<JsonRecord>(`/api/v1/reports/${type}?${filters.query}`);
   const copy = labels[type];
-  if (query.loading) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}><LoadingState /></PageFrame>;
-  if (query.error && !query.data) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
-  return <PageFrame staleError={query.error} sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={<DownloadAction type={type} query={filters.query} />}>{query.data ? <ReportContent type={type} payload={query.data} filters={filters.filters} /> : <EmptyState />}</PageFrame>;
+  const action = <DownloadAction type={type} query={filters.query} />;
+  const selector = (
+    <div className="segment-toggle" role="tablist" aria-label="Tipo de relatório">
+      {REPORT_TYPES.map((item) => {
+        const active = item === type;
+        return <button key={item} type="button" role="tab" aria-selected={active} className={`segment-toggle__btn${active ? " segment-toggle__btn--active" : ""}`} onClick={() => setParams({ tipo: item }, { replace: true })}>{labels[item].tab}</button>;
+      })}
+    </div>
+  );
+  if (query.loading) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={action}>{selector}<LoadingState /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={action}>{selector}<ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  return <PageFrame staleError={query.error} sectionId="reports" title={copy.title} subtitle={copy.subtitle} actions={action}>{selector}{query.data ? <ReportContent type={type} payload={query.data} filters={filters.filters} /> : <EmptyState />}</PageFrame>;
 }
-
-export const ManagementReportPage = () => <ReportPage type="gerencial" />;
-export const ProductionReportPage = () => <ReportPage type="producao" />;
-export const LossesReportPage = () => <ReportPage type="perdas" />;
-export const IndicatorsReportPage = () => <ReportPage type="indicadores" />;
-export const AnalyticalDataReportPage = () => <ReportPage type="dados_analiticos" />;
