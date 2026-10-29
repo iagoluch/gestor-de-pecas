@@ -191,7 +191,15 @@ export function DatePicker({ label, value, onChange }: DatePickerProps) {
             if (!calendarRef.current?.contains(document.activeElement)) commitTypedDate();
           }, 0);
         }}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          // Data completa e válida já vale na hora: "Aplicar" logo após digitar não pode usar a data antiga.
+          const typed = parseDisplayDate(event.target.value);
+          if (typed) {
+            onChange(isoDate(typed));
+            setView(typed);
+          }
+        }}
         onClick={() => setOpen(true)}
         onFocus={() => setOpen(true)}
         onKeyDown={handleInputKeyDown}

@@ -14,6 +14,7 @@ hash da aplicação (``Database._hash_senha``), restritas a nomes que começam c
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 import sys
 from typing import Iterable
 
@@ -36,7 +37,10 @@ class ResultadoProvisionamento:
 
 def _database():
     from app.database.database import Database
+    from simulacao.config import EXPECTED_DATABASE
 
+    # O .env traz a trava do banco REAL; aqui o alvo é sempre o TESTE.
+    os.environ["GESTOR_EXPECTED_DATABASE"] = EXPECTED_DATABASE
     return Database(auto_migrate=False)
 
 

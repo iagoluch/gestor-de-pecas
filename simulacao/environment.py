@@ -123,6 +123,8 @@ def montar_ambiente(config: SimulationConfig, env_file: dict[str, str]) -> dict[
             # Recepção ProductionOrder ligada: é o pipeline canônico de ingestão.
             "GESTOR_TOTVS_ENABLED": "true",
             "GESTOR_TOTVS_SOAP_ENABLED": "true",
+            "GESTOR_TOTVS_SOAP_SUCCESS_RESULT": "OK",
+            "GESTOR_TOTVS_SOAP_ALLOWED_SOURCE_CIDRS": "127.0.0.1/32",
             # Envio ao WSPCP desligado: nenhuma produção sai daqui.
             "GESTOR_TOTVS_OUTBOX_WORKER_ENABLED": "0",
             # Ciclo do SigmaNEST desligado: a rede industrial não é alcançável

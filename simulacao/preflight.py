@@ -218,16 +218,10 @@ async def preflight_api(sessao, config: SimulationConfig, resultado: ResultadoPr
     capacidades = await sessao.call(
         "GET", "/system/capabilities", action="preflight_capabilities", registrar=False
     )
+    # Sem sessão a API só devolve o relógio (BK-18); fonte de dados e integração
+    # são checadas em preflight_api_autenticado, depois do login de gestão.
     dados = capacidades.data if isinstance(capacidades.data, dict) else {}
     simulacao = dados.get("simulation") or {}
-    corporativo = dados.get("corporate_integration") or {}
-    resultado.adicionar(
-        Checagem(
-            "fonte_de_dados_teste",
-            str(dados.get("active_data_source") or "") == "postgresql_test_only",
-            f"A API declara fonte ativa '{dados.get('active_data_source')}'.",
-        )
-    )
     escala_api = float(simulacao.get("time_scale") or 0)
     resultado.adicionar(
         Checagem(
@@ -240,16 +234,6 @@ async def preflight_api(sessao, config: SimulationConfig, resultado: ResultadoPr
             dados=simulacao,
         )
     )
-    resultado.adicionar(
-        Checagem(
-            "outbound_produtivo_bloqueado",
-            not bool(corporativo.get("execution_write_enabled")),
-            "Escrita de execução no ERP desabilitada: "
-            f"execution_write_enabled={corporativo.get('execution_write_enabled')}; "
-            f"motivo: {corporativo.get('reason')}.",
-            dados=corporativo,
-        )
-    )
     frontend = await sessao.call(
         "GET", "/", action="preflight_frontend", registrar=False, raw=True
     )
@@ -260,6 +244,34 @@ async def preflight_api(sessao, config: SimulationConfig, resultado: ResultadoPr
             and "<div id=\"root\"" in frontend.data,
             f"A raiz devolveu {frontend.status} com o HTML do SPA TESTE.",
             critico=False,
+        )
+    )
+    return resultado
+
+
+async def preflight_api_autenticado(sessao, resultado: ResultadoPreflight):
+    """Checagens que a API só responde a quem tem sessão (fonte de dados, ERP)."""
+
+    capacidades = await sessao.call(
+        "GET", "/system/capabilities", action="preflight_capabilities_auth", registrar=False
+    )
+    dados = capacidades.data if isinstance(capacidades.data, dict) else {}
+    corporativo = dados.get("corporate_integration") or {}
+    resultado.adicionar(
+        Checagem(
+            "fonte_de_dados_teste",
+            str(dados.get("active_data_source") or "") == "postgresql_test_only",
+            f"A API declara fonte ativa '{dados.get('active_data_source')}'.",
+        )
+    )
+    resultado.adicionar(
+        Checagem(
+            "outbound_produtivo_bloqueado",
+            not bool(corporativo.get("execution_write_enabled")),
+            "Escrita de execução no ERP desabilitada: "
+            f"execution_write_enabled={corporativo.get('execution_write_enabled')}; "
+            f"motivo: {corporativo.get('reason')}.",
+            dados=corporativo,
         )
     )
     return resultado

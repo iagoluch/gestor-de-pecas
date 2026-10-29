@@ -308,6 +308,10 @@ class SimulationRunner:
         login = await self.sessao_supervisor.login("sim_supervisor", self.config.sim_password)
         if not login.ok:
             raise RuntimeError("A sessão de gestão não autenticou; a simulação não pode observar.")
+        await preflight_mod.preflight_api_autenticado(self.sessao_supervisor, self.preflight)
+        if not self.preflight.aprovado:
+            falhas = "; ".join(f"{c.nome}: {c.detalhe}" for c in self.preflight.falhas_criticas)
+            raise RuntimeError(f"Pré-voo autenticado reprovou: {falhas}")
 
         # TV de gestão à vista: perfil próprio, porque é o perfil que ativa o
         # ciclo automático entre Andon e Solda. A sessão de gestão continua

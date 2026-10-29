@@ -114,6 +114,20 @@ describe("filtros gerenciais e relógio de referência", () => {
     expect(consultas.every((q) => q.includes("2026-08-24"))).toBe(true);
   });
 
+  it("usa a data digitada ao clicar em Aplicar sem sair do campo", async () => {
+    montar(false);
+    await screen.findByTestId("query");
+    fireEvent.change(screen.getByLabelText("Fim"), { target: { value: "03/11/2026" } });
+    fireEvent.change(screen.getByLabelText("Início"), { target: { value: "01/11/2026" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => {
+      expect(periodo(screen.getByTestId("query").textContent ?? "")).toEqual({
+        inicio: "2026-11-01T00:00:00",
+        fim: "2026-11-03T23:59:59",
+      });
+    });
+  });
+
   it("não interfere no ambiente normal: mantém o relógio real", async () => {
     montar(false);
     const saida = await screen.findByTestId("query");
