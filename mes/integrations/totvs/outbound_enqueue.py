@@ -364,6 +364,20 @@ def _stop_report_request(
     )
 
 
+def _stop_within_one_minute(event: CanonicalExecutionEvent) -> bool:
+    """Parada que começa e termina no mesmo minuto não vai ao Protheus.
+
+    O StopReport compara só hora e minuto (A680HORA); um intervalo de segundos
+    seria recusado e, por ordem de OP, travaria os envios seguintes da mesma OP.
+    A parada continua registrada no Gestor.
+    """
+
+    start, end = event.previous_event_time, event.event_time
+    if start is None or end is None:
+        return False
+    return start.replace(second=0, microsecond=0) >= end.replace(second=0, microsecond=0)
+
+
 def plan_execution_event(
     event: CanonicalExecutionEvent,
     *,
@@ -388,7 +402,10 @@ def plan_execution_event(
 
     # StopReport exige início e fim: só a retomada/encerramento que sucede uma
     # parada fecha o intervalo. Parada ainda aberta nunca entra na fila.
-    if str(event.previous_state or "").strip().casefold() == "parada":
+    if (
+        str(event.previous_state or "").strip().casefold() == "parada"
+        and not _stop_within_one_minute(event)
+    ):
         requests.append(
             _stop_report_request(
                 event, stop_reason_code=config.resolve_stop_reason_code(event)

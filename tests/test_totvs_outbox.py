@@ -315,6 +315,23 @@ class OutboxPlannerTests(unittest.TestCase):
         self.assertIn("<StartDateTime>", requests[0].payload_xml)
         self.assertIn("<EndDateTime>", requests[0].payload_xml)
 
+    def test_parada_dentro_do_mesmo_minuto_nao_vai_ao_protheus(self):
+        # O Protheus compara hora e minuto (A680HORA): segundos não bastam e a
+        # recusa travaria os envios seguintes da OP.
+        config = OutboundEnqueueConfig(
+            enabled=True, stop_reason_codes={"MANUTENCAO PREVENTIVA": "0010"}
+        )
+        fim = canonical_event().event_time.replace(second=40, microsecond=0)
+        retomada = canonical_event(
+            state="producao",
+            good_quantity=Decimal("0"),
+            previous_state="parada",
+            previous_reason="Manutencao preventiva",
+            event_time=fim,
+            previous_event_time=fim.replace(second=5),
+        )
+        self.assertEqual(plan_execution_event(retomada, config=config), [])
+
     def test_parada_sem_codigo_totvs_fica_visivel_como_erro_bloqueado(self):
         retomada = canonical_event(
             state="producao",
