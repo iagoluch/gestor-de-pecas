@@ -59,6 +59,13 @@ export function formatAveragePerResource(totalSeconds: number | null | undefined
   return `Média ${formatHours(totalSeconds / resourceCount)} por recurso (${formatNumber(resourceCount)} recursos)`;
 }
 
+/** Explica o que entra no "Tempo registrado": o relógio inteiro do recurso, não só a produção. */
+export function formatRecordedTimeDetail(totalSeconds: number | null | undefined, resourceCount: number) {
+  const average = formatAveragePerResource(totalSeconds, resourceCount);
+  const scope = "Todos os estados: produção, parada, ocioso…";
+  return average ? `${scope} · ${average}` : scope;
+}
+
 export function formatHours(seconds: number | null | undefined) {
   if (seconds === null || seconds === undefined) return "Não disponível";
   const total = Math.max(0, Math.round(seconds));
@@ -100,6 +107,8 @@ export function isTechnicalName(value: string | null | undefined) {
 export function displayName(value: string | number | null | undefined, fallback = "Não disponível") {
   const text = String(value ?? "").trim();
   if (!text) return fallback;
+  // "prototipo" é nível de acesso ("Operador Protótipo") e também nome de setor: aqui é setor.
+  if (text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR") === "prototipo") return "Protótipo";
   const known = systemStateLabelOrNull(text) ?? internalTermLabel(text) ?? roleLabelOrNull(text);
   if (known) return known;
   return isTechnicalName(text) ? humanizeSlug(text) : text;

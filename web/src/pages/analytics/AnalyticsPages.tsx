@@ -24,6 +24,7 @@ import {
   displayName,
   formatDateTime,
   formatAveragePerResource,
+  formatRecordedTimeDetail,
   formatDuration,
   formatHours,
   formatNumber,
@@ -406,7 +407,7 @@ export function AnalyticsHoursPage() {
   const filters = useManagementFilters();
   const query = useApiQuery<TimeBreakdown>(`/api/v1/analytics/hours-utilization?${filters.query}`);
   const title = "Análises — Horas & Utilização";
-  const subtitle = "Tempo físico consolidado sem multiplicar a máquina por OPs simultâneas.";
+  const subtitle = "Tempo registrado consolidado, sem multiplicar a máquina por OPs simultâneas.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
@@ -414,7 +415,7 @@ export function AnalyticsHoursPage() {
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Tempo físico" value={formatHours(data?.physical_seconds)} detail={formatAveragePerResource(data?.physical_seconds, data?.by_resource?.length ?? 0)} />
+        <MetricCard label="Tempo registrado" value={formatHours(data?.physical_seconds)} detail={formatRecordedTimeDetail(data?.physical_seconds, data?.by_resource?.length ?? 0)} />
         <MetricCard label="Tempo atribuído bruto" value={formatHours(data?.raw_attributed_timeline_seconds)} detail={formatAveragePerResource(data?.raw_attributed_timeline_seconds, data?.by_resource?.length ?? 0)} accent="teal" />
         <MetricCard label="Sobreposição removida" value={formatHours(data?.overlap_removed_seconds)} accent="warning" />
         <MetricCard

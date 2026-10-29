@@ -385,7 +385,7 @@ describe("Operações > Tempo: categorias clicáveis", () => {
     const { resource_count: _omit, ...old } = time;
     vi.stubGlobal("fetch", vi.fn(async () => respond(old)));
     render(<MemoryRouter><FilterProvider><OperationsTimePage /></FilterProvider></MemoryRouter>);
-    await screen.findByText("Tempo físico");
+    await screen.findByText("Tempo registrado");
     expect(document.body).not.toHaveTextContent("NaN");
   });
 });

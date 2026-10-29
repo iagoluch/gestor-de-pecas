@@ -246,7 +246,7 @@ export function OperationsTimePage() {
   const query = useApiQuery<TimeBreakdown>(`/api/v1/operations/time?${filters.query}`);
   const [explainedMetric, setExplainedMetric] = useState<string | null>(null);
   const title = "Consulta Operacional — Tempo MES";
-  const subtitle = "Tempo físico consolidado por categoria, setor e recurso.";
+  const subtitle = "Tempo registrado consolidado por categoria, setor e recurso.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
@@ -310,7 +310,7 @@ export function OperationsTimePage() {
             rowKey={(row) => row[0]}
             columns={[
               { key: "category", label: "Categoria", render: (row) => categoryLabel(row[0]) },
-              { key: "time", label: resourceCount > 1 ? "Média por recurso" : "Tempo físico", render: (row) => explainable(row[0], formatHours(categoryAverage(row[0]))) },
+              { key: "time", label: resourceCount > 1 ? "Média por recurso" : "Tempo registrado", render: (row) => explainable(row[0], formatHours(categoryAverage(row[0]))) },
               ...(resourceCount > 1 ? [{ key: "total", label: "Tempo total", render: (row: [string, number]) => explainable(row[0], formatHours(categoryTotal(row[0]))) }] : []),
             ]}
           />

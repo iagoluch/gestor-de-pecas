@@ -10,7 +10,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { OverviewFilters } from "../../types/explanation";
-import { formatAveragePerResource, formatHours, formatNumber } from "../../utils/format";
+import { formatAveragePerResource, formatHours, formatNumber, formatRecordedTimeDetail } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 
 type ReportType = "gerencial" | "producao" | "perdas" | "indicadores" | "dados_analiticos";
@@ -137,8 +137,8 @@ function ReportContent({ type, payload, filters }: { type: ReportType; payload: 
           { key: "good", label: "Boas", render: (row) => sectorValue(filters, "qtd.boa", "Produção boa", row, "producao_boa") },
           { key: "scrap", label: "Refugo", render: (row) => sectorValue(filters, "qtd.refugo", "Refugo", row, "refugo") },
           { key: "rework", label: "Retrabalho", render: (row) => sectorValue(filters, "qtd.retrabalho", "Retrabalho", row, "retrabalho") },
-          { key: "quality", label: "Fonte de qualidade", render: () => String(quality.reason ?? "Não disponível") },
         ]} />
+        <p className="section-note">Fonte de qualidade: {String(quality.reason ?? "Não disponível")}</p>
       </SectionCard>
     </>;
   }
@@ -171,7 +171,7 @@ function ReportContent({ type, payload, filters }: { type: ReportType; payload: 
       <div className="metric-grid metric-grid--four">
         <MetricCard label="OEE" value={metricValue(oee)} valueNode={explained(filters, "kpi.oee", "OEE", oee.value, metricValue(oee))} detail={String(oee.reason ?? "")} accent="purple" availability={String(oee.availability ?? "nao_configurado") as never} />
         <MetricCard label="FTT" value={metricValue(ftt)} valueNode={explained(filters, "qtd.ftt", "FTT", ftt.value, metricValue(ftt))} detail={String(ftt.reason ?? "")} accent="teal" availability={String(ftt.availability ?? "dados_insuficientes") as never} />
-        <MetricCard label="Tempo físico" value={formatHours(numeric(time.physical_seconds))} detail={formatAveragePerResource(numeric(time.physical_seconds), rows(time.by_resource).length)} accent="success" />
+        <MetricCard label="Tempo registrado" value={formatHours(numeric(time.physical_seconds))} detail={formatRecordedTimeDetail(numeric(time.physical_seconds), rows(time.by_resource).length)} accent="success" />
         <MetricCard label="Utilização" value={record(analytics.capacidade).utilizacao_percentual == null ? humanizeSystemState(record(analytics.capacidade).availability ?? "dados_insuficientes", { fallback: "Dados insuficientes" }) : `${formatNumber(numeric(record(analytics.capacidade).utilizacao_percentual), 1)}%`} detail={String(record(analytics.capacidade).reason ?? "")} accent="warning" />
       </div>
       <SectionCard title="Confiabilidade e capacidade" className="content-section">

@@ -111,13 +111,13 @@ describe("Relatórios: números clicáveis com a conta aberta", () => {
     expect(buttons(/Ocorrências/)).not.toBeInTheDocument();
   });
 
-  it("Indicadores: OEE e FTT abrem a explicação; Utilização e Tempo físico ficam texto (fonte diferente)", async () => {
+  it("Indicadores: OEE e FTT abrem a explicação; Utilização e Tempo registrado ficam texto (fonte diferente)", async () => {
     const fetchMock = mountFetch("indicadores");
     page(<IndicatorsReportPage />);
     await opens(fetchMock, /Ver de onde vem este número: OEE 40/, "kpi.oee");
     await opens(fetchMock, /Ver de onde vem este número: FTT 95/, "qtd.ftt");
     expect(buttons(/Utilização/)).not.toBeInTheDocument();
-    expect(buttons(/Tempo físico/)).not.toBeInTheDocument();
+    expect(buttons(/Tempo registrado/)).not.toBeInTheDocument();
   });
 
   it("Dados analíticos: só Inconsistências abre qld.auditoria.total", async () => {

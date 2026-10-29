@@ -27,6 +27,9 @@ describe("nomes técnicos nunca aparecem crus", () => {
   it("displayName preserva nome cadastrado e trata só o identificador técnico", () => {
     expect(displayName("Solda Aço")).toBe("Solda Aço");
     expect(displayName("Plasma TerraBlade 4")).toBe("Plasma TerraBlade 4");
+    expect(displayName("prototipo")).toBe("Protótipo");
+    expect(displayName("Protótipo")).toBe("Protótipo");
+    expect(humanize("prototipo")).toBe("Operador Protótipo");
     expect(displayName("PCMIXQ01001")).toBe("PCMIXQ01001");
     expect(displayName("falta_de_material")).toBe("Falta De Material");
     expect(displayName(null)).toBe("Não disponível");
