@@ -103,6 +103,18 @@ describe("Aba Diretoria — Painel", () => {
     expect(screen.getByText(/Pintura/, { selector: ".director-highlight strong" })).toBeInTheDocument();
   });
 
+  it("eficiência acima de 100% mostra o valor real e um aviso; abaixo disso não avisa", async () => {
+    stub({ painel: { ...PAINEL, cards: { ...PAINEL.cards, eficiencia_oee: { value: 112.3, unit: "%", availability: "disponivel" } } } });
+    const { unmount } = render(<DirectorPage />);
+    expect(await screen.findByText(/Eficiência acima de 100%/)).toBeInTheDocument();
+    expect(screen.getByText("112,3%")).toBeInTheDocument();
+    unmount();
+    stub();
+    render(<DirectorPage />);
+    await screen.findByText("71,4%");
+    expect(screen.queryByText(/Eficiência acima de 100%/)).not.toBeInTheDocument();
+  });
+
   it("custo incompleto e zerado não vira um R$ 0 mentiroso", async () => {
     stub({ painel: { ...PAINEL, cards: { ...PAINEL.cards, custo_parada: 0 } } });
     render(<DirectorPage />);

@@ -7,7 +7,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import type { DirectorPanel as DirectorPanelData, DirectorPeriodName, DirectorSectorRank } from "../../types/director";
 import { formatNumber, formatPieces } from "../../utils/format";
 import { DirectorExplainable } from "./DirectorExplainable";
-import { costLine, costText, efficiencyText, formatHoursValue } from "./directorFormat";
+import { costLine, costText, EFFICIENCY_ABOVE_100_NOTICE, efficiencyText, efficiencyValue, formatHoursValue } from "./directorFormat";
 
 export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeriodName; onOpenSector: (setor: string) => void }) {
   const query = useApiQuery<DirectorPanelData>(directorPaths.panel(periodo));
@@ -52,6 +52,7 @@ export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeri
         />
       </div>
       {data.aviso ? <Notice tone="stale" className="director-warning">{data.aviso}</Notice> : null}
+      {(efficiencyValue(cards.eficiencia_oee) ?? 0) > 100 ? <Notice tone="stale" className="director-warning">{EFFICIENCY_ABOVE_100_NOTICE}</Notice> : null}
 
       <SectionCard title="Onde mais perdemos" className="content-section">
         {data.onde_perdemos.length ? (

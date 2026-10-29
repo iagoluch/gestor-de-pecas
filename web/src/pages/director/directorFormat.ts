@@ -36,6 +36,16 @@ export function efficiencyText(metric: DirectorCards["eficiencia_oee"]) {
   return humanizeSystemState(metric?.availability ?? "dados_insuficientes", { fallback: "Sem dados no período" });
 }
 
+/** Percentual da eficiência quando existe; `null` em "dados insuficientes". */
+export function efficiencyValue(metric: DirectorCards["eficiencia_oee"]) {
+  if (typeof metric === "number") return metric;
+  return metric?.value ?? null;
+}
+
+/** O ritmo real pode passar do padrão cadastrado: o número não é cortado em 100%, mas avisamos. */
+export const EFFICIENCY_ABOVE_100_NOTICE =
+  "Eficiência acima de 100%: as peças saíram mais rápido que o tempo padrão cadastrado. O número é real (não foi limitado); vale revisar o tempo padrão do produto.";
+
 /** Valor da hora no campo: 80 -> "80,00". */
 export function formatRate(value: number | null) {
   return value === null ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
