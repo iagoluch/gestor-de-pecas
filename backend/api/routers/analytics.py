@@ -56,5 +56,7 @@ def analysis(
             "availability": oee.get("availability", "dados_insuficientes"),
             "reason": oee.get("reason"),
             "evolution": oee.get("evolution"),
+            "extended_metrics": oee.get("extended_metrics"),
+            "losses_breakdown": oee.get("losses_breakdown"),
         }
     return payload

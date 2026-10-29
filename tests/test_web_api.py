@@ -935,6 +935,9 @@ class WebApiTests(unittest.TestCase):
         analytics = self.client.get("/api/v1/analytics/oee")
         self.assertEqual(analytics.status_code, 200)
         self.assertIsNone(analytics.json()["value"])
+        # A tela OEE lê "Perdas por motivo" e métricas estendidas no topo da resposta.
+        self.assertIn("losses_breakdown", analytics.json())
+        self.assertIn("extended_metrics", analytics.json())
         self.assertEqual(
             analytics.json()["evolution"]["reason"],
             "Dados insuficientes para exibir a evolução do OEE no período selecionado.",
