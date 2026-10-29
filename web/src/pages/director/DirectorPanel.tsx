@@ -127,6 +127,7 @@ function Highlight({ tone, title, rank, periodo, empty }: { tone: "good" | "bad"
               </DirectorExplainable>
             ) : `${formatNumber(rank.oee, 1)}%`}
           </small>
+          {rank.oee > 100 ? <small className="director-highlight__warning">Acima de 100%: confira o tempo padrão deste setor.</small> : null}
         </>
       ) : (
         <small>{empty}</small>

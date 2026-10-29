@@ -115,6 +115,18 @@ describe("Aba Diretoria — Painel", () => {
     expect(screen.queryByText(/Eficiência acima de 100%/)).not.toBeInTheDocument();
   });
 
+  it("setor com eficiência acima de 100% mostra o valor real e um aviso no cartão; abaixo disso não avisa", async () => {
+    stub({ painel: { ...PAINEL, melhor_setor: { nome: "Pintura", oee: 1087.7 } } });
+    const { unmount } = render(<DirectorPage />);
+    expect(await screen.findByText(/confira o tempo padrão deste setor/)).toBeInTheDocument();
+    expect(screen.getByText("1.087,7%")).toBeInTheDocument();
+    unmount();
+    stub();
+    render(<DirectorPage />);
+    await screen.findByText("71,4%");
+    expect(screen.queryByText(/confira o tempo padrão deste setor/)).not.toBeInTheDocument();
+  });
+
   it("custo incompleto e zerado não vira um R$ 0 mentiroso", async () => {
     stub({ painel: { ...PAINEL, cards: { ...PAINEL.cards, custo_parada: 0 } } });
     render(<DirectorPage />);
