@@ -5032,8 +5032,10 @@ class Database(
 
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
-            # Estado ainda aberto vale até agora: com filtro "hoje" o fim do
+            # Nenhum estado conta além de agora: com filtro "hoje" o fim do
             # período é 23:59:59 e o resto do dia seria contado antes de ocorrer.
+            # Vale também para estado já fechado com fim no futuro (fim de turno
+            # gravado antecipado, relógio adiantado de simulação).
             open_end = min(end, agora_db())
             result = []
             for raw in cursor.fetchall():
@@ -5045,7 +5047,7 @@ class Database(
                 state_start = _period_value(row.get("data_inicio"))
                 state_end = _period_value(row.get("data_fim")) or open_end
                 row["inicio_periodo"] = max(state_start, start)
-                row["fim_periodo"] = min(state_end, end)
+                row["fim_periodo"] = min(state_end, open_end)
                 row["segundos_periodo"] = max(
                     0.0,
                     (row["fim_periodo"] - row["inicio_periodo"]).total_seconds(),

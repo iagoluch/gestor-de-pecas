@@ -93,8 +93,9 @@ def _estados_como_sql(estados, inicio, fim, categoria=None):
     """``listar_estados_recurso_periodo`` do PostgreSQL, em memória.
 
     Predicado: data_inicio < fim AND COALESCE(data_fim, fim) > inicio (o
-    ``&& tsrange`` da consulta real é implicado por ele). O estado aberto vale
-    até min(fim, agora); períodos não positivos devolvem vazio.
+    ``&& tsrange`` da consulta real é implicado por ele). Nenhum estado, aberto
+    ou fechado, conta além de min(fim, agora); períodos não positivos devolvem
+    vazio.
     """
 
     if fim <= inicio:
@@ -108,7 +109,7 @@ def _estados_como_sql(estados, inicio, fim, categoria=None):
             continue
         row = dict(raw)
         row["inicio_periodo"] = max(raw["data_inicio"], inicio)
-        row["fim_periodo"] = min(raw["data_fim"] or open_end, fim)
+        row["fim_periodo"] = min(raw["data_fim"] or open_end, open_end)
         row["segundos_periodo"] = max(
             0.0, (row["fim_periodo"] - row["inicio_periodo"]).total_seconds()
         )
@@ -283,6 +284,7 @@ ESTADOS_BORDA = [
     _estado(5, datetime(2026, 10, 12, 0, 0), datetime(2026, 10, 12, 12, 0)),   # termina no meio
     _estado(6, datetime(2026, 10, 13, 0, 0), datetime(2026, 10, 13, 23, 59, 59)),
     _estado(7, datetime(2026, 10, 14, 23, 59, 59)),                            # aberto começa no fim do dia 14
+    _estado(8, datetime(2026, 10, 15, 8, 0), datetime(2026, 10, 15, 17, 30)),  # fechado com fim depois de agora
 ]
 
 # Arranjos de sub-períodos: uniforme (inclui dias depois de agora), largura não
@@ -351,6 +353,20 @@ class FatiaDeEstadosIgualAoSqlTests(unittest.TestCase):
                         self.assertEqual(
                             sorted(map(_chave, linhas)), sorted(map(_chave, esperado))
                         )
+
+    def test_estado_fechado_com_fim_no_futuro_conta_so_ate_agora(self):
+        # Fim de turno gravado antecipado (17:30) não pode virar 9h30 às 14h.
+        fechado = _estado(1, datetime(2026, 10, 15, 8, 0), datetime(2026, 10, 15, 17, 30))
+        for indexar in (True, False):
+            with self.subTest(indexar=indexar):
+                _, linhas = self._prefetch(
+                    [fechado], [_dia(15)], indexar=indexar
+                ).state_rows(*_dia(15))
+                self.assertEqual(linhas[0]["fim_periodo"], AGORA)
+                self.assertEqual(
+                    linhas[0]["segundos_periodo"],
+                    (AGORA - datetime(2026, 10, 15, 8, 0)).total_seconds(),
+                )
 
     def test_bucket_inteiramente_depois_de_agora_inclui_estado_aberto_com_zero_segundos(self):
         futuro = _dia(16)

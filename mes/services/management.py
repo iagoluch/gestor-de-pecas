@@ -1825,15 +1825,16 @@ class _JanelaPrefetch:
     def _recortar_estado(row, comeco, bruto_fim, inicio, fim, agora):
         """Mesmo recorte de ``listar_estados_recurso_periodo``.
 
-        A inclusão do estado aberto usa ``fim``; o tempo dele, porém, vai só
-        até ``min(fim, agora)`` — senão o resto do dia seria contado antes de
-        acontecer.
+        A inclusão do estado usa ``fim``; o tempo dele, porém, vai só até
+        ``min(fim, agora)``, aberto ou fechado — senão o resto do dia seria
+        contado antes de acontecer.
         """
 
-        termino = bruto_fim or (min(fim, agora) if agora is not None else fim)
+        limite = min(fim, agora) if agora is not None else fim
+        termino = bruto_fim or limite
         recorte = dict(row)
         recorte["inicio_periodo"] = max(comeco, inicio)
-        recorte["fim_periodo"] = min(termino, fim)
+        recorte["fim_periodo"] = min(termino, limite)
         recorte["segundos_periodo"] = max(
             0.0,
             (recorte["fim_periodo"] - recorte["inicio_periodo"]).total_seconds(),
