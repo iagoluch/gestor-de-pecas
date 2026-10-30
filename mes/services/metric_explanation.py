@@ -10,13 +10,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from mes.contracts import AnalyticsFilter
 from mes.analytics.physical_time import restrict_to_resources
 from mes.analytics.resource_state import physical_state_category
 from mes.domain import EventCategory, StopClassification
+from mes.services.calendar import CalendarService
 
 
 DEFAULT_MAX_NODES = 400
@@ -253,6 +254,10 @@ class MetricExplanationService:
             _sector_node(sector, resources, rows, multi_day)
             for sector, resources in by_sector.items()
         ]
+        if metric == "tempo.fora_turno":
+            _label_real_out_of_shift_start(
+                sector_nodes, filters.inicio, getattr(self.management, "db", None)
+            )
         _add_legacy_nesting(sector_nodes, legacy_production)
         sector_nodes.sort(key=_by_seconds)
         children, truncated = _truncate(sector_nodes, max_nodes)
@@ -526,9 +531,45 @@ def _stretch_node(seg, rows, multi_day) -> Node:
 
 
 def _stretch_label(seg, multi_day) -> str:
-    if multi_day or seg.start.date() != seg.end.date():
-        return f"{seg.start:%d/%m %H:%M} → {seg.end:%d/%m %H:%M}"
-    return f"{seg.start:%H:%M} → {seg.end:%H:%M}"
+    return _period_label(seg.start, seg.end, multi_day)
+
+
+def _period_label(start, end, multi_day) -> str:
+    if multi_day or start.date() != end.date():
+        return f"{start:%d/%m %H:%M} → {end:%d/%m %H:%M}"
+    return f"{start:%H:%M} → {end:%H:%M}"
+
+
+# Quanto voltar no calendário para achar onde começou o fora de turno que
+# entra no período já em curso (cobre fim de semana e feriado prolongado).
+_REAL_START_LOOKBACK = timedelta(days=7)
+
+
+def _label_real_out_of_shift_start(sector_nodes, inicio, db) -> None:
+    """Fora de turno que vem de antes do período mostra o início real.
+
+    O trecho que começa em ``inicio`` foi recortado: o fora de turno começou
+    no fim do turno anterior (ex.: ontem 17:30). Só o rótulo muda; os
+    segundos continuam contando apenas o que cai dentro do período.
+    """
+
+    if db is None:
+        return
+    calendar = CalendarService(db)
+    clipped = inicio.isoformat()
+    lookback = inicio - _REAL_START_LOOKBACK
+    for sector in sector_nodes:
+        for resource in sector.children:
+            for stretch in resource.children:
+                if (stretch.detail or {}).get("start") != clipped:
+                    continue
+                gaps = calendar.out_of_shift_intervals(resource.label, lookback, inicio)
+                if not gaps or gaps[-1][1] != inicio or gaps[-1][0] <= lookback:
+                    continue
+                real_start = gaps[-1][0]
+                end = datetime.fromisoformat(stretch.detail["end"])
+                stretch.label = _period_label(real_start, end, multi_day=True)
+                stretch.detail["real_start"] = real_start.isoformat()
 
 
 def _format_hours_ptbr(seconds: float) -> str:

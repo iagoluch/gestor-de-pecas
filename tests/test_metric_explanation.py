@@ -558,6 +558,21 @@ class MetricExplanationTests(unittest.TestCase):
         self.assertTrue(tree.reconciliation["ok"])
         self.assertEqual(tree.excluded[0]["seconds"], 8 * H)
 
+    def test_fora_turno_from_previous_day_shows_real_start(self):
+        # Turno de terça e quarta acaba às 16:00: o fora de turno da madrugada
+        # começou ontem às 16:00. O rótulo mostra isso; o dia conta só 8 h.
+        ontem = QUARTA - timedelta(days=1)
+        estados = [_estado(1, "DOBRA1", "fila", _at(ontem, 15), _at(QUARTA, 10))]
+        explainer, _repo = _explainer(estados, {"DOBRA1": [_turno(1), _turno(2)]})
+        tree = explainer.explain("tempo.fora_turno", self.filters)
+
+        stretches = tree.children[0].children[0].children
+        madrugada = next(t for t in stretches if t.detail["start"] == QUARTA.isoformat())
+        self.assertEqual(madrugada.label, "18/08 16:00 → 19/08 08:00")
+        self.assertEqual(madrugada.seconds, 8 * H)
+        self.assertEqual(madrugada.detail["real_start"], _at(ontem, 16).isoformat())
+        self.assertTrue(tree.reconciliation["ok"])
+
     def test_resource_without_calendar_is_flagged_and_left_out_of_total(self):
         # Decisão 19/10/2026 (1A): recurso sem turno no período não entra no
         # total nem na média da explicação; o aviso diz quanto ficou de fora.
