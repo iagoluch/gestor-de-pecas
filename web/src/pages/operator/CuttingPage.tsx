@@ -6,7 +6,7 @@ import { StopReasonFields } from "../../components/StopReasonFields";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { StopReason } from "../../types/api";
-import { formatDateTime, formatDuration } from "../../utils/format";
+import { displayText, formatDateTime, formatDuration } from "../../utils/format";
 import { Notice } from "../../components/Notice";
 import { AsyncButton } from "../../components/AsyncButton";
 import { StationStateBanner, type StationState } from "../../components/StationStateBanner";
@@ -297,7 +297,7 @@ export function CuttingPage({ resource }: { resource: string }) {
           {active && !stopped && Number(active.nestings_aguardando ?? 0) > 0 ? <button type="button" className="button" disabled={busy} onClick={() => void action({ action: "Finalizado", appointment_id: active.apontamento_ids_em_processo?.[0] ?? active.id, start_next: false })}>Finalizar só este plano</button> : null}
         </div>
       </div>
-      {stopped ? <Notice tone="error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${queue.data.resource_state.motivo}` : ""}. Retome antes de finalizar.</Notice> : null}
+      {stopped ? <Notice tone="error">Recurso parado{queue.data?.resource_state?.motivo ? ` — ${displayText(queue.data.resource_state.motivo)}` : ""}. Retome antes de finalizar.</Notice> : null}
       {queue.loading && !queue.data ? <LoadingState label="Carregando fila do Corte…" /> : queue.error && !queue.data ? <ErrorState error={queue.error} onRetry={queue.reload} /> : queue.data?.items.length ? (
         <>
           {queue.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}

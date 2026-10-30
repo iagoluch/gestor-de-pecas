@@ -32,7 +32,7 @@ function EvidenceList({ evidence }: { evidence: InsightEvidence[] }) {
             </small>
           </div>
           <div className="insight-evidence-list__origin">
-            {item.op ? <Link to={`/rastreabilidade/linha-do-tempo?op=${encodeURIComponent(item.op)}`}>Rastrear OP</Link> : null}
+            {item.op ? <Link to={`/rastreabilidade/op-produto?op=${encodeURIComponent(item.op)}`}>Rastrear OP</Link> : null}
           </div>
         </li>
       ))}

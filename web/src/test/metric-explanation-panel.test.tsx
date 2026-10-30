@@ -169,7 +169,7 @@ describe("MetricExplanationPanel", () => {
 
     expect(dialog).not.toHaveTextContent("estado:551");
     fireEvent.click(within(dialog).getByRole("button", { name: /07:12 → 12:00/ }));
-    expect(dialog).toHaveTextContent("estado:551");
+    expect(dialog).not.toHaveTextContent("estado:551");
     expect(dialog).toHaveTextContent("sistema");
     expect(dialog).not.toHaveTextContent("estado:552");
   });

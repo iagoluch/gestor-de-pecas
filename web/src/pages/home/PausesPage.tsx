@@ -260,7 +260,7 @@ export function ManagementPausesPage() {
                 label: "Ações",
                 render: (row) => (
                   <RowActions
-                    label={`${row.nome} · ${row.tipo_setor}`}
+                    label={`${row.nome} · ${displayName(row.tipo_setor)}`}
                     disabled={salvando}
                     primary={{ label: "Editar", onClick: () => abrirEdicao(row) }}
                     actions={[

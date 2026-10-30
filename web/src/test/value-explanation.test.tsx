@@ -80,7 +80,7 @@ describe("ValueExplanationPanel (painel local)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /LASER1/ }));
     expect(dialog).not.toHaveTextContent("evt:77");
     fireEvent.click(within(dialog).getByRole("button", { name: /07:30 · OP 123/ }));
-    expect(dialog).toHaveTextContent("evt:77");
+    expect(dialog).not.toHaveTextContent("evt:77");
     expect(dialog).toHaveTextContent("Rebarba");
     // Campo nulo não é inventado.
     expect(dialog).not.toHaveTextContent("Operador");

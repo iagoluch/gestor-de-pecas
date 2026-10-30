@@ -3,7 +3,7 @@ import { ApiError } from "../api/client";
 import { useMetricExplanation } from "../hooks/useMetricExplanation";
 import type { ExplanationNode, ExplanationTree, OverviewFilters } from "../types/explanation";
 import { isValueExplanation } from "../types/valueExplanation";
-import { formatHours } from "../utils/format";
+import { displayText, formatHours } from "../utils/format";
 import { LoadingState } from "./DataState";
 import { clockTime, ExplanationDrawer, plural } from "./ExplanationDrawer";
 import { MetricExplanationChat } from "./MetricExplanationChat";
@@ -62,8 +62,7 @@ function StretchRecord({ node }: { node: ExplanationNode }) {
   if (!detail) return null;
   return (
     <dl className="mx-record">
-      {detail.record_id ? <div><dt>Registro</dt><dd>{detail.record_id}</dd></div> : null}
-      {detail.origin ? <div><dt>Origem</dt><dd>{detail.origin}</dd></div> : null}
+      {detail.origin ? <div><dt>Origem</dt><dd>{displayText(detail.origin)}</dd></div> : null}
       {detail.rule ? <div><dt>Regra aplicada</dt><dd>{detail.rule}</dd></div> : null}
     </dl>
   );
@@ -146,7 +145,7 @@ function Explanation({ tree }: { tree: ExplanationTree }) {
         {average ? <p className="mx-hero__sub">{average}</p> : null}
         <SiblingBar tree={tree} />
       </div>
-      <p className="mx-why">{tree.reason}</p>
+      <p className="mx-why">{displayText(tree.reason)}</p>
       {tree.children.length ? (
         <div className="mx-rows">
           <NodeRows nodes={tree.children} depth={0} total={tree.total_seconds} open={open} toggle={toggle} path="n" />
@@ -155,7 +154,7 @@ function Explanation({ tree }: { tree: ExplanationTree }) {
       {tree.excluded.length || tree.notes.length ? (
         <ul className="mx-faint">
           {tree.excluded.map((item) => (
-            <li key={`${item.label}-${item.seconds}`}>({item.label} {formatHours(item.seconds)}: {item.reason})</li>
+            <li key={`${item.label}-${item.seconds}`}>({item.label} {formatHours(item.seconds)}: {displayText(item.reason)})</li>
           ))}
           {tree.notes.map((note) => <li key={note}>{note}</li>)}
         </ul>

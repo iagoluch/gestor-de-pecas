@@ -111,6 +111,7 @@ const INTERNAL_TERMS: Record<string, string> = {
   ai_conversations: "Histórico de conversas",
   ai_messages: "Mensagens da conversa",
   backend_only: "Calculado pelo sistema",
+  retorno_turno_sem_demanda: "Retorno do turno sem demanda",
   // Severidade e situação que o backend expõe em inglês.
   critical: "Crítico",
   error: "Erro",

@@ -6,7 +6,7 @@ import { StopReasonFields } from "../../components/StopReasonFields";
 import { OperatorActionIcon } from "../../components/OperatorActionIcon";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { StopReason } from "../../types/api";
-import { formatDateTime, formatDuration } from "../../utils/format";
+import { displayText, formatDateTime, formatDuration } from "../../utils/format";
 import { Notice } from "../../components/Notice";
 import { AsyncButton } from "../../components/AsyncButton";
 import { StationStateBanner } from "../../components/StationStateBanner";
@@ -303,7 +303,7 @@ export function HighlightPage() {
       ) : !task.data ? <EmptyState title={filter ? "Nenhuma tarefa corresponde ao filtro" : "Nenhuma tarefa liberada pelo Corte"} detail={filter ? "Limpe o filtro para restaurar a lista completa." : "Assim que um plano do Laser Ensis for concluído, ele aparece aqui."} /> : null}
       {stoppedWithoutTask ? (
         <Notice tone="error">
-          Posto parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
+          Posto parado{resourceState?.motivo ? ` — ${displayText(resourceState.motivo)}` : ""}. Retome para voltar a apontar.
         </Notice>
       ) : null}
       {task.loading && loadedTask && !task.data ? <LoadingState label="Carregando tarefa…" /> : task.error && !task.data ? <ErrorState error={task.error} onRetry={task.reload} /> : task.data ? (

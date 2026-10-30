@@ -36,11 +36,11 @@
 button.mx-row { cursor: pointer; }
 button.mx-row:hover { background: var(--surface-hover); }
 button.mx-row:focus-visible, .mx-stretch:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.mx-row__name { flex: 0 0 150px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mx-row__name { flex: 1 1 55%; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 .mx-row__chev { display: inline-block; width: 18px; color: var(--muted); font-size: 11px; }
-.mx-row__track { flex: 1; height: 14px; overflow: hidden; border-radius: 7px; background: var(--track); }
+.mx-row__track { flex: 1 1 20%; height: 14px; overflow: hidden; border-radius: 7px; background: var(--track); }
 .mx-row__track i { display: block; height: 100%; background: var(--primary); }
-.mx-row__value { flex: 0 0 76px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mx-row__value { flex: 0 0 88px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mx-children { margin-left: 22px; }
 .mx-children .mx-children { margin-left: 22px; }
 .mx-node--resource > .mx-row { font-size: 14px; }
@@ -69,8 +69,8 @@ button.mx-row:focus-visible, .mx-stretch:focus-visible { outline: none; box-shad
 
 @media (max-width: 520px) {
   .mx-hero__value { font-size: 34px; }
-  .mx-row__name { flex-basis: 96px; }
-  .mx-row__value { flex-basis: 64px; }
+  .mx-row__name { flex-basis: 50%; }
+  .mx-row__value { flex-basis: 76px; }
   .mx-row { padding: 8px 2px; font-size: 14px; }
   .mx-children, .mx-children .mx-children { margin-left: 12px; }
 }

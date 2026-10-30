@@ -781,7 +781,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {operations.error && operations.error.status !== 404 ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
       {stoppedWithoutOp ? (
         <Notice tone="error">
-          Recurso parado{resourceState?.motivo ? ` — ${resourceState.motivo}` : ""}. Retome para voltar a apontar.
+          Recurso parado{resourceState?.motivo ? ` — ${displayText(resourceState.motivo)}` : ""}. Retome para voltar a apontar.
         </Notice>
       ) : null}
       {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
@@ -1029,7 +1029,7 @@ function SetupQualityDialog({
       {!loading && state?.bloqueio_ativo ? (
         <>
           <h3 className="operator-step-title" data-step-title tabIndex={-1}>Primeira peça bloqueada</h3>
-          <p className="operator-help">{state.message}</p>
+          <p className="operator-help">{displayText(state.message)}</p>
           <p className="operator-help">O responsável precisa estar no posto e informar o próprio crachá. Não existe login para ele: a autorização fica registrada com OP, recurso, operador, horário e decisão.</p>
           <label>Crachá do responsável<input value={badge} onChange={(event) => setBadge(event.target.value)} autoFocus /></label>
           <ChamadaButton

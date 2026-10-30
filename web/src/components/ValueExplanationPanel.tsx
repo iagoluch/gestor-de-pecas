@@ -1,12 +1,19 @@
 import { useState } from "react";
 import type { ValueDetail, ValueExplanation, ValueNode, ValueUnit } from "../types/valueExplanation";
-import { formatHours, formatNumber, formatPercent } from "../utils/format";
+import { displayText, formatHours, formatNumber, formatPercent } from "../utils/format";
 import { clockTime, ExplanationDrawer } from "./ExplanationDrawer";
 import "../styles/metric-explanation.css";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 const UNIT_HINT: Partial<Record<ValueUnit, string>> = { pcs: "peças", hours: "horas" };
+
+/** Duração em 00h:00m (ex.: 30.780 s → "08h:33m"); tempo curto (< 1 min) segue em segundos. */
+function clockDuration(seconds: number): string {
+  const total = Math.round(Math.abs(seconds) / 60);
+  const text = `${String(Math.floor(total / 60)).padStart(2, "0")}h:${String(total % 60).padStart(2, "0")}m`;
+  return seconds < 0 ? `-${text}` : text;
+}
 
 /** Formata o número na unidade do contrato. `hours` chega em horas e vira "2h 30m". */
 export function formatValue(value: number | string | null | undefined, unit: ValueUnit): string {
@@ -17,7 +24,7 @@ export function formatValue(value: number | string | null | undefined, unit: Val
     case "pct": return formatPercent(value);
     case "brl": return brl.format(value);
     case "hours": return formatHours(value * 3600);
-    case "seconds": return `${formatNumber(value, 2)} s`;
+    case "seconds": return Math.abs(value) >= 60 ? clockDuration(value) : `${formatNumber(value, 2)} s`;
     default: return formatNumber(value, 2);
   }
 }
@@ -69,7 +76,8 @@ function detailLabel(key: string) {
 }
 
 // Chaves técnicas que só orientam a tela (unidade do número, id da métrica): não são dado para o gestor ler.
-const HIDDEN_DETAIL_KEYS = new Set(["unidade", "metric"]);
+// Números de registro (`estado_recurso:2316`) também são do banco, não do gestor.
+const HIDDEN_DETAIL_KEYS = new Set(["unidade", "metric", "id", "record_id", "source_id", "source_ref", "source_refs"]);
 
 function detailEntries(detail: ValueDetail | null) {
   return Object.entries(detail ?? {}).filter(
@@ -124,7 +132,7 @@ function ValueRows({ nodes, unit, open, toggle, path }: {
                 {details.length ? (
                   <dl className="mx-record">
                     {details.map(([name, detailValue]) => (
-                      <div key={name}><dt>{detailLabel(name)}</dt><dd>{String(detailValue)}</dd></div>
+                      <div key={name}><dt>{detailLabel(name)}</dt><dd>{typeof detailValue === "string" ? displayText(detailValue) : String(detailValue)}</dd></div>
                     ))}
                   </dl>
                 ) : null}
@@ -178,7 +186,7 @@ export function ValueExplanationBody({ explanation }: { explanation: ValueExplan
         <strong className="mx-hero__value" data-testid="explanation-total">{formatValue(explanation.value, explanation.unit)}</strong>
         {hint && explanation.unit === "pcs" ? <p className="mx-hero__sub">{hint}</p> : null}
       </div>
-      {explanation.reason ? <p className="mx-why">{explanation.reason}</p> : null}
+      {explanation.reason ? <p className="mx-why">{displayText(explanation.reason)}</p> : null}
       {explanation.rule ? <p className="mx-rule"><b>Regra:</b> {explanation.rule}</p> : null}
       {explanation.children.length ? (
         <div className="mx-rows">
@@ -189,7 +197,7 @@ export function ValueExplanationBody({ explanation }: { explanation: ValueExplan
       {explanation.excluded.length || explanation.notes.length ? (
         <ul className="mx-faint">
           {explanation.excluded.map((item) => (
-            <li key={`${item.label}-${item.value}`}>({item.label} {inputValue(item.value, item.unidade, explanation.unit)}: {item.reason})</li>
+            <li key={`${item.label}-${item.value}`}>({item.label} {inputValue(item.value, item.unidade, explanation.unit)}: {displayText(item.reason)})</li>
           ))}
           {explanation.notes.map((note) => <li key={note}>{note}</li>)}
         </ul>

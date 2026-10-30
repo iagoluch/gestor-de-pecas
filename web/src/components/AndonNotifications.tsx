@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AndonSnapshot } from "../types/andon";
+import { displayText } from "../utils/format";
 import {
   EMPTY_NOTIFICATION_QUEUE,
   detectStateChanges,
@@ -56,7 +57,7 @@ export function AndonNotifications({ snapshot, focusSector }: { snapshot: AndonS
             <span>{notification.sector}</span>
           </header>
           <p className="andon-toast__state"><i aria-hidden="true" />{notification.stateLabel}</p>
-          {notification.reason ? <p className="andon-toast__detail">Motivo: {notification.reason}</p> : null}
+          {notification.reason ? <p className="andon-toast__detail">Motivo: {displayText(notification.reason)}</p> : null}
           {notification.op || notification.operator ? (
             <p className="andon-toast__detail">
               {notification.op ? `OP ${notification.op}` : null}

@@ -5,7 +5,7 @@ import { Notice } from "../../components/Notice";
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { DirectorCosts, DirectorPeriodName, DirectorSheet as DirectorSheetData } from "../../types/director";
-import { formatNumber, formatPieces } from "../../utils/format";
+import { displayName, formatNumber, formatPieces } from "../../utils/format";
 import { DirectorExplainable } from "./DirectorExplainable";
 import { costLine, costText, formatHoursValue } from "./directorFormat";
 
@@ -101,7 +101,7 @@ export function DirectorSheet({ periodo, setor, recurso, onSetor, onRecurso }: {
               {data.paradas_por_motivo.length ? (
                 <ul className="director-list">
                   {data.paradas_por_motivo.map((item) => (
-                    <li key={item.motivo}><span>{item.motivo}</span><strong>{explain("dir.parado_motivo", `Parado por ${item.motivo}`, formatHoursValue(item.horas), { motivo: item.motivo })}</strong></li>
+                    <li key={item.motivo}><span>{displayName(item.motivo)}</span><strong>{explain("dir.parado_motivo", `Parado por ${displayName(item.motivo)}`, formatHoursValue(item.horas), { motivo: item.motivo })}</strong></li>
                   ))}
                 </ul>
               ) : (
