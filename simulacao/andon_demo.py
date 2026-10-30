@@ -155,6 +155,11 @@ def ensure_demo_database() -> tuple[str, str]:
             "SELECT 1 FROM pg_database WHERE datname = %s", (DEMO_DATABASE,)
         ).fetchone()
         if not exists:
+            if os.getenv("GESTOR_PERMITIR_BANCO_EXTRA") != "1":
+                raise RuntimeError(
+                    "Regra do notebook: um único banco (gestor_pecas_test). Criar outro banco "
+                    "exige GESTOR_PERMITIR_BANCO_EXTRA=1 e aprovação do usuário."
+                )
             connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(DEMO_DATABASE)))
     validate_demo_dsn(demo_dsn)
     database = Database(

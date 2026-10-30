@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from app.core.paths import base_dir
+from app.database import limpeza_schemas_teste
 from app.database.errors import DatabaseConfigurationError
 
 
@@ -186,6 +187,8 @@ def load_postgres_config(*, testing=False, environ=None):
         connection_defaults["keepalives_count"] = env.get("PGKEEPALIVES_COUNT", "3")
     if connection_defaults:
         dsn = make_conninfo(dsn, **connection_defaults)
+    if testing and environ is None:
+        limpeza_schemas_teste.iniciar(dsn)
 
     session_timezone = session_timezone_from_env(env)
     min_size = _positive_int("PGPOOL_MIN_SIZE", 1, environ=env)

@@ -484,3 +484,5 @@ Durante organização estrutural, estabilidade vale mais que estrutura perfeita.
 Durante melhoria visual, não alterar regra de negócio.
 
 Durante mudanças no banco, preservar dados, atomicidade e rastreabilidade acima de tudo.
+
+**Regra máxima do notebook (30/10/2026):** neste notebook existe um único banco, `gestor_pecas_test`, com um único schema, `public`. É nele que o sistema é testado, e é o que sobe para o REAL (na VM) depois de aprovado. Não criar outro banco nem outro schema permanente; nunca apontar nada para `gestor_pecas` aqui.

@@ -125,6 +125,11 @@ def _ensure_target_database(maintenance_dsn: str) -> bool:
         ).fetchone()[0]
         if exists:
             return False
+        if os.getenv("GESTOR_PERMITIR_BANCO_EXTRA") != "1":
+            raise RuntimeError(
+                "Regra do notebook: um único banco (gestor_pecas_test). Criar outro banco "
+                "exige GESTOR_PERMITIR_BANCO_EXTRA=1 e aprovação do usuário."
+            )
         connection.execute(
             sql.SQL("CREATE DATABASE {} TEMPLATE template0 ENCODING 'UTF8'").format(
                 sql.Identifier(TARGET_DATABASE)
