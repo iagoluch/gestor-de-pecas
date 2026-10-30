@@ -173,6 +173,9 @@ class ManufacturingRules:
     automatic_breaks: tuple[tuple[time, time, str], ...] = AUTOMATIC_BREAKS
     official_work_window: tuple[time, time] = OFFICIAL_WORK_WINDOW
     overtime_windows: tuple[tuple[time, time], ...] = OVERTIME_WINDOWS
+    #: Faixas "fora de turno" cadastradas na aba Turnos (ex.: 21:30-06:00).
+    #: Descontadas da janela global; o que nenhuma faixa cobre já é fora de turno.
+    out_of_shift_windows: tuple[tuple[time, time], ...] = ()
     official_work_days: tuple[int, ...] = OFFICIAL_WORK_DAYS
 
     @staticmethod

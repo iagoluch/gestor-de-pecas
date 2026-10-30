@@ -95,7 +95,7 @@ class _ManagementDb(_AuditMemory, FakeDatabase):
         return [dict(t) for t in self.turnos]
 
     def salvar_parametro_turno(self, *, nome, tipo, hora_inicio, hora_fim, ativo=True, ordem=1,
-                               parametro_id=None):
+                               parametro_id=None, turno_id=None):
         alvo = next((t for t in self.turnos if t["id"] == parametro_id), None)
         if alvo is None:
             alvo = {"id": len(self.turnos) + 1}

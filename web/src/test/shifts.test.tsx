@@ -22,7 +22,7 @@ function stubFetch(items = TURNOS) {
     const path = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     if (path.includes("/management/shift-parameters") && method === "GET") return json(payload(items));
-    if (path.includes("/management/shift-parameters") && method === "POST") return json({ ok: true, item: items[0] });
+    if (path.includes("/management/shift-parameters") && method === "POST") return json({ ok: true, item: items[0] ?? { id: 1 } });
     if (path.includes("/management/shift-parameters/") && method === "DELETE") return json({ ok: true });
     return json({ code: "not_found", message: "Não encontrado" }, 404);
   });
@@ -53,22 +53,23 @@ describe("Turnos automáticos — tela IagoDev", () => {
     expect(card?.querySelector(".metric-card__value")?.textContent).toBe("2");
   });
 
-  it("cria um novo turno pelo formulário", async () => {
-    const fetchMock = stubFetch();
+  it("cria um novo turno com expediente, H1, H2 e fora de turno ligados ao oficial", async () => {
+    const fetchMock = stubFetch([]);
     renderShifts();
-    await waitFor(() => expect(linhas()).toBe(3));
+    await screen.findByText("Nenhum turno configurado");
 
     fireEvent.click(screen.getByRole("button", { name: "Novo turno" }));
-    fireEvent.change(screen.getByLabelText(/^Nome/), { target: { value: "H3" } });
-    fireEvent.change(screen.getByLabelText(/^Início/), { target: { value: "21:30" } });
-    fireEvent.change(screen.getByLabelText(/^Fim/), { target: { value: "23:00" } });
+    fireEvent.change(screen.getByLabelText(/^Nome do turno/), { target: { value: "Turno B" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await screen.findByText("Turno salvo. O próximo ciclo já usa o novo horário.");
-    const chamada = fetchMock.mock.calls.find(([path, init]) =>
-      String(path).endsWith("/management/shift-parameters") && (init?.method ?? "GET").toUpperCase() === "POST");
-    const corpo = JSON.parse(String(chamada?.[1]?.body));
-    expect(corpo).toMatchObject({ nome: "H3", tipo: "hora_extra", hora_inicio: "21:30", hora_fim: "23:00" });
+    const corpos = fetchMock.mock.calls
+      .filter(([path, init]) => String(path).endsWith("/management/shift-parameters") && (init?.method ?? "GET").toUpperCase() === "POST")
+      .map(([, init]) => JSON.parse(String(init?.body)));
+    expect(corpos).toHaveLength(4);
+    expect(corpos[0]).toMatchObject({ nome: "Turno B Oficial", tipo: "expediente", hora_inicio: "08:00", hora_fim: "17:30", turno_id: null });
+    expect(corpos.slice(1).map((corpo) => corpo.tipo).sort()).toEqual(["fora_turno", "hora_extra", "hora_extra"]);
+    expect(corpos.slice(1).every((corpo) => corpo.turno_id === 1)).toBe(true);
   });
 
   it("remove um turno", async () => {

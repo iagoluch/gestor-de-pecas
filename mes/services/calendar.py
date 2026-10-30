@@ -266,6 +266,23 @@ class CalendarService:
             "reason": reason,
         }
 
+    def global_shift_seconds(self, inicio, fim):
+        """Tempo de expediente da aba Turnos (janela oficial menos pausas).
+
+        Referência para recurso sem calendário próprio: não cria calendário nem
+        hora extra, apenas lê a configuração global vigente.
+        """
+
+        windows = _official_window_intervals(
+            inicio, fim, self.rules.official_work_window, self.rules.official_work_days
+        )
+        for pause_start, pause_end, _name in self.rules.automatic_breaks:
+            for day in {w[0].date() for w in windows}:
+                windows = _subtract_interval_list(
+                    windows, datetime.combine(day, pause_start), datetime.combine(day, pause_end)
+                )
+        return sum((end - start).total_seconds() for start, end in windows)
+
     def available_seconds(self, resource_code, inicio, fim):
         return self.period_summary(resource_code, inicio, fim)
 
@@ -484,16 +501,15 @@ def _default_operational_intervals(inicio, fim, rules):
     """Janelas globais para recurso ainda sem calendário próprio.
 
     A configuração global de turno é a referência de fallback do produto.
-    Ela pode incluir H1/H2 configurados em ``parametros_turno``; não cria nem
-    cadastra hora extra específica para o recurso, apenas evita que leituras
-    diferentes tratem o mesmo recurso sem vínculo como dentro e fora de turno
-    ao mesmo tempo.
+    Só o expediente oficial conta: H1/H2 são hora extra e entram na capacidade
+    apenas nos dias em que a Manufatura a planejou (exceção de calendário
+    ``disponivel_extra``); sem plano, o horário vira fora de turno.
     """
 
     days = rules.official_work_days
     windows = _official_window_intervals(inicio, fim, rules.official_work_window, days)
-    for overtime_window in rules.overtime_windows:
-        windows.extend(_official_window_intervals(inicio, fim, overtime_window, days))
+    for out_window in rules.out_of_shift_windows:
+        windows = _subtract_many(windows, _official_window_intervals(inicio, fim, out_window, days))
     return merge_intervals(windows)
 
 

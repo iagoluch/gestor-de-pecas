@@ -556,6 +556,40 @@ class ShiftParametersLoaderTests(unittest.TestCase):
         self.assertEqual(rules.shift_end_boundaries, (time(17, 30), time(21, 30)))
         self.assertEqual(rules.overtime_windows, ((time(6, 0), time(8, 0)), (time(17, 30), time(21, 30))))
 
+    def test_faixa_fora_de_turno_configurada_nao_gera_hora_extra_nem_limite(self):
+        from mes.services.calendar import CalendarService
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        db = ShiftParametersFake([
+            _turno("Oficial", "expediente", "08:00", "17:30", ordem=1),
+            _turno("H2", "hora_extra", "17:30", "21:30", ordem=2),
+            _turno("Madrugada", "fora_turno", "21:30", "06:00", ordem=3),
+            _turno("Almoco-fora", "fora_turno", "20:00", "21:00", ordem=4),
+        ])
+        rules = load_manufacturing_rules(db)
+
+        self.assertEqual(rules.overtime_windows, ((time(17, 30), time(21, 30)),))
+        self.assertEqual(rules.shift_end_boundaries, (time(17, 30), time(21, 30)))
+        self.assertEqual(
+            rules.out_of_shift_windows,
+            ((time(20, 0), time(21, 0)), (time(21, 30), time(6, 0))),
+        )
+        # Segunda-feira 2026-09-07 sem hora extra planejada: a H2 não conta na
+        # capacidade, então 19h–22h inteiro é fora de turno.
+        calendar = CalendarService(db, rules)
+        fora = calendar.out_of_shift_intervals("SEM_CALENDARIO", datetime(2026, 9, 7, 19, 0), datetime(2026, 9, 7, 22, 0))
+        self.assertEqual(fora, [(datetime(2026, 9, 7, 19, 0), datetime(2026, 9, 7, 22, 0))])
+
+    def test_hora_extra_ligada_a_outro_turno_nao_entra_nas_regras_do_turno_vigente(self):
+        from mes.services.shift_parameters import load_manufacturing_rules
+
+        oficial = {**_turno("Oficial", "expediente", "08:00", "17:30", ordem=1), "id": 1}
+        h2 = {**_turno("H2", "hora_extra", "17:30", "21:30", ordem=2), "id": 2, "turno_id": 1}
+        alheia = {**_turno("Outra", "hora_extra", "16:00", "19:00", ordem=3), "id": 3, "turno_id": 99}
+        rules = load_manufacturing_rules(ShiftParametersFake([oficial, h2, alheia]))
+
+        self.assertEqual(rules.overtime_windows, ((time(17, 30), time(21, 30)),))
+
     def test_mudar_o_horario_na_tela_muda_o_limite_sem_tocar_no_codigo(self):
         from mes.services.shift_parameters import load_manufacturing_rules
 
@@ -601,11 +635,12 @@ class ShiftParametersLoaderTests(unittest.TestCase):
         inicio = datetime(2026, 9, 3, 15, 0)
         fim = datetime(2026, 9, 3, 20, 0)
 
-        # Não há vínculo de calendário para RECURSO-NOVO. Ainda assim, a
-        # leitura temporal segue o mesmo expediente/H2 vigente no sistema.
+        # Não há vínculo de calendário para RECURSO-NOVO. A leitura temporal
+        # segue o expediente vigente; a H2 só conta com hora extra planejada,
+        # então sem plano 16h–20h é fora de turno.
         self.assertEqual(
             calendar.out_of_shift_intervals("RECURSO-NOVO", inicio, fim),
-            [(datetime(2026, 9, 3, 19, 0), fim)],
+            [(datetime(2026, 9, 3, 16, 0), fim)],
         )
         self.assertIs(
             calendar.shift_window_kind("RECURSO-NOVO", datetime(2026, 9, 3, 16, 30)),

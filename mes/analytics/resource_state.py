@@ -63,7 +63,19 @@ def physical_state_category(row) -> EventCategory:
     return category
 
 
-def build_physical_state_inputs(rows, *, inicio: datetime, fim: datetime):
+#: Ociosidade que só conta dentro do turno configurado em ``parametros_turno``.
+SHIFT_BOUND_IDLE_CATEGORIES = (EventCategory.NO_DEMAND, EventCategory.QUEUE)
+
+
+def build_physical_state_inputs(rows, *, inicio: datetime, fim: datetime, calendar=None):
+    """Segmentos físicos dos estados persistidos.
+
+    Com ``calendar`` (``CalendarService``), a ociosidade (sem demanda e fila)
+    que passa dos limites do turno vira ``fora_turno``: um estado aberto não
+    pode estender "recurso sem demanda" madrugada adentro quando o fim do
+    turno ainda não foi gravado pelo agendador.
+    """
+
     inputs = []
     for raw in rows or ():
         row = dict(raw)
@@ -76,20 +88,46 @@ def build_physical_state_inputs(rows, *, inicio: datetime, fim: datetime):
         if end <= start:
             continue
         category = physical_state_category(row)
-        inputs.append(PhysicalInputSegment(
-            resource=str(row.get("recurso") or "Não informado").strip() or "Não informado",
-            sector=str(row.get("tipo_setor") or "Não informado").strip() or "Não informado",
-            category=category,
-            start=start,
-            end=end,
-            source_ref=f"estado_recurso:{row.get('id')}",
-            stop_classification=classify_state_row(row),
-        ))
+        resource = str(row.get("recurso") or "Não informado").strip() or "Não informado"
+        pieces = [(start, end, category)]
+        if calendar is not None and category in SHIFT_BOUND_IDLE_CATEGORIES:
+            pieces = _split_by_shift(calendar, resource, start, end, category)
+        for piece_start, piece_end, piece_category in pieces:
+            inputs.append(PhysicalInputSegment(
+                resource=resource,
+                sector=str(row.get("tipo_setor") or "Não informado").strip() or "Não informado",
+                category=piece_category,
+                start=piece_start,
+                end=piece_end,
+                source_ref=f"estado_recurso:{row.get('id')}",
+                stop_classification=classify_state_row(row) if piece_category is category else None,
+            ))
     return inputs
 
 
-def summarize_physical_states(rows, *, inicio: datetime, fim: datetime):
-    return consolidate_physical_time(build_physical_state_inputs(rows, inicio=inicio, fim=fim))
+def _split_by_shift(calendar, resource, start, end, category):
+    """Divide ``[start, end)`` em trecho dentro do turno (``category``) e fora dele."""
+
+    outside = [
+        (max(a, start), min(b, end))
+        for a, b in calendar.out_of_shift_intervals(resource, start, end)
+        if min(b, end) > max(a, start)
+    ]
+    pieces = [(a, b, EventCategory.OUT_OF_SHIFT) for a, b in outside]
+    cursor = start
+    for a, b in sorted(outside):
+        if a > cursor:
+            pieces.append((cursor, a, category))
+        cursor = max(cursor, b)
+    if end > cursor:
+        pieces.append((cursor, end, category))
+    return sorted(pieces, key=lambda piece: piece[0])
+
+
+def summarize_physical_states(rows, *, inicio: datetime, fim: datetime, calendar=None):
+    return consolidate_physical_time(
+        build_physical_state_inputs(rows, inicio=inicio, fim=fim, calendar=calendar)
+    )
 
 
 def _dt(value):

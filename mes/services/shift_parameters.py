@@ -35,7 +35,10 @@ def load_manufacturing_rules(db, *, vigente_em=None) -> ManufacturingRules:
       H3, H4... amanhã, se a fábrica precisar) — janelas de hora extra
       **antes** do expediente (H1) não geram limite próprio: quem já está
       trabalhando ali é protegido pela regra de execução ativa, não por um
-      corte automático.
+      corte automático;
+    * toda linha ``tipo='fora_turno'`` vira uma faixa explícita de fora de
+      turno (``out_of_shift_windows``), descontada da janela global. Não gera
+      hora extra nem limite de fim de turno.
     """
 
     loader = getattr(db, "listar_parametros_turno", None)
@@ -50,6 +53,13 @@ def load_manufacturing_rules(db, *, vigente_em=None) -> ManufacturingRules:
         return ManufacturingRules()
 
     expediente = expediente_rows[0]
+    # Hora extra e fora de turno só valem junto do turno oficial a que pertencem;
+    # linha sem vínculo (cadastro antigo) continua valendo.
+    rows = [
+        row for row in rows
+        if str(row.get("tipo") or "") == "expediente"
+        or row.get("turno_id") in (None, expediente.get("id"))
+    ]
     official_work_window = (expediente["hora_inicio"], expediente["hora_fim"])
 
     overtime_rows = sorted(
@@ -57,6 +67,14 @@ def load_manufacturing_rules(db, *, vigente_em=None) -> ManufacturingRules:
         key=lambda row: row["hora_inicio"],
     )
     overtime_windows = tuple((row["hora_inicio"], row["hora_fim"]) for row in overtime_rows)
+
+    out_of_shift_windows = tuple(
+        (row["hora_inicio"], row["hora_fim"])
+        for row in sorted(
+            (row for row in rows if str(row.get("tipo") or "") == "fora_turno"),
+            key=lambda row: row["hora_inicio"],
+        )
+    )
 
     boundaries = [official_work_window[1]]
     cursor = official_work_window[1]
@@ -76,6 +94,7 @@ def load_manufacturing_rules(db, *, vigente_em=None) -> ManufacturingRules:
         shift_end_boundaries=tuple(dict.fromkeys(boundaries)),
         official_work_window=official_work_window,
         overtime_windows=overtime_windows,
+        out_of_shift_windows=out_of_shift_windows,
     )
 
 

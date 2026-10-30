@@ -12,7 +12,7 @@ calendário. Por isso o tempo sem demanda de dias passados já é explicável pe
 mesmos ids de evento (``estado_recurso:<id>``).
 """
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import itertools
 import unittest
 
@@ -643,17 +643,18 @@ class MetricExplanationTests(unittest.TestCase):
 
     def test_segment_crossing_period_boundary_is_clipped(self):
         estados = [
-            _estado(1, "DOBRA1", "fila", _at(QUARTA, 22), _at(QUINTA, 2)),
+            _estado(1, "DOBRA1", "fila", _at(QUARTA, 15), _at(QUINTA, 2)),
         ]
         explainer, repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
         filters = AnalyticsFilter(QUARTA, QUINTA)  # [qua 00:00, qui 00:00)
 
         tree = explainer.explain("tempo.sem_demanda", filters)
 
-        self.assertEqual(tree.total_seconds, 2 * H)
+        # Turno 08–16: só 15h–16h é sem demanda; o resto é fora de turno.
+        self.assertEqual(tree.total_seconds, 1 * H)
         stretch = tree.children[0].children[0].children[0]
-        self.assertEqual(stretch.seconds, 2 * H)
-        self.assertEqual(stretch.detail["end"], QUINTA.isoformat())
+        self.assertEqual(stretch.seconds, 1 * H)
+        self.assertEqual(stretch.detail["end"], _at(QUARTA, 16).isoformat())
         self.assertEqual(
             tree.total_seconds,
             _service(repo).get_overview(filters)["hours"]["no_demand_seconds"],
@@ -661,7 +662,7 @@ class MetricExplanationTests(unittest.TestCase):
 
     def test_truncation_flag(self):
         estados = [
-            _estado(i, f"DOBRA{i}", "fila", _at(QUARTA, 8), _at(QUARTA, 8 + i))
+            _estado(i, f"DOBRA{i}", "fila", _at(QUARTA, 8), _at(QUARTA, 8) + timedelta(minutes=45 * i))
             for i in range(1, 11)
         ]
         turnos = {f"DOBRA{i}": [_turno(2)] for i in range(1, 11)}
@@ -671,7 +672,7 @@ class MetricExplanationTests(unittest.TestCase):
 
         self.assertFalse(full.truncated)
         self.assertTrue(tree.truncated)
-        self.assertEqual(tree.total_seconds, sum(range(1, 11)) * H)
+        self.assertEqual(tree.total_seconds, sum(range(1, 11)) * 45 * 60)
         self.assertTrue(tree.reconciliation["ok"])
         sector = tree.children[0]
         self.assertEqual(sector.seconds, tree.total_seconds)
@@ -834,9 +835,21 @@ class AdversarialClosingTests(unittest.TestCase):
         self.assertTrue(stop.reconciliation["ok"])
         stretch = stop.children[0].children[0].children[0]
         self.assertEqual(stretch.label, "19/08 22:00 → 20/08 03:00")
+        # 03h–06h está fora do turno (08–16): não é "sem demanda".
         self.assertEqual(
-            explainer.explain("tempo.sem_demanda", filters).total_seconds, 3 * H
+            explainer.explain("tempo.sem_demanda", filters).total_seconds, 0
         )
+
+    def test_sem_demanda_aberto_nao_passa_do_fim_do_turno(self):
+        """Estado 'sem demanda' sem fim gravado só vale até o fim do turno da aba Turnos."""
+
+        estados = [_estado(1, "DOBRA1", "fila", _at(QUARTA, 12), None)]
+        explainer, _repo = _explainer(estados, {"DOBRA1": [_turno(2)]})
+        filters = AnalyticsFilter(QUARTA, QUARTA.replace(hour=23, minute=59))
+
+        tree = explainer.explain("tempo.sem_demanda", filters)
+
+        self.assertEqual(tree.total_seconds, 4 * H)  # 12h–16h
 
     def test_night_shift_spilling_into_the_period_counts_as_calendar(self):
         noite = {

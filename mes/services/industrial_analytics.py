@@ -132,6 +132,7 @@ class IndustrialAnalyticsService:
                 state_rows,
                 inicio=filters.inicio,
                 fim=filters.fim,
+                calendar=CalendarService(self.db),
             )
         inputs = []
         for row in self._facts(filters):
@@ -718,6 +719,14 @@ class IndustrialAnalyticsService:
             # reais viravam vários minutos e a tela publicava um valor móvel.
             summary = calendar.period_summary(code, filters.inicio, filters.fim)
             available = summary.get("tempo_disponivel_segundos")
+            if available is None:
+                # Sem calendário próprio vale o expediente da aba Turnos.
+                available = calendar.global_shift_seconds(filters.inicio, filters.fim)
+                summary = {
+                    **summary,
+                    "availability": DataAvailability.AVAILABLE.value,
+                    "reason": "Expediente global da aba Turnos (recurso sem calendário próprio).",
+                }
             time_row = by_resource.get(key, {})
             # Carga = tempo físico em que o recurso esteve ocupado. Setup e
             # retrabalho ocupam a máquina, então entram na ocupação.

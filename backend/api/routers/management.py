@@ -258,6 +258,7 @@ def save_shift_parameter(
             ativo=payload.ativo,
             ordem=payload.ordem,
             parametro_id=payload.id,
+            turno_id=payload.turno_id,
         )
     except ValueError as exc:
         raise AppError("invalid_shift_parameter", str(exc)) from exc

@@ -2826,6 +2826,43 @@ MANUTENCAO_SUGESTOES_STATEMENTS = (
     """,
 )
 
+
+# Migration 69 (29/10/2026): faixa "fora de turno" configurável na aba Turnos.
+# Aditiva: só relaxa o CHECK de ``parametros_turno.tipo`` para aceitar
+# 'fora_turno'. Nenhuma linha é criada: o que não está em nenhuma faixa segue
+# fora de turno automaticamente.
+# Rollback: DELETE FROM parametros_turno WHERE tipo = 'fora_turno'; recriar o
+# CHECK antigo; DELETE FROM schema_migrations WHERE version = 69; SCHEMA_VERSION = 68.
+PARAMETROS_TURNO_FORA_TURNO_DESCRIPTION = "parametros_turno aceita tipo 'fora_turno' (faixa fora de turno configurável)"
+PARAMETROS_TURNO_FORA_TURNO_STATEMENTS = (
+    "ALTER TABLE parametros_turno DROP CONSTRAINT IF EXISTS parametros_turno_tipo_check",
+    "ALTER TABLE parametros_turno ADD CONSTRAINT parametros_turno_tipo_check "
+    "CHECK (tipo IN ('expediente', 'hora_extra', 'fora_turno'))",
+)
+
+# Migration 70 — hora extra e fora de turno pertencem a um turno oficial.
+# Cada faixa ``hora_extra``/``fora_turno`` aponta (``turno_id``) para o
+# ``expediente`` a que pertence: ao criar um turno novo o horário da hora extra
+# muda, então a faixa não pode existir solta. Faixas já cadastradas são
+# ligadas ao único expediente existente (se houver mais de um, ficam sem
+# vínculo e a tela exige escolher). O histórico guarda o vínculo da versão.
+# Rollback: ALTER TABLE parametros_turno DROP COLUMN turno_id;
+# ALTER TABLE parametros_turno_historico DROP COLUMN turno_id;
+# DELETE FROM schema_migrations WHERE version = 70; SCHEMA_VERSION = 69.
+PARAMETROS_TURNO_VINCULO_DESCRIPTION = "parametros_turno: hora extra e fora de turno ligadas a um turno oficial (turno_id)"
+PARAMETROS_TURNO_VINCULO_STATEMENTS = (
+    "ALTER TABLE parametros_turno ADD COLUMN turno_id BIGINT REFERENCES parametros_turno(id) ON DELETE CASCADE",
+    "ALTER TABLE parametros_turno_historico ADD COLUMN turno_id BIGINT",
+    """
+    UPDATE parametros_turno SET turno_id = (SELECT id FROM parametros_turno WHERE tipo = 'expediente')
+    WHERE tipo <> 'expediente' AND (SELECT COUNT(*) FROM parametros_turno WHERE tipo = 'expediente') = 1
+    """,
+    """
+    UPDATE parametros_turno_historico h SET turno_id = p.turno_id
+    FROM parametros_turno p WHERE p.id = h.parametro_id AND p.turno_id IS NOT NULL
+    """,
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2897,6 +2934,8 @@ MIGRATIONS = {
     66: (AUDITORIA_ALTERACOES_DESCRIPTION, AUDITORIA_ALTERACOES_STATEMENTS),
     67: (QUALIDADE_RNC_DECISOES_DESCRIPTION, QUALIDADE_RNC_DECISOES_STATEMENTS),
     68: (MANUTENCAO_SUGESTOES_DESCRIPTION, MANUTENCAO_SUGESTOES_STATEMENTS),
+    69: (PARAMETROS_TURNO_FORA_TURNO_DESCRIPTION, PARAMETROS_TURNO_FORA_TURNO_STATEMENTS),
+    70: (PARAMETROS_TURNO_VINCULO_DESCRIPTION, PARAMETROS_TURNO_VINCULO_STATEMENTS),
 }
 
 

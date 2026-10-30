@@ -538,10 +538,10 @@ class CapacityTests(unittest.TestCase):
         ]
         result = self._service(_CapacityRepo(estados)).capacity_configuration(self.filters)
         self.assertEqual(result["unidade"], "tempo")
-        # Um recurso tem calendário, o outro não: disponibilidade parcial.
-        self.assertEqual(result["availability"], DataAvailability.PARTIAL.value)
-        self.assertEqual(result["recursos_com_calendario"], 1)
-        self.assertEqual(result["recursos_sem_calendario"], 1)
+        # Um recurso tem calendário próprio, o outro usa o expediente da aba Turnos.
+        self.assertEqual(result["availability"], DataAvailability.AVAILABLE.value)
+        self.assertEqual(result["recursos_com_calendario"], 2)
+        self.assertEqual(result["recursos_sem_calendario"], 0)
 
         gasparini = next(item for item in result["items"] if item["codigo"] == "DOBRA1")
         self.assertEqual(gasparini["capacidade_segundos"], 8 * 3600)
@@ -549,14 +549,15 @@ class CapacityTests(unittest.TestCase):
         self.assertAlmostEqual(gasparini["utilizacao_percentual"], 50.0)
         self.assertEqual(gasparini["capacidade_restante_segundos"], 4 * 3600)
 
-        # Sem calendário nenhum número é inventado para o segundo recurso.
+        # Sem calendário próprio vale o expediente da aba Turnos (08:00–17:30
+        # menos almoço e café = 8h33 por dia útil).
         outro = next(item for item in result["items"] if item["codigo"] == "DOBRA2")
-        self.assertIsNone(outro["capacidade_segundos"])
-        self.assertIsNone(outro["utilizacao_percentual"])
-        self.assertEqual(outro["calendario_availability"], DataAvailability.NOT_CONFIGURED.value)
+        self.assertEqual(outro["capacidade_segundos"], 30780.0)
+        self.assertEqual(outro["calendario_availability"], DataAvailability.AVAILABLE.value)
 
         self.assertEqual(result["bottleneck_resource"], "DOBRA1")
-        self.assertAlmostEqual(result["utilizacao_percentual"], 50.0)
+        # Carga 4 h sobre 8 h (calendário próprio) + 8h33 (aba Turnos).
+        self.assertAlmostEqual(result["utilizacao_percentual"], 4 * 3600 / (8 * 3600 + 30780) * 100)
 
     def test_capacidade_planejada_nao_avanca_com_os_segundos_do_relogio(self):
         repo = _CapacityRepo([], com_calendario=("DOBRA1", "DOBRA2"))
@@ -647,8 +648,8 @@ class CapacityTests(unittest.TestCase):
         pick = lambda r, c: next(i for i in r["items"] if i["codigo"] == c)  # noqa: E731
         self.assertIs(pick(cabe, "DOBRA1")["fila_excede_livre"], False)  # igual ao livre: cabe
         self.assertIs(pick(excede, "DOBRA1")["fila_excede_livre"], True)
-        # Sem calendário não há tempo livre: None (não False), a horas continuam.
-        self.assertIsNone(pick(sem_calendario, "DOBRA2")["fila_excede_livre"])
+        # Sem calendário próprio vale o expediente da aba Turnos (8h33): 99 h excedem.
+        self.assertIs(pick(sem_calendario, "DOBRA2")["fila_excede_livre"], True)
         # Fila parcial (OP sem tempo padrão) que cabe: desconhecido, não "cabe".
         parcial = self._fila([
             self._fato("OP1", "DOBRA1", 1, 3600),
@@ -657,15 +658,12 @@ class CapacityTests(unittest.TestCase):
         self.assertIsNone(pick(parcial, "DOBRA1")["fila_excede_livre"])
         self.assertEqual(pick(sem_calendario, "DOBRA2")["fila_horas_segundos"], 99 * 3600)
 
-    def test_sem_calendario_algum_a_capacidade_permanece_nao_configurada(self):
+    def test_sem_calendario_algum_usa_expediente_da_aba_turnos(self):
         repo = _CapacityRepo([], com_calendario=())
         result = self._service(repo).capacity_configuration(self.filters)
-        self.assertEqual(result["availability"], DataAvailability.NOT_CONFIGURED.value)
-        self.assertIsNone(result["total_capacity_seconds"])
-        self.assertIsNone(result["utilizacao_percentual"])
-        self.assertIsNone(result["bottleneck_resource"])
+        self.assertEqual(result["availability"], DataAvailability.AVAILABLE.value)
         self.assertTrue(
-            all(item["capacidade_segundos"] is None for item in result["items"])
+            all(item["capacidade_segundos"] == 30780.0 for item in result["items"])
         )
 
 

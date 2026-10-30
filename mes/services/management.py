@@ -1091,7 +1091,8 @@ class ManagementService:
         if state_source_available and state_rows:
             # Estado físico canônico substitui as timelines por OP.
             inputs = build_physical_state_inputs(
-                state_rows, inicio=filters.inicio, fim=filters.fim
+                state_rows, inicio=filters.inicio, fim=filters.fim,
+                calendar=CalendarService(self.db),
             )
         else:
             inputs = self._fact_physical_inputs(facts, filters)

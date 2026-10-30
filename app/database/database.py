@@ -16,7 +16,6 @@ from app.core.constants import FMT_DB
 from app.core.normalization import limpa_codigo, normalizar_data_db
 from app.core.resource_mapping import WELDING_SECTOR_KEYS, resolve_resource_identity
 from app.core.operator_sectors import (
-    CAPACITY_TAB_STATION_OWNED_SECTORS,
     CAPACITY_TAB_WHITELIST_CODES,
     participa_da_timeline,
     postos_apontaveis_sem_catalogo,
@@ -3167,7 +3166,7 @@ class Database(
         else:
             instante = _period_value(vigente_em)
             query = (
-                "SELECT parametro_id AS id, nome, tipo, hora_inicio, hora_fim, ativo, ordem"
+                "SELECT parametro_id AS id, nome, tipo, hora_inicio, hora_fim, ativo, ordem, turno_id"
                 " FROM parametros_turno_historico"
                 " WHERE vigente_desde <= %s AND (vigente_ate IS NULL OR vigente_ate > %s)"
             )
@@ -3198,12 +3197,13 @@ class Database(
             cursor.execute(
                 """
                 INSERT INTO parametros_turno_historico (
-                    parametro_id, nome, tipo, hora_inicio, hora_fim, ativo, ordem, vigente_desde
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    parametro_id, nome, tipo, hora_inicio, hora_fim, ativo, ordem,
+                    turno_id, vigente_desde
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     row["id"], row["nome"], row["tipo"], row["hora_inicio"],
-                    row["hora_fim"], row["ativo"], row["ordem"], instante,
+                    row["hora_fim"], row["ativo"], row["ordem"], row.get("turno_id"), instante,
                 ),
             )
 
@@ -3217,50 +3217,73 @@ class Database(
         ativo=True,
         ordem=1,
         parametro_id=None,
+        turno_id=None,
     ):
-        """Cria ou atualiza um turno. A janela precisa existir de fato."""
+        """Cria ou atualiza um turno. A janela precisa existir de fato.
+
+        Hora extra e fora de turno pertencem a um turno oficial (``expediente``)
+        já cadastrado, informado em ``turno_id``; ao editar, o vínculo atual é
+        mantido quando ``turno_id`` não vem.
+        """
 
         rotulo = str(nome or "").strip()
         tipo_normalizado = str(tipo or "").strip().casefold()
         if not rotulo:
             raise ValueError("Nome do turno é obrigatório.")
-        if tipo_normalizado not in {"expediente", "hora_extra"}:
-            raise ValueError("Tipo do turno deve ser 'expediente' ou 'hora_extra'.")
+        if tipo_normalizado not in {"expediente", "hora_extra", "fora_turno"}:
+            raise ValueError("Tipo do turno deve ser 'expediente', 'hora_extra' ou 'fora_turno'.")
         if hora_inicio == hora_fim:
             raise ValueError("O turno precisa de horário inicial e final distintos.")
         with self.connection() as connection, connection.cursor() as cursor:
+            if tipo_normalizado == "expediente":
+                turno_id = None
+            elif turno_id is not None:
+                cursor.execute(
+                    "SELECT 1 FROM parametros_turno WHERE id = %s AND tipo = 'expediente'",
+                    (int(turno_id),),
+                )
+                if cursor.fetchone() is None:
+                    raise ValueError(
+                        "A hora extra e o fora de turno precisam pertencer a um turno oficial existente."
+                    )
             if parametro_id is not None:
                 cursor.execute(
                     """
                     UPDATE parametros_turno
                     SET nome = %s, tipo = %s, hora_inicio = %s, hora_fim = %s,
-                        ativo = %s, ordem = %s, atualizado_em = CURRENT_TIMESTAMP
+                        ativo = %s, ordem = %s, turno_id = COALESCE(%s, turno_id),
+                        atualizado_em = CURRENT_TIMESTAMP
                     WHERE id = %s
                     RETURNING *
                     """,
                     (
                         rotulo, tipo_normalizado, hora_inicio, hora_fim,
-                        bool(ativo), int(ordem), int(parametro_id),
+                        bool(ativo), int(ordem), turno_id, int(parametro_id),
                     ),
                 )
             else:
                 cursor.execute(
                     """
                     INSERT INTO parametros_turno (
-                        nome, tipo, hora_inicio, hora_fim, ativo, ordem
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                        nome, tipo, hora_inicio, hora_fim, ativo, ordem, turno_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (nome) DO UPDATE SET
                         tipo = EXCLUDED.tipo,
                         hora_inicio = EXCLUDED.hora_inicio,
                         hora_fim = EXCLUDED.hora_fim,
                         ativo = EXCLUDED.ativo,
                         ordem = EXCLUDED.ordem,
+                        turno_id = COALESCE(EXCLUDED.turno_id, parametros_turno.turno_id),
                         atualizado_em = CURRENT_TIMESTAMP
                     RETURNING *
                     """,
-                    (rotulo, tipo_normalizado, hora_inicio, hora_fim, bool(ativo), int(ordem)),
+                    (rotulo, tipo_normalizado, hora_inicio, hora_fim, bool(ativo), int(ordem), turno_id),
                 )
             row = cursor.fetchone()
+            if row and tipo_normalizado != "expediente" and row["turno_id"] is None:
+                raise ValueError(
+                    "Informe a qual turno oficial esta hora extra ou fora de turno pertence."
+                )
             if row:
                 self._versionar_parametro_turno_tx(cursor, row["id"], row)
             return dict(row) if row else None
@@ -4050,9 +4073,9 @@ class Database(
                 sequencia_nesting AS nesting,
                 maquina,
                 material,
+                espessura,
                 area_usada,
                 fracao_sucata,
-                espessura,
                 data_inicio AS inicio,
                 data_fim AS fim,
                 tempo_previsto_segundos AS previsto_segundos,
@@ -5256,10 +5279,8 @@ class Database(
         e não todo recurso habilitado que o PC Factory/Protheus sincronizou —
         o cadastro bruto traz código obsoleto e duplicado (ex.: DISPOG/DISPOEX
         duplicam DISPG/DISPEX com nome quase idêntico) que nunca deveria
-        aparecer em tela. A frente de Solda Aço/Alumínio/Robô não tem código de
-        catálogo próprio por estação, então continua com a regra reativa da
-        Wave 6F: só aparece quando uma OP real referencia o recurso em
-        ``catalogo_operacoes_op``.
+        aparecer em tela. Postos de Solda Aço/Alumínio/Robô não são recursos
+        oficiais do catálogo e não aparecem (decisão do usuário, 29/10/2026).
         """
 
         query = """
@@ -5270,21 +5291,9 @@ class Database(
             FROM catalogo_recursos_pcfactory r
             LEFT JOIN calendarios_produtivos c ON c.codigo = r.calendario_codigo
             WHERE r.habilitado IS TRUE
-              AND (
-                UPPER(r.codigo) = ANY(%s)
-                OR (
-                    UPPER(COALESCE(r.tipo_setor, '')) = ANY(%s)
-                    AND EXISTS (
-                        SELECT 1 FROM catalogo_operacoes_op o
-                        WHERE UPPER(BTRIM(o.codigo_recurso)) = UPPER(BTRIM(r.codigo))
-                    )
-                )
-              )
+              AND UPPER(r.codigo) = ANY(%s)
         """
-        params = [
-            sorted(code.upper() for code in CAPACITY_TAB_WHITELIST_CODES),
-            sorted(sector.upper() for sector in CAPACITY_TAB_STATION_OWNED_SECTORS),
-        ]
+        params = [sorted(code.upper() for code in CAPACITY_TAB_WHITELIST_CODES)]
         if setor:
             query += " AND UPPER(COALESCE(r.tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())

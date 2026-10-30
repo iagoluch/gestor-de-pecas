@@ -40,18 +40,20 @@ class ShiftParameterRequest(BaseModel):
     são as janelas fora dela — antes (tipo H1, sem corte automático próprio:
     quem já está trabalhando é protegido pela execução ativa) ou encadeadas
     depois (tipo H2, H3...: cada uma ganha seu próprio corte automático de
-    fim de turno).
+    fim de turno); ``fora_turno`` é uma faixa explícita sem trabalho (ex.:
+    21:30-06:00), descontada da janela global.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     id: int | None = None
     nome: str = Field(min_length=1, max_length=60)
-    tipo: str = Field(pattern="^(expediente|hora_extra)$")
+    tipo: str = Field(pattern="^(expediente|hora_extra|fora_turno)$")
     hora_inicio: time
     hora_fim: time
     ativo: bool = True
     ordem: int = Field(default=1, ge=1, le=99)
+    turno_id: int | None = None
 
 
 class ProductiveCalendarRequest(BaseModel):
