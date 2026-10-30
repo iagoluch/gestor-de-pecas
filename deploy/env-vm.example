@@ -1,0 +1,178 @@
+# =============================================================================
+# GESTOR DE PEÇAS - .env DA VM (servidor real)
+#
+# Mesma ordem e mesmos números de seção do .env do notebook, só com o que a
+# VM precisa para funcionar (o resto o sistema já assume sozinho).
+# 1. Copie para C:\gestor-pecas\.env
+# 2. Preencha só as linhas VAZIAS (nada depois do "=").
+# 3. As linhas já preenchidas estão certas. Não mude sem motivo.
+# 4. Linha com "#" na frente está desligada. Para usar, apague o "#".
+# NUNCA coloque este arquivo preenchido no Git.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 1. BANCO DE DADOS
+# -----------------------------------------------------------------------------
+
+# Endereço do banco da VM. PREENCHER.
+# Formato: postgresql://USUARIO:SENHA@ENDERECO:PORTA/gestor_pecas
+DATABASE_URL=
+
+# Trava: o sistema só liga se o banco aberto tiver este nome.
+GESTOR_EXPECTED_DATABASE=gestor_pecas
+
+# Fuso das horas gravadas.
+GESTOR_DB_TIMEZONE=America/Sao_Paulo
+
+
+# -----------------------------------------------------------------------------
+# 2. SERVIDOR WEB E LOGIN
+# -----------------------------------------------------------------------------
+
+# "production" = servidor real. Não mude.
+GESTOR_WEB_ENV=production
+
+# Texto aleatório com 32+ caracteres que protege os logins. PREENCHER.
+# Para gerar: python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Use um NOVO, nunca o do notebook. Trocar depois desloga todo mundo.
+GESTOR_WEB_SESSION_SECRET=
+
+# Nome ou IP da VM que as pessoas digitam no navegador. PREENCHER.
+# Vários: separe com vírgula, sem espaço. Ex.: 127.0.0.1,localhost,NOME-DA-VM
+GESTOR_WEB_ALLOWED_HOSTS=
+
+# Endereço completo digitado no navegador, com http:// ou https://. PREENCHER.
+GESTOR_WEB_ALLOWED_ORIGINS=
+
+# Nome da VM na rede interna. PREENCHER.
+GESTOR_WEB_PUBLIC_HOST=
+
+# Servidor real EXIGE https. Se a VM só tem http (sem cadeado), apague o "#"
+# da linha abaixo, senão ninguém consegue entrar:
+# GESTOR_WEB_COOKIE_SECURE=false
+
+
+# -----------------------------------------------------------------------------
+# 3. IMPORTAR A OP QUE VEM DO PROTHEUS
+#    Obrigatório: sem esta linha a OP buscada na seção 9 é recusada.
+#    O Protheus ENVIAR a OP sozinho (SOAP) não é usado; não precisa de mais nada.
+# -----------------------------------------------------------------------------
+
+GESTOR_TOTVS_ENABLED=true
+
+
+# -----------------------------------------------------------------------------
+# 4. ENVIAR APONTAMENTOS AO PROTHEUS (saída)
+#    O Protheus de TESTE do notebook NÃO serve aqui. Peça os do REAL à TI.
+# -----------------------------------------------------------------------------
+
+# Endereço do serviço que recebe os apontamentos. PREENCHER.
+GESTOR_TOTVS_OUTBOUND_ENDPOINT=
+
+# Só o nome do servidor do endereço acima (sem https:// e sem o resto). PREENCHER.
+# O sistema só envia se bater com o endereço, como proteção.
+GESTOR_TOTVS_OUTBOUND_EXPECTED_HOST=
+
+# Conta que o Gestor usa no Protheus. PREENCHER.
+GESTOR_TOTVS_OUTBOUND_USERNAME=
+GESTOR_TOTVS_OUTBOUND_PASSWORD=
+
+# Tipo de login. Não mude.
+GESTOR_TOTVS_OUTBOUND_AUTH_MODE=basic
+
+
+# -----------------------------------------------------------------------------
+# 5. FILA DE ENVIO AO PROTHEUS
+#    Cada apontamento entra numa fila e um robô envia. O operador nunca espera.
+#    Nasce DESLIGADA. Só ligue com o PCP autorizando e a seção 4 preenchida.
+# -----------------------------------------------------------------------------
+
+# Liga a fila e o robô que envia. Ligue os DOIS juntos.
+GESTOR_TOTVS_OUTBOX_ENABLED=false
+GESTOR_TOTVS_OUTBOX_WORKER_ENABLED=false
+
+# Para a legenda da OP mudar para "Iniciada" ao começar, apague o "#" abaixo.
+# Cuidado: cria um movimento extra no Protheus a cada início. Só se o PCP pedir.
+# GESTOR_TOTVS_OUTBOX_ZERO_START_ENABLED=true
+
+# Códigos de refugo e de parada que o Protheus REAL aceita. PREENCHER quando o PCP
+# passar a lista. Enquanto estiver "{}", refugo e parada ficam presos na fila com
+# erro visível.
+GESTOR_TOTVS_OUTBOUND_WASTE_CODE_MAP_JSON={}
+GESTOR_TOTVS_OUTBOUND_DEFAULT_WASTE_CODE=
+GESTOR_TOTVS_OUTBOUND_STOP_REASON_MAP_JSON={}
+GESTOR_TOTVS_OUTBOUND_DEFAULT_STOP_REASON_CODE=
+
+
+# -----------------------------------------------------------------------------
+# 6. AVISOS NO TELEGRAM (opcional)
+#    Sem isto o sistema funciona, só não manda aviso. Use um bot DIFERENTE do
+#    bot do notebook, senão os dois respondem ao mesmo tempo.
+# -----------------------------------------------------------------------------
+
+TELEGRAM_ENABLED=false
+
+# Chave do bot. PREENCHER só se ligar o Telegram.
+TELEGRAM_BOT_TOKEN=
+
+# Grupo que recebe aviso quando um envio ao Protheus falha. Recomendado.
+GESTOR_TOTVS_OUTBOX_TELEGRAM_CHAT_ID=
+
+# Grupo que recebe aviso de botão de chamada e de parada de máquina.
+GESTOR_CHAMADA_TELEGRAM_CHAT_ID=
+
+# Resumo diário e bot que responde comandos. Deixe desligados.
+GESTOR_TELEGRAM_DIGEST_ENABLED=false
+GESTOR_TELEGRAM_BOT_POLLING_ENABLED=false
+
+
+# -----------------------------------------------------------------------------
+# 7. SIGMANEST (planejamento do Corte) - o Gestor só LÊ
+# -----------------------------------------------------------------------------
+
+SIGMANEST_SERVER=192.168.0.218,55035
+SIGMANEST_DATABASE=SNDBase2026
+SIGMANEST_USER=ti_consulta
+
+# Senha do usuário acima. PREENCHER.
+SIGMANEST_PASSWORD=
+
+SIGMANEST_ODBC_DRIVER=ODBC Driver 18 for SQL Server
+
+
+# -----------------------------------------------------------------------------
+# 8. FERRAMENTAS DO NOTEBOOK - não existem na VM
+#    (observatório, relógio simulado, IA). Ficam desligadas sozinhas.
+# -----------------------------------------------------------------------------
+
+
+# -----------------------------------------------------------------------------
+# 9. BUSCA DE OP DIRETO NO PROTHEUS (pacote GPOPSYNC)
+#    É assim que a OP chega ao Gestor. Precisa do GPOPSYNC compilado e
+#    publicado no Protheus REAL.
+# -----------------------------------------------------------------------------
+
+# Endereço do serviço GPOPSYNC no Protheus REAL. PREENCHER.
+GESTOR_TOTVS_OP_PULL_ENDPOINT=
+
+# O GPOPSYNC devolve a OP na hora. Sem esta linha o sistema espera outro jeito
+# e a busca não funciona. Não mude.
+GESTOR_TOTVS_OP_PULL_MODE=inline
+
+# Empresa e filial do Protheus REAL. PREENCHER.
+GESTOR_TOTVS_OP_PULL_COMPANY_ID=
+GESTOR_TOTVS_OP_PULL_BRANCH_ID=
+
+# Conta de acesso ao serviço. PREENCHER.
+GESTOR_TOTVS_OP_PULL_USERNAME=
+GESTOR_TOTVS_OP_PULL_PASSWORD=
+
+
+# -----------------------------------------------------------------------------
+# 10. PASTAS DE DESENHO (opcional)
+# -----------------------------------------------------------------------------
+
+# Pasta de rede onde o posto procura o desenho da peça. Vários: separe com ";".
+# Vazio = o posto não mostra desenho.
+GESTOR_OPERATOR_DRAWING_ROOTS=
