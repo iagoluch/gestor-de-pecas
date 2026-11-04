@@ -30,6 +30,7 @@ from app.database.change_audit_repository import ChangeAuditRepositoryMixin
 from app.database.cost_rate_repository import CostRateRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
 from app.database.manual_queue_repository import ManualQueueRepositoryMixin
+from app.database.order_route_repository import OrderRouteRepositoryMixin
 from app.database.standard_time_repository import (
     PROTHEUS_TIME_SQL,
     StandardTimeRepositoryMixin,
@@ -223,6 +224,7 @@ class Database(
     ReportRepositoryMixin,
     AIRepositoryMixin,
     ManualQueueRepositoryMixin,
+    OrderRouteRepositoryMixin,
     CostRateRepositoryMixin,
     ChangeAuditRepositoryMixin,
 ):
@@ -3943,16 +3945,16 @@ class Database(
                 c.produto_codigo AS catalogo_produto_codigo,
                 c.numero_operacao AS catalogo_numero_operacao,
                 c.codigo_recurso AS catalogo_codigo_recurso,
-                -- Tempo padrão efetivo: Protheus real > manual > estimado.
-                -- Manual e estimado valem pela VIGÊNCIA na data de início do
-                -- apontamento (período fechado não muda); ver os JOINs abaixo.
+                -- Tempo padrão efetivo: Protheus real > estimado. O manual não
+                -- conta desde 04/11/2026 (fica no banco, fora desta consulta).
+                -- O estimado vale pela VIGÊNCIA na data de início do apontamento
+                -- (período fechado não muda); ver o JOIN abaixo.
                 -- ``tempo_medio_segundos`` mantém o significado antigo (só Protheus).
                 -- "Tem Protheus" é PROTHEUS_TIME_SQL, a mesma regra da tela de tempo padrão.
                 CASE WHEN {PROTHEUS_TIME_SQL} THEN c.tempo_medio_segundos
-                     ELSE COALESCE(tm.segundos_por_peca, te.segundos_por_peca)
+                     ELSE te.segundos_por_peca
                 END AS tempo_padrao_segundos,
                 CASE WHEN {PROTHEUS_TIME_SQL} THEN 'protheus'
-                     WHEN tm.segundos_por_peca IS NOT NULL THEN 'manual'
                      WHEN te.segundos_por_peca IS NOT NULL THEN 'estimado'
                 END AS tempo_padrao_fonte,
                 c.ordem AS ordem_operacao,
@@ -3988,19 +3990,6 @@ class Database(
                 ) AS eventos
             FROM apontamentos_operacionais a
             LEFT JOIN catalogo_operacoes_op c ON c.id = a.catalogo_operacao_id
-            -- Manual vigente no instante de início: versão mais recente do histórico
-            -- com vigente_desde <= instante do fato. Remoção é versão com valor NULL.
-            LEFT JOIN LATERAL (
-                SELECT h.segundos_novo AS segundos_por_peca
-                FROM tempo_padrao_manual_historico h
-                WHERE h.produto_codigo = UPPER(BTRIM(c.produto_codigo))
-                  AND h.numero_operacao = BTRIM(c.numero_operacao)
-                  AND h.codigo_recurso = UPPER(BTRIM(c.codigo_recurso))
-                  AND UPPER(BTRIM(c.tipo_setor)) <> 'CORTE'
-                  AND h.vigente_desde <= COALESCE(a.data_inicio, a.data_entrada)
-                ORDER BY h.vigente_desde DESC, h.id DESC
-                LIMIT 1
-            ) tm ON TRUE
             LEFT JOIN tempo_padrao_estimado te
               ON te.produto_codigo = UPPER(BTRIM(c.produto_codigo))
              AND te.numero_operacao = BTRIM(c.numero_operacao)
@@ -4048,7 +4037,7 @@ class Database(
             params.extend((pattern, pattern, pattern, pattern))
         query += """
             GROUP BY a.id, c.id, c.tempo_medio_segundos, c.ordem,
-                     tm.segundos_por_peca, te.segundos_por_peca,
+                     te.segundos_por_peca,
                      p.data_liberacao, p.inicio_planejado, p.fim_planejado,
                      p.prazo_entrega, p.prioridade
             ORDER BY a.data_inicio, a.id

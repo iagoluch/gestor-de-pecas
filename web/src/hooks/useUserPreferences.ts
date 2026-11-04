@@ -1,54 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { DashboardCardKey, UserDashboardPreferences, UserPreferences } from "../types/api";
+import type { DashboardCardKey, DashboardCardSize, UserDashboardPreferences, UserPreferences } from "../types/api";
+import {
+  DASHBOARD_CARD_KEYS,
+  DEFAULT_DASHBOARD_SIZES,
+  DEFAULT_VISIBLE_CARDS,
+  MAX_CARDS_ON_SCREEN,
+  clampCardSize,
+  cloneSizes,
+} from "../utils/dashboardCards";
+
+const defaultCards = Object.fromEntries(
+  DASHBOARD_CARD_KEYS.map((key) => [key, DEFAULT_VISIBLE_CARDS.includes(key)]),
+) as unknown as UserDashboardPreferences["cards"];
 
 export const DEFAULT_PREFERENCES: UserDashboardPreferences = {
-  cards: {
-    producao_boa: true,
-    oee: true,
-    disponibilidade: true,
-    performance: true,
-    ftt: true,
-    simulation: true,
-    planned_vs_actual: true,
-    exceptions: true,
-    time_composition: true,
-    top_losses: true,
-    live_events: true,
-    sectors_table: true,
-    top_resources: true,
-    audit_issues: true,
-  },
-  order: [
-    "producao_boa",
-    "oee",
-    "disponibilidade",
-    "performance",
-    "ftt",
-    "simulation",
-    "planned_vs_actual",
-    "exceptions",
-    "time_composition",
-    "top_losses",
-    "live_events",
-    "sectors_table",
-    "top_resources",
-    "audit_issues",
-  ],
+  cards: defaultCards,
+  order: [...DASHBOARD_CARD_KEYS],
+  sizes: cloneSizes(DEFAULT_DASHBOARD_SIZES),
 };
 
 const clonePreferences = (prefs: UserDashboardPreferences): UserDashboardPreferences => ({
   cards: { ...prefs.cards },
   order: [...prefs.order],
+  sizes: cloneSizes(prefs.sizes),
 });
 
-const DEFAULT_KEYS = new Set<DashboardCardKey>(Object.keys(DEFAULT_PREFERENCES.cards) as DashboardCardKey[]);
+const DEFAULT_KEYS = new Set<DashboardCardKey>(DASHBOARD_CARD_KEYS);
 
 /** Funde o que veio do servidor com o default: chave nova ou vencida nunca quebra a tela. */
 function mergePreferences(remote?: Partial<UserDashboardPreferences> | null): UserDashboardPreferences {
   const cards = { ...DEFAULT_PREFERENCES.cards };
   if (remote?.cards) {
-    for (const key of Object.keys(cards) as DashboardCardKey[]) {
+    for (const key of DASHBOARD_CARD_KEYS) {
       if (typeof remote.cards[key] === "boolean") cards[key] = remote.cards[key] as boolean;
     }
   }
@@ -63,8 +47,11 @@ function mergePreferences(remote?: Partial<UserDashboardPreferences> | null): Us
       }
     }
   }
-  order.push(...DEFAULT_PREFERENCES.order.filter((key) => !seen.has(key)));
-  return { cards, order };
+  order.push(...DASHBOARD_CARD_KEYS.filter((key) => !seen.has(key)));
+  const sizes = Object.fromEntries(
+    DASHBOARD_CARD_KEYS.map((key) => [key, clampCardSize(key, remote?.sizes?.[key])]),
+  ) as Record<DashboardCardKey, DashboardCardSize>;
+  return { cards, order, sizes };
 }
 
 export function moveDashboardCard(
@@ -80,13 +67,31 @@ export function moveDashboardCard(
   return current;
 }
 
+/** Ordem completa: cada chave uma vez, na sequência pedida. */
+export function normalizeDashboardOrder(order: readonly DashboardCardKey[]): DashboardCardKey[] {
+  const seen = new Set<DashboardCardKey>();
+  const normalized: DashboardCardKey[] = [];
+  for (const key of order) {
+    if (DEFAULT_KEYS.has(key) && !seen.has(key)) {
+      seen.add(key);
+      normalized.push(key);
+    }
+  }
+  normalized.push(...DASHBOARD_CARD_KEYS.filter((key) => !seen.has(key)));
+  return normalized;
+}
+
+const sameOrder = (a: readonly DashboardCardKey[], b: readonly DashboardCardKey[]) =>
+  a.length === b.length && a.every((key, index) => key === b[index]);
+
 // ponytail: reverts locally on save failure; a retry queue can be added when flaky networks are measured.
-/** Preferências pessoais da dashboard home. */
+/** Preferências pessoais da dashboard home: visibilidade, ordem e tamanho. */
 export function useUserPreferences() {
   const [preferences, setPreferences] = useState<UserDashboardPreferences>(clonePreferences(DEFAULT_PREFERENCES));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
 
@@ -142,25 +147,46 @@ export function useUserPreferences() {
     [],
   );
 
-  const moveCard = useCallback(
-    (card: DashboardCardKey, target: DashboardCardKey, before: boolean) => {
+  const reorderCards = useCallback(
+    (order: readonly DashboardCardKey[]) => {
       const previous = clonePreferences(preferencesRef.current);
-      const next = {
-        cards: { ...previous.cards },
-        order: moveDashboardCard(previous.order, card, target, before),
-      };
-      void saveDashboard(next, previous);
+      const normalized = normalizeDashboardOrder(order);
+      if (sameOrder(previous.order, normalized)) return;
+      void saveDashboard({ ...previous, order: normalized }, previous);
     },
     [saveDashboard],
+  );
+
+  const moveCard = useCallback(
+    (card: DashboardCardKey, target: DashboardCardKey, before: boolean) => {
+      reorderCards(moveDashboardCard(preferencesRef.current.order, card, target, before));
+    },
+    [reorderCards],
   );
 
   const toggleCard = useCallback(
     (card: DashboardCardKey) => {
       const previous = clonePreferences(preferencesRef.current);
-      const next = {
-        cards: { ...previous.cards, [card]: !previous.cards[card] },
-        order: [...previous.order],
-      };
+      const showing = !previous.cards[card];
+      const visibleCount = DASHBOARD_CARD_KEYS.filter((key) => previous.cards[key]).length;
+      if (showing && visibleCount >= MAX_CARDS_ON_SCREEN) {
+        setNotice(`Limite de ${MAX_CARDS_ON_SCREEN} blocos visíveis. Oculte um bloco antes de mostrar outro.`);
+        return;
+      }
+      setNotice(null);
+      const next = { ...previous, cards: { ...previous.cards, [card]: showing } };
+      void saveDashboard(next, previous);
+    },
+    [saveDashboard],
+  );
+
+  const resizeCard = useCallback(
+    (card: DashboardCardKey, cols: number, rows: number) => {
+      const previous = clonePreferences(preferencesRef.current);
+      const size = clampCardSize(card, { cols, rows });
+      const current = previous.sizes[card];
+      if (current.cols === size.cols && current.rows === size.rows) return;
+      const next = { ...previous, sizes: { ...previous.sizes, [card]: size } };
       void saveDashboard(next, previous);
     },
     [saveDashboard],
@@ -168,6 +194,7 @@ export function useUserPreferences() {
 
   const resetToDefault = useCallback(() => {
     const previous = clonePreferences(preferencesRef.current);
+    setNotice(null);
     void saveDashboard(clonePreferences(DEFAULT_PREFERENCES), previous);
   }, [saveDashboard]);
 
@@ -175,11 +202,17 @@ export function useUserPreferences() {
     preferences,
     cards: preferences.cards,
     order: preferences.order,
+    sizes: preferences.sizes,
+    visibleCount: DASHBOARD_CARD_KEYS.filter((key) => preferences.cards[key]).length,
     loading,
     saving,
     error,
+    notice,
+    clearNotice: () => setNotice(null),
     moveCard,
+    reorderCards,
     toggleCard,
+    resizeCard,
     resetToDefault,
   };
 }

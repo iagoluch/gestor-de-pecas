@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterProvider } from "../filters/FilterContext";
 import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
+import { DEFAULT_DASHBOARD_SIZES } from "../utils/dashboardCards";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -21,6 +22,9 @@ const DEFAULT_CARDS = {
   sectors_table: true,
   top_resources: true,
   audit_issues: true,
+  chamadas: false,
+  metas: false,
+  andon: false,
 };
 
 const DEFAULT_ORDER = Object.keys(DEFAULT_CARDS) as Array<keyof typeof DEFAULT_CARDS>;
@@ -78,8 +82,58 @@ function overviewBody() {
   };
 }
 
+function chamadasBody() {
+  return {
+    items: [
+      {
+        id: 1,
+        contato_nome: "Sandro",
+        motivo: "Manutenção",
+        comentario: "Ajustar a dobradeira",
+        solicitante_nome: "Ana",
+        criado_em: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
+function andonBody() {
+  return {
+    period: {},
+    generated_at: "2026-11-03T10:30:00",
+    clock: { now: "2026-11-03T10:30:00", running: true },
+    current_shift: { availability: "disponivel" },
+    summary: {
+      resources: 2, production: 1, downtime: 1, setup: 0, rework: 0, queue: 0,
+      activity_without_op: 0, out_of_shift: 0, no_demand: 0, unknown: 0,
+      oee: metric(), availability: metric(), performance: metric(), ftt: metric(),
+    },
+    sectors: [
+      {
+        name: "Dobra",
+        resources: [
+          {
+            code: "DB01",
+            name: "Dobradeira 1",
+            sector: "Dobra",
+            state: { category: "parada", label: "Parada", reason: "Falta de material", duration_seconds: 900 },
+          },
+        ],
+      },
+    ],
+    resource_count: 2,
+    simulation_only: false,
+    availability: "disponivel",
+    sources: {},
+  };
+}
+
 function stubFetch(cards: typeof DEFAULT_CARDS = DEFAULT_CARDS, order: Array<keyof typeof DEFAULT_CARDS> = DEFAULT_ORDER) {
-  let state = { cards: { ...cards }, order: [...order] };
+  let state = {
+    cards: { ...cards },
+    order: [...order],
+    sizes: Object.fromEntries(DEFAULT_ORDER.map((key) => [key, { ...DEFAULT_DASHBOARD_SIZES[key] }])),
+  };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const responseFor = (body: unknown) =>
@@ -89,7 +143,7 @@ function stubFetch(cards: typeof DEFAULT_CARDS = DEFAULT_CARDS, order: Array<key
       });
 
     if (url.includes("/api/v1/auth/preferences") && init?.method === "POST") {
-      state = JSON.parse(String(init.body)) as { cards: typeof DEFAULT_CARDS; order: Array<keyof typeof DEFAULT_CARDS> };
+      state = (JSON.parse(String(init.body)) as { dashboard_home: typeof state }).dashboard_home;
       return responseFor({ dashboard_home: state, updated_at: "2026-11-03T10:30:00" });
     }
     if (url.includes("/api/v1/auth/preferences")) {
@@ -97,6 +151,12 @@ function stubFetch(cards: typeof DEFAULT_CARDS = DEFAULT_CARDS, order: Array<key
     }
     if (url.includes("/api/v1/management/overview/trend")) {
       return responseFor({ availability: "sem_registros", points: [] });
+    }
+    if (url.includes("/api/v1/chamadas/admin/historico")) {
+      return responseFor(chamadasBody());
+    }
+    if (url.includes("/api/v1/andon")) {
+      return responseFor(andonBody());
     }
     return responseFor(overviewBody());
   });
@@ -120,7 +180,7 @@ function lastPreferencesPost(fetchMock: ReturnType<typeof vi.fn>) {
   );
   if (!call) throw new Error("Nenhuma gravação de preferência foi enviada");
   return JSON.parse(String((call[1] as RequestInit).body as string)) as {
-    dashboard_home: { cards: typeof DEFAULT_CARDS; order: Array<keyof typeof DEFAULT_CARDS> };
+    dashboard_home: { cards: typeof DEFAULT_CARDS; order: Array<keyof typeof DEFAULT_CARDS>; sizes: Record<keyof typeof DEFAULT_CARDS, { cols: number; rows: number }> };
   };
 }
 
@@ -167,6 +227,7 @@ describe("Tela inicial — personalização direta", () => {
       dropEffect: "",
       setData(_type: string, value: string) { data.value = value; },
       getData(_type: string) { return data.value ?? ""; },
+      setDragImage() { /* jsdom não implementa; o visual real usa o card como prévia */ },
     };
     fireEvent.dragStart(sourceHandle, { dataTransfer });
     fireEvent.dragOver(targetSection, { dataTransfer });
@@ -175,13 +236,38 @@ describe("Tela inicial — personalização direta", () => {
     expect(body.dashboard_home.order.indexOf("sectors_table")).toBeLessThan(body.dashboard_home.order.indexOf("time_composition"));
   });
 
-  it("Restaurar padrão reenvia todos os blocos visíveis e a ordem original", async () => {
+  it("respeita o limite de 14 blocos visíveis ao adicionar um card novo", async () => {
+    const fetchMock = stubFetch();
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar Chamadas da gestão" }));
+    expect(await screen.findByText("Limite de 14 blocos visíveis. Oculte um bloco antes de mostrar outro.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+
+    fireEvent.click(within(screen.getByLabelText("Agora na fábrica")).getByRole("button", { name: "Ocultar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar Chamadas da gestão" }));
+    const body = lastPreferencesPost(fetchMock);
+    expect(body.dashboard_home.cards.chamadas).toBe(true);
+    expect(await screen.findByText("Ajustar a dobradeira")).toBeInTheDocument();
+  });
+
+  it("redimensiona pelo teclado e persiste o tamanho", async () => {
+    const fetchMock = stubFetch();
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }));
+    const handle = screen.getByRole("separator", { name: "Redimensionar OEE (setas do teclado)" });
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    const body = lastPreferencesPost(fetchMock);
+    expect(body.dashboard_home.sizes.oee.cols).toBe(DEFAULT_DASHBOARD_SIZES.oee.cols + 1);
+  });
+
+  it("Restaurar padrão reenvia os blocos do padrão e a ordem original", async () => {
     const fetchMock = stubFetch(ALL_HIDDEN);
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }));
     fireEvent.click(screen.getByRole("button", { name: "Restaurar padrão" }));
     const body = lastPreferencesPost(fetchMock);
-    expect(Object.values(body.dashboard_home.cards)).toEqual(Array(14).fill(true));
+    expect(Object.values(body.dashboard_home.cards)).toEqual(DEFAULT_ORDER.map((key) => DEFAULT_CARDS[key]));
     expect(body.dashboard_home.order).toEqual(DEFAULT_ORDER);
   });
 });

@@ -94,3 +94,10 @@ docs/graphify-out/
 
 # saídas locais do pentest Strix (sob demanda, 48 MB, não versionar)
 strix_runs/
+
+# estado local de ferramentas de sessão (não é produto)
+.superpowers/
+.claude/skills/impeccable/scripts/data/
+
+# provas visuais pesadas de sessão de teste (vídeos ~210 MB; adicionar com git add -f se precisar)
+docs/comprovacao_gestao_2026-10-29/

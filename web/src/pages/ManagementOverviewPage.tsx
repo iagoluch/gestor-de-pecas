@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
@@ -12,13 +12,16 @@ import { PageFrame } from "../components/PageFrame";
 import { SectionCard } from "../components/SectionCard";
 import { useManagementFilters } from "../filters/FilterContext";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useGridFlip } from "../hooks/useGridFlip";
 import { useOncePerMinute } from "../hooks/useOncePerMinute";
-import { useUserPreferences } from "../hooks/useUserPreferences";
+import { moveDashboardCard, useUserPreferences } from "../hooks/useUserPreferences";
 import { explainableComposition } from "../types/explanation";
-import type { DashboardCardKey, KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
+import type { AndonSnapshot } from "../types/andon";
+import type { DashboardCardKey, DashboardCardSize, KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
 import type { SectorSummary } from "../types/api";
 import { displayName, displayText, formatHours, formatNumber } from "../utils/format";
 import { humanizeSystemState } from "../utils/systemState";
+import { MAX_CARDS_ON_SCREEN } from "../utils/dashboardCards";
 
 function metricText(metric: MetricValue) {
   if (metric.value === null) return humanizeSystemState(metric.availability);
@@ -92,31 +95,93 @@ function eventColor(state: string) {
   return "var(--primary)";
 }
 
+interface ChamadaResumo {
+  id: number;
+  contato_nome: string;
+  motivo: string;
+  comentario: string;
+  solicitante_nome: string;
+  criado_em: string;
+}
+
+const sameOrder = (a: readonly DashboardCardKey[], b: readonly DashboardCardKey[]) =>
+  a.length === b.length && a.every((key, index) => key === b[index]);
+
 export function ManagementOverviewPage() {
-  const { cards: visibleCards, order: cardOrder, moveCard, toggleCard, resetToDefault, error: preferencesError } = useUserPreferences();
+  const {
+    cards: visibleCards,
+    order: cardOrder,
+    sizes,
+    visibleCount,
+    notice,
+    moveCard,
+    reorderCards,
+    toggleCard,
+    resizeCard,
+    resetToDefault,
+    error: preferencesError,
+  } = useUserPreferences();
   const [editMode, setEditMode] = useState(false);
-  const orderIndex = new Map(cardOrder.map((key, index) => [key, index]));
+  const [dragSource, setDragSource] = useState<DashboardCardKey | null>(null);
+  const [previewOrder, setPreviewOrder] = useState<DashboardCardKey[] | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ key: DashboardCardKey; size: DashboardCardSize } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const displayOrder = previewOrder ?? cardOrder;
+  useGridFlip(gridRef, displayOrder.join("|"), dragSource);
+  const orderIndex = new Map(displayOrder.map((key, index) => [key, index]));
   const visibleCard = (key: DashboardCardKey) => visibleCards[key] !== false;
   const moveRelative = (key: DashboardCardKey, delta: number) => {
-    const index = cardOrder.indexOf(key);
+    const index = displayOrder.indexOf(key);
     const targetIndex = index + delta;
-    if (index < 0 || targetIndex < 0 || targetIndex >= cardOrder.length) return;
-    const target = cardOrder[targetIndex];
+    if (index < 0 || targetIndex < 0 || targetIndex >= displayOrder.length) return;
+    const target = displayOrder[targetIndex];
     moveCard(key, target, delta < 0);
   };
-  const renderBlock = (key: DashboardCardKey, className: string, children: ReactNode) => (
+  const hoverCard = (source: DashboardCardKey, target: DashboardCardKey) => {
+    setPreviewOrder((current) => {
+      const base = current ?? cardOrder;
+      const sourceIndex = base.indexOf(source);
+      const targetIndex = base.indexOf(target);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return current;
+      // Arrastando para frente, entra depois do alvo; para trás, antes dele.
+      const next = moveDashboardCard(base, source, target, sourceIndex > targetIndex);
+      return sameOrder(next, base) ? current : next;
+    });
+  };
+  const dropCard = () => {
+    if (previewOrder) reorderCards(previewOrder);
+    setDragSource(null);
+    setPreviewOrder(null);
+  };
+  const endDrag = () => {
+    setDragSource(null);
+    setPreviewOrder(null);
+  };
+  const renderBlock = (key: DashboardCardKey, children: ReactNode) => (
     <DraggableDashboardBlock
       key={key}
       cardKey={key}
-      className={className}
       hidden={!visibleCards[key]}
       editMode={editMode}
       index={orderIndex.get(key) ?? 0}
-      total={cardOrder.length}
+      total={displayOrder.length}
+      size={sizes[key]}
+      previewSize={resizePreview?.key === key ? resizePreview.size : null}
+      dragging={dragSource === key}
+      dragSource={dragSource}
+      canShow={visibleCount < MAX_CARDS_ON_SCREEN}
       onToggle={toggleCard}
       onMoveUp={(card) => moveRelative(card, -1)}
       onMoveDown={(card) => moveRelative(card, 1)}
-      onDropCard={moveCard}
+      onDragStartCard={(card) => {
+        setDragSource(card);
+        setPreviewOrder(cardOrder);
+      }}
+      onDragEndCard={endDrag}
+      onHoverCard={hoverCard}
+      onDropCard={dropCard}
+      onPreviewSize={(card, size) => setResizePreview(size ? { key: card, size } : null)}
+      onResizeCard={resizeCard}
     >
       {children}
     </DraggableDashboardBlock>
@@ -127,6 +192,9 @@ export function ManagementOverviewPage() {
   // Série para gráficos/sparklines: opcional — se falhar ou demorar, a página inteira continua igual.
   const trendQuery = useApiQuery<OverviewTrend>(`/api/v1/management/overview/trend?${filters.query}`, { ignoreLiveTick: true });
   const trend = trendQuery.data && Array.isArray(trendQuery.data.points) && trendQuery.data.availability !== "sem_registros" ? trendQuery.data : null;
+  // Cards novos só buscam quando estão visíveis: quem nunca os adicionou não paga a chamada.
+  const chamadasQuery = useApiQuery<{ items: ChamadaResumo[] }>(visibleCards.chamadas ? "/api/v1/chamadas/admin/historico" : null);
+  const andonQuery = useApiQuery<AndonSnapshot>(visibleCards.andon ? "/api/v1/andon" : null);
   const [selectedKpi, setSelectedKpi] = useState<KpiExplanation | null>(null);
   const closeInsight = useCallback(() => {
     setSelectedKpi(null);
@@ -209,19 +277,26 @@ export function ManagementOverviewPage() {
       <ExplainableValue metric={metric} filters={{ ...filters.filters, sector: row.setor }} context={`${label} em ${displayName(row.setor)} ${text}`}>{text}</ExplainableValue>
     ) : text
   );
+  const chamadas = chamadasQuery.data?.items ?? [];
+  const andon = andonQuery.data;
+  const andonStops = (andon?.sectors.flatMap((sector) => sector.resources) ?? [])
+    .filter((resource) => resource.state.category === "parada")
+    .slice(0, 4);
   return (
     <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro." actions={<button type="button" className="button button--secondary" onClick={() => setEditMode((value) => !value)}>{editMode ? "Concluir" : "Personalizar"}</button>}>
         {editMode ? (
           <div className="dashboard-edit-bar" role="status">
             <strong>Personalização ativa</strong>
-            <span>Arraste pelos seis pontos ou use ↑ e ↓. As alterações são salvas automaticamente.</span>
+            <span>Arraste o card para onde ele deve ficar, use ↑ e ↓ ou puxe as alças para redimensionar. Salvamos automaticamente.</span>
+            <span className="dashboard-edit-bar__count">{visibleCount} de {MAX_CARDS_ON_SCREEN} blocos visíveis</span>
             <button type="button" className="button button--secondary" onClick={resetToDefault}>Restaurar padrão</button>
             <button type="button" className="button button--primary" onClick={() => setEditMode(false)}>Concluir</button>
           </div>
         ) : null}
+        {notice ? <p role="alert" className="dashboard-customization-error">{notice}</p> : null}
         {preferencesError ? <p role="alert" className="dashboard-customization-error">Não foi possível salvar a personalização: {apiErrorMessage(preferencesError)}</p> : null}
-        <div className="home-dashboard-grid">
-          {renderBlock("producao_boa", "home-block--metric-2", (
+        <div className="home-dashboard-grid" ref={gridRef}>
+          {renderBlock("producao_boa", (
             <MetricCard
               label="Produção boa"
               value={quantityText(data.production.good)}
@@ -234,8 +309,8 @@ export function ManagementOverviewPage() {
               spark={hasQuantityRecords ? sparkOf((point) => point.production.good, SERIES_COLORS.good) : null}
             />
           ))}
-          {kpiNodes.map(({ preferenceKey, node }) => renderBlock(preferenceKey, "home-block--metric-2", node))}
-          {simulation && renderBlock("simulation", "home-block--full", (
+          {kpiNodes.map(({ preferenceKey, node }) => renderBlock(preferenceKey, node))}
+          {simulation && renderBlock("simulation", (
             <div className="metric-grid metric-grid--auto simulation-metrics">
               <MetricCard label="Planejado" value={simulation.planned_quantity.toLocaleString("pt-BR")} detail="Peças no período" />
               <MetricCard label="Realizado" value={simulation.actual_quantity.toLocaleString("pt-BR")} detail="Somente peças boas" accent="success" />
@@ -245,7 +320,7 @@ export function ManagementOverviewPage() {
               <MetricCard label="AE" value={metricText(simulation.metrics.ae)} detail="Eficiência global efetiva" />
             </div>
           ))}
-          {renderBlock("planned_vs_actual", "home-block--half", (
+          {renderBlock("planned_vs_actual", (
           <SectionCard
             title="Planejado × realizado — acumulado"
             className="overview-grid__chart"
@@ -282,7 +357,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("exceptions", "home-block--half", (
+          {renderBlock("exceptions", (
           <SectionCard
             title="O que precisa de atenção"
             className="management-attention-card"
@@ -316,7 +391,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("time_composition", "home-block--span-4", (
+          {renderBlock("time_composition", (
           <SectionCard
             title="Composição do tempo"
             navigation={{ label: "Abrir Análises: Horas & Utilização", onNavigate: () => navigateTo("/analises/horas-utilizacao") }}
@@ -355,7 +430,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("top_losses", "home-block--span-3", (
+          {renderBlock("top_losses", (
           <SectionCard
             title="Maiores perdas"
             navigation={{ label: "Abrir análise das maiores perdas", onNavigate: () => navigateTo("/analises/paradas") }}
@@ -374,7 +449,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("live_events", "home-block--span-3", (
+          {renderBlock("live_events", (
           <SectionCard title="Agora na fábrica">
             {!trend || trend.recent_events.length === 0 ? <EmptyState title="Sem eventos recentes" detail="Mudanças de estado dos recursos aparecem aqui." /> : (
               <ul className="feed">
@@ -389,7 +464,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("sectors_table", "home-block--full", (
+          {renderBlock("sectors_table", (
           <SectionCard
             title="Setores — leitura rápida e execução real"
             className="overview-grid__table"
@@ -449,7 +524,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("top_resources", "home-block--half", (
+          {renderBlock("top_resources", (
           <SectionCard
             title="Recursos com maior impacto"
             navigation={{ label: "Abrir análise dos recursos com maior impacto", onNavigate: () => navigateTo("/analises/paradas") }}
@@ -472,7 +547,7 @@ export function ManagementOverviewPage() {
             )}
           </SectionCard>
           ))}
-          {renderBlock("audit_issues", "home-block--half", (
+          {renderBlock("audit_issues", (
           <SectionCard
             title="Inconsistências de dados"
             navigation={{ label: "Abrir Auditoria: Alertas e inconsistências", onNavigate: () => navigateTo("/auditoria/alertas-inconsistencias") }}
@@ -488,6 +563,91 @@ export function ManagementOverviewPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </SectionCard>
+          ))}
+          {renderBlock("chamadas", (
+          <SectionCard
+            title="Chamadas da gestão"
+            action={<span className="section-count">{chamadas.length}</span>}
+            navigation={{ label: "Abrir Chamadas da Gestão", onNavigate: () => navigate("/inicio/chamadas") }}
+          >
+            {chamadasQuery.loading && !chamadasQuery.data ? (
+              <p className="chart-note">Carregando chamadas…</p>
+            ) : chamadasQuery.error && !chamadasQuery.data ? (
+              <p className="chart-note">Não foi possível carregar as chamadas agora.</p>
+            ) : chamadas.length === 0 ? (
+              <EmptyState title="Nenhuma chamada registrada" detail="Chamadas do operador e da gestão aparecem aqui." />
+            ) : (
+              <ul className="feed">
+                {chamadas.slice(0, 4).map((item) => (
+                  <li key={item.id}>
+                    <span className="feed__dot" style={{ "--c": "var(--primary)" } as CSSProperties} aria-hidden="true">
+                      {displayName(item.solicitante_nome, "?").slice(0, 2).toUpperCase()}
+                    </span>
+                    <span>
+                      <strong>{displayName(item.motivo)}</strong> · {displayName(item.contato_nome)}
+                      {item.comentario ? <small className="feed__detail">{item.comentario}</small> : null}
+                    </span>
+                    <span className="feed__time">{ago(item.criado_em)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+          ))}
+          {renderBlock("metas", (
+          <SectionCard
+            title="Metas e atingimento"
+            navigation={{ label: "Abrir Análises: OEE", onNavigate: () => navigateTo("/analises/oee") }}
+          >
+            {simulation ? (
+              <div className="plan-actual-summary">
+                <div><span>Quantidade planejada</span><strong>{simulation.planned_quantity.toLocaleString("pt-BR")} peças</strong></div>
+                <div><span>Quantidade boa realizada</span><strong>{simulation.actual_quantity.toLocaleString("pt-BR")} peças</strong></div>
+                <div><span>Atingimento</span><strong>{simulation.attainment_percentage === null ? "Não disponível" : `${simulation.attainment_percentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}</strong></div>
+                <div className="plan-actual-summary__progress"><i style={{ width: `${Math.min(100, simulation.attainment_percentage ?? 0)}%` }} /></div>
+              </div>
+            ) : (
+              <EmptyState
+                title="Sem meta definida"
+                detail="O atingimento depende da meta do período; o planejamento consolidado continua no card Planejado × realizado."
+              />
+            )}
+          </SectionCard>
+          ))}
+          {renderBlock("andon", (
+          <SectionCard
+            title="Alertas ao vivo"
+            action={<span className="section-count">{andonStops.length} parada(s)</span>}
+            navigation={{ label: "Abrir Andon", onNavigate: () => navigate("/andon") }}
+          >
+            {andonQuery.loading && !andon ? (
+              <p className="chart-note">Carregando Andon…</p>
+            ) : andonQuery.error && !andon ? (
+              <p className="chart-note">O Andon não está disponível para esta conta ou o painel não respondeu.</p>
+            ) : !andon ? (
+              <EmptyState />
+            ) : (
+              <>
+                <div className="metric-grid metric-grid--four">
+                  <MetricCard label="Produzindo" value={String(andon.summary.production)} accent="success" />
+                  <MetricCard label="Em parada" value={String(andon.summary.downtime)} accent="danger" />
+                  <MetricCard label="Sem demanda" value={String(andon.summary.no_demand)} accent="teal" />
+                  <MetricCard label="Fora de turno" value={String(andon.summary.out_of_shift)} accent="warning" />
+                </div>
+                {andonStops.length === 0 ? <EmptyState title="Nenhuma parada agora" /> : (
+                  <ul className="feed">
+                    {andonStops.map((resource) => (
+                      <li key={`${resource.sector}-${resource.code}`}>
+                        <span className="feed__dot" style={{ "--c": "var(--danger)" } as CSSProperties} aria-hidden="true">{resource.code.slice(0, 2).toUpperCase()}</span>
+                        <span><strong>{displayName(resource.name)}</strong> · {displayText(resource.state.reason ?? resource.state.label)}</span>
+                        <span className="feed__time">{formatHours(resource.state.duration_seconds ?? 0)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </SectionCard>
           ))}
