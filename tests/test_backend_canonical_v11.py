@@ -594,5 +594,85 @@ class AndonProjectionTests(unittest.TestCase):
         self.assertTrue(all(not sector["resources"] for sector in result["sectors"]))
 
 
+class _CuttingPlansRepo(_CanonicalRepo):
+    """Repo canônico + Corte: nestings e produção por OP injetados pelo teste."""
+
+    def __init__(self, nestings=(), production=()):
+        self._nestings = list(nestings)
+        self._production = list(production)
+
+    def listar_tempos_nesting_corte(self, **_kwargs):
+        return [dict(row) for row in self._nestings]
+
+    def listar_producao_corte_periodo(self, *_args, **_kwargs):
+        return [dict(row) for row in self._production]
+
+
+def _nesting(tarefa, programa, status="Finalizado"):
+    return {
+        "tarefa": tarefa,
+        "programa": programa,
+        "status": status,
+        "maquina": "LASER1",
+        "real_segundos": 60,
+        "previsto_segundos": 60,
+    }
+
+
+class CuttingPlansNestingRuleTests(unittest.TestCase):
+    """Regra: N repetições de nesting contam N nos totais; a linha mostra 1 plano."""
+
+    FILTERS = AnalyticsFilter(datetime(2026, 8, 19, 0, 0), datetime(2026, 8, 19, 23, 59))
+
+    def _cutting(self, nestings=(), production=()):
+        repo = _CuttingPlansRepo(nestings, production)
+        return ManagementService(repo).get_overview(self.FILTERS)["cutting"]
+
+    def test_chapa_com_tres_nestings_vira_uma_linha_e_total_soma_tres(self):
+        cutting = self._cutting([_nesting("T1", "PROG-A")] * 3)
+        self.assertEqual(len(cutting["plans"]), 1)
+        self.assertEqual(cutting["plans"][0]["nestings"], 3)
+        self.assertEqual(cutting["nestings"], 3)
+        self.assertEqual(sum(plan["nestings"] for plan in cutting["plans"]), cutting["nestings"])
+
+    def test_plano_com_duas_ops_lista_as_duas_sem_mudar_o_total(self):
+        nestings = [_nesting("T1", "PROG-A")] * 3
+        producao = [
+            {"codigo_tarefa": "T1", "codigo_op": "OP10", "quantidade": 5},
+            {"codigo_tarefa": "T1", "codigo_op": "OP11", "quantidade": 7},
+        ]
+        cutting = self._cutting(nestings, producao)
+        self.assertEqual(cutting["plans"][0]["ops"], ["OP10", "OP11"])
+        self.assertEqual(cutting["plans"][0]["nestings"], 3)
+        self.assertEqual(cutting["nestings"], 3)
+        self.assertEqual(self._cutting(nestings)["nestings"], cutting["nestings"])
+
+    def test_nestings_parciais_concluidos_ficam_abaixo_do_total(self):
+        nestings = [
+            _nesting("T1", "PROG-A", "Finalizado"),
+            _nesting("T1", "PROG-A", "Em execução"),
+            _nesting("T1", "PROG-A", "Aguardando"),
+        ]
+        cutting = self._cutting(nestings)
+        plan = cutting["plans"][0]
+        self.assertEqual((plan["nestings"], plan["nestings_concluidos"]), (3, 1))
+        # Regra atual do serviço: "nestings" conta todos os do período e
+        # "completed_nestings" só os de status Finalizado.
+        self.assertEqual(cutting["nestings"], 3)
+        self.assertEqual(cutting["completed_nestings"], 1)
+
+    def test_mesmo_programa_em_tarefas_diferentes_gera_linhas_separadas(self):
+        nestings = [_nesting("T1", "PROG-A")] * 2 + [_nesting("T2", "PROG-A")]
+        cutting = self._cutting(nestings)
+        linhas = [(p["tarefa"], p["plano"], p["nestings"]) for p in cutting["plans"]]
+        self.assertEqual(linhas, [("T1", "PROG-A", 2), ("T2", "PROG-A", 1)])
+        self.assertEqual(cutting["nestings"], 3)
+
+    def test_sem_nesting_plans_vem_vazio_sem_erro(self):
+        cutting = self._cutting([])
+        self.assertEqual(cutting["plans"], [])
+        self.assertEqual(cutting["nestings"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

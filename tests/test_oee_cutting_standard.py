@@ -101,7 +101,8 @@ class CuttingStandardTests(unittest.TestCase):
         corte = _corte(overview)
 
         self.assertEqual(corte["kpi_time_bases"]["standard_run_seconds"], 0.0)
-        self.assertEqual(corte["pecas_boas_sem_tempo_padrao"], 10)
+        # Regra do Corte (03/11/2026): 1 plano cortado sem padrão, não as 10 peças da OP.
+        self.assertEqual(corte["pecas_boas_sem_tempo_padrao"], 1)
         self.assertEqual(
             corte["metrics"]["performance"]["availability"],
             DataAvailability.NOT_CONFIGURED.value,

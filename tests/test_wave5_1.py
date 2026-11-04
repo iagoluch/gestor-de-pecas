@@ -303,14 +303,12 @@ class RollupDeCorteTests(unittest.TestCase):
 
         corte, overview = self._setor_corte()
 
-        # 6 + 4 peças das duas OPs ligadas à tarefa — número real do vínculo
-        # OP × tarefa, não estimativa.
-        self.assertEqual(corte["producao_boa"], 10)
-        self.assertEqual(corte["ops"], 2)
+        # Regra do Corte (03/11/2026): conta 1 por plano cortado (2 nestings
+        # finalizados = 2 planos), não as 6 + 4 peças das OPs ligadas à tarefa.
+        self.assertEqual(corte["producao_boa"], 2)
         self.assertGreater(corte["tempo_producao_segundos"], 0)
         # O rollup de setor e o total de produção falam a mesma língua.
-        self.assertGreaterEqual(overview["production"]["good"], 10)
-        self.assertGreaterEqual(overview["production"]["ops"], 2)
+        self.assertGreaterEqual(overview["production"]["good"], 2)
 
     def test_filtro_por_op_nao_mistura_execucao_de_corte(self):
         self._apontar(1)

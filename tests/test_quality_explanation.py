@@ -35,6 +35,7 @@ from tests.test_value_explanation import (
     _EventRepo,
     _events,
     _leaves,
+    _nesting_row,
     _user,
 )
 
@@ -148,14 +149,15 @@ class QualityTotalsTests(unittest.TestCase):
         self.assertIn("Por motivo: Trinca: 2 peças.", tree["notes"])
 
     def test_boa_diverge_da_visao_geral_quando_ha_corte(self):
-        repo = _EventRepo(_events(), cutting=[_cutting_row(qtd=10)])
+        # Regra do Corte (03/11/2026): o Corte soma 1 por plano cortado (1 nesting = 1).
+        repo = _EventRepo(_events(), cutting=[_cutting_row(qtd=10)], nestings=[_nesting_row()])
         facade = _facade(repo)
         tree = _explain(repo, "qld.boa")
         overview_good = facade.management.get_overview(_filters())["production"]["good"]
         self.assertEqual(tree["value"], 18)
-        self.assertEqual(overview_good, 28)
+        self.assertEqual(overview_good, 19)
         self.assertTrue(any("Corte" in note and "Visão Geral" in note for note in tree["notes"]))
-        self.assertTrue(any("28" in note and "18" in note for note in tree["notes"]))
+        self.assertTrue(any("19" in note and "18" in note for note in tree["notes"]))
         # O Corte não entra na árvore: ela fecha com a tela de Qualidade, não com a Visão Geral.
         self.assertNotIn("Corte", [node["label"] for node in tree["children"]])
         self.assertTrue(tree["reconciliation"]["ok"])

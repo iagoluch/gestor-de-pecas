@@ -289,30 +289,25 @@ class ManagementService:
                 sheet_bucket["standard_run_seconds"] += seconds
                 sheet_bucket["estimated_run_seconds"] += seconds
                 sheet_bucket["nesting_standard_seconds"] += seconds
-        for row in cutting_production:
-            qty = max(0, int(row.get("quantidade") or 0))
-            op = str(row.get("codigo_op") or "").strip()
-            if not qty or not op:
-                continue
-            good += qty
-            ops.add(op)
+        # Regra do Corte (03/11/2026): o que conta é o plano cortado, não a OP
+        # nem as peças da OP. Cada nesting concluído é 1 plano; as OPs da
+        # tarefa seguem visíveis em ``cutting.plans`` sem entrar na soma.
+        for row in self._cutting_plans_counted(completed_nestings, cutting_production):
+            good += 1
             bucket = sectors["Corte"]
-            bucket["good"] += qty
-            bucket["ops"].add(op)
+            bucket["good"] += 1
             resource_input = resource_bucket(row.get("maquina"), "Corte")
             if resource_input is not None:
-                resource_input["good"] += qty
-            task = str(row.get("codigo_tarefa") or "").strip().casefold()
+                resource_input["good"] += 1
+            task = str(row.get("tarefa") or "").strip().casefold()
             if task in cutting_standard["tasks_with_standard"]:
                 continue
-            # Tarefa com chapa sem previsto (ou sem chapa visível): continua
-            # sem padrão; nenhum número é inventado.
-            good_without_standard += qty
-            estimated_good_without_standard += qty
-            bucket["good_without_standard"] += qty
+            good_without_standard += 1
+            estimated_good_without_standard += 1
+            bucket["good_without_standard"] += 1
             if resource_input is not None:
-                resource_input["good_without_standard"] += qty
-                resource_input["estimated_good_without_standard"] += qty
+                resource_input["good_without_standard"] += 1
+                resource_input["estimated_good_without_standard"] += 1
         if cutting_production:
             quantity_evidence = True
 
@@ -804,6 +799,9 @@ class ManagementService:
                 "overlap_removed_seconds": nesting_physical["overlap_removed_seconds"],
                 "planned_seconds": cutting_planned_seconds,
                 "items": nesting_rows,
+                "plans": self._cutting_plans(
+                    nesting_rows, completed_nestings, cutting_production
+                ),
             },
             "audit": {
                 "open_issues": self._load_open_issues(filters.setor),
@@ -1173,6 +1171,56 @@ class ManagementService:
 
     CUTTING_STANDARD_ORIGIN = "nesting_previsto"
     CUTTING_PERFORMANCE_LABEL = "Performance baseada no previsto do nesting"
+
+    @staticmethod
+    def _cutting_plans_counted(completed_nestings, cutting_production) -> list[dict]:
+        """Nestings concluídos que contam como plano cortado.
+
+        Mesmo critério de antes: só tarefa com produção concluída entra; o que
+        muda é a unidade (plano, não peças da OP).
+        """
+        tasks = {
+            str(row.get("codigo_tarefa") or "").strip().casefold()
+            for row in cutting_production
+            if int(row.get("quantidade") or 0) > 0 and str(row.get("codigo_op") or "").strip()
+        }
+        return [
+            row for row in completed_nestings
+            if str(row.get("tarefa") or "").strip().casefold() in tasks
+        ]
+
+    @staticmethod
+    def _cutting_plans(nesting_rows, completed_nestings, cutting_production) -> list[dict]:
+        """Uma linha por plano do Corte (tarefa + programa) com seus nestings.
+
+        Regra do usuário: cada nesting (repetição da chapa) conta como um plano
+        cortado em todo total, então a soma de ``nestings`` destas linhas é o
+        mesmo ``cutting.nestings``. A linha só agrupa para a tela mostrar
+        "1 plano com N nestings". As OPs da tarefa vão como detalhe e não
+        entram em soma nenhuma.
+        """
+        completed = {id(row) for row in completed_nestings}
+        ops_by_task = defaultdict(set)
+        for row in cutting_production:
+            task = str(row.get("codigo_tarefa") or "").strip().casefold()
+            op = str(row.get("codigo_op") or "").strip()
+            if task and op:
+                ops_by_task[task].add(op)
+        plans = {}
+        for row in nesting_rows:
+            task = str(row.get("tarefa") or "").strip()
+            program = str(row.get("programa") or "").strip()
+            plan = plans.setdefault((task.casefold(), program.casefold()), {
+                "tarefa": task or None,
+                "plano": program or None,
+                "nestings": 0,
+                "nestings_concluidos": 0,
+                "ops": sorted(ops_by_task.get(task.casefold(), ())),
+            })
+            plan["nestings"] += 1
+            if id(row) in completed:
+                plan["nestings_concluidos"] += 1
+        return sorted(plans.values(), key=lambda plan: (plan["tarefa"] or "", plan["plano"] or ""))
 
     def _cutting_standard(self, nesting_rows, filters) -> dict:
         """Tempo padrão do Corte a partir do previsto do SigmaNEST (opção A).
@@ -1556,6 +1604,13 @@ class ManagementService:
             "events": events,
             "facts": facts,
             "cutting": self.get_cutting_production(filters),
+            "nestings": self._cutting_plans_counted(
+                [
+                    row for row in self.get_nesting_times(filters)
+                    if str(row.get("status") or "").strip().casefold() == "finalizado"
+                ],
+                self.get_cutting_production(filters),
+            ),
         }
 
     def _prefetch_memo(self, key, compute):

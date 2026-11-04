@@ -56,9 +56,10 @@ def _event(id_, tipo, qtd, setor, recurso, hora=10, **extra):
 class _BaseRepo:
     """Repositório mínimo, sem fonte de eventos de quantidade (cai no fallback)."""
 
-    def __init__(self, facts=None, cutting=None):
+    def __init__(self, facts=None, cutting=None, nestings=None):
         self._facts = facts or []
         self._cutting = cutting or []
+        self._nestings = nestings or []
 
     def listar_fatos_operacionais_periodo(self, *_a, **_k):
         return [dict(row) for row in self._facts]
@@ -67,7 +68,7 @@ class _BaseRepo:
         return []
 
     def listar_tempos_nesting_corte(self, **_k):
-        return []
+        return [dict(row) for row in self._nestings]
 
     def listar_producao_corte_periodo(self, *_a, **_k):
         return [dict(row) for row in self._cutting]
@@ -104,6 +105,24 @@ def _cutting_row(op="OP-9", qtd=10, maquina="LASER1"):
     }
 
 
+def _nesting_row(id_=1, tarefa="T-1", programa="P-1", maquina="LASER1"):
+    """Uma chapa cortada (nesting finalizado): na regra de 03/11/2026 conta 1 plano."""
+    inicio = datetime(2026, 8, 19, 8, 0)
+    return {
+        "apontamento_id": id_,
+        "tarefa": tarefa,
+        "programa": programa,
+        "nesting": id_,
+        "maquina": maquina,
+        "inicio": inicio,
+        "fim": inicio.replace(minute=15),
+        "previsto_segundos": 600.0,
+        "real_segundos": 900.0,
+        "real_periodo_segundos": 900.0,
+        "status": "Finalizado",
+    }
+
+
 def _events():
     return [
         _event(1, "boa", 9, "Dobra", "DOBRA1", op="OP-1"),
@@ -134,18 +153,19 @@ def _leaves(nodes):
 
 class ValueEqualsOverviewTests(unittest.TestCase):
     def test_pecas_boas_fecha_com_a_visao_geral_incluindo_o_corte(self):
-        repo = _EventRepo(_events(), cutting=[_cutting_row()])
+        # Regra do Corte (03/11/2026): conta 1 por plano cortado, não as peças da OP.
+        repo = _EventRepo(_events(), cutting=[_cutting_row()], nestings=[_nesting_row()])
         tree, overview = _tree(repo, "qtd.boa")
 
         self.assertEqual(tree["kind"], "value")
         self.assertEqual(tree["unit"], "pcs")
         self.assertEqual(tree["value"], overview["production"]["good"])
-        self.assertEqual(tree["value"], 9 + 5 + 4 + 10)
+        self.assertEqual(tree["value"], 9 + 5 + 4 + 1)
         self.assertEqual(tree["reconciliation"]["sum"], tree["value"])
         self.assertTrue(tree["reconciliation"]["ok"])
         self.assertEqual(tree["reconciliation"]["diff"], 0.0)
         sectors = {node["label"]: node["value"] for node in tree["children"]}
-        self.assertEqual(sectors, {"Dobra": 14.0, "Corte": 10.0, "Solda": 4.0})
+        self.assertEqual(sectors, {"Dobra": 14.0, "Corte": 1.0, "Solda": 4.0})
         self.assertTrue(any("Corte" in note for note in tree["notes"]))
 
     def test_refugo_e_retrabalho_fecham_com_a_visao_geral(self):
@@ -471,13 +491,18 @@ class AdversarialBorderTests(unittest.TestCase):
         self.assertTrue(any("mesma fonte" in note for note in tree["notes"]))
 
     def test_so_corte_sem_nenhum_lancamento_de_quantidade(self):
-        repo = _EventRepo([], cutting=[_cutting_row(qtd=7), _cutting_row(op="OP-10", qtd=3, maquina="LASER2")])
+        # 2 planos cortados (2 nestings da mesma tarefa); as 2 OPs não somam peças.
+        repo = _EventRepo(
+            [],
+            cutting=[_cutting_row(qtd=7), _cutting_row(op="OP-10", qtd=3, maquina="LASER2")],
+            nestings=[_nesting_row(1), _nesting_row(2, maquina="LASER2")],
+        )
         tree, overview = self._assert_closes(repo, "qtd.boa", "good")
-        self.assertEqual(tree["value"], 10.0)
-        self.assertEqual([(n["label"], n["value"]) for n in tree["children"]], [("Corte", 10.0)])
+        self.assertEqual(tree["value"], 2.0)
+        self.assertEqual([(n["label"], n["value"]) for n in tree["children"]], [("Corte", 2.0)])
         leaf = next(_leaves(tree["children"]))
-        self.assertEqual(leaf["kind"], "op")
-        self.assertEqual(leaf["detail"]["origem"], "apontamentos_corte")
+        self.assertEqual(leaf["kind"], "part")  # folha "Tarefa · Plano" (valor 1), não a OP
+        self.assertEqual(leaf["detail"]["origem"], "nesting_corte")
         self.assertTrue(any("Corte" in note for note in tree["notes"]))
         # Sem refugo/retrabalho: taxa 0 (não "indisponível") e FTT 100.
         rate, _ = self._assert_closes(repo, "qtd.taxa_refugo")
@@ -493,8 +518,10 @@ class AdversarialBorderTests(unittest.TestCase):
             _cutting_row(op="OP-8", qtd=0),
             _cutting_row(op="OP-7", qtd=-4),
         ]
-        tree, _ = self._assert_closes(_EventRepo([], cutting=cutting), "qtd.boa", "good")
-        self.assertEqual(tree["value"], 5.0)
+        tree, _ = self._assert_closes(
+            _EventRepo([], cutting=cutting, nestings=[_nesting_row()]), "qtd.boa", "good"
+        )
+        self.assertEqual(tree["value"], 1.0)
         self.assertEqual(len(list(_leaves(tree["children"]))), 1)
 
     def test_corte_com_fallback_soma_apontamentos_e_corte(self):
@@ -503,9 +530,10 @@ class AdversarialBorderTests(unittest.TestCase):
             "data_inicio": datetime(2026, 8, 19, 8, 0), "data_fim": datetime(2026, 8, 19, 9, 0),
             "quantidade_boa": 8, "quantidade_refugo": 0, "quantidade_retrabalho": 0, "eventos": [],
         }]
-        tree, overview = self._assert_closes(_BaseRepo(facts=facts, cutting=[_cutting_row(qtd=4)]), "qtd.boa", "good")
+        repo = _BaseRepo(facts=facts, cutting=[_cutting_row(qtd=4)], nestings=[_nesting_row()])
+        tree, overview = self._assert_closes(repo, "qtd.boa", "good")
         self.assertEqual(overview["production"]["source"], "apontamentos_operacionais_fallback")
-        self.assertEqual({n["label"]: n["value"] for n in tree["children"]}, {"Dobra": 8.0, "Corte": 4.0})
+        self.assertEqual({n["label"]: n["value"] for n in tree["children"]}, {"Dobra": 8.0, "Corte": 1.0})
 
     def test_tipo_com_caixa_e_espacos_conta_como_o_overview_e_desconhecido_fica_de_fora(self):
         eventos = [
@@ -614,8 +642,10 @@ class AdversarialTruncationTests(unittest.TestCase):
         self.assertTrue(tree["reconciliation"]["ok"])
 
     def test_corte_acima_do_limite_tambem_trunca_sem_perder_pecas(self):
-        cutting = [_cutting_row(op=f"OP-{i}", qtd=2) for i in range(1, MAX_LEAVES_PER_RESOURCE + 31)]
-        tree, overview = _tree(_EventRepo([], cutting=cutting), "qtd.boa")
+        total = MAX_LEAVES_PER_RESOURCE + 30
+        cutting = [_cutting_row(op=f"OP-{i}", qtd=2) for i in range(1, total + 1)]
+        nestings = [_nesting_row(i, programa=f"P-{i}") for i in range(1, total + 1)]
+        tree, overview = _tree(_EventRepo([], cutting=cutting, nestings=nestings), "qtd.boa")
         self.assertTrue(tree["truncated"])
         self.assertEqual(tree["value"], overview["production"]["good"])
         self.assertEqual(tree["children"][0]["value"], tree["value"])
@@ -637,15 +667,15 @@ class AdversarialTruncationTests(unittest.TestCase):
 
 class AdversarialContextAndApiTests(unittest.TestCase):
     def test_contexto_da_ia_nao_mostra_quantidade_como_percentual(self):
-        repo = _EventRepo(_events(), cutting=[_cutting_row()])
+        repo = _EventRepo(_events(), cutting=[_cutting_row()], nestings=[_nesting_row()])
         tree, _ = _tree(repo, "qtd.taxa_refugo")
         context = build_explanation_context(tree, max_tokens=4000)
-        self.assertIn('"Peças boas": 28', context)
-        self.assertNotIn('"Peças boas": 28%', context)
+        self.assertIn('"Peças boas": 19', context)
+        self.assertNotIn('"Peças boas": 19%', context)
         self.assertNotIn('"Refugo": 2%', context)
         self.assertNotIn('"Retrabalho": 3%', context)
         self.assertIn('"Retrabalho": 3.', context)
-        self.assertIn("Valor: 6,7%", context)
+        self.assertIn("Valor: 9,5%", context)
 
     def test_contexto_da_ia_do_ftt_tambem_usa_quantidades_nas_entradas(self):
         tree, _ = _tree(_EventRepo(_events()), "qtd.ftt")

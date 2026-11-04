@@ -45,8 +45,8 @@ _NOTE_FALLBACK = (
     "mesma fonte."
 )
 _NOTE_CUTTING = (
-    "As peças boas do Corte não vêm dos lançamentos de quantidade: vêm das "
-    "tarefas de corte concluídas no período e entram no total da Visão Geral."
+    "No Corte conta o plano cortado, não a OP: cada nesting concluído no "
+    "período vale 1. As OPs da tarefa aparecem só como detalhe e não somam."
 )
 
 VALUE_TEXT: dict[str, dict[str, str]] = {
@@ -291,14 +291,9 @@ class ValueExplanationService:
 
     @staticmethod
     def _cutting_rows(sources: dict) -> list[dict]:
-        """Linhas do Corte que o overview soma às boas (mesmo predicado dele)."""
+        """Nestings concluídos do Corte: cada um é 1 plano cortado (regra de 03/11/2026)."""
 
-        rows = []
-        for row in sources.get("cutting") or []:
-            qty = max(0, int(row.get("quantidade") or 0))
-            if qty and _text(row.get("codigo_op")):
-                rows.append(row)
-        return rows
+        return [row for row in sources.get("nestings") or [] if _text(row.get("tarefa"))]
 
     def _collect(self, sources: dict, kind: str):
         """Agrupa os lançamentos de um tipo em setor -> recurso -> folhas."""
@@ -373,23 +368,29 @@ class ValueExplanationService:
 
         cutting_used = False
         if kind == "boa":
+            ops_by_task: dict[str, set] = defaultdict(set)
+            for row in sources.get("cutting") or []:
+                if _text(row.get("codigo_tarefa")) and _text(row.get("codigo_op")):
+                    ops_by_task[_text(row["codigo_tarefa"]).casefold()].add(_text(row["codigo_op"]))
             for row in self._cutting_rows(sources):
                 cutting_used = True
-                stamp = _iso(row.get("concluido_em"))
-                op = _text(row.get("codigo_op"))
+                stamp = _iso(row.get("fim"))
+                tarefa = _text(row.get("tarefa"))
+                plano = _text(row.get("programa"))
                 add(
                     "Corte",
                     _text(row.get("maquina")) or _NO_RESOURCE,
                     _Leaf(
-                        "op",
-                        _stamp_label(f"OP {op}", stamp),
-                        float(max(0, int(row.get("quantidade") or 0))),
+                        "part",
+                        _stamp_label(f"Tarefa {tarefa} · Plano {plano or '—'}", stamp),
+                        1.0,
                         stamp,
                         _detail(
-                            op=op,
-                            tarefa=_text(row.get("codigo_tarefa")),
+                            tarefa=tarefa,
+                            plano=plano,
+                            ops=", ".join(sorted(ops_by_task.get(tarefa.casefold(), ()))),
                             data_hora=stamp,
-                            origem="apontamentos_corte",
+                            origem="nesting_corte",
                         ),
                     ),
                 )
