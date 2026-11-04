@@ -636,9 +636,9 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
         """Somente o que ainda não foi concluído no SigmaNEST vira trabalho.
 
         Na fixture real, o programa 7040 possui ``CompDate`` e o 7041 não; o
-        8501 (Laser) também já está concluído na origem. Como T2915 ainda tem
-        o 7041 pendente, o 7040 (legado, sem apontamento antes do MES) entra
-        no grupo como capítulo já 'Finalizado' -- não como trabalho a fazer.
+        8501 (Laser) também já está concluído na origem. Como a conclusão na
+        origem não gera apontamento no Gestor, esses nestings ficam fora da
+        fila -- inclusive do grupo da tarefa, que só mostra o 7041 pendente.
         """
 
         self.service.sincronizar(desde=datetime(2026, 1, 1))
@@ -647,12 +647,12 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
         plasma = cut.listar_fila("Plasma TerraBlade 4")
         self.assertEqual([linha["codigo_tarefa"] for linha in plasma], ["T2915"])
         self.assertEqual(plasma[0]["status"], "Aguardando")
-        # 7040 aparece como capítulo já concluído (legado); só 7041 é
-        # trabalho pendente de verdade.
-        self.assertEqual(plasma[0]["nesting_count"], 2)
-        self.assertEqual(plasma[0]["nestings_concluidos"], 1)
+        # O 7040 (concluído na origem) não aparece nem como capítulo
+        # concluído: só apontamento feito no Gestor conta como concluído.
+        self.assertEqual(plasma[0]["nesting_count"], 1)
+        self.assertEqual(plasma[0]["nestings_concluidos"], 0)
         self.assertEqual(plasma[0]["nestings_aguardando"], 1)
-        self.assertEqual(plasma[0]["programa"], "7040, 7041")
+        self.assertEqual(plasma[0]["programa"], "7041")
         self.assertEqual(plasma[0]["plano_hashes_aguardando"], [
             next(
                 item["plano_hash"] for item in plasma[0]["nestings"]
@@ -664,14 +664,13 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
         self.assertEqual(cut.listar_fila("Laser Ensis 3015"), [])
 
     def test_nesting_concluido_no_sigmanest_sai_da_fila_sem_efeito_colateral(self):
-        """Correção complementar da Etapa 3.1 + reconciliação de legado.
+        """Correção complementar da Etapa 3.1.
 
-        ``sigmanest_comp_date`` preenchido oculta o nesting da fila ativa. Como
-        nenhum desses nestings tinha apontamento algum no Gestor (dado
-        anterior à implantação do MES), a sincronização finaliza cada um
-        automaticamente em ``apontamentos_corte`` -- sem tocar em estado de
-        recurso, evento de operador ou quantidade produzida, e sem mexer no
-        Destaque da tarefa.
+        ``sigmanest_comp_date`` preenchido oculta o nesting da fila ativa. A
+        sincronização NÃO cria apontamento algum para ele: só o apontamento
+        feito dentro do Gestor finaliza Corte. Também não toca em estado de
+        recurso, evento de operador, quantidade produzida nem no Destaque da
+        tarefa.
         """
 
         self.service.sincronizar(desde=datetime(2026, 1, 1))
@@ -697,10 +696,9 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
 
         # 2. CompDate preenchido nunca fica "Aguardando". O 8501 (T3432) não
         #    tem nenhum irmão pendente na mesma tarefa/máquina: fica
-        #    totalmente fora da fila. Já o 7040 (T2915) tem o 7041 pendente
-        #    na mesma tarefa -- aparece como capítulo já 'Finalizado' dentro
-        #    do grupo, contexto útil pro operador, mas nunca como trabalho
-        #    a fazer.
+        #    totalmente fora da fila. O 7040 (T2915) também fica de fora,
+        #    mesmo com o 7041 pendente na mesma tarefa: sem apontamento no
+        #    Gestor ele não é capítulo concluído nem trabalho a fazer.
         self.assertIsNotNone(planos["8501"]["sigmanest_comp_date"])
         self.assertNotIn(planos["8501"]["plano_hash"], visiveis)
         self.assertEqual(cut.listar_fila("Laser Ensis 3015"), [])
@@ -710,9 +708,9 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
             linha for linha in cut.listar_fila("Plasma TerraBlade 4")
             if linha["codigo_tarefa"] == "T2915"
         )
-        self.assertIn(planos["7040"]["plano_hash"], grupo_t2915["plano_hashes"])
+        self.assertNotIn(planos["7040"]["plano_hash"], grupo_t2915["plano_hashes"])
         self.assertNotIn(planos["7040"]["plano_hash"], grupo_t2915["plano_hashes_aguardando"])
-        self.assertEqual(grupo_t2915["nestings_concluidos"], 1)
+        self.assertEqual(grupo_t2915["nestings_concluidos"], 0)
         self.assertEqual(grupo_t2915["status"], "Aguardando")
 
         # 3. O registro concluído continua persistido, ativo e auditável.
@@ -721,24 +719,11 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
             with self.subTest(programa=programa):
                 self.assertTrue(planos[programa]["ativo"])
 
-        # 4. Os dois nestings concluídos na origem (7040 e 8501) ganharam um
-        #    apontamento 'Finalizado' automático, de legado -- nenhum efeito
-        #    colateral em estado de recurso, evento de operador ou produção.
-        with self.db.connection() as conexao, conexao.cursor() as cursor:
-            cursor.execute(
-                "SELECT plano_hash, status, operador_inicio, operador_fim,"
-                " data_inicio, data_fim FROM apontamentos_corte ORDER BY plano_hash"
-            )
-            apontamentos = [dict(row) for row in cursor.fetchall()]
-        self.assertEqual(len(apontamentos), 2)
-        for apontamento in apontamentos:
-            with self.subTest(plano_hash=apontamento["plano_hash"]):
-                self.assertEqual(apontamento["status"], "Finalizado")
-                self.assertEqual(apontamento["operador_inicio"], "SigmaNEST (pré-MES)")
-                self.assertEqual(apontamento["operador_fim"], "SigmaNEST (pré-MES)")
-                self.assertEqual(apontamento["data_inicio"], apontamento["data_fim"])
+        # 4. Os nestings concluídos na origem (7040 e 8501) NÃO ganham
+        #    apontamento nenhum -- nem em apontamentos_corte, nem em estado de
+        #    recurso, evento de operador ou produção.
         for tabela in (
-            "apontamentos_operacionais", "eventos_apontamento_operador",
+            "apontamentos_corte", "apontamentos_operacionais", "eventos_apontamento_operador",
             "eventos_estado_recurso", "eventos_quantidade_producao",
         ):
             with self.subTest(tabela=tabela):
@@ -750,33 +735,35 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
         self.assertEqual(self._contar("historico"), 0)
 
     def test_conclusao_na_origem_e_idempotente_e_nao_e_desfeita_pela_origem(self):
-        """Reprocessar não duplica o apontamento de legado criado.
+        """Reprocessar é idempotente e a conclusão na origem não gera apontamento.
 
-        Diferente do resto da projeção (puramente derivada da origem), o
-        apontamento de Corte criado para um nesting sem nenhum histórico no
-        Gestor é um fato consumado: se a origem mudar de ideia depois
-        (``sigmanest_comp_date`` voltar a NULL), o nesting não volta à fila.
+        A projeção é puramente derivada da origem: nenhum ciclo cria
+        ``apontamentos_corte``. Como não há fato consumado no Gestor, se a
+        origem "esquecer" o ``sigmanest_comp_date``, o nesting volta à fila.
         """
 
         self.service.sincronizar(desde=datetime(2026, 1, 1))
         cut = CutService(self.db, "Operador", cutoff_date="2026-01-01")
         self.assertEqual(self._contar("catalogo_sigmanest_planos_corte"), 3)
         self.assertEqual(cut.listar_fila("Laser Ensis 3015"), [])
-        self.assertEqual(self._contar("apontamentos_corte"), 2)
+        self.assertEqual(self._contar("apontamentos_corte"), 0)
 
         self.service.sincronizar(desde=datetime(2026, 1, 1))
         self.assertEqual(self._contar("catalogo_sigmanest_planos_corte"), 3)
         self.assertEqual(cut.listar_fila("Laser Ensis 3015"), [])
-        self.assertEqual(self._contar("apontamentos_corte"), 2)
+        self.assertEqual(self._contar("apontamentos_corte"), 0)
 
-        # A origem "esquecer" o CompDate depois não desfaz o apontamento já
-        # criado -- o nesting já tem histórico no Gestor, não é mais legado.
+        # Sem apontamento no Gestor, a fila segue a origem: sem CompDate o
+        # nesting volta a ser trabalho a fazer.
         with self.db.connection() as conexao, conexao.cursor() as cursor:
             cursor.execute(
                 "UPDATE catalogo_sigmanest_planos_corte SET sigmanest_comp_date = NULL"
             )
-        self.assertEqual(cut.listar_fila("Laser Ensis 3015"), [])
-        self.assertEqual(self._contar("apontamentos_corte"), 2)
+        self.assertEqual(
+            [linha["codigo_tarefa"] for linha in cut.listar_fila("Laser Ensis 3015")],
+            ["T3432"],
+        )
+        self.assertEqual(self._contar("apontamentos_corte"), 0)
 
     def test_materializacao_leva_a_op_correlacionada_para_o_fluxo_canonico(self):
         self.service.sincronizar(desde=datetime(2026, 1, 1))
@@ -811,17 +798,14 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
         self.assertEqual(status, {None})
 
     def test_sincronizacao_nao_cria_apontamento_operacional(self):
-        """A sincronização nunca cria apontamento operacional/evento de
-        recurso -- só finaliza automaticamente o Corte de legado (ver
-        ``test_nesting_concluido_no_sigmanest_sai_da_fila_sem_efeito_colateral``),
-        e isso é uma linha direta em ``apontamentos_corte``, sem side effect
-        nas tabelas operacionais do Gestor.
+        """A sincronização nunca cria apontamento de Corte, apontamento
+        operacional nem evento de recurso: só o apontamento feito dentro do
+        Gestor finaliza Corte (mesmo para nesting já concluído na origem).
         """
 
         self.service.sincronizar(desde=datetime(2026, 1, 1))
-        self.assertEqual(self._contar("apontamentos_corte"), 2)
         for tabela in (
-            "apontamentos_operacionais",
+            "apontamentos_corte", "apontamentos_operacionais",
             "eventos_apontamento_operador", "eventos_estado_recurso",
         ):
             with self.subTest(tabela=tabela):
@@ -860,15 +844,13 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
 
         self.service.sincronizar(overlap_days=7)
 
-        # O 8501 já tinha sido auto-finalizado (legado) no primeiro ciclo, sem
-        # nenhum irmão pendente -- por isso não aparecia em `antes`. Agora que
-        # o 8777 chegou pra mesma tarefa, os dois aparecem juntos no grupo: o
-        # 8501 como capítulo já 'Finalizado', o 8777 como trabalho a fazer.
+        # O 8501 está concluído na origem e segue fora da fila (não há
+        # apontamento no Gestor); só o 8777 novo é trabalho a fazer.
         fila = cut.listar_fila("Laser Ensis 3015")
         self.assertEqual([linha["codigo_tarefa"] for linha in fila], ["T3432"])
-        self.assertEqual(fila[0]["programa"], "8501, 8777")
+        self.assertEqual(fila[0]["programa"], "8777")
         self.assertEqual(fila[0]["status"], "Aguardando")
-        self.assertEqual(fila[0]["nestings_concluidos"], 1)
+        self.assertEqual(fila[0]["nestings_concluidos"], 0)
         self.assertEqual(fila[0]["plano_hashes_aguardando"], [
             next(
                 item["plano_hash"] for item in fila[0]["nestings"]
@@ -955,18 +937,16 @@ class SigmaNestSyncPostgresTests(unittest.TestCase):
         self.assertEqual(len({linha["plano_hash"] for linha in linhas}), 3)
 
         # A fila do Corte enxerga as três como chapas do mesmo programa. O
-        # grupo da tarefa também carrega o 8501 (legado, já concluído na
-        # origem antes do MES, auto-finalizado pela sincronização) como um
-        # quarto capítulo, já 'Finalizado' -- é o mesmo T3432.
+        # 8501 (já concluído na origem, sem apontamento no Gestor) fica fora
+        # do grupo do T3432.
         cut = CutService(self.db, "Operador", cutoff_date="2026-01-01")
         fila = cut.listar_fila("Laser Ensis 3015")
         tarefa = next(item for item in fila if item["codigo_tarefa"] == "T3432")
-        self.assertEqual(tarefa["quantidade_chapas"], 4)
-        self.assertEqual(tarefa["nesting_count"], 4)
-        self.assertEqual(tarefa["nestings_concluidos"], 1)
+        self.assertEqual(tarefa["quantidade_chapas"], 3)
+        self.assertEqual(tarefa["nesting_count"], 3)
+        self.assertEqual(tarefa["nestings_concluidos"], 0)
         por_programa = {item["programa"]: item["chapas"] for item in tarefa["chapas_por_programa"]}
-        self.assertEqual(por_programa["8777"], 3)
-        self.assertEqual(por_programa["8501"], 1)
+        self.assertEqual(por_programa, {"8777": 3})
 
         # Reprocessar a mesma janela não cria chapa nova.
         repetido = self.service.sincronizar(desde=datetime(2026, 1, 1))
