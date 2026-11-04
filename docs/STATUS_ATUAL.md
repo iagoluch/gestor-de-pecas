@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 09/10/2026 (simulação TESTE em tempo real; marcos do REAL preservados abaixo).
+**Atualizado em:** 04/11/2026 (consulta de OP com etapa extra, tempo padrão só Protheus, tela inicial personalizável, Corte só apontado, sem aba Manutenção; simulação TESTE de 09/10 e marcos do REAL preservados abaixo).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -11,6 +11,27 @@ ferramenta.
 Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
+
+### Estado do trabalho — 04/11/2026 (tudo commitado e enviado)
+
+Commits: `6f21996` (consulta de OP + etapa extra, migration 72), `db5c618` (tempo padrão só leitura/Protheus), `3aa27a8` (Corte), `6bf4b01` (aba Manutenção da gestão removida), `b6c7813` (tela inicial + comprovações). Migrations 71 e 72 aplicadas no TEST; REAL/VM não é tratado neste notebook.
+
+- **Consulta de OP + etapa extra no roteiro:** tela `/producao/ordens`, API `/order-consultation`, regra em `mes/services/order_route.py` + `app/database/order_route_repository.py`. PCP, manufatura e admin (`can_manage_route_steps`) incluem uma etapa apontável que o Protheus não tem. Mora em `catalogo_operacoes_op` com `etapa_gestor = TRUE` e **nunca vai ao Protheus** (outbound ignora via `gestor_added_step`). Desativar = `ativo = FALSE`, nunca DELETE. Migration 72 aditiva (rollback no código).
+- **Banco TEST zerado em 04/11:** mantidos usuários, níveis, crachás/operadores, turnos, calendário, pausas automáticas, preferências, motivos de parada e só os 28 recursos apontáveis (critério `is_apontavel_resource`). Regra: só `gestor_pecas_test`, schema `public`, API 8001; Protheus TEST e SigmaNEST sync sempre ligados.
+- **Corte só conta o que foi apontado no sistema:** o sync do SigmaNEST não finaliza mais corte "pré-MES" (removidos `OPERADOR_CORTE_LEGADO` e `_concluir_corte_legado_sem_apontamento`). Peças boas só mostra plano finalizado dentro do Gestor. Sobra código morto em `app/database/database.py` (`listar_planos_corte_legado_sem_apontamento`, `concluir_apontamento_corte_legado`), sem chamador; remoção aguarda decisão.
+- **Gestão sem aba Manutenção:** seção e rota `manutencao/sugestoes` removidas; a tela `/manutencao` do perfil Manutenção continua.
+- **Tempo padrão só leitura e só Protheus:** sem gravação manual; sem tempo no Protheus aparece `n/a`. Tela "Manufatura — Tempo padrão".
+- **Tela inicial:** migration 71 (`dashboard_home`); ver seção abaixo.
+- **Verificado:** vitest `order-consultation` 6 ok; pytest dos módulos sem banco ok. Testes que exigem Postgres **não rodaram no fim** (Docker Desktop fora do ar: 39 falhas por `ConnectionTimeout`, não por código) — rodar de novo quando o Docker subir. `tsc -b`/build do front ok antes dos commits.
+- **Fora do Git:** `.github/instructions/` (vazio, TOTVS), `docs/RELATORIO_GASTO_TOKENS_2026-11-04.md` (ainda não commitado).
+
+### Tela inicial personalizável por usuário — 04/11/2026
+
+- **FATO:** `/inicio/visao-geral` permite arrastar os cards para reordenar (prévia viva durante o arraste + animação no encaixe), ocultar/mostrar, redimensionar de 1×1 até 6×4 e restaurar o padrão. Sem preferência salva, a tela fica idêntica à anterior: 14 blocos visíveis na ordem original.
+- **PERSISTÊNCIA:** `user_preferences.dashboard_home` (JSONB, migration 71, `SCHEMA_VERSION=72`), contrato `{cards, order, sizes}` com 17 chaves conhecidas. A normalização é do backend: descarta chave desconhecida/duplicada, completa as faltantes e limita a 14 visíveis — a regra não vive só no navegador.
+- **LIMITE:** máximo de 14 blocos visíveis (para mostrar um novo é preciso ocultar outro). Os três cards novos — `chamadas`, `metas` e `andon` — nascem ocultos e só buscam dados quando visíveis. Nenhuma regra de negócio, cálculo de OEE ou backend de domínio foi alterado.
+- **PENDENTE:** a migration 71 ainda não foi aplicada no banco TEST; ela entra no próximo startup normal da API.
+- **PROVA:** `docs/comprovacao_tela_inicial_personalizacao_2026-11-03/` (`custom-01`…`custom-07`: padrão, modo edição, arraste com prévia, ordem aplicada, card novo, OEE 2×2 e 1366×768). Testes: `tests/test_preferences.py` 7/7, `dashboard-preferences` 7/7, `management` 75/75, `tsc -b` e `vite build` ok.
 
 ### Telas de auditoria e decisão de RNC — 27/10/2026
 
@@ -1016,4 +1037,4 @@ PENDENTE: a TI ou o responsável autorizado pelo PC deve fornecer somente os end
 - FEATURE: cada conta personaliza a Visão Geral diretamente na tela. O botão "Personalizar" no cabeçalho ativa o modo de edição; cada bloco exibe alça de arraste, botões ↑/↓ e "Ocultar/Mostrar". Sem preferência salva, a tela permanece idêntica à anterior (tudo visível). O modo normal não exibe controles e mantém a ordem salva.
 - FATO TÉCNICO: preferências pessoais ficam em `user_preferences` (migration 71; schema 71), lidas/gravadas por `GET/POST /api/v1/auth/preferences`. O JSON contém `cards` booleanos e `order`; valores inválidos caem no padrão, chaves desconhecidas/duplicadas são descartadas. "Restaurar padrão" remarca todos os blocos e restaura a ordem original. Estado vazio com tudo oculto exibe um aviso com instruções.
 - FATO DE VALIDAÇÃO: `tests/test_preferences.py`, `web/src/test/dashboard-preferences.test.tsx` (5/5) e `web/src/test/management.test.tsx` (76/76) passam; `tsc -b`, build Vite e a prova visual Playwright estão em `docs/comprovacao_tela_inicial_personalizacao_2026-11-03/` (padrão, modo de edição, reordenação/ocultação e 1366×768).
-- PENDENTE: a migration 71 ainda não foi aplicada no banco TESTE nesta sessão; a aplicação a aplica no startup pelo fluxo normal de deploy/teste (nunca no REAL sem autorização).
+- APLICADA: migrations 71 e 72 já estão no banco TESTE (`schema_migrations` = 72). Banco REAL não é acompanhado aqui.
