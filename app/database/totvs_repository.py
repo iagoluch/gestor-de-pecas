@@ -6,6 +6,7 @@ from datetime import datetime
 
 from psycopg.types.json import Jsonb
 
+from app.database.order_route_repository import OrderRouteRepositoryMixin
 from mes.integrations.totvs.errors import (
     TotvsIdentityConflictError,
     TotvsStoredMessageError,
@@ -483,6 +484,7 @@ class TotvsRepositoryMixin:
             UPDATE catalogo_operacoes_op
             SET ativo = FALSE, sincronizado_em = %s
             WHERE codigo_op = %s AND ativo IS TRUE
+              AND etapa_gestor IS NOT TRUE
             """,
             (synchronized_at, order.codigo_op),
         )
@@ -556,3 +558,5 @@ class TotvsRepositoryMixin:
                     operation.totvs_machine_code,
                 ),
             )
+        # Etapas adicionadas no Gestor não vêm do Protheus: seguem a âncora.
+        OrderRouteRepositoryMixin.realinhar_etapas_gestor_cursor(cursor, order.codigo_op)

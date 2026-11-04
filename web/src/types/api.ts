@@ -555,14 +555,25 @@ export interface DashboardCardPreferences {
   sectors_table: boolean;
   top_resources: boolean;
   audit_issues: boolean;
+  chamadas: boolean;
+  metas: boolean;
+  andon: boolean;
 }
 
 export type DashboardCardKey = keyof DashboardCardPreferences;
+
+/** Tamanho do bloco na grade: colunas e linhas que ele ocupa. */
+export interface DashboardCardSize {
+  cols: number;
+  rows: number;
+}
 
 export interface UserDashboardPreferences {
   cards: DashboardCardPreferences;
   /** Ordem pessoal de exibição; cada chave aparece exatamente uma vez. */
   order: DashboardCardKey[];
+  /** Tamanho escolhido por bloco; chaves ausentes caem no padrão. */
+  sizes: Record<DashboardCardKey, DashboardCardSize>;
 }
 
 export interface UserPreferences {

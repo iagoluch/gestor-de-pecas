@@ -33,7 +33,6 @@ from backend.api.schemas.common import (
     ProductiveResourceCalendarRequest,
     ProductiveShiftRequest,
     ShiftParameterRequest,
-    StandardTimeManualRequest,
     UserAccountRequest,
     UserLevelRequest,
 )
@@ -42,6 +41,8 @@ from mes.integrations.notifications.telegram import deliver_telegram_message, te
 from mes.services.change_audit import auditar, consultar, encontrar, ler_estado
 from mes.services.internal_alerts import InternalAlertService
 from mes.services.standard_time import (
+    MANUAL_DISABLED_CODE,
+    MANUAL_DISABLED_MESSAGE,
     RECALCULATION_JOB,
     RecalculationJob,
     StandardTimeRuleError,
@@ -757,11 +758,12 @@ def first_pieces(
 
 
 # ---------------------------------------------------------------------------
-# Tempo padrão manual e estimado (06/10/2026).
+# Tempo padrão (06/10/2026; manual desativado em 04/11/2026).
 #
 # Exclusivo da engenharia de manufatura e do admin, inclusive a leitura: o
 # gestor vê só o resultado (Performance) no payload gerencial. Prioridade da
-# fonte: Protheus real > manual > estimado > NULL. O Corte não participa.
+# fonte: Protheus real > estimado > NULL; o manual não é mais gravado nem conta.
+# O Corte não participa.
 # ---------------------------------------------------------------------------
 def _standard_time_error(error: StandardTimeRuleError) -> AppError:
     return AppError(error.code, error.message, status_code=error.status_code)
@@ -796,50 +798,17 @@ def list_standard_times(
     }
 
 
-@router.put("/standard-times/manual", dependencies=[Depends(require_csrf)])
-def set_manual_standard_time(
-    payload: StandardTimeManualRequest,
-    user: SessionUser = Depends(require_tempo_padrao_user),
-    database=Depends(get_database),
+@router.put("/standard-times/manual", status_code=410)
+@router.delete("/standard-times/manual", status_code=410)
+def manual_standard_time_disabled(
+    _user: SessionUser = Depends(require_tempo_padrao_user),
 ):
-    service = StandardTimeService(database)
-    try:
-        saved = service.set_manual(
-            payload.produto_codigo,
-            payload.numero_operacao,
-            payload.codigo_recurso,
-            payload.segundos_por_peca,
-            observacao=payload.observacao,
-            usuario_id=user.id,
-            usuario_nome=user.name,
-        )
-    except StandardTimeRuleError as error:
-        raise _standard_time_error(error) from error
-    return {"ok": True, "item": saved}
+    # Desativado em 04/11/2026: só vale o tempo do Protheus. A rota continua
+    # registrada para responder 410 com código estável (não 404/405 genérico).
+    raise AppError(MANUAL_DISABLED_CODE, MANUAL_DISABLED_MESSAGE, status_code=410)
 
 
-@router.delete("/standard-times/manual", dependencies=[Depends(require_csrf)])
-def delete_manual_standard_time(
-    produto_codigo: str = Query(max_length=80),
-    numero_operacao: str = Query(max_length=40),
-    codigo_recurso: str = Query(max_length=80),
-    user: SessionUser = Depends(require_tempo_padrao_user),
-    database=Depends(get_database),
-):
-    service = StandardTimeService(database)
-    try:
-        service.remove_manual(
-            produto_codigo,
-            numero_operacao,
-            codigo_recurso,
-            usuario_id=user.id,
-            usuario_nome=user.name,
-        )
-    except StandardTimeRuleError as error:
-        raise _standard_time_error(error) from error
-    return {"ok": True}
-
-
+# Leitura do histórico do manual guardado (não conta em nenhum cálculo).
 @router.get("/standard-times/manual/history")
 def manual_standard_time_history(
     produto_codigo: str = Query(max_length=80),

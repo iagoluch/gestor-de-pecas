@@ -23,6 +23,7 @@ const ENTITIES: Record<string, string> = {
   pausa: "Pausa",
   rnc_decisao: "Decisão de RNC",
   manutencao_sugestao: "Sugestão de manutenção",
+  roteiro_etapa: "Etapa do roteiro",
 };
 
 const ACTIONS: Record<ChangeAction, string> = { criar: "Criou", alterar: "Alterou", excluir: "Excluiu" };

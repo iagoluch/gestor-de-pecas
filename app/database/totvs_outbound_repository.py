@@ -51,6 +51,7 @@ class TotvsOutboundRepositoryMixin:
                     a.numero_operacao AS operation,
                     o.totvs_activity_id AS activity_id,
                     o.totvs_machine_code AS resource_code,
+                    COALESCE(o.etapa_gestor, FALSE) AS gestor_added_step,
                     a.produto_codigo AS item_code,
                     a.produto_descricao AS item_description,
                     p.local_estoque AS warehouse_code,
@@ -135,6 +136,7 @@ class TotvsOutboundRepositoryMixin:
             previous_resource_status_code=row["previous_resource_status_code"],
             previous_interruption_planned=row["previous_interruption_planned"],
             resource_divergent=bool(row["resource_divergent"]),
+            gestor_added_step=bool(row["gestor_added_step"]),
         )
 
     def buscar_marco_terminal_outbound_totvs(
@@ -166,6 +168,9 @@ class TotvsOutboundRepositoryMixin:
                     WHERE codigo_op = %(op)s
                       AND ativo IS TRUE
                       AND marco_terminal IS FALSE
+                      -- Etapa adicionada no Gestor não existe no Protheus: não
+                      -- conta como operação do marco terminal nem o trava.
+                      AND etapa_gestor IS NOT TRUE
                 ),
                 ultimo_evento AS (
                     SELECT DISTINCT ON (a.numero_operacao)

@@ -134,6 +134,12 @@ USER_MANAGEMENT_LEVELS = ("admin",)
 #: (decisão do usuário, 06/10/2026). O gestor lê o resultado, não edita.
 STANDARD_TIME_LEVELS = ("admin", "manufatura")
 
+#: Incluir/desativar etapa no roteiro de uma OP (Consulta de OP, 04/11/2026): PCP,
+#: engenharia de manufatura e admin. ``pcp`` é nível personalizado (molde
+#: ``lider``): o nível efetivo da sessão é ``lider`` e só o nível ATRIBUÍDO à
+#: conta o distingue; por isso a checagem olha os dois.
+ROUTE_STEP_LEVELS = ("admin", "manufatura", "pcp")
+
 #: Cadastro/edição das cotas padrão por produto na tela de gestão: só a
 #: Qualidade (conta ``qualidade``) e o admin (decisão do usuário, 06/10/2026).
 #: Controla a LISTAGEM gerencial; a edição em si segue o endpoint da Qualidade e
@@ -172,6 +178,16 @@ def can_manage_users(level):
 
 def can_manage_standard_time(level):
     return normalize_user_level(level) in STANDARD_TIME_LEVELS
+
+
+def can_manage_route_steps(level, assigned_level=None):
+    """Quem pode incluir/desativar etapa no roteiro da OP (a fonte que vale é o backend)."""
+
+    assigned = str(assigned_level or "").strip().lower()
+    effective = normalize_user_level(level)
+    return effective in ROUTE_STEP_LEVELS or (
+        assigned in ROUTE_STEP_LEVELS and can_access_management_web(level)
+    )
 
 
 def can_manage_quality_templates(level):

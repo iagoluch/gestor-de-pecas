@@ -27,6 +27,11 @@ CAMPOS_AUDITAVEIS = {
     "rnc_decisao": ("rnc_id", "rnc_codigo", "decisao", "justificativa"),
     # Decisão do perfil de Manutenção sobre a sugestão de manutenção (sem R$, sem dado pessoal).
     "manutencao_sugestao": ("sugestao_id", "recurso", "parada_inicio", "status", "nota"),
+    # Etapa adicionada/desativada no roteiro de uma OP (chave = código da OP).
+    "roteiro_etapa": (
+        "codigo_op", "numero_operacao", "descricao_operacao", "setor", "recurso",
+        "apos_operacao", "motivo", "ativo",
+    ),
 }
 
 # Entidades em R$: só a aba Diretoria as expõe (``/diretoria/custos/auditoria``).

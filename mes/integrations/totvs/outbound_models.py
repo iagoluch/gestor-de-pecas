@@ -44,6 +44,7 @@ class CanonicalExecutionEvent:
     previous_resource_status_code: str | None = None
     previous_interruption_planned: bool | None = None
     resource_divergent: bool = False
+    gestor_added_step: bool = False
 
 
 @dataclass(frozen=True)

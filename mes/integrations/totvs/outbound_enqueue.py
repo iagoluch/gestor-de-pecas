@@ -395,6 +395,9 @@ def plan_execution_event(
         not config.enabled
         or not _has_totvs_identity(event)
         or _is_synthetic_order(event, config)
+        # Etapa adicionada no Gestor não existe no Protheus: sem destino, sem
+        # item bloqueado e sem travar a fila da OP.
+        or getattr(event, "gestor_added_step", False)
     ):
         return []
     requests: list[OutboxEnqueueRequest] = []

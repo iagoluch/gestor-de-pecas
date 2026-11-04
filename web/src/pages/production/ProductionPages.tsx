@@ -50,12 +50,12 @@ function LoadingPage({ title, subtitle }: { title: string; subtitle: string }) {
   return <PageFrame sectionId="production" title={title} subtitle={subtitle}><LoadingState /></PageFrame>;
 }
 
-export function ProductionOrdersPage() {
+export function ProductionExecutionPage() {
   const filters = useManagementFilters();
   const [search, setSearch] = useState("");
   const deferredSearch = useDebouncedValue(search);
   const query = useApiQuery<PagedOrders>(`/api/v1/orders?${filters.query}&page=1&page_size=${ROW_LIMIT}${deferredSearch ? `&search=${encodeURIComponent(deferredSearch)}` : ""}`);
-  const title = "Produção — Ordens de Produção";
+  const title = "Produção — Execução das OPs";
   const subtitle = "Plano corporativo em leitura e execução real do Gestor, sem permitir edição do planejamento.";
   if (query.loading && !query.data) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="production" title={title} subtitle={subtitle} actions={<SearchInput value={search} onChange={setSearch} placeholder="Buscar OP, produto ou recurso" />}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;

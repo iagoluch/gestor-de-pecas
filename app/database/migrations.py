@@ -1,10 +1,12 @@
 """Versioned PostgreSQL schema migrations."""
 
+import json
 import logging
 import os
 
 from psycopg.errors import LockNotAvailable, QueryCanceled
 
+from app.core.preferences import dashboard_default
 from app.database.errors import DatabaseMigrationError
 from app.database.schema import SCHEMA_VERSION
 
@@ -2866,19 +2868,64 @@ PARAMETROS_TURNO_VINCULO_STATEMENTS = (
 
 # Migration 71 — preferências pessoais da dashboard home (tela inicial).
 # Preferência por usuário, não por papel: cada conta escolhe quais cards/blocos
-# vê na Visão Geral. O JSON guarda só chaves booleanas; o default replica a
-# tela atual (todos visíveis), então contas sem linha gravada não notam nada.
+# vê na Visão Geral. O JSON guarda chaves booleanas, a ordem e o tamanho dos
+# blocos; o default vem de ``dashboard_default()`` — a mesma fonte do backend.
 # Rollback: DROP TABLE user_preferences; DELETE FROM schema_migrations WHERE version = 71; SCHEMA_VERSION = 70.
 USER_PREFERENCES_DESCRIPTION = "preferências pessoais da dashboard home por usuário"
+USER_PREFERENCES_DEFAULT_JSON = json.dumps(dashboard_default(), ensure_ascii=False, separators=(",", ":"))
 USER_PREFERENCES_STATEMENTS = (
-    """
+    f"""
     CREATE TABLE IF NOT EXISTS user_preferences (
         usuario_id BIGINT PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
-        dashboard_home JSONB NOT NULL DEFAULT '{"cards": {"producao_boa": true, "oee": true, "disponibilidade": true, "performance": true, "ftt": true, "simulation": true, "planned_vs_actual": true, "exceptions": true, "time_composition": true, "top_losses": true, "live_events": true, "sectors_table": true, "top_resources": true, "audit_issues": true}, "order": ["producao_boa", "oee", "disponibilidade", "performance", "ftt", "simulation", "planned_vs_actual", "exceptions", "time_composition", "top_losses", "live_events", "sectors_table", "top_resources", "audit_issues"]}',
+        dashboard_home JSONB NOT NULL DEFAULT '{USER_PREFERENCES_DEFAULT_JSON}',
         updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_user_preferences_updated_at ON user_preferences (updated_at)",
+)
+
+# Migration 72 — etapa adicionada no Gestor ao roteiro de uma OP (04/11/2026).
+# O roteiro do Protheus nem sempre condiz com o que a linha faz: PCP, engenharia
+# de manufatura e admin podem INCLUIR uma etapa apontável. A etapa mora na mesma
+# ``catalogo_operacoes_op`` (fila, apontamento e Andon a enxergam como qualquer
+# operação), marcada por ``etapa_gestor``. Ela NÃO tem ``totvs_activity_id`` e
+# nunca vai ao Protheus (o outbound a ignora). ``apos_operacao_id`` guarda depois
+# de qual operação ela entra: a re-sincronização da OP realinha ``ordem`` por ele
+# e jamais a inativa. Desativar = ``ativo = FALSE`` + carimbo (nunca DELETE).
+# Aditiva e idempotente; linhas existentes ficam ``etapa_gestor = FALSE``.
+# Rollback: ALTER TABLE catalogo_operacoes_op DROP CONSTRAINT ck_catalogo_operacao_etapa_gestor;
+# DELETE FROM catalogo_operacoes_op WHERE etapa_gestor IS TRUE (só se sem apontamento);
+# DROP das 9 colunas abaixo; DELETE FROM schema_migrations WHERE version = 72; SCHEMA_VERSION = 71.
+ROTEIRO_ETAPA_GESTOR_DESCRIPTION = "etapa adicionada no Gestor ao roteiro da OP (apontável, não vai ao Protheus)"
+ROTEIRO_ETAPA_GESTOR_STATEMENTS = (
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS etapa_gestor BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS apos_operacao_id BIGINT"
+    " REFERENCES catalogo_operacoes_op(id) ON DELETE SET NULL",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS adicionada_por_id BIGINT",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS adicionada_por_nome TEXT",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS adicionada_em TIMESTAMP WITHOUT TIME ZONE",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS motivo_adicao TEXT",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS desativada_por_nome TEXT",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS desativada_em TIMESTAMP WITHOUT TIME ZONE",
+    "ALTER TABLE catalogo_operacoes_op ADD COLUMN IF NOT EXISTS motivo_desativacao TEXT",
+    "ALTER TABLE catalogo_operacoes_op DROP CONSTRAINT IF EXISTS ck_catalogo_operacao_etapa_gestor",
+    """
+    ALTER TABLE catalogo_operacoes_op
+    ADD CONSTRAINT ck_catalogo_operacao_etapa_gestor
+    CHECK (
+        etapa_gestor IS FALSE
+        OR (
+            totvs_activity_id IS NULL
+            AND marco_terminal IS FALSE
+            AND inspecao_qualidade IS FALSE
+            AND adicionada_por_nome IS NOT NULL
+            AND adicionada_em IS NOT NULL
+            AND char_length(btrim(COALESCE(motivo_adicao, ''))) >= 3
+        )
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_catalogo_operacoes_etapa_gestor"
+    " ON catalogo_operacoes_op (codigo_op) WHERE etapa_gestor IS TRUE",
 )
 
 MIGRATIONS = {
@@ -2955,6 +3002,7 @@ MIGRATIONS = {
     69: (PARAMETROS_TURNO_FORA_TURNO_DESCRIPTION, PARAMETROS_TURNO_FORA_TURNO_STATEMENTS),
     70: (PARAMETROS_TURNO_VINCULO_DESCRIPTION, PARAMETROS_TURNO_VINCULO_STATEMENTS),
     71: (USER_PREFERENCES_DESCRIPTION, USER_PREFERENCES_STATEMENTS),
+    72: (ROTEIRO_ETAPA_GESTOR_DESCRIPTION, ROTEIRO_ETAPA_GESTOR_STATEMENTS),
 }
 
 
