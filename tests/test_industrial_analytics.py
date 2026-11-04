@@ -629,14 +629,16 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(item["fila"], 3)
         self.assertEqual(item["fila_ops"], 2)
 
-    def test_fila_com_tempo_estimado_entra_na_soma_e_e_marcada(self):
+    def test_fila_com_fonte_estimado_nao_entra_na_soma(self):
+        # 04/11/2026: só Protheus conta; a OP com fonte "estimado" fica sem tempo padrão.
         result = self._fila([
             self._fato("OP1", "DOBRA1", 2, 300, fonte="estimado"),
             self._fato("OP2", "DOBRA1", 2, 300),
         ])
         item = next(i for i in result["items"] if i["codigo"] == "DOBRA1")
-        self.assertEqual(item["fila_horas_segundos"], 1200)
-        self.assertEqual(item["fila_horas_estimadas_segundos"], 600)
+        self.assertEqual(item["fila_horas_segundos"], 600)
+        self.assertEqual(item["fila_sem_tempo_padrao"], 1)
+        self.assertFalse(item["fila_horas_estimadas_segundos"])
 
     def test_fila_excede_livre_so_com_calendario(self):
         # DOBRA1: 8 h de turno, 2 h ocupadas -> 6 h livres.

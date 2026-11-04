@@ -47,7 +47,7 @@ _VALUE_PREFIXES = tuple(_VALUE_SERVICES)
 # S1–S5 explicam a tela de Tempo padrão, que só a manufatura e o admin abrem;
 # S6 (Padrão x real) é lido pela gestão, como a página de Análises.
 _STANDARD_TIME_LINE_METRICS = frozenset({
-    "std.protheus", "std.manual", "std.estimado", "std.fonte", "std.recalculo",
+    "std.protheus", "std.estimado", "std.fonte", "std.recalculo",
 })
 
 

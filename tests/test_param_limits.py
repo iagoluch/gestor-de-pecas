@@ -44,12 +44,6 @@ _REJEITADOS = [
         {"params": {"produto_codigo": BIG, "numero_operacao": "10", "codigo_recurso": "R"}},
     ),
     (
-        "query do DELETE de tempo padrão",
-        "delete",
-        "/management/standard-times/manual",
-        {"params": {"produto_codigo": "P", "numero_operacao": "10", "codigo_recurso": BIG}},
-    ),
-    (
         "nome do nível na exclusão (SEC-06)",
         "delete",
         "/management/levels/" + "n" * 61,

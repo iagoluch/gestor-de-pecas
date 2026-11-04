@@ -7,7 +7,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { isValueExplanation, type ExplanationResponse } from "../../types/valueExplanation";
 
 export interface StandardTimeExplainTarget {
-  /** `std.protheus`, `std.manual`, `std.estimado`, `std.fonte` ou `std.recalculo`. */
+  /** `std.protheus`, `std.estimado`, `std.fonte` ou `std.recalculo`. */
   metric: string;
   /** Chave da linha; o `std.recalculo` explica a tela inteira e não precisa dela. */
   produto?: string;

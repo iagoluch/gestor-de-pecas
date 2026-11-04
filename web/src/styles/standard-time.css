@@ -1,4 +1,4 @@
-/* Tempo padrão (Produção): edição manual na própria linha da tabela. */
+/* Tempo padrão (Manufatura): consulta só leitura; o tempo oficial vem do Protheus. */
 .std-time__filter-input { min-width: 190px; min-height: 38px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-size: var(--text-base); font-weight: 600; letter-spacing: normal; text-transform: none; }
 .std-time__filter-input:hover { border-color: var(--border-strong); }
 .std-time__filter-input:focus { border-color: var(--primary); outline: none; box-shadow: var(--focus-ring); }
@@ -9,19 +9,8 @@
 .std-time__product small, .std-time__estimated small, .std-time__hint { color: var(--muted); font-size: var(--text-xs); }
 
 .std-time__estimated small.std-time__mixed { color: var(--warning-ink, var(--muted)); font-weight: 700; }
-
-.std-time__manual { display: grid; gap: 4px; min-width: 190px; }
-.std-time__manual-row { display: flex; align-items: center; gap: 6px; }
-.std-time__seconds, .std-time__note { min-height: 34px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--surface); font-size: var(--text-base); font-variant-numeric: tabular-nums; }
-.std-time__seconds { width: 96px; }
-.std-time__note { width: 100%; font-size: var(--text-sm); }
-.std-time__seconds:hover:not(:disabled), .std-time__note:hover:not(:disabled) { border-color: var(--border-strong); }
-.std-time__seconds:focus, .std-time__note:focus { border-color: var(--primary); outline: none; box-shadow: var(--focus-ring); }
-.std-time__seconds[aria-invalid="true"] { border-color: var(--danger); }
-.std-time__seconds:disabled { color: var(--muted); background: var(--surface-alt); cursor: not-allowed; }
-.std-time__save { min-height: 34px; padding: 0 12px; border-radius: var(--radius-control); font-size: var(--text-sm); font-weight: 700; }
-.std-time__save:disabled { cursor: not-allowed; opacity: .5; }
-.std-time__error { color: var(--danger-ink); font-size: var(--text-sm); font-weight: 700; }
+.std-time__na { max-width: 260px; }
+.std-time__na strong { font-weight: 700; }
 
 .std-time__pagination { margin-top: var(--space-3); }
 .std-time__pagination .section-count { margin-right: auto; }

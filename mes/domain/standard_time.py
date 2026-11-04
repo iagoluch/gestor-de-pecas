@@ -30,8 +30,9 @@ SOURCE_ESTIMATED = "estimado"
 
 #: Fontes aceitas na Performance oficial: só o Protheus (decisão de 04/11/2026).
 OFFICIAL_SOURCES = frozenset({SOURCE_PROTHEUS})
-#: Fontes que valem em alguma leitura (oficial ou estimada). ``manual`` fica de fora.
-ACTIVE_SOURCES = frozenset({SOURCE_PROTHEUS, SOURCE_ESTIMATED})
+#: Fontes que valem em alguma leitura (oficial ou estimada). Desde 04/11/2026 a
+#: leitura "estimada" também só aceita Protheus: ``manual`` e ``estimado`` ficam de fora.
+ACTIVE_SOURCES = frozenset({SOURCE_PROTHEUS})
 
 #: Rótulo e explicação do padrão oficial ausente (sem tempo no Protheus).
 NO_STANDARD_LABEL = "n/a"
@@ -107,7 +108,7 @@ def official_standard_seconds(fact: Mapping) -> float | None:
 
 
 def estimated_view_standard_seconds(fact: Mapping) -> float | None:
-    """Padrão da leitura "estimada": oficial + estimado."""
+    """Padrão da leitura "estimada": hoje igual ao oficial (só Protheus)."""
 
     value, _source = resolve_fact_standard(fact)
     return value

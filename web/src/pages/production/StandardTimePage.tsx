@@ -1,20 +1,16 @@
-import { useId, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { api, ApiError } from "../../api/client";
 import { AsyncButton } from "../../components/AsyncButton";
-import { useConfirm } from "../../components/ConfirmDialog";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { Notice } from "../../components/Notice";
 import type { NoticeTone } from "../../components/Notice";
-import { OperatorDialog } from "../../components/OperatorDialog";
 import { PageFrame } from "../../components/PageFrame";
-import { RowActions } from "../../components/RowActions";
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { NO_PROTHEUS_STANDARD_TEXT, NO_STANDARD_LABEL } from "../../types/standardTime";
 import type {
-  StandardTimeHistoryEntry,
   StandardTimeListResponse,
   StandardTimeRecalculateStatus,
   StandardTimeRecalculateSummary,
@@ -27,73 +23,32 @@ import { StandardTimeExplainable } from "./StandardTimeExplainable";
 
 const API = "/api/v1/management/standard-times";
 const PAGE_SIZE = 100;
-/** Mesmo teto do backend (`MAX_MANUAL_SECONDS_PER_PIECE`): a validação do servidor é a que vale. */
-const MAX_SECONDS = 86400;
 
-const TITLE = "Produção — Tempo padrão";
-const SUBTITLE = "Cadastre o tempo padrão das operações sem padrão no Protheus e acompanhe as estimativas calculadas pelo histórico.";
+/**
+ * Só leitura (decisão de 04/11/2026): o Gestor não cadastra tempo padrão manual.
+ * Vale o tempo do Protheus; sem ele, "n/a". O estimado é leitura separada.
+ */
+const TITLE = "Manufatura — Tempo padrão";
+const SUBTITLE = "Consulta do tempo padrão do Protheus por produto, operação e recurso. Sem tempo no Protheus aparece n/a: a engenharia de manufatura ajusta direto no ERP.";
 
-/** Corte não recebe tempo manual: o previsto vem do SigmaNEST. */
+/** Corte fica fora: o previsto vem do SigmaNEST. */
 const SETORES_FILTRO = SETORES.filter((setor) => setor !== "Corte");
 
 const SOURCE_BADGE: Record<StandardTimeSource | "none", { label: string; tone: string }> = {
   protheus: { label: "Protheus", tone: "success" },
-  manual: { label: "Manual", tone: "info" },
   estimado: { label: "Estimado", tone: "warning" },
-  none: { label: "Sem padrão", tone: "neutral" },
-};
-
-const HISTORY_ACTION: Record<string, string> = {
-  definido: "Definido",
-  alterado: "Alterado",
-  removido: "Removido",
+  none: { label: NO_STANDARD_LABEL, tone: "neutral" },
 };
 
 /** Mensagem humana por `code`; nunca o código técnico. */
 const ERROR_MESSAGES: Record<string, string> = {
   standard_time_access_denied: "Seu perfil não tem acesso ao tempo padrão. Só a engenharia de manufatura e a administração usam esta tela.",
-  invalid_standard_time: "Tempo inválido. Informe um valor maior que zero e de até 86.400 segundos por peça.",
-  invalid_standard_time_key: "Não foi possível identificar a operação. Atualize a lista e tente de novo.",
-  standard_time_operation_not_found: "Esta operação não está mais no catálogo ativo. A lista foi atualizada.",
-  standard_time_manual_not_found: "Não há tempo manual salvo para esta operação. A lista foi atualizada.",
-  standard_time_defined_by_protheus: "O Protheus já define o tempo padrão desta operação, então o valor manual não é aceito. A lista foi atualizada.",
-  standard_time_sector_without_standard: "O Corte não recebe tempo manual: o tempo previsto vem do SigmaNEST.",
   network_error: "Não foi possível acessar o servidor. Tente novamente.",
 };
-
-/** Erros que indicam que a linha mudou no servidor: vale recarregar a lista. */
-const STALE_CODES = new Set([
-  "standard_time_operation_not_found",
-  "standard_time_manual_not_found",
-  "standard_time_defined_by_protheus",
-  "standard_time_sector_without_standard",
-]);
 
 export function standardTimeErrorMessage(reason: unknown) {
   if (reason instanceof ApiError) return ERROR_MESSAGES[reason.code] ?? "Não foi possível concluir a operação. Tente novamente.";
   return ERROR_MESSAGES.network_error;
-}
-
-const isStale = (reason: unknown) => reason instanceof ApiError && STALE_CODES.has(reason.code);
-
-/**
- * Lê "45", "45,5", "45.5" ou "1.234,5" (pt-BR). Devolve o número ou a
- * mensagem de erro humana — a validação final é a do servidor.
- */
-export function parseSeconds(text: string): { value: number } | { error: string } {
-  const raw = text.trim().replace(/\s/g, "");
-  if (!raw) return { error: "Informe o tempo em segundos por peça." };
-  let normalized: string | null = null;
-  if (raw.includes(",")) {
-    if (/^\d{1,3}(\.\d{3})+,\d+$|^\d+,\d+$/.test(raw)) normalized = raw.replace(/\./g, "").replace(",", ".");
-  } else if (/^\d+(\.\d+)?$/.test(raw)) {
-    normalized = raw;
-  }
-  if (normalized === null) return { error: "Use só números, por exemplo 45 ou 45,5." };
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value <= 0) return { error: "O tempo precisa ser maior que zero." };
-  if (value > MAX_SECONDS) return { error: "O tempo máximo é 86.400 segundos por peça (24 horas)." };
-  return { value };
 }
 
 const explainTarget = (metric: string, row: StandardTimeRow) => ({
@@ -105,9 +60,6 @@ const explainTarget = (metric: string, row: StandardTimeRow) => ({
 
 const seconds = (value: number | null | undefined) =>
   value == null ? "—" : `${formatNumber(value, 2)} s`;
-
-/** Valor no campo de edição: vírgula decimal, sem separador de milhar. */
-const toInput = (value: number) => String(value).replace(".", ",");
 
 const shortDate = (value: string | null | undefined) => {
   if (!value) return "";
@@ -126,30 +78,17 @@ export function validFromLabel(value: string | null | undefined) {
   return formatDateTime(value);
 }
 
-/** Chave mista: só algumas linhas do catálogo têm Protheus, então o manual não cobre todas as OPs. */
+/** Chave mista: só algumas linhas do catálogo têm Protheus; as demais ficam "n/a". */
 function mixedCoverage(row: StandardTimeRow) {
   const comProtheus = row.linhas_com_protheus ?? 0;
   const total = row.linhas_total ?? 0;
   if (comProtheus <= 0 || comProtheus >= total) return null;
-  return { coberto: total - comProtheus, total };
-}
-
-/** Por que o campo manual não pode ser editado; `null` = editável. O backend confirma. */
-function lockReason(row: StandardTimeRow) {
-  if (row.tempo_protheus_segundos != null) return "Definido no Protheus";
-  if (/^corte$/i.test((row.tipo_setor ?? "").trim())) return "Corte: o previsto vem do SigmaNEST";
-  return null;
+  return { comProtheus, total };
 }
 
 function operationLabel(row: StandardTimeRow) {
   return `${row.produto_codigo}, operação ${row.numero_operacao}, recurso ${row.codigo_recurso}`;
 }
-
-const keyParams = (row: StandardTimeRow) => new URLSearchParams({
-  produto_codigo: row.produto_codigo,
-  numero_operacao: row.numero_operacao,
-  codigo_recurso: row.codigo_recurso,
-}).toString();
 
 interface Feedback {
   tone: NoticeTone;
@@ -163,8 +102,6 @@ export function StandardTimePage() {
   const [somenteSemPadrao, setSomenteSemPadrao] = useState(true);
   const [offset, setOffset] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [historico, setHistorico] = useState<StandardTimeRow | null>(null);
-  const [confirm, confirmDialog] = useConfirm();
   const debouncedProduto = useDebouncedValue(produto.trim());
   const debouncedRecurso = useDebouncedValue(recurso.trim());
 
@@ -217,24 +154,6 @@ export function StandardTimePage() {
     }
   }
 
-  async function removeManual(row: StandardTimeRow) {
-    const accepted = await confirm({
-      title: "Remover tempo manual",
-      message: `O tempo manual de ${operationLabel(row)} será removido e a operação volta a usar o estimado, se houver. O histórico é mantido.`,
-      confirmLabel: "Remover tempo manual",
-      tone: "danger",
-    });
-    if (!accepted) return;
-    try {
-      await api.delete(`${API}/manual?${keyParams(row)}`);
-      setFeedback({ tone: "success", text: `Tempo manual removido: ${row.produto_codigo}, operação ${row.numero_operacao}.` });
-    } catch (reason) {
-      setFeedback({ tone: "error", text: standardTimeErrorMessage(reason) });
-      if (!isStale(reason)) return;
-    }
-    query.reload();
-  }
-
   const header = (
     <>
       <StandardTimeExplainable context="último recálculo das estimativas" target={{ metric: "std.recalculo" }}>
@@ -249,7 +168,6 @@ export function StandardTimePage() {
   return (
     <PageFrame sectionId="manufacturing" title={TITLE} subtitle={SUBTITLE} filters={false} actions={header} staleError={query.data ? query.error : null}>
       {feedback ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
-      {confirmDialog}
 
       <div className="record-toolbar" role="search" aria-label="Filtros do tempo padrão">
         <div className="record-toolbar__fields">
@@ -272,12 +190,12 @@ export function StandardTimePage() {
           </label>
           <label className="std-time__toggle">
             <input type="checkbox" checked={somenteSemPadrao} onChange={(event) => changeFilter(() => setSomenteSemPadrao(event.target.checked))} />
-            Somente sem padrão
+            Somente sem tempo no Protheus
           </label>
         </div>
         <div className="record-toolbar__meta">
           <span className="record-toolbar__summary">
-            {query.data ? `${formatNumber(total)} operação(ões)${somenteSemPadrao ? " sem padrão" : ""}` : ""}
+            {query.data ? `${formatNumber(total)} operação(ões)${somenteSemPadrao ? " sem tempo no Protheus" : ""}` : ""}
           </span>
           <button type="button" className="record-toolbar__reset" onClick={clearFilters} disabled={!filtered && somenteSemPadrao}>
             Limpar filtros
@@ -292,7 +210,7 @@ export function StandardTimePage() {
       ) : null}
 
       <SectionCard
-        title={somenteSemPadrao ? "Operações sem tempo padrão" : "Operações e tempos padrão"}
+        title={somenteSemPadrao ? "Operações sem tempo padrão no Protheus" : "Operações e tempos padrão"}
         className="content-section section-card--table"
         action={<span className="section-count">{query.data ? `${formatNumber(total)} no total` : ""}</span>}
       >
@@ -300,10 +218,10 @@ export function StandardTimePage() {
         {query.error && !query.data ? <ErrorState error={query.error} onRetry={query.reload} /> : null}
         {query.data && !items.length ? (
           <EmptyState
-            title={filtered || !somenteSemPadrao ? "Nenhuma operação neste filtro" : "Nenhuma operação sem padrão"}
+            title={filtered || !somenteSemPadrao ? "Nenhuma operação neste filtro" : "Nenhuma operação sem tempo no Protheus"}
             detail={filtered || !somenteSemPadrao
-              ? "Ajuste produto, setor ou recurso, ou mostre também as operações que já têm padrão."
-              : "Todas as operações do catálogo já têm tempo padrão do Protheus, manual ou estimado."}
+              ? "Ajuste produto, setor ou recurso, ou mostre também as operações que já têm tempo no Protheus."
+              : "Todas as operações do catálogo já têm tempo padrão do Protheus."}
           />
         ) : null}
         {query.data && items.length ? (
@@ -335,12 +253,7 @@ export function StandardTimePage() {
                 },
                 { key: "recurso", label: "Recurso", render: (row) => row.codigo_recurso },
                 { key: "setor", label: "Setor", render: (row) => displayName(row.tipo_setor, "—") },
-                { key: "protheus", label: "Protheus", render: (row) => <ProtheusCell row={row} /> },
-                {
-                  key: "manual",
-                  label: "Manual (s/peça)",
-                  render: (row) => <ManualTimeCell row={row} onSaved={(text) => { setFeedback({ tone: "success", text }); query.reload(); }} onStale={query.reload} />,
-                },
+                { key: "protheus", label: "Tempo padrão (Protheus)", render: (row) => <ProtheusCell row={row} /> },
                 { key: "estimado", label: "Estimado", render: (row) => <EstimatedCell row={row} /> },
                 {
                   key: "fonte",
@@ -351,17 +264,6 @@ export function StandardTimePage() {
                     </StandardTimeExplainable>
                   ),
                 },
-                {
-                  key: "acoes",
-                  label: "Ações",
-                  render: (row) => (
-                    <RowActions
-                      label={operationLabel(row)}
-                      primary={{ label: "Histórico", onClick: () => setHistorico(row), disabled: row.tempo_manual_segundos == null && !row.manual_alterado_em }}
-                      actions={[{ label: "Remover manual", danger: true, disabled: row.tempo_manual_segundos == null, onClick: () => void removeManual(row) }]}
-                    />
-                  ),
-                },
               ]}
             />
             <Pagination offset={offset} count={items.length} total={total} onChange={setOffset} />
@@ -369,9 +271,7 @@ export function StandardTimePage() {
         ) : null}
       </SectionCard>
 
-      <p className="std-time__legend">Fonte em uso: o Protheus sempre vale; sem ele vale o tempo manual; sem os dois, o tempo estimado pelo histórico de execuções. Tempos manuais e estimados valem só dali em diante: não alteram períodos já passados.</p>
-
-      {historico ? <HistoryDialog row={historico} onClose={() => setHistorico(null)} /> : null}
+      <p className="std-time__legend">Só vale o tempo padrão do Protheus; quando ele não tem tempo, aparece {NO_STANDARD_LABEL} e a engenharia de manufatura ajusta direto no ERP. O tempo estimado pelo histórico de execuções fica em coluna separada, não entra na Performance oficial e vale só dali em diante.</p>
     </PageFrame>
   );
 }
@@ -404,19 +304,28 @@ function SourceBadge({ source }: { source: StandardTimeSource | null }) {
   return <span className={`status-badge status-badge--${badge.tone}`}>{badge.label}</span>;
 }
 
+/** Tempo do Protheus; sem ele, "n/a" com a explicação de onde se ajusta. */
 function ProtheusCell({ row }: { row: StandardTimeRow }) {
-  const mixed = mixedCoverage(row);
-  const value = row.tempo_protheus_segundos == null ? seconds(null) : (
+  if (row.tempo_protheus_segundos == null) {
+    return (
+      <span className="std-time__estimated std-time__na" title={NO_PROTHEUS_STANDARD_TEXT}>
+        <strong>{NO_STANDARD_LABEL}</strong>
+        <small>{NO_PROTHEUS_STANDARD_TEXT}</small>
+      </span>
+    );
+  }
+  const value = (
     <StandardTimeExplainable context={`Tempo Protheus ${seconds(row.tempo_protheus_segundos)}: ${operationLabel(row)}`} target={explainTarget("std.protheus", row)}>
       {seconds(row.tempo_protheus_segundos)}
     </StandardTimeExplainable>
   );
+  const mixed = mixedCoverage(row);
   if (!mixed) return <>{value}</>;
   return (
     <span className="std-time__estimated">
       <strong>{value}</strong>
       <small className="std-time__mixed">
-        {`Manual cobre ${formatNumber(mixed.coberto)} de ${formatNumber(mixed.total)} OPs (as demais usam Protheus)`}
+        {`Protheus em ${formatNumber(mixed.comProtheus)} de ${formatNumber(mixed.total)} OPs (as demais ficam ${NO_STANDARD_LABEL})`}
       </small>
     </span>
   );
@@ -446,116 +355,6 @@ function EstimatedCell({ row }: { row: StandardTimeRow }) {
   );
 }
 
-function ManualTimeCell({ row, onSaved, onStale }: {
-  row: StandardTimeRow;
-  onSaved: (message: string) => void;
-  onStale: () => void;
-}) {
-  const savedValue = row.tempo_manual_segundos == null ? "" : toInput(row.tempo_manual_segundos);
-  const savedNote = row.manual_observacao ?? "";
-  const [value, setValue] = useState(savedValue);
-  const [note, setNote] = useState(savedNote);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const hintId = useId();
-  const locked = lockReason(row);
-  const dirty = value.trim() !== savedValue || note.trim() !== savedNote;
-
-  // Depois de recarregar a lista, o campo volta a refletir o que está salvo.
-  // O ajuste é feito durante a renderização, não em useEffect: um efeito passivo
-  // roda depois do commit e, se atrasasse, apagava o que o usuário já digitou.
-  const [syncedFrom, setSyncedFrom] = useState({ savedValue, savedNote });
-  if (syncedFrom.savedValue !== savedValue || syncedFrom.savedNote !== savedNote) {
-    setSyncedFrom({ savedValue, savedNote });
-    setValue(savedValue);
-    setNote(savedNote);
-    setError("");
-  }
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (locked || saving) return;
-    const parsed = parseSeconds(value);
-    if ("error" in parsed) {
-      setError(parsed.error);
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      await api.put(`${API}/manual`, {
-        produto_codigo: row.produto_codigo,
-        numero_operacao: row.numero_operacao,
-        codigo_recurso: row.codigo_recurso,
-        segundos_por_peca: parsed.value,
-        ...(note.trim() ? { observacao: note.trim() } : {}),
-      });
-      onSaved(`Tempo manual salvo: ${row.produto_codigo}, operação ${row.numero_operacao}, ${formatNumber(parsed.value, 2)} s por peça.`);
-    } catch (reason) {
-      setError(standardTimeErrorMessage(reason));
-      if (isStale(reason)) onStale();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="std-time__manual" onSubmit={(event) => void save(event)} noValidate>
-      <div className="std-time__manual-row">
-        <input
-          className="std-time__seconds"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          aria-label={`Tempo manual em segundos por peça: ${operationLabel(row)}`}
-          aria-describedby={locked || error ? hintId : undefined}
-          aria-invalid={error ? true : undefined}
-          placeholder="s/peça"
-          value={value}
-          disabled={Boolean(locked) || saving}
-          onChange={(event) => { setValue(event.target.value); setError(""); }}
-        />
-        {!locked ? (
-          <button type="submit" className="button button--primary std-time__save" disabled={!dirty || saving}>
-            {saving ? "Salvando…" : "Salvar"}
-          </button>
-        ) : null}
-      </div>
-      {!locked && (dirty || note) ? (
-        <input
-          className="std-time__note"
-          type="text"
-          maxLength={500}
-          autoComplete="off"
-          aria-label={`Observação do tempo manual: ${operationLabel(row)}`}
-          placeholder="Observação (opcional)"
-          value={note}
-          disabled={saving}
-          onChange={(event) => setNote(event.target.value)}
-        />
-      ) : null}
-      {locked ? <small id={hintId} className="std-time__hint">{locked}</small> : null}
-      {error ? <small id={hintId} className="std-time__error" role="alert">{error}</small> : null}
-      {!locked && dirty ? (
-        <small className="std-time__hint">Vale a partir do momento em que você salvar; não altera períodos já passados.</small>
-      ) : null}
-      {!dirty && row.manual_alterado_por && row.tempo_manual_segundos != null ? (
-        <small className="std-time__hint">{row.manual_alterado_por}{row.manual_alterado_em ? `, ${formatDateTime(row.manual_alterado_em)}` : ""}</small>
-      ) : null}
-      {!dirty && row.manual_vigente_desde && row.tempo_manual_segundos != null ? (
-        <small className="std-time__hint">vale a partir de {validFromLabel(row.manual_vigente_desde)}</small>
-      ) : null}
-      {!dirty && row.tempo_manual_segundos != null ? (
-        <small className="std-time__hint">
-          <StandardTimeExplainable context={`Tempo manual ${seconds(row.tempo_manual_segundos)}: ${operationLabel(row)}`} target={explainTarget("std.manual", row)}>
-            ver de onde vem
-          </StandardTimeExplainable>
-        </small>
-      ) : null}
-    </form>
-  );
-}
-
 function Pagination({ offset, count, total, onChange }: { offset: number; count: number; total: number; onChange: (offset: number) => void }) {
   if (total <= PAGE_SIZE) return null;
   const first = offset + 1;
@@ -566,32 +365,5 @@ function Pagination({ offset, count, total, onChange }: { offset: number; count:
       <button type="button" disabled={offset <= 0} onClick={() => onChange(Math.max(0, offset - PAGE_SIZE))}>Anterior</button>
       <button type="button" disabled={last >= total} onClick={() => onChange(offset + PAGE_SIZE)}>Próxima</button>
     </nav>
-  );
-}
-
-function HistoryDialog({ row, onClose }: { row: StandardTimeRow; onClose: () => void }) {
-  const query = useApiQuery<{ items: StandardTimeHistoryEntry[] }>(`${API}/manual/history?${keyParams(row)}`, { ignoreLiveTick: true });
-  const entries = query.data?.items ?? [];
-  return (
-    <OperatorDialog title="Histórico do tempo manual" context={operationLabel(row)} onCancel={onClose} size="wide">
-      {query.loading && !query.data ? <LoadingState /> : null}
-      {query.error && !query.data ? <ErrorState error={query.error} onRetry={query.reload} /> : null}
-      {query.data && !entries.length ? <EmptyState title="Sem alterações registradas" detail="Ainda não houve tempo manual nesta operação." /> : null}
-      {entries.length ? (
-        <DataTable
-          rows={entries}
-          rowKey={(entry, index) => `${entry.registrado_em}-${index}`}
-          columns={[
-            { key: "quando", label: "Quando", render: (entry) => formatDateTime(entry.registrado_em) },
-            { key: "acao", label: "Ação", render: (entry) => HISTORY_ACTION[entry.acao] ?? displayName(entry.acao) },
-            { key: "de", label: "Antes", render: (entry) => seconds(entry.segundos_anterior) },
-            { key: "para", label: "Depois", render: (entry) => seconds(entry.segundos_novo) },
-            { key: "vigente", label: "Vale a partir de", render: (entry) => validFromLabel(entry.vigente_desde) || "—" },
-            { key: "quem", label: "Quem", render: (entry) => entry.usuario_nome || "—" },
-            { key: "obs", label: "Observação", render: (entry) => entry.observacao || "—" },
-          ]}
-        />
-      ) : null}
-    </OperatorDialog>
   );
 }

@@ -1,4 +1,7 @@
-"""Tempo padrão manual/estimado contra o Postgres real (migration 56).
+"""Tempo padrão (Protheus/estimado) contra o Postgres real (migration 56).
+
+Decisão de 04/11/2026: o manual que ficou no banco não conta em nenhuma
+consulta; os testes o gravam por SQL cru (a escrita pelo Gestor saiu).
 
 Schema isolado em ``TEST_DATABASE_URL`` (nunca o REAL), criado e descartado por
 teste. Cobre o SQL que os dublês de ``test_standard_time.py`` não executam: a
@@ -7,8 +10,6 @@ consulta de fatos com a prioridade da fonte, o repositório e a reimportação.
 
 from datetime import datetime, timedelta
 import os
-import threading
-import time
 import unittest
 from uuid import uuid4
 
@@ -25,7 +26,7 @@ from app.database.schema import SCHEMA_VERSION
 from mes.contracts import AnalyticsFilter
 from mes.domain.standard_time import normalize_key
 from mes.services.industrial_analytics import IndustrialAnalyticsService
-from mes.services.standard_time import StandardTimeRuleError, StandardTimeService
+from mes.services.standard_time import StandardTimeService
 
 AGORA = datetime(2026, 10, 6, 9, 0)
 
@@ -98,6 +99,23 @@ class StandardTimePostgresTests(unittest.TestCase):
             (op, setor, recurso, inicio, inicio, operacao, recurso, op, operacao),
         )
 
+    def _manual_antigo(self, produto, operacao, recurso, segundos, vigente_desde=datetime(2026, 9, 1)):
+        """Manual gravado antes de 04/11/2026: fica no banco, mas não pode contar."""
+
+        self._exec(
+            "INSERT INTO tempo_padrao_manual (produto_codigo, numero_operacao, codigo_recurso,"
+            " segundos_por_peca, usuario_nome) VALUES (%s, %s, %s, %s, 'Eng')"
+            " ON CONFLICT (produto_codigo, numero_operacao, codigo_recurso)"
+            " DO UPDATE SET segundos_por_peca = EXCLUDED.segundos_por_peca",
+            (produto, operacao, recurso, segundos),
+        )
+        self._exec(
+            "INSERT INTO tempo_padrao_manual_historico (produto_codigo, numero_operacao,"
+            " codigo_recurso, acao, segundos_novo, usuario_nome, registrado_em, vigente_desde)"
+            " VALUES (%s, %s, %s, 'definido', %s, 'Eng', %s, %s)",
+            (produto, operacao, recurso, segundos, vigente_desde, vigente_desde),
+        )
+
     def _fatos(self):
         fatos = self.db.listar_fatos_operacionais_periodo(AGORA - timedelta(days=1), AGORA)
         return {(f["op"], f["numero_operacao"]): f for f in fatos}
@@ -125,73 +143,16 @@ class StandardTimePostgresTests(unittest.TestCase):
     def _dia(self, dia, hora=12):
         self.clock = datetime(2026, 10, dia, hora, 0)
 
-    def test_manual_definido_depois_do_fato_nao_altera_o_fato(self):
-        self._apontar_em("OP1", 5)
-        self._apontar_em("OP1", 6)
-        self._apontar_em("OP1", 7)
-        self._dia(6)  # 12:00: o fato de 06 (08:00) começou antes do manual
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
-        self.assertEqual(
-            self._padrao_por_dia(), {5: (None, None), 6: (None, None), 7: ("manual", 40.0)}
-        )
-
-    def test_manual_do_mesmo_dia_vale_so_a_partir_do_instante(self):
-        # Mesmo dia: fato da manhã (OP1, 08:00) não muda com manual definido às
-        # 12:00; fato iniciado depois da definição (OP2, 13:00) usa o manual.
-        self._apontar_em("OP1", 6, hora=8)
-        self._apontar_em("OP2", 6, hora=13)
-        self._dia(6, hora=12)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
-        self.assertEqual(self._padrao_por_dia("OP1"), {6: (None, None)})
-        self.assertEqual(self._padrao_por_dia("OP2"), {6: ("manual", 40.0)})
-
-    def test_fato_iniciado_exatamente_no_instante_da_vigencia_ja_usa_o_manual(self):
-        self._apontar_em("OP1", 6, hora=12)
-        self._dia(6, hora=12)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
-        self.assertEqual(self._padrao_por_dia(), {6: ("manual", 40.0)})
-
-    def test_alterar_manual_nao_muda_periodo_anterior(self):
-        for dia in (5, 6, 7, 8):
+    def test_manual_antigo_no_banco_nao_conta_em_fato_nenhum_e_nao_e_apagado(self):
+        for dia in (5, 6, 7):
             self._apontar_em("OP1", dia)
-        self._dia(6)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
-        self._dia(7)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 50)
+        self._manual_antigo("PROD1", "20", "DOBRA1", 40, vigente_desde=datetime(2026, 9, 1))
         self.assertEqual(
-            self._padrao_por_dia(),
-            {5: (None, None), 6: (None, None), 7: ("manual", 40.0), 8: ("manual", 50.0)},
+            self._padrao_por_dia(), {5: (None, None), 6: (None, None), 7: (None, None)}
         )
-        # Mesmo dia, mais tarde: a última versão vence a partir do novo instante,
-        # sem tocar nos fatos anteriores a ele.
-        self._dia(7, hora=15)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 55)
-        self.assertEqual(
-            self._padrao_por_dia(),
-            {5: (None, None), 6: (None, None), 7: ("manual", 40.0), 8: ("manual", 55.0)},
-        )
-
-    def test_remover_manual_nao_muda_periodo_anterior(self):
-        for dia in (7, 8, 9):
-            self._apontar_em("OP1", dia)
-        self._dia(6)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
-        self._dia(9)
-        self.service.remove_manual("PROD1", "20", "DOBRA1")
-        self.assertEqual(
-            self._padrao_por_dia(),
-            {7: ("manual", 40.0), 8: ("manual", 40.0), 9: ("manual", 40.0)},
-        )
-        # Fato posterior à remoção fica sem manual; redefinir vale só dali em diante.
-        self._apontar_em("OP1", 10)
-        self._dia(11)
-        self._apontar_em("OP1", 12)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 60)
-        self.assertEqual(
-            self._padrao_por_dia(),
-            {7: ("manual", 40.0), 8: ("manual", 40.0), 9: ("manual", 40.0),
-             10: (None, None), 12: ("manual", 60.0)},
-        )
+        with self.db.connection() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) AS n FROM tempo_padrao_manual")
+            self.assertEqual(cursor.fetchone()["n"], 1)
 
     def test_estimado_nao_atinge_fato_anterior_a_vigente_desde(self):
         for dia in (5, 6, 8):
@@ -219,11 +180,10 @@ class StandardTimePostgresTests(unittest.TestCase):
         )
         self.assertEqual(str(item["estimado_vigente_desde"]), "2026-10-07 03:00:00")
 
-    def test_protheus_continua_vencendo_manual_e_estimado_em_qualquer_dia(self):
+    def test_protheus_vence_estimado_em_qualquer_dia_e_manual_antigo_nao_interfere(self):
         for dia in (5, 6, 7):
             self._apontar_em("OP1", dia)
-        self._dia(6)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
+        self._manual_antigo("PROD1", "20", "DOBRA1", 40)
         self.db.substituir_tempos_padrao_estimados(
             [{"produto": "PROD1", "operacao": "20", "recurso": "DOBRA1",
               "segundos_por_peca": 70.0, "amostras": 5,
@@ -236,21 +196,20 @@ class StandardTimePostgresTests(unittest.TestCase):
             {5: ("protheus", 33.0), 6: ("protheus", 33.0), 7: ("protheus", 33.0)},
         )
 
-    def test_listagem_e_historico_expoem_vigente_desde(self):
-        self._dia(6)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 40)
-        self._dia(7)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 50)
+    def test_listagem_nao_expoe_manual_e_historico_antigo_segue_legivel(self):
+        self._manual_antigo("PROD1", "20", "DOBRA1", 40, vigente_desde=datetime(2026, 10, 6, 12, 0))
         item = next(
             i for i in self.db.listar_tempos_padrao(somente_sem_padrao=False)["items"]
             if i["numero_operacao"] == "20"
         )
-        self.assertEqual(str(item["manual_vigente_desde"]), "2026-10-07 12:00:00")
+        for coluna in ("tempo_manual_segundos", "manual_vigente_desde", "manual_alterado_por"):
+            self.assertNotIn(coluna, item)
+        self.assertIsNone(item["fonte_efetiva"])
         self.assertIsNone(item["estimado_vigente_desde"])
         historico = self.db.listar_historico_tempo_padrao_manual("PROD1", "20", "DOBRA1")
         self.assertEqual(
             [(h["acao"], str(h["vigente_desde"])) for h in historico],
-            [("alterado", "2026-10-07 12:00:00"), ("definido", "2026-10-06 12:00:00")],
+            [("definido", "2026-10-06 12:00:00")],
         )
 
     def test_leitura_enxuta_de_fatos_so_perde_os_operadores(self):
@@ -326,24 +285,24 @@ class StandardTimePostgresTests(unittest.TestCase):
         fato = self._fatos()[("OP1", "20")]
         self.assertEqual((fato["tempo_padrao_fonte"], float(fato["tempo_padrao_segundos"])), ("estimado", 70.0))
 
-        # ...manual vence o estimado...
-        self.service.set_manual("prod1", "20", "dobra1", 55.5, usuario_nome="Eng")
+        # ...o manual antigo no banco não vence o estimado...
+        self._manual_antigo("PROD1", "20", "DOBRA1", 55.5)
         fato = self._fatos()[("OP1", "20")]
-        self.assertEqual((fato["tempo_padrao_fonte"], float(fato["tempo_padrao_segundos"])), ("manual", 55.5))
+        self.assertEqual((fato["tempo_padrao_fonte"], float(fato["tempo_padrao_segundos"])), ("estimado", 70.0))
         self.assertIsNone(fato["tempo_medio_segundos"])
 
-        # ...e o Protheus real posterior vence o manual sem apagá-lo.
+        # ...e o Protheus real posterior vence o estimado.
         self._exec("UPDATE catalogo_operacoes_op SET tempo_medio_segundos = 40 WHERE numero_operacao = '20'")
         fato = self._fatos()[("OP1", "20")]
         self.assertEqual((fato["tempo_padrao_fonte"], float(fato["tempo_padrao_segundos"])), ("protheus", 40.0))
         itens = self.db.listar_tempos_padrao(somente_sem_padrao=False)["items"]
         dobra = next(i for i in itens if i["numero_operacao"] == "20")
-        self.assertEqual(float(dobra["tempo_manual_segundos"]), 55.5)
+        self.assertNotIn("tempo_manual_segundos", dobra)
         self.assertEqual(dobra["fonte_efetiva"], "protheus")
 
-        # Protheus volta a NULL (reimportação com 0,01): o manual reaparece.
+        # Protheus volta a NULL (reimportação com 0,01): volta o estimado, nunca o manual.
         self._exec("UPDATE catalogo_operacoes_op SET tempo_medio_segundos = NULL WHERE numero_operacao = '20'")
-        self.assertEqual(self._fatos()[("OP1", "20")]["tempo_padrao_fonte"], "manual")
+        self.assertEqual(self._fatos()[("OP1", "20")]["tempo_padrao_fonte"], "estimado")
 
         # Solda: Protheus real; Corte: nunca recebe estimado/manual.
         self.assertEqual(self._fatos()[("OP1", "30")]["tempo_padrao_fonte"], "protheus")
@@ -362,7 +321,7 @@ class StandardTimePostgresTests(unittest.TestCase):
     def test_fatos_nao_duplicam_linhas_quando_ha_varias_ops_da_mesma_chave(self):
         self._apontar("OP1", "20", "DOBRA1", "Dobra")
         self._apontar("OP2", "20", "DOBRA1", "Dobra")
-        self.service.set_manual("PROD1", "20", "DOBRA1", 50)
+        self._manual_antigo("PROD1", "20", "DOBRA1", 50)
         fatos = self.db.listar_fatos_operacionais_periodo(AGORA - timedelta(days=1), AGORA)
         self.assertEqual(len(fatos), 2)
 
@@ -377,8 +336,9 @@ class StandardTimePostgresTests(unittest.TestCase):
         self.assertEqual(self.db.listar_tempos_padrao(somente_sem_padrao=False, setor="solda")["total"], 1)
         self.assertEqual(self.db.listar_tempos_padrao(somente_sem_padrao=False, produto="prod2")["total"], 0)
         self.assertEqual(len(self.db.listar_tempos_padrao(somente_sem_padrao=False, limite=1)["items"]), 1)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 55)
-        self.assertEqual(self.db.listar_tempos_padrao(somente_sem_padrao=True)["total"], 0)
+        # Manual antigo não tira a chave da lista "sem tempo no Protheus".
+        self._manual_antigo("PROD1", "20", "DOBRA1", 55)
+        self.assertEqual(self.db.listar_tempos_padrao(somente_sem_padrao=True)["total"], 1)
 
     # --- "tem Protheus": tela e fatos seguem a mesma regra --------------------
     def _chave_mista(self):
@@ -419,7 +379,7 @@ class StandardTimePostgresTests(unittest.TestCase):
         self._chave_mista()
         item, fontes = self._tela_e_fatos_concordam("PROD3", "40")
         self.assertEqual(fontes, {"OP1": "protheus", "OP2": None, "OP3": None})
-        # Sem Protheus em todas as linhas a chave continua precisando de manual.
+        # Sem Protheus em todas as linhas a chave fica n/a nas demais.
         self.assertIsNone(item["tempo_protheus_segundos"])
         self.assertEqual((item["linhas_com_protheus"], item["linhas_total"]), (1, 3))
         self.assertIsNone(item["fonte_efetiva"])
@@ -428,12 +388,12 @@ class StandardTimePostgresTests(unittest.TestCase):
             [(i["produto_codigo"], i["numero_operacao"])
              for i in self.db.listar_tempos_padrao(somente_sem_padrao=True)["items"]],
         )
-        # O manual é aceito e cobre exatamente as linhas que ficaram sem padrão.
-        self.service.set_manual("PROD3", "40", "DOBRA3", 77)
+        # Manual antigo não cobre as linhas sem Protheus.
+        self._manual_antigo("PROD3", "40", "DOBRA3", 77)
         self.assertEqual(
-            self._fontes_dos_fatos("40"), {"OP1": "protheus", "OP2": "manual", "OP3": "manual"}
+            self._fontes_dos_fatos("40"), {"OP1": "protheus", "OP2": None, "OP3": None}
         )
-        self.assertEqual(self._tela("PROD3")["fonte_efetiva"], "manual")
+        self.assertIsNone(self._tela("PROD3")["fonte_efetiva"])
         self._tela_e_fatos_concordam("PROD3", "40")
 
     def test_chave_so_com_tempo_zero_ou_nulo_nao_tem_protheus_em_nenhum_lado(self):
@@ -458,14 +418,6 @@ class StandardTimePostgresTests(unittest.TestCase):
         self.assertEqual(set(fontes.values()), {"protheus"})
         self.assertEqual(float(item["tempo_protheus_segundos"]), 12.0)
         self.assertEqual(item["fonte_efetiva"], "protheus")
-        contexto = self.db.obter_contexto_tempo_padrao("PROD5", "40", "DOBRA5")
-        self.assertEqual(float(contexto["tempo_protheus_segundos"]), 12.0)
-
-    def test_contexto_de_escrita_segue_a_mesma_regra_da_tela(self):
-        self._chave_mista()
-        contexto = self.db.obter_contexto_tempo_padrao("PROD3", "40", "DOBRA3")
-        self.assertIsNone(contexto["tempo_protheus_segundos"])
-        self.assertEqual((contexto["linhas_com_protheus"], contexto["linhas_total"]), (1, 3))
 
     # --- normalização da chave: Python == SQL ---------------------------------
     def test_normalize_key_python_equivale_ao_btrim_upper_do_sql(self):
@@ -480,13 +432,13 @@ class StandardTimePostgresTests(unittest.TestCase):
                 self.assertEqual(sql_row["chave"], esperado[0], repr(valor))
                 self.assertEqual(sql_row["operacao"], esperado[1], repr(valor))
 
-    def test_chave_com_tab_no_catalogo_faz_o_ciclo_tela_manual_fato(self):
+    def test_chave_com_tab_no_catalogo_aparece_na_tela_e_manual_antigo_nao_vale(self):
         self._catalogo("OP1", "ZZ9\t", "40", "DOBRA9", "Dobra", None)
         self._apontar("OP1", "40", "DOBRA9", "Dobra")
         item = self._tela("ZZ9")
         self.assertEqual(item["produto_codigo"], "ZZ9\t")
-        self.service.set_manual(item["produto_codigo"], item["numero_operacao"], item["codigo_recurso"], 33)
-        self.assertEqual(self._fontes_dos_fatos("40"), {"OP1": "manual"})
+        self._manual_antigo(item["produto_codigo"], item["numero_operacao"], item["codigo_recurso"], 33)
+        self.assertEqual(self._fontes_dos_fatos("40"), {"OP1": None})
 
     # --- filtro de produto: LIKE literal --------------------------------------
     def test_filtro_de_produto_escapa_curingas_do_like(self):
@@ -504,53 +456,7 @@ class StandardTimePostgresTests(unittest.TestCase):
         self.assertEqual(produtos("_"), ["AB_C"])
         self.assertEqual(produtos("AB"), ["ABXC", "AB_C"])
 
-    # --- histórico do manual: serialização por chave --------------------------
-    def test_duas_primeiras_definicoes_simultaneas_gravam_definido_e_alterado(self):
-        original = self.db._registrar_historico_tempo_padrao
-        primeira = threading.Event()
-
-        def historico_lento(*args, **kwargs):
-            # Alarga a janela: a 1ª transação segura o commit enquanto a 2ª começa.
-            if not primeira.is_set():
-                primeira.set()
-                time.sleep(0.4)
-            return original(*args, **kwargs)
-
-        self.db._registrar_historico_tempo_padrao = historico_lento
-        partida = threading.Barrier(2)
-        erros = []
-
-        def definir(valor):
-            try:
-                partida.wait(timeout=5)
-                self.db.definir_tempo_padrao_manual("PROD1", "20", "DOBRA1", valor, usuario_nome="Eng")
-            except Exception as error:  # pragma: no cover - só se o teste falhar
-                erros.append(error)
-
-        threads = [threading.Thread(target=definir, args=(valor,)) for valor in (40, 50)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join(timeout=15)
-        self.assertEqual(erros, [])
-        historico = self.db.listar_historico_tempo_padrao_manual("PROD1", "20", "DOBRA1")
-        self.assertEqual(sorted(h["acao"] for h in historico), ["alterado", "definido"])
-        alterado = next(h for h in historico if h["acao"] == "alterado")
-        definido = next(h for h in historico if h["acao"] == "definido")
-        self.assertEqual(alterado["segundos_anterior"], definido["segundos_novo"])
-
-    def test_manual_valida_regra_e_grava_historico(self):
-        with self.assertRaises(StandardTimeRuleError) as protheus:
-            self.service.set_manual("PROD1", "30", "SOLDA1", 10)
-        self.assertEqual(protheus.exception.status_code, 409)
-        with self.assertRaises(StandardTimeRuleError) as corte:
-            self.service.set_manual("PROD2", "10", "LASER1", 10)
-        self.assertEqual(corte.exception.status_code, 409)
-        self.service.set_manual("PROD1", "20", "DOBRA1", 55, observacao="medido", usuario_nome="Eng")
-        self.service.set_manual("PROD1", "20", "DOBRA1", 60, usuario_nome="Eng")
-        self.service.remove_manual("PROD1", "20", "DOBRA1", usuario_nome="Eng")
-        historico = self.db.listar_historico_tempo_padrao_manual("PROD1", "20", "DOBRA1")
-        self.assertEqual(sorted(h["acao"] for h in historico), ["alterado", "definido", "removido"])
+    def test_tabela_manual_antiga_mantem_o_check_de_valor_positivo(self):
         with self.assertRaises(psycopg.errors.CheckViolation):
             self._exec(
                 "INSERT INTO tempo_padrao_manual (produto_codigo, numero_operacao, codigo_recurso,"

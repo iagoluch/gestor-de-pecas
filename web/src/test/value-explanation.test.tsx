@@ -5,7 +5,7 @@ import { ExplainableValue } from "../components/ExplainableValue";
 import { MetricExplanationPanel } from "../components/MetricExplanationPanel";
 import { LocalExplanationPanel } from "../components/ValueExplanationPanel";
 import { defaultFilters, FilterProvider } from "../filters/FilterContext";
-import { ProductionOrdersPage, ProductionPlanActualPage } from "../pages/production/ProductionPages";
+import { ProductionExecutionPage, ProductionPlanActualPage } from "../pages/production/ProductionPages";
 import {
   buildAttendanceExplanation,
   buildSumExplanation,
@@ -221,7 +221,7 @@ describe("Produção: cartões somados no navegador", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(
       <MemoryRouter>
-        <FilterProvider>{page === "orders" ? <ProductionOrdersPage /> : <ProductionPlanActualPage />}</FilterProvider>
+        <FilterProvider>{page === "orders" ? <ProductionExecutionPage /> : <ProductionPlanActualPage />}</FilterProvider>
       </MemoryRouter>,
     );
     return fetchMock;

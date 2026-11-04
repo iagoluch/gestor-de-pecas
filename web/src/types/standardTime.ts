@@ -1,6 +1,12 @@
 /** Contrato de `/api/v1/management/standard-times` (só engenharia de manufatura e admin). */
 
-export type StandardTimeSource = "protheus" | "manual" | "estimado";
+/** O tempo manual não existe mais (04/11/2026): só vale o Protheus; o estimado é leitura separada. */
+export type StandardTimeSource = "protheus" | "estimado";
+
+/** Rótulo e explicação do tempo padrão oficial ausente (sem tempo no Protheus). Espelha `mes/domain/standard_time.py`. */
+export const NO_STANDARD_LABEL = "n/a";
+export const NO_PROTHEUS_STANDARD_TEXT =
+  "Tempo padrão não cadastrado no Protheus. A engenharia de manufatura ajusta direto no ERP.";
 
 export interface StandardTimeRow {
   produto_codigo: string;
@@ -10,12 +16,6 @@ export interface StandardTimeRow {
   produto_descricao?: string | null;
   descricao_operacao?: string | null;
   tempo_protheus_segundos: number | null;
-  tempo_manual_segundos: number | null;
-  manual_observacao?: string | null;
-  manual_alterado_por?: string | null;
-  manual_alterado_em?: string | null;
-  /** Instante (ISO; "YYYY-MM-DD" em backend antigo) a partir do qual o manual vale. Não é retroativo. */
-  manual_vigente_desde?: string | null;
   tempo_estimado_segundos: number | null;
   estimado_amostras?: number | null;
   estimado_calculado_em?: string | null;
@@ -25,11 +25,11 @@ export interface StandardTimeRow {
   estimado_vigente_desde?: string | null;
   /**
    * Linhas do catálogo desta chave com tempo no Protheus / total de linhas.
-   * Chave mista (0 < com_protheus < total): o manual só cobre as linhas sem Protheus.
+   * Chave mista (0 < com_protheus < total): as linhas sem Protheus ficam "n/a".
    */
   linhas_com_protheus?: number | null;
   linhas_total?: number | null;
-  /** Fonte que vale hoje; `null` = sem padrão. */
+  /** Fonte que vale hoje; `null` = "n/a" (sem Protheus e sem estimado). */
   fonte_efetiva: StandardTimeSource | null;
 }
 
@@ -40,17 +40,6 @@ export interface StandardTimeListResponse {
   limit: number;
   offset: number;
   somente_sem_padrao: boolean;
-}
-
-export interface StandardTimeHistoryEntry {
-  acao: string;
-  segundos_anterior: number | null;
-  segundos_novo: number | null;
-  observacao?: string | null;
-  usuario_nome?: string | null;
-  registrado_em: string;
-  /** A partir de quando este valor passou a valer (sem retroativo). */
-  vigente_desde?: string | null;
 }
 
 export interface StandardTimeRecalculateSummary {

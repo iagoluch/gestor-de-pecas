@@ -1,9 +1,12 @@
-"""Persistência do tempo padrão manual e estimado (migration 56).
+"""Persistência do tempo padrão estimado e leitura do manual guardado (migration 56).
 
 Não decide regra: a prioridade da fonte e as validações vivem em
 ``mes/domain/standard_time.py`` e ``mes/services/standard_time.py``. Aqui ficam
-as consultas e as garantias de banco (PK por chave normalizada, histórico de
-alterações gravado na mesma transação da alteração).
+as consultas e as garantias de banco (PK por chave normalizada).
+
+Tempo manual (decisão do usuário, 04/11/2026): não há mais escrita. As tabelas
+``tempo_padrao_manual*`` ficam no banco só como registro; nenhuma consulta de
+padrão as usa. O histórico continua legível (``listar_historico_tempo_padrao_manual``).
 
 A chave é ``(produto, operação, recurso)`` com produto/recurso em maiúsculas e
 sem espaços nas pontas; o catálogo é por OP, então a lista agrupa as linhas
@@ -29,12 +32,12 @@ _CATALOG_BASE = (
 #: Regra única de "a linha do catálogo tem tempo do Protheus": tempo > 0. O mapper
 #: grava NULL quando o Protheus manda 0,01 ("recurso sem tempo configurado").
 #: É a regra da consulta de fatos (que alimenta o OEE, por linha ``c`` ligada ao
-#: apontamento); a listagem e o contexto de escrita usam a mesma expressão.
+#: apontamento); a listagem usa a mesma expressão.
 PROTHEUS_TIME_SQL = "c.tempo_medio_segundos > 0"
 
 #: Agregação por chave sobre as linhas do catálogo (uma por OP). A chave só "tem
 #: Protheus" quando TODAS as linhas têm: a consulta de fatos decide por linha, e
-#: uma linha sem tempo fica sem padrão oficial (precisa do manual). Em chave mista
+#: uma linha sem tempo fica sem padrão oficial ("n/a"). Em chave mista
 #: ``tempo_protheus_segundos`` é NULL e ``linhas_com_protheus < linhas_total``;
 #: com todas as linhas, vale o valor da mais recente.
 PROTHEUS_KEY_AGG_SQL = (
@@ -61,10 +64,10 @@ class StandardTimeRepositoryMixin:
         self, *, produto=None, setor=None, recurso=None, somente_sem_padrao=True,
         limite=LIMITE_PADRAO, deslocamento=0,
     ):
-        """Operações (produto, operação, recurso) com as três fontes lado a lado.
+        """Operações (produto, operação, recurso) com Protheus e estimado lado a lado.
 
-        ``somente_sem_padrao``: só chaves sem Protheus real e sem manual (o
-        estimado não conta como padrão oficial, mas aparece na linha).
+        ``somente_sem_padrao``: só chaves sem Protheus real (o estimado não conta
+        como padrão oficial, mas aparece na linha). O manual guardado não entra.
         """
 
         limite = max(1, min(int(limite or LIMITE_PADRAO), LIMITE_MAXIMO))
@@ -90,15 +93,6 @@ class StandardTimeRepositoryMixin:
             f" {_CATALOG_BASE} AND BTRIM(c.produto_codigo) <> ''{filtros}"
             " GROUP BY 1, 2, 3)"
             " SELECT k.*,"
-            " tm.segundos_por_peca AS tempo_manual_segundos,"
-            " tm.observacao AS manual_observacao,"
-            " tm.usuario_nome AS manual_alterado_por,"
-            " tm.atualizado_em AS manual_alterado_em,"
-            " CASE WHEN tm.segundos_por_peca IS NOT NULL THEN ("
-            "   SELECT h.vigente_desde FROM tempo_padrao_manual_historico h"
-            "   WHERE h.produto_codigo = k.produto_codigo AND h.numero_operacao = k.numero_operacao"
-            "     AND h.codigo_recurso = k.codigo_recurso AND h.segundos_novo IS NOT NULL"
-            "   ORDER BY h.vigente_desde DESC, h.id DESC LIMIT 1) END AS manual_vigente_desde,"
             " te.segundos_por_peca AS tempo_estimado_segundos,"
             " te.amostras AS estimado_amostras,"
             " te.calculado_em AS estimado_calculado_em,"
@@ -106,13 +100,11 @@ class StandardTimeRepositoryMixin:
             " te.janela_inicio AS estimado_janela_inicio,"
             " te.janela_fim AS estimado_janela_fim,"
             " CASE WHEN k.tempo_protheus_segundos IS NOT NULL THEN 'protheus'"
-            "      WHEN tm.segundos_por_peca IS NOT NULL THEN 'manual'"
             "      WHEN te.segundos_por_peca IS NOT NULL THEN 'estimado' END AS fonte_efetiva,"
             " COUNT(*) OVER () AS total"
             " FROM chaves k"
-            " LEFT JOIN tempo_padrao_manual tm USING (produto_codigo, numero_operacao, codigo_recurso)"
             " LEFT JOIN tempo_padrao_estimado te USING (produto_codigo, numero_operacao, codigo_recurso)"
-            " WHERE (NOT %s OR (k.tempo_protheus_segundos IS NULL AND tm.segundos_por_peca IS NULL))"
+            " WHERE (NOT %s OR k.tempo_protheus_segundos IS NULL)"
             " ORDER BY k.produto_codigo, k.numero_operacao, k.codigo_recurso"
             " LIMIT %s OFFSET %s"
         )
@@ -130,137 +122,6 @@ class StandardTimeRepositoryMixin:
         for row in rows:
             row.pop("total", None)
         return {"items": rows, "total": total, "sem_produto": sem_produto}
-
-    def obter_contexto_tempo_padrao(self, produto, operacao, recurso):
-        """Operação do catálogo (ativa, apontável) + manual atual; ``None`` se não existir.
-
-        ``tempo_protheus_segundos`` segue ``PROTHEUS_KEY_AGG_SQL`` (só há Protheus
-        quando todas as linhas da chave têm), a mesma regra da listagem e dos fatos.
-
-        ``setores`` traz todos os setores das linhas da chave: basta um ser
-        Corte para a chave não aceitar manual.
-        """
-
-        chave = normalize_key(produto, operacao, recurso)
-        with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT array_agg(DISTINCT BTRIM(c.tipo_setor)) AS setores,"  # nosec B608 -- fragmento constante
-                f"{PROTHEUS_KEY_AGG_SQL}"
-                " FROM catalogo_operacoes_op c"
-                " WHERE c.ativo IS TRUE AND c.marco_terminal IS FALSE"
-                " AND UPPER(BTRIM(c.produto_codigo)) = %s AND BTRIM(c.numero_operacao) = %s"
-                " AND UPPER(BTRIM(c.codigo_recurso)) = %s"
-                " HAVING COUNT(*) > 0",
-                chave,
-            )
-            row = cursor.fetchone()
-            if not row:
-                return None
-            contexto = dict(row)
-            cursor.execute(
-                "SELECT segundos_por_peca FROM tempo_padrao_manual"
-                " WHERE produto_codigo = %s AND numero_operacao = %s AND codigo_recurso = %s",
-                chave,
-            )
-            manual = cursor.fetchone()
-            contexto["tempo_manual_segundos"] = manual["segundos_por_peca"] if manual else None
-            return contexto
-
-    def definir_tempo_padrao_manual(
-        self, produto, operacao, recurso, segundos_por_peca, *,
-        observacao=None, usuario_id=None, usuario_nome=None,
-    ):
-        """Cria/atualiza o manual e grava o histórico na mesma transação.
-
-        O novo valor vale a partir do instante da gravação (``vigente_desde``):
-        fatos iniciados antes dele seguem com o valor que tinham.
-        """
-
-        chave = normalize_key(produto, operacao, recurso)
-        observacao = (str(observacao).strip()[:500] or None) if observacao else None
-        with self.connection() as connection, connection.cursor() as cursor:
-            # Serializa por chave: ``FOR UPDATE`` não trava linha inexistente, e
-            # duas primeiras definições simultâneas gravariam ambas "definido".
-            self._travar_chave_tempo_padrao(cursor, chave)
-            cursor.execute(
-                "SELECT segundos_por_peca FROM tempo_padrao_manual"
-                " WHERE produto_codigo = %s AND numero_operacao = %s AND codigo_recurso = %s",
-                chave,
-            )
-            anterior = cursor.fetchone()
-            cursor.execute(
-                "INSERT INTO tempo_padrao_manual (produto_codigo, numero_operacao, codigo_recurso,"
-                " segundos_por_peca, observacao, usuario_id, usuario_nome, atualizado_em)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, LOCALTIMESTAMP)"
-                " ON CONFLICT (produto_codigo, numero_operacao, codigo_recurso) DO UPDATE SET"
-                " segundos_por_peca = EXCLUDED.segundos_por_peca,"
-                " observacao = EXCLUDED.observacao, usuario_id = EXCLUDED.usuario_id,"
-                " usuario_nome = EXCLUDED.usuario_nome, atualizado_em = EXCLUDED.atualizado_em"
-                " RETURNING *",
-                (*chave, segundos_por_peca, observacao, usuario_id, usuario_nome),
-            )
-            row = dict(cursor.fetchone())
-            self._registrar_historico_tempo_padrao(
-                cursor, chave,
-                "alterado" if anterior else "definido",
-                anterior["segundos_por_peca"] if anterior else None,
-                segundos_por_peca, observacao, usuario_id, usuario_nome,
-                self._now(),
-            )
-            return row
-
-    def remover_tempo_padrao_manual(
-        self, produto, operacao, recurso, *, usuario_id=None, usuario_nome=None
-    ):
-        """Remove o manual (o histórico permanece). ``False`` se não havia.
-
-        A remoção é uma versão sem valor com ``vigente_desde`` do instante atual:
-        fatos iniciados antes dele mantêm o manual que tinham.
-        """
-
-        chave = normalize_key(produto, operacao, recurso)
-        with self.connection() as connection, connection.cursor() as cursor:
-            self._travar_chave_tempo_padrao(cursor, chave)
-            cursor.execute(
-                "DELETE FROM tempo_padrao_manual"
-                " WHERE produto_codigo = %s AND numero_operacao = %s AND codigo_recurso = %s"
-                " RETURNING segundos_por_peca",
-                chave,
-            )
-            anterior = cursor.fetchone()
-            if not anterior:
-                return False
-            self._registrar_historico_tempo_padrao(
-                cursor, chave, "removido", anterior["segundos_por_peca"], None,
-                None, usuario_id, usuario_nome, self._now(),
-            )
-            return True
-
-    @staticmethod
-    def _travar_chave_tempo_padrao(cursor, chave):
-        """Advisory lock de transação por chave (liberado no commit/rollback).
-
-        O prefixo separa o espaço de chaves dos outros ``hashtext`` do sistema;
-        colisão de hash só gera espera extra, nunca erro.
-        """
-
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(%s))",
-            ("tempo_padrao_manual|" + "|".join(chave),),
-        )
-
-    @staticmethod
-    def _registrar_historico_tempo_padrao(
-        cursor, chave, acao, anterior, novo, observacao, usuario_id, usuario_nome,
-        vigente_desde,
-    ):
-        cursor.execute(
-            "INSERT INTO tempo_padrao_manual_historico (produto_codigo, numero_operacao,"
-            " codigo_recurso, acao, segundos_anterior, segundos_novo, observacao,"
-            " usuario_id, usuario_nome, vigente_desde)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (*chave, acao, anterior, novo, observacao, usuario_id, usuario_nome, vigente_desde),
-        )
 
     def listar_historico_tempo_padrao_manual(self, produto, operacao, recurso, limite=50):
         chave = normalize_key(produto, operacao, recurso)

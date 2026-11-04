@@ -1,14 +1,17 @@
 """Explicação de valor da família ``std.*``: tempo padrão.
 
-S1–S5 (``std.protheus``, ``std.manual``, ``std.estimado``, ``std.fonte``,
-``std.recalculo``) explicam a linha de tela de Produção > Tempo padrão; a chave
+S1–S5 (``std.protheus``, ``std.estimado``, ``std.fonte``, ``std.recalculo``)
+explicam a linha de tela de Produção > Tempo padrão; a chave
 (produto, operação, recurso) vem dos filtros ``produto``/``operacao``/``recurso``.
 S6 (``std.comparacoes``, ``std.padrao_acumulado``, ``std.real_acumulado``,
 ``std.desvio``) explica os cartões de Análises > Padrão x real e repete a conta
 da própria página: só soma a linha que tem esperado E real.
 
-Fontes únicas (nenhuma conta nova): ``listar_tempos_padrao`` e o histórico manual
-do repositório, o último evento de recálculo (``ESTIMATE_EVENT_TYPE``) e
+Tempo manual (decisão do usuário, 04/11/2026): não conta mais e não tem
+explicação própria (``std.manual`` saiu). Sem Protheus, o padrão oficial é
+"n/a" com ``NO_PROTHEUS_STANDARD_TEXT``.
+
+Fontes únicas (nenhuma conta nova): ``listar_tempos_padrao`` do repositório, o último evento de recálculo (``ESTIMATE_EVENT_TYPE``) e
 ``IndustrialAnalyticsService.standard_vs_actual`` / ``standard_time_samples``.
 """
 
@@ -24,7 +27,8 @@ from mes.domain.standard_time import (
     DEFAULT_LOOKBACK_DAYS,
     DEFAULT_MIN_SAMPLES,
     DEFAULT_PERCENTILE,
-    SECTOR_WITHOUT_STANDARD_TIME,
+    NO_PROTHEUS_STANDARD_TEXT,
+    NO_STANDARD_LABEL,
     drop_outliers,
     estimate_standard_seconds,
     normalize_key,
@@ -43,7 +47,7 @@ from mes.services.value_explanation import (
 
 _NO_KEY = "Informe produto, operação e recurso para ver a conta deste tempo."
 _NO_RESOURCE = "Sem recurso informado"
-_SOURCE_LABELS = {"protheus": "Protheus", "manual": "Manual", "estimado": "Estimado"}
+_SOURCE_LABELS = {"protheus": "Protheus", "estimado": "Estimado"}
 _LINES_LIMIT = 500  # LIMITE_MAXIMO de ``listar_tempos_padrao``
 
 STD_TEXT: dict[str, dict[str, str]] = {
@@ -52,15 +56,7 @@ STD_TEXT: dict[str, dict[str, str]] = {
         "unit": "seconds",
         "rule": (
             "Tempo oficial por peça cadastrado no Protheus para o produto, a operação e o recurso. "
-            "Não é editável aqui: um tempo manual por cima dele é recusado (erro 409)."
-        ),
-    },
-    "std.manual": {
-        "label": "Tempo padrão manual",
-        "unit": "seconds",
-        "rule": (
-            "Tempo por peça digitado pela engenharia de manufatura. Vale a partir da data de vigência "
-            "e cada mudança fica no histórico (quem, quando, valor anterior). O Corte não aceita manual."
+            "Não é editável no Gestor: a engenharia de manufatura ajusta direto no ERP."
         ),
     },
     "std.estimado": {
@@ -74,7 +70,10 @@ STD_TEXT: dict[str, dict[str, str]] = {
     "std.fonte": {
         "label": "Fonte do tempo padrão em uso",
         "unit": "text",
-        "rule": "Prioridade: Protheus > manual > estimado > sem padrão. A primeira fonte que existe é a que vale.",
+        "rule": (
+            "Prioridade: Protheus > estimado > n/a. A primeira fonte que existe é a que vale. "
+            "A Performance oficial usa só o Protheus; o estimado entra só na leitura estimada."
+        ),
     },
     "std.recalculo": {
         "label": "Chaves com tempo estimado no último recálculo",
@@ -92,7 +91,7 @@ STD_TEXT: dict[str, dict[str, str]] = {
     "std.padrao_acumulado": {
         "label": "Tempo padrão acumulado",
         "unit": "hours",
-        "rule": "Soma do tempo padrão oficial (Protheus ou manual) × peças boas de cada apontamento que também tem tempo real.",
+        "rule": "Soma do tempo padrão oficial (Protheus) × peças boas de cada apontamento que também tem tempo real.",
     },
     "std.real_acumulado": {
         "label": "Tempo real acumulado",
@@ -106,7 +105,7 @@ STD_TEXT: dict[str, dict[str, str]] = {
     },
 }
 
-_LINE_METRICS = ("std.protheus", "std.manual", "std.estimado", "std.fonte")
+_LINE_METRICS = ("std.protheus", "std.estimado", "std.fonte")
 
 
 def _fmt_s(seconds: Any) -> str:
@@ -174,7 +173,6 @@ class StandardTimeExplanationService:
             )
         handler = {
             "std.protheus": self._protheus,
-            "std.manual": self._manual,
             "std.estimado": self._estimado,
             "std.fonte": self._fonte,
         }[metric]
@@ -194,54 +192,12 @@ class StandardTimeExplanationService:
         value = _num(row.get("tempo_protheus_segundos"))
         covered, total = row.get("linhas_com_protheus"), row.get("linhas_total")
         if value is None:
-            reason = "O Protheus não tem tempo para esta combinação de produto, operação e recurso."
+            reason = f"{NO_STANDARD_LABEL}: {NO_PROTHEUS_STANDARD_TEXT}"
         else:
             reason = f"O Protheus cadastra {_fmt_s(value)} por peça para esta operação neste recurso."
         if covered is not None and total:
             reason += f" Há tempo em {covered} de {total} linha(s) de roteiro."
-        excluded = []
-        manual = _num(row.get("tempo_manual_segundos"))
-        if value is not None and manual is not None:
-            excluded.append({
-                "label": "Tempo manual cadastrado",
-                "value": _fmt_s(manual),
-                "reason": "Fica por baixo do Protheus: o oficial vale e um manual por cima é recusado (409).",
-            })
-        return self._build(metric, text, value, reason, [], excluded, [])
-
-    def _manual(self, metric, text, row, key, max_leaves) -> ValueExplanation:
-        value = _num(row.get("tempo_manual_segundos"))
-        sector = str(row.get("tipo_setor") or "").strip().casefold()
-        notes: list[str] = []
-        if sector == SECTOR_WITHOUT_STANDARD_TIME:
-            notes.append("O Corte não aceita tempo padrão manual.")
-        if value is None:
-            reason = "Não há tempo manual cadastrado para esta combinação."
-        else:
-            reason = f"A engenharia cadastrou {_fmt_s(value)} por peça"
-            who, when, since = row.get("manual_alterado_por"), _stamp(row.get("manual_alterado_em")), _stamp(row.get("manual_vigente_desde"))
-            reason += f", por {who}" if who else ""
-            reason += f" em {when}" if when else ""
-            reason += f", vigente desde {since}." if since else "."
-        history = self.db.listar_historico_tempo_padrao_manual(*key, limite=50) if value is not None or row.get("manual_alterado_em") else []
-        children = [
-            ValueNode(
-                kind="event",
-                label=f"{item.get('acao') or 'Alteração'} em {_stamp(item.get('registrado_em')) or 'data não informada'}",
-                value=_num(item.get("segundos_novo")),
-                detail=_detail(
-                    acao=item.get("acao"),
-                    por=item.get("usuario_nome"),
-                    anterior=_fmt_s(item["segundos_anterior"]) if item.get("segundos_anterior") is not None else None,
-                    vigente_desde=_stamp(item.get("vigente_desde")),
-                    observacao=item.get("observacao"),
-                ),
-            )
-            for item in history
-        ]
-        if children:
-            notes.append("A lista é o histórico de alterações, da mais recente para a mais antiga; o valor de cada linha é o tempo gravado naquela alteração.")
-        return self._build(metric, text, value, reason, children, [], notes)
+        return self._build(metric, text, value, reason, [], [], [])
 
     def _estimado(self, metric, text, row, key, max_leaves) -> ValueExplanation:
         value = _num(row.get("tempo_estimado_segundos"))
@@ -306,23 +262,23 @@ class StandardTimeExplanationService:
 
     def _fonte(self, metric, text, row, key, max_leaves) -> ValueExplanation:
         source = row.get("fonte_efetiva")
-        label = _SOURCE_LABELS.get(str(source or ""), "Sem padrão")
+        label = _SOURCE_LABELS.get(str(source or ""), NO_STANDARD_LABEL)
         values = {
             "Protheus": row.get("tempo_protheus_segundos"),
-            "Manual": row.get("tempo_manual_segundos"),
             "Estimado": row.get("tempo_estimado_segundos"),
         }
         children = [
             ValueNode(
                 kind="part",
                 label=name,
-                value=_fmt_s(number) if number is not None else "Não cadastrado",
+                value=_fmt_s(number) if number is not None else NO_STANDARD_LABEL,
                 detail=_detail(em_uso="sim" if name == label else None),
             )
             for name, number in values.items()
         ]
-        reason = f"Fonte em uso: {label}." if source else "Nenhuma fonte tem tempo para esta combinação: fica sem padrão."
-        return self._build(metric, text, label, reason, children, [], [])
+        reason = f"Fonte em uso: {label}." if source else f"Fonte em uso: {NO_STANDARD_LABEL}. {NO_PROTHEUS_STANDARD_TEXT}"
+        notes = [NO_PROTHEUS_STANDARD_TEXT] if row.get("tempo_protheus_segundos") is None and source else []
+        return self._build(metric, text, label, reason, children, [], notes)
 
     # --------------------------------------------------------------- S5: resumo
 
@@ -409,7 +365,7 @@ class StandardTimeExplanationService:
         if metric == "std.comparacoes":
             groups = [
                 ("Com tempo padrão e tempo real", comparable),
-                ("Sem tempo padrão cadastrado", no_standard),
+                (f"Tempo padrão {NO_STANDARD_LABEL} (sem Protheus)", no_standard),
                 ("Com padrão, mas dados insuficientes de tempo real", no_real),
             ]
             children = [self._group(label, items, lambda r: 1.0, max_leaves) for label, items in groups if items]
@@ -439,7 +395,7 @@ class StandardTimeExplanationService:
         excluded = []
         if no_standard:
             excluded.append({"label": "Apontamentos sem tempo padrão", "value": str(len(no_standard)),
-                             "reason": "Sem padrão oficial (Protheus ou manual) não há tempo esperado."})
+                             "reason": f"Padrão oficial {NO_STANDARD_LABEL}: {NO_PROTHEUS_STANDARD_TEXT}"})
         if no_real:
             excluded.append({"label": "Apontamentos sem tempo real suficiente", "value": str(len(no_real)),
                              "reason": "Dados insuficientes de tempo real: ficam fora da soma para comparar o mesmo conjunto."})

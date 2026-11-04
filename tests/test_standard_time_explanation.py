@@ -19,8 +19,6 @@ def _row(**over):
     row = {
         "produto_codigo": "P1", "numero_operacao": "10", "codigo_recurso": "LASER1", "tipo_setor": "solda",
         "tempo_protheus_segundos": None, "linhas_com_protheus": 0, "linhas_total": 2,
-        "tempo_manual_segundos": None, "manual_alterado_por": None, "manual_alterado_em": None,
-        "manual_vigente_desde": None,
         "tempo_estimado_segundos": None, "estimado_janela_inicio": None, "estimado_janela_fim": None,
         "estimado_calculado_em": None, "fonte_efetiva": None,
     }
@@ -79,45 +77,50 @@ def test_unknown_metric():
         _explain(_service(), "std.nada")
 
 
-@pytest.mark.parametrize("metric", ["std.protheus", "std.manual", "std.estimado", "std.fonte"])
+@pytest.mark.parametrize("metric", ["std.protheus", "std.estimado", "std.fonte"])
 def test_line_without_key_or_row_has_no_value(metric):
     assert _explain(_service(), metric).value is None
     assert _explain(_service(FakeDb()), metric, **KEY).value is None
 
 
-def test_protheus_value_and_manual_shadowed():
-    db = FakeDb([_row(tempo_protheus_segundos=12.5, linhas_com_protheus=1, tempo_manual_segundos=9.0)])
+NA_TEXT = "Tempo padrão não cadastrado no Protheus. A engenharia de manufatura ajusta direto no ERP."
+
+
+def test_protheus_value_without_manual_shadow():
+    db = FakeDb([_row(tempo_protheus_segundos=12.5, linhas_com_protheus=1)])
     tree = _explain(_service(db), "std.protheus", **KEY)
     assert tree.value == 12.5 and tree.unit == "seconds"
     assert "1 de 2" in tree.reason
-    assert tree.excluded[0]["value"] == "9,00 s"
+    assert tree.excluded == []
 
 
-def test_manual_history_lists_events_and_corte_note():
-    db = FakeDb(
-        [_row(tipo_setor="Corte", tempo_manual_segundos=8.0, manual_alterado_por="Ana",
-              manual_alterado_em=datetime(2026, 10, 1, 8, 0), manual_vigente_desde=datetime(2026, 10, 2))],
-        history=[{"acao": "definido", "segundos_anterior": 7.0, "segundos_novo": 8.0, "usuario_nome": "Ana",
-                  "registrado_em": datetime(2026, 10, 1, 8, 0), "vigente_desde": datetime(2026, 10, 2), "observacao": "x"}],
-    )
-    tree = _explain(_service(db), "std.manual", **KEY)
-    assert tree.value == 8.0 and len(tree.children) == 1
-    assert tree.children[0].detail["anterior"] == "7,00 s"
-    assert any("Corte" in n for n in tree.notes)
+def test_protheus_missing_shows_na_with_explanation():
+    tree = _explain(_service(FakeDb([_row()])), "std.protheus", **KEY)
+    assert tree.value is None
+    assert tree.reason.startswith(f"n/a: {NA_TEXT}")
 
 
-def test_fonte_shows_all_three_and_marks_the_one_in_use():
-    db = FakeDb([_row(tempo_manual_segundos=8.0, tempo_estimado_segundos=7.0, fonte_efetiva="manual")])
+def test_std_manual_no_longer_exists():
+    assert "std.manual" not in STD_TEXT
+    with pytest.raises(UnknownMetricError):
+        _explain(_service(FakeDb([_row()])), "std.manual", **KEY)
+
+
+def test_fonte_shows_protheus_and_estimado_and_marks_the_one_in_use():
+    db = FakeDb([_row(tempo_estimado_segundos=7.0, fonte_efetiva="estimado")])
     tree = _explain(_service(db), "std.fonte", **KEY)
-    assert tree.value == "Manual"
+    assert tree.value == "Estimado"
     by = {c.label: c for c in tree.children}
-    assert by["Manual"].detail == {"em_uso": "sim"}
-    assert by["Protheus"].value == "Não cadastrado"
+    assert set(by) == {"Protheus", "Estimado"}
+    assert by["Estimado"].detail == {"em_uso": "sim"}
+    assert by["Protheus"].value == "n/a"
+    assert NA_TEXT in tree.notes
 
 
 def test_fonte_without_any_standard():
     tree = _explain(_service(FakeDb([_row()])), "std.fonte", **KEY)
-    assert tree.value == "Sem padrão"
+    assert tree.value == "n/a"
+    assert NA_TEXT in tree.reason
 
 
 def _estimate_setup(values):
@@ -223,7 +226,7 @@ def _route(metric, role, facade=None, **filters):
                             AnalyticsFilter(inicio=datetime(2026, 9, 20), fim=NOW, **filters), _user(role))
 
 
-@pytest.mark.parametrize("metric", ["std.protheus", "std.manual", "std.estimado", "std.fonte", "std.recalculo"])
+@pytest.mark.parametrize("metric", ["std.protheus", "std.estimado", "std.fonte", "std.recalculo"])
 def test_line_metrics_denied_without_standard_time_access(metric):
     from backend.api.errors import AppError
 
@@ -240,10 +243,10 @@ def test_every_std_metric_passes_the_route_response_model(metric, com_linha):
 
     from backend.api.schemas.explanation import ExplanationResponse, ValueExplanationResponse
 
-    rows = [_row(tempo_manual_segundos=8.0, tempo_estimado_segundos=7.0, fonte_efetiva="manual")] if com_linha else []
+    rows = [_row(tempo_estimado_segundos=7.0, fonte_efetiva="estimado")] if com_linha else []
     facade = _Facade(FakeDb(rows), FakeAnalytics())
     TypeAdapter(ExplanationResponse | ValueExplanationResponse).validate_python(
-        _route(metric, "admin", facade, **(KEY if metric in ("std.protheus", "std.manual", "std.estimado", "std.fonte") else {}))
+        _route(metric, "admin", facade, **(KEY if metric in ("std.protheus", "std.estimado", "std.fonte") else {}))
     )
 
 
@@ -287,12 +290,11 @@ def test_line_key_is_case_and_space_insensitive_and_garbage_rows_do_not_crash():
         assert _explain(_service(db), "std.protheus", **{**KEY, **blank}).value is None
 
 
-def test_manual_history_with_removal_and_empty_fields_does_not_crash():
-    db = FakeDb([_row(tempo_manual_segundos=None, manual_alterado_em=datetime(2026, 10, 1))],
-                history=[{"acao": None, "segundos_anterior": None, "segundos_novo": None, "usuario_nome": None,
-                          "registrado_em": None, "vigente_desde": None, "observacao": None}])
-    tree = _explain(_service(db), "std.manual", **KEY)
-    assert tree.value is None and len(tree.children) == 1 and tree.children[0].value is None
+def test_row_with_old_manual_columns_is_ignored():
+    """Linha de backend antigo com colunas do manual não muda a fonte nem quebra."""
+    db = FakeDb([_row(tempo_manual_segundos=8.0, fonte_efetiva="manual")])
+    tree = _explain(_service(db), "std.fonte", **KEY)
+    assert tree.value == "n/a"
 
 
 def test_comparison_with_zero_standard_never_divides_by_zero():

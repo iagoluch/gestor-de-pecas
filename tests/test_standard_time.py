@@ -1,4 +1,7 @@
-"""Tempo padrão manual e estimado (06/10/2026): domínio, serviço, gestão e API.
+"""Tempo padrão (Protheus) e estimado: domínio, serviço, gestão e API.
+
+Decisão de 04/11/2026: o Gestor não cadastra mais tempo manual; o manual
+que já está no banco não conta em nenhuma visão.
 
 Sem banco: o SQL real (migration 56, consulta de fatos, repositório) é coberto
 por ``tests/test_standard_time_postgres.py``.
@@ -23,6 +26,10 @@ from backend.api.main import _recalculate_standard_time_estimates_if_due, create
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 from mes.domain.standard_time import (
+    ACTIVE_SOURCES,
+    NO_PROTHEUS_STANDARD_TEXT,
+    NO_STANDARD_LABEL,
+    OFFICIAL_SOURCES,
     drop_outliers,
     estimate_standard_seconds,
     normalize_key,
@@ -37,6 +44,7 @@ from mes.services.management import ManagementService
 from mes.services import standard_time as standard_time_module
 from mes.services.standard_time import (
     ESTIMATE_EVENT_TYPE,
+    MANUAL_DISABLED_CODE,
     RECALCULATION_BUSY_CODE,
     RECALCULATION_JOB,
     StandardTimeRecalculationBusy,
@@ -70,14 +78,27 @@ class StandardTimeDomainTests(unittest.TestCase):
 
     def test_prioridade_e_visoes_oficial_e_estimada(self):
         protheus = {"tempo_padrao_segundos": 30.0, "tempo_padrao_fonte": "protheus"}
-        manual = {"tempo_padrao_segundos": 31.0, "tempo_padrao_fonte": "manual"}
         estimado = {"tempo_padrao_segundos": 32.0, "tempo_padrao_fonte": "estimado"}
         vazio = {"tempo_padrao_segundos": None, "tempo_padrao_fonte": None}
         self.assertEqual(official_standard_seconds(protheus), 30.0)
-        self.assertEqual(official_standard_seconds(manual), 31.0)
         self.assertIsNone(official_standard_seconds(estimado))
-        self.assertEqual(estimated_view_standard_seconds(estimado), 32.0)
+        # 04/11/2026: a visão estimada também só aceita Protheus.
+        self.assertIsNone(estimated_view_standard_seconds(estimado))
+        self.assertEqual(estimated_view_standard_seconds(protheus), 30.0)
         self.assertEqual(resolve_fact_standard(vazio), (None, None))
+
+    def test_manual_gravado_antes_de_04_11_nao_conta_em_visao_nenhuma(self):
+        manual = {"tempo_padrao_segundos": 31.0, "tempo_padrao_fonte": "manual"}
+        self.assertEqual(resolve_fact_standard(manual), (None, None))
+        self.assertIsNone(official_standard_seconds(manual))
+        self.assertIsNone(estimated_view_standard_seconds(manual))
+        self.assertEqual(OFFICIAL_SOURCES, frozenset({"protheus"}))
+        self.assertNotIn("manual", ACTIVE_SOURCES)
+        self.assertEqual(NO_STANDARD_LABEL, "n/a")
+        self.assertEqual(
+            NO_PROTHEUS_STANDARD_TEXT,
+            "Tempo padrão não cadastrado no Protheus. A engenharia de manufatura ajusta direto no ERP.",
+        )
 
     def test_fato_legado_so_com_tempo_medio_vale_como_protheus(self):
         self.assertEqual(resolve_fact_standard({"tempo_medio_segundos": 500.0}), (500.0, "protheus"))
@@ -106,38 +127,9 @@ class _MemoryDb:
         # chave normalizada -> {"setores": [...], "protheus": float | None}
         self.catalog = catalog or {}
         self.facts = facts or []
-        self.manual = {}
         self.historico = []
         self.estimados = {}
         self.eventos = []
-
-    def obter_contexto_tempo_padrao(self, produto, operacao, recurso):
-        entry = self.catalog.get((produto, operacao, recurso))
-        if entry is None:
-            return None
-        return {
-            "setores": entry["setores"],
-            "tempo_protheus_segundos": entry.get("protheus"),
-            "tempo_manual_segundos": self.manual.get((produto, operacao, recurso)),
-        }
-
-    def definir_tempo_padrao_manual(self, produto, operacao, recurso, segundos, *,
-                                    observacao=None, usuario_id=None, usuario_nome=None):
-        key = (produto, operacao, recurso)
-        acao = "alterado" if key in self.manual else "definido"
-        self.historico.append((key, acao, segundos, usuario_id, usuario_nome))
-        self.manual[key] = segundos
-        return {"produto_codigo": produto, "numero_operacao": operacao,
-                "codigo_recurso": recurso, "segundos_por_peca": segundos}
-
-    def remover_tempo_padrao_manual(self, produto, operacao, recurso, *,
-                                    usuario_id=None, usuario_nome=None):
-        key = (produto, operacao, recurso)
-        if key not in self.manual:
-            return False
-        self.historico.append((key, "removido", None, usuario_id, usuario_nome))
-        del self.manual[key]
-        return True
 
     def listar_tempos_padrao(self, **_kwargs):
         return {"items": [], "total": 0, "sem_produto": 0}
@@ -192,55 +184,12 @@ def _fact(idx, *, seconds, good=10, day_offset=1, setor="Dobra", status="Finaliz
 KEY = ("PROD1", "20", "DOBRA1")
 
 
-class StandardTimeServiceManualTests(unittest.TestCase):
-    def setUp(self):
-        self.db = _MemoryDb(catalog={
-            KEY: {"setores": ["Dobra"], "protheus": None},
-            ("PROD1", "30", "SOLDA1"): {"setores": ["Solda"], "protheus": 42.0},
-            ("PROD2", "10", "LASER1"): {"setores": ["Corte"], "protheus": None},
-        })
-        self.service = StandardTimeService(self.db, now_func=lambda: NOW)
-
-    def test_define_altera_e_remove_com_historico(self):
-        self.service.set_manual(" prod1 ", "20", "dobra1", 55, usuario_id=7, usuario_nome="Eng")
-        self.service.set_manual("PROD1", "20", "DOBRA1", 60, usuario_id=7, usuario_nome="Eng")
-        self.assertEqual(self.db.manual[KEY], 60.0)
-        self.service.remove_manual("PROD1", "20", "DOBRA1", usuario_id=7, usuario_nome="Eng")
-        self.assertEqual([h[1] for h in self.db.historico], ["definido", "alterado", "removido"])
-        self.assertNotIn(KEY, self.db.manual)
-
-    def test_protheus_real_vence_e_recusa_o_manual_com_409(self):
-        with self.assertRaises(StandardTimeRuleError) as raised:
-            self.service.set_manual("PROD1", "30", "SOLDA1", 10)
-        self.assertEqual((raised.exception.code, raised.exception.status_code),
-                         ("standard_time_defined_by_protheus", 409))
-
-    def test_corte_nao_recebe_tempo_manual(self):
-        with self.assertRaises(StandardTimeRuleError) as raised:
-            self.service.set_manual("PROD2", "10", "LASER1", 10)
-        self.assertEqual((raised.exception.code, raised.exception.status_code),
-                         ("standard_time_sector_without_standard", 409))
-
-    def test_operacao_inexistente_404_e_chave_vazia_422(self):
-        with self.assertRaises(StandardTimeRuleError) as missing:
-            self.service.set_manual("PROD9", "1", "X", 10)
-        self.assertEqual(missing.exception.status_code, 404)
-        with self.assertRaises(StandardTimeRuleError) as empty:
-            self.service.set_manual("", "20", "DOBRA1", 10)
-        self.assertEqual(empty.exception.status_code, 422)
-
-    def test_valor_invalido_ou_acima_do_teto_422(self):
-        for value in (0, -1, 86401, float("nan"), float("inf"), "abc", None):
-            with self.assertRaises(StandardTimeRuleError, msg=repr(value)) as raised:
-                self.service.set_manual("PROD1", "20", "DOBRA1", value)
-            self.assertEqual(raised.exception.code, "invalid_standard_time")
-            self.assertEqual(raised.exception.status_code, 422)
-        self.assertEqual(self.db.manual, {})
-
-    def test_remover_inexistente_404(self):
-        with self.assertRaises(StandardTimeRuleError) as raised:
-            self.service.remove_manual("PROD1", "20", "DOBRA1")
-        self.assertEqual(raised.exception.status_code, 404)
+class StandardTimeServiceWithoutManualTests(unittest.TestCase):
+    def test_servico_nao_oferece_mais_escrita_manual(self):
+        service = StandardTimeService(_MemoryDb(), now_func=lambda: NOW)
+        self.assertFalse(hasattr(service, "set_manual"))
+        self.assertFalse(hasattr(service, "remove_manual"))
+        self.assertEqual(MANUAL_DISABLED_CODE, "standard_time_manual_disabled")
 
 
 class StandardTimeEstimateTests(unittest.TestCase):
@@ -431,33 +380,38 @@ class ManagementPayloadTests(unittest.TestCase):
         service = ManagementService(_FactRepo(fonte, valor), now_func=lambda: datetime(2026, 8, 19, 11, 0))
         return service.get_overview(self.FILTERS)
 
-    def test_somente_estimado_nao_altera_a_performance_oficial(self):
+    def test_fonte_estimado_nao_vale_em_performance_nenhuma(self):
+        # 04/11/2026: só Protheus conta, nem a visão estimada aceita "estimado".
         payload = self._overview("estimado", 500.0)
         self.assertIsNone(payload["kpis"]["performance"]["value"])
         self.assertEqual(payload["kpis"]["performance"]["availability"], "nao_configurado")
         estimados = payload["kpis_estimados"]
-        self.assertTrue(estimados["usa_tempo_estimado"])
-        self.assertEqual(estimados["pecas_boas_tempo_estimado"], 10)
-        self.assertAlmostEqual(estimados["performance"]["value"], 10 * 500 / 6000 * 100)
+        self.assertFalse(estimados["usa_tempo_estimado"])
+        self.assertEqual(estimados["pecas_boas_tempo_estimado"], 0)
+        self.assertIsNone(estimados["performance"]["value"])
 
-    def test_manual_e_protheus_entram_na_performance_oficial(self):
-        for fonte in ("manual", "protheus"):
-            payload = self._overview(fonte, 500.0)
-            self.assertAlmostEqual(payload["kpis"]["performance"]["value"], 10 * 500 / 6000 * 100)
-            self.assertFalse(payload["kpis_estimados"]["usa_tempo_estimado"])
-            self.assertEqual(payload["kpis_estimados"]["pecas_boas_tempo_estimado"], 0)
+    def test_so_protheus_entra_na_performance_oficial(self):
+        payload = self._overview("protheus", 500.0)
+        self.assertAlmostEqual(payload["kpis"]["performance"]["value"], 10 * 500 / 6000 * 100)
+        self.assertFalse(payload["kpis_estimados"]["usa_tempo_estimado"])
+        self.assertEqual(payload["kpis_estimados"]["pecas_boas_tempo_estimado"], 0)
+
+    def test_manual_antigo_nao_entra_em_performance_nenhuma(self):
+        payload = self._overview("manual", 500.0)
+        self.assertIsNone(payload["kpis"]["performance"]["value"])
+        self.assertIsNone(payload["kpis_estimados"]["performance"]["value"])
 
     def test_sem_nenhuma_fonte_as_duas_performances_ficam_indisponiveis(self):
         payload = self._overview(None, None)
         self.assertIsNone(payload["kpis"]["performance"]["value"])
         self.assertIsNone(payload["kpis_estimados"]["performance"]["value"])
 
-    def test_padrao_x_real_separa_oficial_de_estimado(self):
+    def test_padrao_x_real_ignora_fonte_estimado(self):
         service = IndustrialAnalyticsService(_FactRepo("estimado", 500.0))
         row = service.standard_vs_actual(self.FILTERS)["items"][0]
         self.assertIsNone(row["tempo_padrao_unitario_segundos"])
-        self.assertEqual(row["tempo_padrao_unitario_estimado_segundos"], 500.0)
-        self.assertEqual(row["tempo_padrao_fonte"], "estimado")
+        self.assertIsNone(row["tempo_padrao_unitario_estimado_segundos"])
+        self.assertIsNone(row["tempo_padrao_fonte"])
 
 
 def _settings():
@@ -490,8 +444,7 @@ class StandardTimeApiTests(unittest.TestCase):
             ("PROD2", "10", "LASER1"): {"setores": ["Corte"], "protheus": None},
         }, facts=[_fact(i, seconds=600 + 100 * (i - 1), day_offset=i) for i in range(1, 6)])
         for name in (
-            "obter_contexto_tempo_padrao", "definir_tempo_padrao_manual",
-            "remover_tempo_padrao_manual", "listar_tempos_padrao",
+            "listar_tempos_padrao",
             "listar_historico_tempo_padrao_manual", "substituir_tempos_padrao_estimados",
             "registrar_evento_sistema", "ultimo_evento_sistema",
             "listar_fatos_operacionais_periodo", "possui_calendario_produtivo",
@@ -507,14 +460,12 @@ class StandardTimeApiTests(unittest.TestCase):
     def _as(self, role, uid=5):
         self.app.dependency_overrides[get_current_user] = lambda: _user(role, uid)
 
-    def test_so_manufatura_e_admin_leem_e_escrevem(self):
+    def test_so_manufatura_e_admin_leem(self):
         for role in ("gestor", "supervisor", "diretoria"):
             self._as(role)
             self.assertEqual(self.client.get("/api/v1/management/standard-times").status_code, 403, role)
             self.assertEqual(
                 self.client.put("/api/v1/management/standard-times/manual", json=BODY).status_code, 403, role)
-            self.assertEqual(
-                self.client.delete("/api/v1/management/standard-times/manual", params=QUERY).status_code, 403, role)
             self.assertEqual(
                 self.client.post("/api/v1/management/standard-times/estimates/recalculate").status_code, 403, role)
             denied = self.client.get("/api/v1/management/standard-times").json()
@@ -525,36 +476,20 @@ class StandardTimeApiTests(unittest.TestCase):
             self._as(role)
             self.assertEqual(self.client.get("/api/v1/management/standard-times").status_code, 200, role)
 
-    def test_put_grava_com_autoria_e_delete_remove(self):
-        self._as("manufatura", uid=77)
-        saved = self.client.put("/api/v1/management/standard-times/manual", json=BODY)
-        self.assertEqual(saved.status_code, 200, saved.text)
-        self.assertEqual(saved.json()["item"]["segundos_por_peca"], 55.5)
-        self.assertEqual(self.memory.manual[KEY], 55.5)
-        self.assertEqual(self.memory.historico[-1][3:], (77, "Conta manufatura"))
-        removed = self.client.delete("/api/v1/management/standard-times/manual", params=QUERY)
-        self.assertEqual(removed.status_code, 200, removed.text)
-        again = self.client.delete("/api/v1/management/standard-times/manual", params=QUERY)
-        self.assertEqual(again.status_code, 404)
-
-    def test_erros_de_regra_viram_codigos_http_estaveis(self):
-        self._as("admin")
+    def test_escrita_manual_responde_410_com_codigo_estavel_e_nao_grava(self):
         url = "/api/v1/management/standard-times/manual"
-        casos = [
-            ({**BODY, "segundos_por_peca": 0}, 422, "invalid_standard_time"),
-            ({**BODY, "segundos_por_peca": 90000}, 422, "invalid_standard_time"),
-            ({**BODY, "produto_codigo": "PROD1", "numero_operacao": "30", "codigo_recurso": "SOLDA1"},
-             409, "standard_time_defined_by_protheus"),
-            ({**BODY, "produto_codigo": "PROD2", "numero_operacao": "10", "codigo_recurso": "LASER1"},
-             409, "standard_time_sector_without_standard"),
-            ({**BODY, "produto_codigo": "NAOEXISTE"}, 404, "standard_time_operation_not_found"),
-        ]
-        for body, status, code in casos:
-            resposta = self.client.put(url, json=body)
-            self.assertEqual(resposta.status_code, status, (body, resposta.text))
-            self.assertEqual(resposta.json()["code"], code)
-        extra = self.client.put(url, json={**BODY, "campo_extra": 1})
-        self.assertEqual(extra.status_code, 422)
+        for role in ("manufatura", "admin"):
+            self._as(role)
+            for resposta in (
+                self.client.put(url, json=BODY),
+                self.client.put(url, json={**BODY, "segundos_por_peca": 0, "campo_extra": 1}),
+                self.client.delete(url, params=QUERY),
+            ):
+                self.assertEqual(resposta.status_code, 410, (role, resposta.text))
+                corpo = resposta.json()
+                self.assertEqual(corpo["code"], "standard_time_manual_disabled")
+                self.assertIn("Protheus", corpo["message"])
+        self.assertEqual(self.memory.historico, [])
 
     URL_RECALC = "/api/v1/management/standard-times/estimates/recalculate"
     URL_STATUS = URL_RECALC + "/status"
@@ -682,7 +617,8 @@ class StandardTimeApiTests(unittest.TestCase):
 
     def test_historico_e_filtros_da_lista(self):
         self._as("admin")
-        self.client.put("/api/v1/management/standard-times/manual", json=BODY)
+        # Histórico do manual antigo continua só para leitura.
+        self.memory.historico.append((KEY, "definido", 55.5, 7, "Eng"))
         historico = self.client.get("/api/v1/management/standard-times/manual/history", params=QUERY)
         self.assertEqual(historico.status_code, 200)
         self.assertEqual(historico.json()["items"][0]["acao"], "definido")

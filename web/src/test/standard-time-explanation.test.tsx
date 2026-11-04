@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import App from "../App";
 import { AuthProvider } from "../auth/AuthContext";
+import { FilterProvider } from "../filters/FilterContext";
+import { StandardTimePage } from "../pages/production/StandardTimePage";
 
 const BASE = {
   produto_codigo: "PROD-1",
@@ -12,21 +13,11 @@ const BASE = {
   produto_descricao: "Suporte lateral",
   descricao_operacao: "Dobrar aba",
   tempo_protheus_segundos: null,
-  tempo_manual_segundos: null,
   tempo_estimado_segundos: null,
   fonte_efetiva: null,
 };
 const PROTHEUS = { ...BASE, produto_codigo: "PROD-3", tempo_protheus_segundos: 30, fonte_efetiva: "protheus" };
 const ESTIMADA = { ...BASE, produto_codigo: "PROD-2", tempo_estimado_segundos: 62.5, estimado_amostras: 7, fonte_efetiva: "estimado" };
-const MANUAL = {
-  ...BASE,
-  produto_codigo: "PROD-4",
-  tempo_manual_segundos: 45,
-  manual_alterado_por: "Ana",
-  manual_alterado_em: "2026-10-01T08:00:00",
-  manual_vigente_desde: "2026-10-02T00:00:00",
-  fonte_efetiva: "manual",
-};
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } });
@@ -40,7 +31,7 @@ function explanation(metric: string) {
   };
 }
 
-function stub(explainStatus = 200, rows: Record<string, unknown>[] = [PROTHEUS, ESTIMADA, MANUAL]) {
+function stub(explainStatus = 200, rows: Record<string, unknown>[] = [PROTHEUS, ESTIMADA, BASE]) {
   const mock = vi.fn(async (input: RequestInfo | URL) => {
     const path = String(input);
     if (path.includes("/auth/session")) {
@@ -63,7 +54,7 @@ function stub(explainStatus = 200, rows: Record<string, unknown>[] = [PROTHEUS, 
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/manufatura/tempo-padrao"]}>
-      <AuthProvider><App /></AuthProvider>
+      <AuthProvider><FilterProvider><StandardTimePage /></FilterProvider></AuthProvider>
     </MemoryRouter>,
   );
 }
@@ -88,14 +79,15 @@ afterEach(() => {
 });
 
 describe("Tempo padrão: números clicáveis", () => {
-  it("Protheus, estimado, manual e fonte abrem std.* com a chave da linha", async () => {
+  it("Protheus, estimado e fonte abrem std.* com a chave da linha; não existe mais std.manual", async () => {
     const mock = stub();
     renderPage();
     const key = ["produto=PROD-3", "operacao=10", "recurso=DOBRA01"];
     await clickAndExpect(mock, /Ver de onde vem este número: Tempo Protheus 30 s/, ["metric=std.protheus", ...key]);
     await clickAndExpect(mock, /Ver de onde vem este número: Tempo estimado 62,5 s/, ["metric=std.estimado", "produto=PROD-2"]);
-    await clickAndExpect(mock, /Ver de onde vem este número: Tempo manual 45 s/, ["metric=std.manual", "produto=PROD-4"]);
     await clickAndExpect(mock, /Ver de onde vem este número: Fonte em uso: PROD-3, operação 10, recurso DOBRA01/, ["metric=std.fonte", ...key]);
+    expect(screen.queryByRole("button", { name: /Tempo manual/ })).not.toBeInTheDocument();
+    expect(explainUrls(mock).some((url) => url.includes("std.manual"))).toBe(false);
   });
 
   it("o último recálculo abre std.recalculo sem chave de linha", async () => {
@@ -111,6 +103,8 @@ describe("Tempo padrão: números clicáveis", () => {
     await screen.findByRole("button", { name: /Tempo Protheus 30 s/ });
     expect(screen.getAllByRole("button", { name: /Tempo Protheus/ })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /Tempo estimado/ })).toHaveLength(1);
+    // Sem Protheus: "n/a" com a explicação, sem botão de explicação de valor.
+    expect(screen.getAllByText("Tempo padrão não cadastrado no Protheus. A engenharia de manufatura ajusta direto no ERP.").length).toBeGreaterThanOrEqual(2);
   });
 
   it("recusa 403 mostra mensagem de acesso, sem expor erro técnico", async () => {

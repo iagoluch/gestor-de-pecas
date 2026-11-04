@@ -275,7 +275,7 @@ class IndustrialAnalyticsService:
             timeline = self._timeline(fact, filters)
             if timeline is None:
                 continue
-            # Performance oficial: só Protheus + manual. O estimado não altera
+            # Performance oficial: só Protheus (04/11/2026). O estimado não altera
             # `tempo_padrao_unitario_segundos`; fica em campo próprio.
             standard_unit = _float_or_none(official_standard_seconds(fact))
             standard_value, standard_source = resolve_fact_standard(fact)
