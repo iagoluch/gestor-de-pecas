@@ -5,8 +5,11 @@
  *   grupo:  pasta da árvore (opcional)
  *   ordem:  número para ordenar (menor primeiro)
  *   rotas:  telas do sistema que abrem este tópico (separadas por vírgula)
+ *   acesso: diretoria → tópico só aparece para os níveis da diretoria (opcional)
  * O id do tópico é o nome do arquivo sem extensão (ex.: `10-ordens`).
  */
+import { DIRECTOR_LEVELS } from "../config/navigation";
+
 export type ManualId = "operador" | "gestao";
 
 export interface HelpTopic {
@@ -16,6 +19,7 @@ export interface HelpTopic {
   grupo: string;
   ordem: number;
   rotas: string[];
+  acesso: string;
   corpo: string;
 }
 
@@ -51,6 +55,7 @@ function montar(): HelpTopic[] {
       grupo: meta.grupo || "",
       ordem: Number(meta.ordem) || 0,
       rotas: (meta.rotas || "").split(",").map((r) => r.trim()).filter(Boolean),
+      acesso: meta.acesso || "",
       corpo,
     });
   }
@@ -59,20 +64,22 @@ function montar(): HelpTopic[] {
 
 export const HELP_TOPICS: HelpTopic[] = montar();
 
-export function topicosDoManual(manual: ManualId): HelpTopic[] {
-  return HELP_TOPICS.filter((t) => t.manual === manual);
+/** Tópicos visíveis para o nível do usuário (`acesso: diretoria` só para DIRECTOR_LEVELS). */
+export function topicosDoManual(manual: ManualId, role?: string): HelpTopic[] {
+  const diretoria = (DIRECTOR_LEVELS as readonly string[]).includes(role ?? "");
+  return HELP_TOPICS.filter((t) => t.manual === manual && (t.acesso !== "diretoria" || diretoria));
 }
 
-export function acharTopico(manual: ManualId, id?: string): HelpTopic | undefined {
-  const lista = topicosDoManual(manual);
+export function acharTopico(manual: ManualId, id: string | undefined, role?: string): HelpTopic | undefined {
+  const lista = topicosDoManual(manual, role);
   return lista.find((t) => t.id === id) ?? lista[0];
 }
 
 /** Tópico mais específico (maior prefixo de rota) que cobre a tela atual. */
-export function topicoParaRota(manual: ManualId, pathname: string): HelpTopic | undefined {
+export function topicoParaRota(manual: ManualId, pathname: string, role?: string): HelpTopic | undefined {
   let melhor: HelpTopic | undefined;
   let tamanho = -1;
-  for (const t of topicosDoManual(manual)) {
+  for (const t of topicosDoManual(manual, role)) {
     for (const rota of t.rotas) {
       const bate = pathname === rota || pathname.startsWith(`${rota}/`);
       if (bate && rota.length > tamanho) { melhor = t; tamanho = rota.length; }
@@ -85,8 +92,8 @@ export function normalizar(texto: string): string {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-export function buscarTopicos(manual: ManualId, termo: string): HelpTopic[] {
+export function buscarTopicos(manual: ManualId, termo: string, role?: string): HelpTopic[] {
   const q = normalizar(termo.trim());
   if (!q) return [];
-  return topicosDoManual(manual).filter((t) => normalizar(`${t.titulo} ${t.corpo}`).includes(q));
+  return topicosDoManual(manual, role).filter((t) => normalizar(`${t.titulo} ${t.corpo}`).includes(q));
 }

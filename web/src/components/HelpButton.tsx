@@ -1,10 +1,12 @@
 import { useLocation } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { topicoParaRota, type ManualId } from "../help/helpContent";
 
 /** Ícone "?" do topo: abre o manual numa nova aba, já no tópico da tela atual. */
 export function HelpButton({ manual }: { manual: ManualId }) {
   const { pathname } = useLocation();
-  const topico = topicoParaRota(manual, pathname);
+  const { user } = useAuth();
+  const topico = topicoParaRota(manual, pathname, user?.role);
   const href = `/ajuda/${manual}${topico ? `/${topico.id}` : ""}`;
   return (
     <a

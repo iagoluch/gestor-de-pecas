@@ -28,14 +28,15 @@ export function HelpPage() {
 
   const manual: ManualId | null = manualValido(manualParam) ? manualParam : null;
   const podeGestao = Boolean(user?.management_access);
-  const topicos = useMemo(() => (manual ? topicosDoManual(manual) : []), [manual]);
+  const role = user?.role;
+  const topicos = useMemo(() => (manual ? topicosDoManual(manual, role) : []), [manual, role]);
   const grupos = useMemo(() => agrupar(topicos), [topicos]);
-  const resultados = useMemo(() => (manual ? buscarTopicos(manual, busca) : []), [manual, busca]);
+  const resultados = useMemo(() => (manual ? buscarTopicos(manual, busca, role) : []), [manual, busca, role]);
 
   if (!manual) return <Navigate to={`/ajuda/${podeGestao ? "gestao" : "operador"}`} replace />;
   if (manual === "gestao" && !podeGestao) return <Navigate to="/ajuda/operador" replace />;
 
-  const atual = acharTopico(manual, topicoParam);
+  const atual = acharTopico(manual, topicoParam, role);
   const indice = atual ? topicos.indexOf(atual) : -1;
   const anterior = indice > 0 ? topicos[indice - 1] : undefined;
   const proximo = indice >= 0 && indice < topicos.length - 1 ? topicos[indice + 1] : undefined;
