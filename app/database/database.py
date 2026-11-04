@@ -11,6 +11,9 @@ import os
 import time as epoch_time
 
 from psycopg.errors import UniqueViolation
+from psycopg.types.json import Jsonb
+
+from app.core.preferences import normalizar_dashboard_home
 
 from app.core.constants import FMT_DB
 from app.core.normalization import limpa_codigo, normalizar_data_db
@@ -7167,6 +7170,43 @@ class Database(
                 (usuario_id,),
             )
             return _as_dict(cursor.fetchone())
+
+    def obter_preferencias_usuario(self, usuario_id):
+        """Devolve o JSON de preferências ou ``None`` quando não há linha.
+
+        Valor gravado inválido cai no default em vez de vazar exceção: a
+        dashboard home nunca pode ficar sem dados por causa disto.
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT dashboard_home, updated_at FROM user_preferences WHERE usuario_id = %s",
+                (usuario_id,),
+            )
+            row = _as_dict(cursor.fetchone())
+        if not row:
+            return None
+        row["dashboard_home"] = normalizar_dashboard_home(row.get("dashboard_home"))
+        return row
+
+    def salvar_preferencias_usuario(self, usuario_id, preferences):
+        """Grava (upsert) as preferências da dashboard home do usuário."""
+
+        dashboard_home = normalizar_dashboard_home(preferences)
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO user_preferences (usuario_id, dashboard_home, updated_at)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (usuario_id) DO UPDATE
+                    SET dashboard_home = EXCLUDED.dashboard_home,
+                        updated_at = CURRENT_TIMESTAMP
+                RETURNING updated_at
+                """,
+                (usuario_id, Jsonb(dashboard_home)),
+            )
+            row = _as_dict(cursor.fetchone())
+        return {"dashboard_home": dashboard_home, "updated_at": row.get("updated_at") if row else None}
 
     def atualizar_nivel_usuario(self, usuario_id, novo_nivel):
         with self.connection() as connection, connection.cursor() as cursor:

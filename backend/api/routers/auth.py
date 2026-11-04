@@ -15,6 +15,7 @@ from app.core.permissions import (
     normalize_user_level,
     operator_sector_for_user_level,
 )
+from app.core.preferences import dashboard_default
 from backend.api.database import get_database
 from backend.api.dependencies.auth import (
     access_flags,
@@ -22,7 +23,13 @@ from backend.api.dependencies.auth import (
     require_csrf_allow_password_change,
 )
 from backend.api.errors import AppError
-from backend.api.schemas.auth import LoginRequest, PasswordChangeRequest, SessionUser
+from backend.api.schemas.auth import (
+    LoginRequest,
+    PasswordChangeRequest,
+    SessionUser,
+    UserPreferences,
+    UserPreferencesResponse,
+)
 from backend.api.security.login_throttle import login_ip_throttle_key, login_throttle_key
 
 
@@ -262,6 +269,41 @@ def _session_response(request: Request, session_user: SessionUser, session_versi
 @router.get("/session", response_model=SessionUser)
 def session(user: SessionUser = Depends(get_session_user_allow_password_change)):
     return user
+
+
+@router.get("/preferences", response_model=UserPreferencesResponse)
+def preferences(
+    user: SessionUser = Depends(get_session_user_allow_password_change),
+    database=Depends(get_database),
+):
+    """Preferências pessoais da dashboard home; default = tela atual."""
+
+    row = database.obter_preferencias_usuario(user.id)
+    if row and row.get("dashboard_home"):
+        return UserPreferencesResponse(
+            dashboard_home=row["dashboard_home"],
+            updated_at=row.get("updated_at"),
+        )
+    return UserPreferencesResponse(dashboard_home=dashboard_default(), updated_at=None)
+
+
+@router.post(
+    "/preferences",
+    response_model=UserPreferencesResponse,
+    dependencies=[Depends(require_csrf_allow_password_change)],
+)
+def save_preferences(
+    payload: UserPreferences,
+    user: SessionUser = Depends(get_session_user_allow_password_change),
+    database=Depends(get_database),
+):
+    """Grava as preferências da dashboard home (upsert)."""
+
+    saved = database.salvar_preferencias_usuario(user.id, payload.dashboard_home)
+    return UserPreferencesResponse(
+        dashboard_home=saved["dashboard_home"],
+        updated_at=saved["updated_at"],
+    )
 
 
 @router.post(

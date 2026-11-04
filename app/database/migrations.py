@@ -117,6 +117,7 @@ EXPECTED_TABLES = (
     "auditoria_alteracoes",
     "qualidade_rnc_decisoes",
     "manutencao_sugestoes",
+    "user_preferences",
 )
 
 BASELINE_STATEMENTS = (
@@ -2863,6 +2864,23 @@ PARAMETROS_TURNO_VINCULO_STATEMENTS = (
     """,
 )
 
+# Migration 71 — preferências pessoais da dashboard home (tela inicial).
+# Preferência por usuário, não por papel: cada conta escolhe quais cards/blocos
+# vê na Visão Geral. O JSON guarda só chaves booleanas; o default replica a
+# tela atual (todos visíveis), então contas sem linha gravada não notam nada.
+# Rollback: DROP TABLE user_preferences; DELETE FROM schema_migrations WHERE version = 71; SCHEMA_VERSION = 70.
+USER_PREFERENCES_DESCRIPTION = "preferências pessoais da dashboard home por usuário"
+USER_PREFERENCES_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS user_preferences (
+        usuario_id BIGINT PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+        dashboard_home JSONB NOT NULL DEFAULT '{"cards": {"producao_boa": true, "oee": true, "disponibilidade": true, "performance": true, "ftt": true, "simulation": true, "planned_vs_actual": true, "exceptions": true, "time_composition": true, "top_losses": true, "live_events": true, "sectors_table": true, "top_resources": true, "audit_issues": true}, "order": ["producao_boa", "oee", "disponibilidade", "performance", "ftt", "simulation", "planned_vs_actual", "exceptions", "time_composition", "top_losses", "live_events", "sectors_table", "top_resources", "audit_issues"]}',
+        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_user_preferences_updated_at ON user_preferences (updated_at)",
+)
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -2936,6 +2954,7 @@ MIGRATIONS = {
     68: (MANUTENCAO_SUGESTOES_DESCRIPTION, MANUTENCAO_SUGESTOES_STATEMENTS),
     69: (PARAMETROS_TURNO_FORA_TURNO_DESCRIPTION, PARAMETROS_TURNO_FORA_TURNO_STATEMENTS),
     70: (PARAMETROS_TURNO_VINCULO_DESCRIPTION, PARAMETROS_TURNO_VINCULO_STATEMENTS),
+    71: (USER_PREFERENCES_DESCRIPTION, USER_PREFERENCES_STATEMENTS),
 }
 
 

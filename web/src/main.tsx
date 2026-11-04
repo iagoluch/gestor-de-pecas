@@ -12,6 +12,7 @@ import "./styles/standard-time.css";
 import "./styles/quality-templates.css";
 import "./styles/quality-spc.css";
 import "./styles/maintenance.css";
+import "./styles/dashboard-customizer.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

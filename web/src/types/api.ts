@@ -498,6 +498,15 @@ export interface ManagementOverview {
   /** Destaques por setor (maior produção, maior refugo…): os mesmos de `/management/sectors`. */
   sector_highlights?: Array<{ key: string; label: string; sector: string; value: number; unit: "peças" | "s" }>;
   sector_kpis?: Array<{ setor: string; metrics: Record<string, MetricValue> }>;
+  /** Corte (SigmaNEST): um item por nesting. `tarefa` e `programa` (o "Plano" do Andon) são os únicos campos que a Visão Geral lê. */
+  cutting?: {
+    /** Total de planos cortados no período: cada nesting (repetição da chapa) conta 1. */
+    nestings?: number;
+    completed_nestings?: number;
+    items: Array<{ tarefa?: string | null; programa?: string | null; status?: string | null }>;
+    /** Uma linha por plano: `nestings` = N repetições (soma = `nestings` acima); `ops` é só detalhe, nunca somado. */
+    plans?: Array<{ tarefa: string | null; plano: string | null; nestings: number; nestings_concluidos: number; ops: string[] }>;
+  };
   time_composition: {
     items: TimeCompositionItem[];
     resource_count?: number;
@@ -529,4 +538,33 @@ export interface OverviewTrend {
   previous: { period_start: string; period_end: string; production: OverviewTrendPoint["production"]; kpis: OverviewTrendPoint["kpis"] } | null;
   sector_summary: Array<{ setor: string; oee: MetricValue | null; resources_total: number; resources_with_production: number }>;
   recent_events: Array<{ resource: string; resource_name?: string | null; sector: string | null; state: string; at: string }>;
+}
+
+export interface DashboardCardPreferences {
+  producao_boa: boolean;
+  oee: boolean;
+  disponibilidade: boolean;
+  performance: boolean;
+  ftt: boolean;
+  simulation: boolean;
+  planned_vs_actual: boolean;
+  exceptions: boolean;
+  time_composition: boolean;
+  top_losses: boolean;
+  live_events: boolean;
+  sectors_table: boolean;
+  top_resources: boolean;
+  audit_issues: boolean;
+}
+
+export type DashboardCardKey = keyof DashboardCardPreferences;
+
+export interface UserDashboardPreferences {
+  cards: DashboardCardPreferences;
+  /** Ordem pessoal de exibição; cada chave aparece exatamente uma vez. */
+  order: DashboardCardKey[];
+}
+
+export interface UserPreferences {
+  dashboard_home: UserDashboardPreferences;
 }

@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -44,3 +45,18 @@ class SessionUser(BaseModel):
     #: Entrou com a senha padrão numa conta de gestão: a tela pede uma nova
     #: senha e a API recusa as demais rotas até ela ser definida.
     password_change_required: bool = False
+
+
+class UserPreferences(BaseModel):
+    """Preferências do usuário para a dashboard."""
+    model_config = ConfigDict(extra="forbid")
+
+    dashboard_home: dict
+
+
+class UserPreferencesResponse(BaseModel):
+    """Resposta com preferências do usuário."""
+    model_config = ConfigDict(extra="forbid")
+
+    dashboard_home: dict
+    updated_at: datetime | None = None

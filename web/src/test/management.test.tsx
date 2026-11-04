@@ -450,6 +450,30 @@ describe("GE-13 — KPI sem meta canônica", () => {
     expect(screen.queryByText("Maior produção boa")).not.toBeInTheDocument();
   });
 
+  const corteBase = { producao_boa: 10, refugo: 0, retrabalho: 0, tempo_produtivo_segundos: 3600, tempo_producao_segundos: 3600, tempo_setup_segundos: 0, tempo_parada_segundos: 0 };
+  const corteCell = async () => ((await screen.findByRole("link", { name: /^corte$/i })).closest("tr") as HTMLElement).querySelectorAll("td")[3]; // Produção boa, Refugo, Retrabalho, OPs (o setor é <th>)
+
+  it("Setores: Corte não lista tarefa, plano nem OP na coluna OPs; os outros setores seguem com OPs", async () => {
+    renderOverview({
+      ...overviewWith([]),
+      sectors: [{ ...corteBase, setor: "Corte", ops: 7 }, { ...corteBase, setor: "Dobra", ops: 5 }],
+      sector_highlights: [],
+      cutting: {
+        items: [], nestings: 3, completed_nestings: 3,
+        plans: [{ tarefa: "T-100", plano: "P-1", nestings: 3, nestings_concluidos: 3, ops: [] }],
+      },
+    });
+    const cell = await corteCell();
+    expect(cell.textContent).toBe("—");
+    const dobra = screen.getByRole("link", { name: /^dobra$/i }).closest("tr") as HTMLElement;
+    expect(dobra.querySelectorAll("td")[3]).toHaveTextContent(/^5$/);
+  });
+
+  it("Setores: Corte sem plano (plans vazio ou ausente) mostra o marcador de vazio, não OP", async () => {
+    renderOverview({ ...overviewWith([]), sectors: [{ ...corteBase, setor: "Corte", ops: 7 }], sector_highlights: [], cutting: { items: [], plans: [] } });
+    expect((await corteCell()).textContent).toBe("—");
+  });
+
   it("Setores: boa, retrabalho e tempo de produção abrem a explicação com o setor; zero e Paradas ficam texto", async () => {
     const setor = {
       setor: "corte", producao_boa: 120, refugo: 0, retrabalho: 3, ops: 4,

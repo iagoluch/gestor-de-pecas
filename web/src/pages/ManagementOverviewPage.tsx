@@ -1,9 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
+import { apiErrorMessage } from "../api/client";
 import { ManagementInsightDrawer } from "../components/ManagementInsightDrawer";
 import { ExplainableValue } from "../components/ExplainableValue";
+import { DraggableDashboardBlock } from "../components/DraggableDashboardBlock";
 import { MetricCard } from "../components/MetricCard";
 import { MetricExplanationPanel } from "../components/MetricExplanationPanel";
 import { PageFrame } from "../components/PageFrame";
@@ -11,8 +13,9 @@ import { SectionCard } from "../components/SectionCard";
 import { useManagementFilters } from "../filters/FilterContext";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useOncePerMinute } from "../hooks/useOncePerMinute";
+import { useUserPreferences } from "../hooks/useUserPreferences";
 import { explainableComposition } from "../types/explanation";
-import type { KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
+import type { DashboardCardKey, KpiExplanation, ManagementException, ManagementOverview, MetricValue, OverviewTrend, OverviewTrendPoint } from "../types/api";
 import type { SectorSummary } from "../types/api";
 import { displayName, displayText, formatHours, formatNumber } from "../utils/format";
 import { humanizeSystemState } from "../utils/systemState";
@@ -90,6 +93,34 @@ function eventColor(state: string) {
 }
 
 export function ManagementOverviewPage() {
+  const { cards: visibleCards, order: cardOrder, moveCard, toggleCard, resetToDefault, error: preferencesError } = useUserPreferences();
+  const [editMode, setEditMode] = useState(false);
+  const orderIndex = new Map(cardOrder.map((key, index) => [key, index]));
+  const visibleCard = (key: DashboardCardKey) => visibleCards[key] !== false;
+  const moveRelative = (key: DashboardCardKey, delta: number) => {
+    const index = cardOrder.indexOf(key);
+    const targetIndex = index + delta;
+    if (index < 0 || targetIndex < 0 || targetIndex >= cardOrder.length) return;
+    const target = cardOrder[targetIndex];
+    moveCard(key, target, delta < 0);
+  };
+  const renderBlock = (key: DashboardCardKey, className: string, children: ReactNode) => (
+    <DraggableDashboardBlock
+      key={key}
+      cardKey={key}
+      className={className}
+      hidden={!visibleCards[key]}
+      editMode={editMode}
+      index={orderIndex.get(key) ?? 0}
+      total={cardOrder.length}
+      onToggle={toggleCard}
+      onMoveUp={(card) => moveRelative(card, -1)}
+      onMoveDown={(card) => moveRelative(card, 1)}
+      onDropCard={moveCard}
+    >
+      {children}
+    </DraggableDashboardBlock>
+  );
   const filters = useManagementFilters();
   const navigate = useNavigate();
   const query = useApiQuery<ManagementOverview>(`/api/v1/management/overview?${filters.query}`);
@@ -142,12 +173,29 @@ export function ManagementOverviewPage() {
   // em vez de deixar o percentual solto. Com metas, o desvio vira exceção.
   const targetNote = insights.limitations.some((item) => item.code === "kpi_targets_not_configured") ? "Sem meta definida" : undefined;
   const kpiCards = [
-    { key: "oee", label: "OEE", accent: "purple" },
-    { key: "availability", label: "Disponibilidade", accent: "success" },
-    { key: "performance", label: "Performance", accent: "warning" },
-    { key: "ftt", label: "FTT / Qualidade", accent: "teal" },
+    { key: "oee", label: "OEE", accent: "purple", preferenceKey: "oee" },
+    { key: "availability", label: "Disponibilidade", accent: "success", preferenceKey: "disponibilidade" },
+    { key: "performance", label: "Performance", accent: "warning", preferenceKey: "performance" },
+    { key: "ftt", label: "FTT / Qualidade", accent: "teal", preferenceKey: "ftt" },
   ] as const;
+  const noneVisibleCustomBlock = Object.values(visibleCards).every((visible) => !visible);
   const sparkOf = (pick: (point: OverviewTrendPoint) => number | null, color: string) => (trend && trend.points.length > 1 ? <Sparkline values={trend.points.map(pick)} color={color} /> : null);
+  const kpiNodes = kpiCards.map((card) => ({
+    preferenceKey: card.preferenceKey as DashboardCardKey,
+    node: (
+      <MetricCard
+        label={card.label}
+        value={metricText(kpis[card.key])}
+        detail={kpis[card.key].reason ?? targetNote}
+        accent={card.accent}
+        availability={kpis[card.key].availability}
+        actionLabel="Entender"
+        onClick={() => setSelectedKpi(insights.kpi_explanations[card.key])}
+        trend={trend ? kpiTrend(kpis[card.key], trend.previous?.kpis[card.key]) : undefined}
+        spark={kpis[card.key].value !== null && kpis[card.key].value !== undefined ? sparkOf((point) => point.kpis[card.key].value, SERIES_COLORS[card.key]) : null}
+      />
+    ),
+  }));
   const plannedSeries = trend && trend.points.length > 1 && trend.points.every((point) => point.planned_quantity !== null) ? trend.points.map((point) => point.planned_quantity) : null;
   const sectorSummary = new Map((trend?.sector_summary ?? []).map((item) => [item.setor, item]));
   // Período ainda em andamento (ex.: "Hoje" às 10h): comparar peças com o período anterior inteiro daria queda falsa.
@@ -162,45 +210,42 @@ export function ManagementOverviewPage() {
     ) : text
   );
   return (
-    <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro.">
-        <div className="metric-grid metric-grid--five">
-          <MetricCard
-            label="Produção boa"
-            value={quantityText(data.production.good)}
-            valueNode={hasQuantityRecords ? (
-              <ExplainableValue metric="qtd.boa" filters={filters.filters} context={`Produção boa ${quantityText(data.production.good)}`}>{quantityText(data.production.good)}</ExplainableValue>
-            ) : undefined}
-            detail={data.production.reason ?? "Peças boas; refugo e retrabalho permanecem separados."}
-            availability={data.production.availability}
-            trend={trend && hasQuantityRecords && !periodOpen ? quantityTrend(data.production.good, trend.previous?.production.good) : undefined}
-            spark={hasQuantityRecords ? sparkOf((point) => point.production.good, SERIES_COLORS.good) : null}
-          />
-          {kpiCards.map((card) => (
-            <MetricCard
-              key={card.key}
-              label={card.label}
-              value={metricText(kpis[card.key])}
-              detail={kpis[card.key].reason ?? targetNote}
-              accent={card.accent}
-              availability={kpis[card.key].availability}
-              actionLabel="Entender"
-              onClick={() => setSelectedKpi(insights.kpi_explanations[card.key])}
-              trend={trend ? kpiTrend(kpis[card.key], trend.previous?.kpis[card.key]) : undefined}
-              spark={kpis[card.key].value !== null && kpis[card.key].value !== undefined ? sparkOf((point) => point.kpis[card.key].value, SERIES_COLORS[card.key]) : null}
-            />
-          ))}
-        </div>
-        {simulation ? (
-          <div className="metric-grid metric-grid--six simulation-metrics">
-            <MetricCard label="Planejado" value={simulation.planned_quantity.toLocaleString("pt-BR")} detail="Peças no período" />
-            <MetricCard label="Realizado" value={simulation.actual_quantity.toLocaleString("pt-BR")} detail="Somente peças boas" accent="success" />
-            <MetricCard label="Atingimento" value={simulation.attainment_percentage === null ? "Não disponível" : `${simulation.attainment_percentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`} accent="teal" />
-            <MetricCard label="Utilização" value={metricText(simulation.metrics.utilization)} accent="warning" />
-            <MetricCard label="Produtividade" value={metricText(simulation.metrics.productivity)} accent="purple" />
-            <MetricCard label="AE" value={metricText(simulation.metrics.ae)} detail="Eficiência global efetiva" />
+    <PageFrame staleError={query.error} sectionId="home" title="Tela inicial — Visão Geral" subtitle="Como estamos, onde estamos perdendo e onde agir primeiro." actions={<button type="button" className="button button--secondary" onClick={() => setEditMode((value) => !value)}>{editMode ? "Concluir" : "Personalizar"}</button>}>
+        {editMode ? (
+          <div className="dashboard-edit-bar" role="status">
+            <strong>Personalização ativa</strong>
+            <span>Arraste pelos seis pontos ou use ↑ e ↓. As alterações são salvas automaticamente.</span>
+            <button type="button" className="button button--secondary" onClick={resetToDefault}>Restaurar padrão</button>
+            <button type="button" className="button button--primary" onClick={() => setEditMode(false)}>Concluir</button>
           </div>
         ) : null}
-        <div className="overview-grid">
+        {preferencesError ? <p role="alert" className="dashboard-customization-error">Não foi possível salvar a personalização: {apiErrorMessage(preferencesError)}</p> : null}
+        <div className="home-dashboard-grid">
+          {renderBlock("producao_boa", "home-block--metric-2", (
+            <MetricCard
+              label="Produção boa"
+              value={quantityText(data.production.good)}
+              valueNode={hasQuantityRecords ? (
+                <ExplainableValue metric="qtd.boa" filters={filters.filters} context={`Produção boa ${quantityText(data.production.good)}`}>{quantityText(data.production.good)}</ExplainableValue>
+              ) : undefined}
+              detail={data.production.reason ?? "Peças boas; refugo e retrabalho permanecem separados."}
+              availability={data.production.availability}
+              trend={trend && hasQuantityRecords && !periodOpen ? quantityTrend(data.production.good, trend.previous?.production.good) : undefined}
+              spark={hasQuantityRecords ? sparkOf((point) => point.production.good, SERIES_COLORS.good) : null}
+            />
+          ))}
+          {kpiNodes.map(({ preferenceKey, node }) => renderBlock(preferenceKey, "home-block--metric-2", node))}
+          {simulation && renderBlock("simulation", "home-block--full", (
+            <div className="metric-grid metric-grid--auto simulation-metrics">
+              <MetricCard label="Planejado" value={simulation.planned_quantity.toLocaleString("pt-BR")} detail="Peças no período" />
+              <MetricCard label="Realizado" value={simulation.actual_quantity.toLocaleString("pt-BR")} detail="Somente peças boas" accent="success" />
+              <MetricCard label="Atingimento" value={simulation.attainment_percentage === null ? "Não disponível" : `${simulation.attainment_percentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`} accent="teal" />
+              <MetricCard label="Utilização" value={metricText(simulation.metrics.utilization)} accent="warning" />
+              <MetricCard label="Produtividade" value={metricText(simulation.metrics.productivity)} accent="purple" />
+              <MetricCard label="AE" value={metricText(simulation.metrics.ae)} detail="Eficiência global efetiva" />
+            </div>
+          ))}
+          {renderBlock("planned_vs_actual", "home-block--half", (
           <SectionCard
             title="Planejado × realizado — acumulado"
             className="overview-grid__chart"
@@ -236,6 +281,8 @@ export function ManagementOverviewPage() {
               />
             )}
           </SectionCard>
+          ))}
+          {renderBlock("exceptions", "home-block--half", (
           <SectionCard
             title="O que precisa de atenção"
             className="management-attention-card"
@@ -268,8 +315,8 @@ export function ManagementOverviewPage() {
               </ul>
             )}
           </SectionCard>
-        </div>
-        <div className="management-insight-grid management-insight-grid--three">
+          ))}
+          {renderBlock("time_composition", "home-block--span-4", (
           <SectionCard
             title="Composição do tempo"
             navigation={{ label: "Abrir Análises: Horas & Utilização", onNavigate: () => navigateTo("/analises/horas-utilizacao") }}
@@ -307,6 +354,8 @@ export function ManagementOverviewPage() {
               </div>
             )}
           </SectionCard>
+          ))}
+          {renderBlock("top_losses", "home-block--span-3", (
           <SectionCard
             title="Maiores perdas"
             navigation={{ label: "Abrir análise das maiores perdas", onNavigate: () => navigateTo("/analises/paradas") }}
@@ -324,6 +373,8 @@ export function ManagementOverviewPage() {
               </ol>
             )}
           </SectionCard>
+          ))}
+          {renderBlock("live_events", "home-block--span-3", (
           <SectionCard title="Agora na fábrica">
             {!trend || trend.recent_events.length === 0 ? <EmptyState title="Sem eventos recentes" detail="Mudanças de estado dos recursos aparecem aqui." /> : (
               <ul className="feed">
@@ -337,8 +388,8 @@ export function ManagementOverviewPage() {
               </ul>
             )}
           </SectionCard>
-        </div>
-        <div className="overview-grid overview-grid--single">
+          ))}
+          {renderBlock("sectors_table", "home-block--full", (
           <SectionCard
             title="Setores — leitura rápida e execução real"
             className="overview-grid__table"
@@ -378,7 +429,7 @@ export function ManagementOverviewPage() {
                           <td>{sectorCell("qtd.boa", sector, "Produção boa", quantityText(sector.producao_boa), hasQuantityRecords ? sector.producao_boa : 0)}</td>
                           <td>{sectorCell("qtd.refugo", sector, "Refugo", quantityText(sector.refugo), hasQuantityRecords ? sector.refugo : 0)}</td>
                           <td>{sectorCell("qtd.retrabalho", sector, "Retrabalho", quantityText(sector.retrabalho), hasQuantityRecords ? sector.retrabalho : 0)}</td>
-                          <td>{sector.ops}</td>
+                          <td>{sector.setor.trim().toLowerCase() === "corte" ? "—" : sector.ops}</td>
                           <td>{hours(sector.tempo_produtivo_segundos)}</td>
                           <td>{sectorCell("tempo.producao", sector, "Tempo de produção", formatHours(sector.tempo_producao_segundos), sector.tempo_producao_segundos)}</td>
                           <td>{sectorCell("tempo.setup", sector, "Tempo de setup", formatHours(sector.tempo_setup_segundos), sector.tempo_setup_segundos)}</td>
@@ -397,8 +448,8 @@ export function ManagementOverviewPage() {
               </>
             )}
           </SectionCard>
-        </div>
-        <div className="management-insight-grid management-insight-grid--two">
+          ))}
+          {renderBlock("top_resources", "home-block--half", (
           <SectionCard
             title="Recursos com maior impacto"
             navigation={{ label: "Abrir análise dos recursos com maior impacto", onNavigate: () => navigateTo("/analises/paradas") }}
@@ -420,6 +471,8 @@ export function ManagementOverviewPage() {
               </ol>
             )}
           </SectionCard>
+          ))}
+          {renderBlock("audit_issues", "home-block--half", (
           <SectionCard
             title="Inconsistências de dados"
             navigation={{ label: "Abrir Auditoria: Alertas e inconsistências", onNavigate: () => navigateTo("/auditoria/alertas-inconsistencias") }}
@@ -437,7 +490,11 @@ export function ManagementOverviewPage() {
               </ul>
             )}
           </SectionCard>
+          ))}
         </div>
+        {noneVisibleCustomBlock ? (
+          <EmptyState title="Nenhum bloco visível na tela inicial" detail="Clique em Personalizar no cabeçalho para escolher o que deseja visualizar." />
+        ) : null}
         <ManagementInsightDrawer explanation={selectedKpi} exception={null} onClose={closeInsight} onExplain={setExplainedMetric} />
         {explainedMetric ? <MetricExplanationPanel metric={explainedMetric} filters={filters.filters} onClose={closeExplanation} /> : null}
     </PageFrame>

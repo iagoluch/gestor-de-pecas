@@ -1,14 +1,19 @@
 """Tempo padrão por peça: fontes, prioridade e estimativa estatística.
 
-Regras (decisões do usuário, 06/10/2026):
+Regras (decisões do usuário, 06/10/2026, revistas em 04/11/2026):
 
-* prioridade da fonte: ``protheus`` (valor real) > ``manual`` (engenharia de
-  manufatura) > ``estimado`` (P25 das execuções boas do Gestor) > ``None``;
-* a Performance **oficial** usa só ``protheus`` e ``manual``; a **estimada**
-  usa também ``estimado`` e é publicada em campo separado;
-* o Corte nunca recebe tempo manual nem estimado: o previsto vem do SigmaNEST;
-* manual e estimado têm vigência (ver ``mes/services/standard_time.py``): valem
-  só para fatos iniciados a partir do instante em que passaram a existir.
+* 04/11/2026: só vale o tempo padrão do **Protheus**. O Gestor não cadastra,
+  altera nem remove tempo manual; os manuais já gravados ficam guardados no
+  banco (tabelas ``tempo_padrao_manual*``), mas **não contam** em nenhuma
+  leitura. Sem tempo no Protheus (o mapper converte 0,01/<=0 em ``None``) o
+  padrão oficial é "n/a" (``NO_PROTHEUS_STANDARD_TEXT``);
+* prioridade da fonte: ``protheus`` (valor real) > ``estimado`` (P25 das
+  execuções boas do Gestor) > ``None``;
+* a Performance **oficial** usa só ``protheus``; a **estimada** usa também
+  ``estimado`` e é publicada em campo separado;
+* o Corte nunca recebe tempo estimado: o previsto vem do SigmaNEST;
+* o estimado tem vigência (ver ``mes/services/standard_time.py``): vale só para
+  fatos iniciados a partir do instante em que passou a existir.
 
 Este módulo é puro: sem banco, sem relógio, sem I/O.
 """
@@ -19,11 +24,21 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 SOURCE_PROTHEUS = "protheus"
+#: Fonte desativada em 04/11/2026: os valores ficam no banco, mas não contam.
 SOURCE_MANUAL = "manual"
 SOURCE_ESTIMATED = "estimado"
 
-#: Fontes aceitas na Performance oficial (tudo que não é estimativa do Gestor).
-OFFICIAL_SOURCES = frozenset({SOURCE_PROTHEUS, SOURCE_MANUAL})
+#: Fontes aceitas na Performance oficial: só o Protheus (decisão de 04/11/2026).
+OFFICIAL_SOURCES = frozenset({SOURCE_PROTHEUS})
+#: Fontes que valem em alguma leitura (oficial ou estimada). ``manual`` fica de fora.
+ACTIVE_SOURCES = frozenset({SOURCE_PROTHEUS, SOURCE_ESTIMATED})
+
+#: Rótulo e explicação do padrão oficial ausente (sem tempo no Protheus).
+NO_STANDARD_LABEL = "n/a"
+NO_PROTHEUS_STANDARD_TEXT = (
+    "Tempo padrão não cadastrado no Protheus. "
+    "A engenharia de manufatura ajusta direto no ERP."
+)
 
 #: Setor cujo previsto vem do SigmaNEST (espelha ``mapper._SECTOR_WITHOUT_TOTVS_STANDARD``).
 SECTOR_WITHOUT_STANDARD_TIME = "corte"
@@ -34,8 +49,6 @@ DEFAULT_MIN_SAMPLES = 5
 DEFAULT_PERCENTILE = 25.0
 #: Multiplicador do IQR para descartar outliers.
 IQR_FACTOR = 1.5
-#: Teto aceito para o tempo manual: 24 h por peça.
-MAX_MANUAL_SECONDS_PER_PIECE = 86400.0
 #: Histórico considerado no cálculo do estimado.
 DEFAULT_LOOKBACK_DAYS = 180
 
@@ -71,12 +84,17 @@ def resolve_fact_standard(fact: Mapping) -> tuple[float | None, str | None]:
     Fatos que trazem ``tempo_padrao_fonte`` (consulta atual) são usados como
     estão. Fatos legados/dublês só com ``tempo_medio_segundos`` valem como
     ``protheus``, que é o significado histórico dessa coluna.
+
+    Fonte fora de ``ACTIVE_SOURCES`` (o ``manual`` desativado em 04/11/2026)
+    não vale: o fato fica sem padrão, mesmo que algum produtor ainda a envie.
     """
 
     if "tempo_padrao_fonte" in fact:
         value = _positive(fact.get("tempo_padrao_segundos"))
         source = fact.get("tempo_padrao_fonte")
-        return (value, source) if value is not None and source else (None, None)
+        if value is None or source not in ACTIVE_SOURCES:
+            return None, None
+        return value, source
     legacy = fact.get("tempo_medio_segundos")
     if legacy is None:
         return None, None
@@ -164,9 +182,11 @@ def estimate_standard_seconds(
 
 
 __all__ = [
+    "ACTIVE_SOURCES",
     "DEFAULT_LOOKBACK_DAYS",
     "DEFAULT_MIN_SAMPLES",
-    "MAX_MANUAL_SECONDS_PER_PIECE",
+    "NO_PROTHEUS_STANDARD_TEXT",
+    "NO_STANDARD_LABEL",
     "OFFICIAL_SOURCES",
     "SOURCE_ESTIMATED",
     "SOURCE_MANUAL",
