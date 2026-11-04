@@ -23,7 +23,7 @@ Commits: `6f21996` (consulta de OP + etapa extra, migration 72), `db5c618` (temp
 - **Tempo padrão só leitura e só Protheus:** sem gravação manual; sem tempo no Protheus aparece `n/a`. Tela "Manufatura — Tempo padrão".
 - **Tela inicial:** migration 71 (`dashboard_home`); ver seção abaixo.
 - **Verificado:** vitest `order-consultation` 6 ok; pytest dos módulos sem banco ok. Testes que exigem Postgres **não rodaram no fim** (Docker Desktop fora do ar: 39 falhas por `ConnectionTimeout`, não por código) — rodar de novo quando o Docker subir. `tsc -b`/build do front ok antes dos commits.
-- **Fora do Git:** `.github/instructions/` (vazio, TOTVS), `docs/RELATORIO_GASTO_TOKENS_2026-11-04.md` (ainda não commitado).
+- **Fora do Git:** `.github/instructions/` (vazio, TOTVS).
 
 ### Tela inicial personalizável por usuário — 04/11/2026
 
