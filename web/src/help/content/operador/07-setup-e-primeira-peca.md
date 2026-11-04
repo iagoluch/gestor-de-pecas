@@ -25,7 +25,7 @@ Com o Setup em curso, clicar de novo em **Setup** reabre a conferência, se ela 
 
 Quando o sistema exige a primeira peça, aparece: "Aponte o Setup / Inicie a produção e depois aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."
 
-Em resumo: sem aprovar a primeira peça, o botão **Finalizar** fica bloqueado.
+Em resumo: o **Iniciar** é livre. Sem aprovar a primeira peça, não dá para **Finalizar**: o botão continua clicável, mas o clique só mostra o aviso do sistema. Ele só fica apagado se o Setup obrigatório ainda não foi registrado.
 
 ## Popup "Setup e Qualidade" (Caldeiraria)
 
@@ -41,15 +41,17 @@ Aparece quando a primeira peça foi reprovada para retrabalho e a OP está bloqu
 | **Chamar responsável** | Abre o chamado (veja [Chamar alguém](topico:11-chamar-alguem)) com motivo "Qualidade". |
 | **Observação** | Texto livre. |
 | **Cancelar** | Fecha sem liberar nada. |
-| **Autorizar e liberar** | Libera a OP. Depois abre o Retrabalho. |
+| **Autorizar e liberar** | Libera a OP. Depois a OP entra em Retrabalho sozinha. |
+
+O título do popup é "Primeira peça bloqueada". Enquanto a OP está bloqueada, o botão **Iniciar** fica apagado. Para abrir este popup, clique em **Retrabalho** (ou em **Setup**).
 
 ### Modo 2 — Produto sem cotas cadastradas
 
-O popup mostra o cadastro de cotas do produto, para o responsável cadastrar as medidas padrão. Veja [Qualidade e inspeção](topico:40-qualidade-e-inspecao). Ao salvar: "Cotas padrão salvas para este produto."
+O popup mostra o cadastro de cotas do produto (com botão **Cancelar**), para cadastrar as medidas padrão. Veja [Qualidade e inspeção](topico:40-qualidade-e-inspecao). Ao salvar: "Cotas padrão salvas para este produto."
 
 ### Modo 3 — Medição da primeira peça
 
-Para cada cota aparece:
+O título é "Medição da primeira peça". Para cada cota aparece:
 
 | Item | O que é |
 |---|---|
@@ -61,15 +63,15 @@ Para cada cota aparece:
 
 Se a peça for reprovada, aparece **Destino da peça reprovada**:
 
-- **Retrabalho — bloqueia a OP até o responsável**: a OP fica bloqueada até o responsável autorizar.
-- **Refugo — consome o saldo e exige outra peça**: exige **Crachá do responsável que autoriza o refugo** e uma nova primeira peça.
+- **Retrabalho — bloqueia a OP até o responsável** (é a opção que já vem marcada): a OP fica bloqueada até o responsável autorizar.
+- **Refugo — consome o saldo e exige outra peça**: exige **Crachá do responsável que autoriza o refugo** (com o botão **Chamar responsável**) e uma nova primeira peça.
 
-Botão **Liberar lote**. Fica apagado, com o motivo escrito, enquanto faltar algo:
+Há também o campo **Observação** ("O que foi verificado no posto") e o botão **Cancelar**. O botão principal é **Liberar lote**. Fica apagado, com o motivo escrito, enquanto faltar algo:
 
 - "Informe a medida de todas as cotas para liberar o lote."
 - "Informe o crachá do responsável para registrar o refugo."
 
-Quando o lote é liberado, o popup fecha e a OP volta à produção sozinha. Se o destino foi Refugo, o popup fecha e a produção é retomada.
+Quando o lote é liberado, o popup fecha e a OP volta à produção sozinha (você não precisa clicar em Iniciar). Se o destino foi Refugo, o popup também fecha e a produção é retomada sozinha.
 
 ### Outras mensagens do popup
 
@@ -81,7 +83,7 @@ Quando o lote é liberado, o popup fecha e a OP volta à produção sozinha. Se 
 
 **Fechar** e **Cancelar** nunca liberam nada.
 
-## Popup "Primeira peça" (Solda e Pintura, sem checklist)
+## Popup "Primeira peça" (Solda e Pintura, sem Setup e sem cotas)
 
 | Campo | Opções |
 |---|---|
@@ -94,6 +96,8 @@ Clique em **Registrar primeira peça**. Se o resultado for Conforme, o lote é l
 
 | Situação | Causa | O que fazer |
 |---|---|---|
-| **Finalizar** apagado | Primeira peça ainda não aprovada. | Clique em **Setup** e conclua a conferência. |
+| **Finalizar** apagado | Setup obrigatório ainda não registrado. | Clique em **Setup**. |
+| **Finalizar** mostra só um aviso | Primeira peça ainda não aprovada. | Clique em **Setup** e conclua a conferência. |
+| **Iniciar** apagado com OP bloqueada | Primeira peça reprovada para retrabalho. | O responsável autoriza no popup. |
 | **Liberar lote** apagado | Falta medida ou crachá. | Leia o motivo escrito embaixo do botão. |
 | OP bloqueada | Primeira peça foi para retrabalho. | O responsável vem ao posto e usa o próprio crachá em **Autorizar e liberar**. |

@@ -34,11 +34,12 @@ Detalhes: [Carregar a OP](topico:04-carregar-op-e-roteiro).
 
 | Mensagem | O que fazer |
 |---|---|
+| "Carregue e selecione uma operação antes de iniciar." (ou "...apontar.") | Carregue a OP e escolha a etapa. |
 | "Recurso parado — {motivo}. Retome para voltar a apontar." | Clique em **Retomar produção**. |
 | "Há setup ou retrabalho em andamento neste posto. Finalize-o antes de iniciar outra OP." | Finalize o setup ou retrabalho aberto. |
 | "Esta OP já foi apontada em outra estação." | Fale com a liderança. |
 | "Encerre o retrabalho primeiro (Finalizar Ret.)." | Use **Finalizar Ret.** |
-| "Aponte o Setup desta operação para conferir a primeira peça antes de finalizar." | Use **Setup** e conclua a conferência. |
+| "Aponte o Setup desta operação para conferir a primeira peça antes de finalizar." | Use **Setup** e conclua a conferência. O botão **Finalizar** mostra esta mensagem em vez de abrir o popup. |
 
 Detalhes: [Iniciar, parar e finalizar](topico:05-iniciar-parar-finalizar), [Setup e primeira peça](topico:07-setup-e-primeira-peca).
 
@@ -61,6 +62,8 @@ Detalhes: [Finalizar e informar quantidades](topico:09-finalizar-quantidades-e-c
 | "Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados." | Aguarde. Não confie nos números até voltar. |
 | "O aviso pelo Telegram NÃO foi enviado..." | Avise a pessoa pessoalmente. |
 | "Não foi possível registrar a chamada." | Tente de novo. |
+| "Muitas chamadas em pouco tempo neste posto. Aguarde um minuto e tente de novo." | Espere 1 minuto. |
+| "Crachá não cadastrado ou inativo. Informe um crachá ativo." | Confira o crachá. |
 
 ## Corte e Destaque
 

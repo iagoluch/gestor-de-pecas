@@ -5,7 +5,7 @@ ordem: 8
 rotas:
 ---
 
-**Retrabalho** é consertar peças que saíram com defeito, sem fabricar de novo. Enquanto há retrabalho aberto, o posto fica travado para outras OPs.
+**Retrabalho** é consertar peças que saíram com defeito, sem fabricar de novo. Enquanto há retrabalho aberto, o posto fica travado para outras OPs (isso vale em todos os postos). A tela avisa: "Há setup ou retrabalho em andamento neste posto. Entre para retomá-lo ou finalizá-lo."
 
 ## O botão Retrabalho
 
@@ -16,7 +16,7 @@ O botão tem dois nomes:
 | **Retrabalho** | A OP não está em retrabalho. |
 | **Finalizar Ret.** | A OP está em Retrabalho. |
 
-Fica apagado se a etapa não é selecionável.
+Fica apagado se não há operação selecionada que possa ser apontada (etapa não selecionável).
 
 ## Começar um retrabalho
 
@@ -39,7 +39,7 @@ Se a OP está bloqueada por primeira peça reprovada, clicar em **Retrabalho** a
 | **Peças para refugo** | Quantas não têm conserto. |
 
 4. Se informou refugo, preencha o crachá do responsável (veja [Finalizar e informar quantidades](topico:09-finalizar-quantidades-e-crachas)).
-5. Clique em **Confirmar**.
+5. Clique em **Confirmar** (o botão se chama só "Confirmar", e não exige quantidade: só o crachá do operador e, havendo refugo, o do responsável).
 
 A OP volta para **Em processo**.
 
@@ -47,7 +47,7 @@ A OP volta para **Em processo**.
 
 - Com retrabalho aberto, **Finalizar** fica apagado. A dica é: "Encerre o retrabalho primeiro (Finalizar Ret.)."
 - Retrabalho pendente não conta como peça atendida do planejado.
-- Quem assume o posto com retrabalho aberto (por exemplo, na troca de turno) precisa entrar e finalizá-lo antes de iniciar outra OP.
+- Quem assume o posto com retrabalho aberto (por exemplo, na troca de turno) precisa entrar e finalizá-lo antes de iniciar outra OP. O sistema não tem regra especial de troca de turno para Setup/Retrabalho: eles continuam abertos até alguém finalizar. O que acontece com eles à noite ou no fim do turno: confirmar com a liderança.
 
 ## Problemas comuns
 

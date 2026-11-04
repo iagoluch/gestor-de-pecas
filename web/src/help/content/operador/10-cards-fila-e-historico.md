@@ -11,13 +11,13 @@ Abaixo dos botões há três seções de cards.
 |---|---|
 | **Produção** | OPs ativas no posto: Em processo, Parada, Setup ou Retrabalho. |
 | **Fila de Ordem** | OPs esperando a vez neste posto. |
-| **Histórico** | Os 100 apontamentos mais recentes. |
+| **Histórico** | Os apontamentos mais recentes (até 100 de cada vez). |
 
 Cada seção mostra **2 cards**, um contador e o botão **Ver mais**.
 
 ## Ver mais
 
-Abre um popup com a lista completa da seção. No Histórico aparece: "Exibindo os 100 registros mais recentes. Use os filtros dos relatórios para consultas históricas maiores."
+Abre um popup com a lista completa da seção. No Histórico, quando existem mais registros do que cabem, aparece: "Exibindo os 100 registros mais recentes. Use os filtros dos relatórios para consultas históricas maiores."
 
 ## Seção vazia
 

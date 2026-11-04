@@ -35,7 +35,7 @@ O botão **i** do plano abre "OPs do plano": OP, produto e setor destino ("Desti
 | Botão | Quando |
 |---|---|
 | **Iniciar** (ou **Retomar produção**, **Iniciar atividade**) | Há plano aguardando ou parado; ou posto parado sem tarefa; ou atividade. |
-| **Parada** | Parar o destaque. |
+| **Parada** | Parar o posto. Fica apagado se o posto já está parado ou se o plano selecionado já está parado. |
 | **Finalizar** (ou **Finalizar atividade**) | Só com plano em execução. |
 
 Aviso: "Posto parado — motivo. Retome para voltar a apontar."
@@ -61,6 +61,6 @@ Mostra os últimos 5 eventos. **Ver mais** abre "Histórico do Destaque". Cada e
 
 ## Atividade diária
 
-Popup **Atividade diária**: **Sim** ou **Não**.
+Popup **Atividade diária**, com **Sim** e **Não**. A pergunta é "Iniciar uma atividade diária neste posto?" ou "Finalizar a atividade diária em andamento?". É o trabalho do posto que não pertence a nenhum plano.
 
 Veja também [Corte](topico:20-corte).

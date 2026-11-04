@@ -5,7 +5,11 @@ ordem: 40
 rotas:
 ---
 
-Esta tela existe no sistema, mas hoje o posto do operador não tem uma aba própria para ela. Ela é usada pela Qualidade e pela gestão. O operador encontra as mesmas conferências dentro do popup **Setup e Qualidade** (veja [Setup e primeira peça](topico:07-setup-e-primeira-peca)). Como e por onde você chega aqui no seu posto: confirmar com a liderança.
+O operador não tem tela nem aba própria de Qualidade ou Inspeção: a área do operador (`/operador`) não leva a ela. O que você usa no posto é o popup **Setup e Qualidade** (veja [Setup e primeira peça](topico:07-setup-e-primeira-peca)), que tem a medição da primeira peça e o mesmo cadastro de cotas descrito abaixo em "Produto sem cotas".
+
+O restante deste capítulo (fila de inspeção, RNC, histórico) descreve a tela de inspeção da Qualidade. Ela não está ligada a nenhum menu atual do sistema; se a liderança passar a usá-la, valem as regras abaixo. Onde e quando ela é usada: confirmar com a liderança.
+
+O cadastro e a revisão das cotas padrão de cada produto ficam em uma tela da Qualidade, só para a Qualidade e a administração.
 
 ## Fila de inspeção
 
@@ -88,4 +92,4 @@ Filtros: OP, Produto, Recurso, Resultado (Todos, Aprovada, Retrabalho, Refugo), 
 
 ## Crachá e PDF
 
-A impressão de crachá e PDF de etiqueta não existe nestas telas do operador. Confirmar com a liderança onde é feita.
+No fluxo do operador não há impressão de crachá nem PDF de etiqueta. O único PDF é o desenho da peça (veja [Desenho da peça](topico:12-desenho-da-peca)). O crachá é só digitado ou passado nos popups (finalizar, refugo, autorização, chamada). Onde o crachá é impresso: confirmar com a liderança.

@@ -39,7 +39,17 @@ Cada tarefa é um card, recolhido por padrão (clique no ▶ para abrir, ▼ par
 | Tempo previsto, Tempo realizado | Planejado e já gasto. |
 | Em execução | "Plano i/n" ou "Nesting i/n". |
 
-Dentro da tarefa, cada **plano** (fechado por padrão) mostra: programa, "X de Y chapas", estado (ex.: AGUARDANDO CORTE, EM CORTE) e, ao abrir: Chapas, Repetição, Chapa, Tempo previsto, lista de OPs (OP, Produto, Qtd) e tabela de chapas (#, Chapa, Repetição, Status, Previsto, Realizado). Outros estados de plano: confirmar com a liderança.
+Dentro da tarefa, cada **plano** (fechado por padrão) mostra: programa, "X de Y chapas", estado (ex.: AGUARDANDO CORTE, EM CORTE) e, ao abrir: Chapas, Repetição, Chapa, Tempo previsto, lista de OPs (OP, Produto, Qtd) e tabela de chapas (#, Chapa, Repetição, Status, Previsto, Realizado).
+
+### Estados do plano
+
+| Estado | O que significa | Cor da etiqueta |
+|---|---|---|
+| **AGUARDANDO CORTE** | Nenhuma chapa foi cortada ainda. | Amarelo |
+| **EM CORTE** | Há uma chapa sendo cortada agora. | Cor de destaque do sistema |
+| **CORTE PARCIAL** | Parte das chapas já foi cortada e ainda falta cortar outras. Continua sendo trabalho do Corte. | Amarelo |
+| **DISPONÍVEL PARA DESTAQUE** | Todas as chapas foram cortadas e as peças esperam o Destaque (só em máquina que libera Destaque). | Azul |
+| **FINALIZADO** | Cortado, e sem nada pendente no Destaque (ou máquina que não passa pelo Destaque). | Cinza |
 
 Mensagens: "Nenhuma OP vinculada a este plano.", "Nenhum plano publicado para esta tarefa.", "OPs sem plano identificado: ..."
 
@@ -69,7 +79,7 @@ Mensagens: "Nenhuma OP vinculada a este plano.", "Nenhum plano publicado para es
 
 ## Atividade diária
 
-Popup **Atividade diária**: "Iniciar" ou "Finalizar", com **Sim** e **Não**.
+Popup **Atividade diária**, com **Sim** e **Não**. A pergunta é "Iniciar uma atividade diária neste recurso?" ou "Finalizar a atividade diária em andamento?". É o trabalho do posto que não pertence a nenhum plano (organizar chapas, sucata, conferência).
 
 ## Histórico do Corte
 

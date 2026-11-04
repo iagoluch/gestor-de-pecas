@@ -9,7 +9,7 @@ rotas:
 
 | Item | O que faz |
 |---|---|
-| Campo **Código da OP** | Digite ou escaneie o código da OP (dica "Digite ou escaneie a OP"). O cursor já começa aqui. Letras viram maiúsculas sozinhas. |
+| Campo **Código da OP** | Digite ou escaneie o código da OP (dica "Digite ou escaneie a OP"). O cursor já começa aqui. Ao carregar, as letras viram maiúsculas. |
 | Botão **Carregar roteiro** | Busca a OP e mostra as operações dela. |
 
 Passos:
@@ -52,6 +52,7 @@ Pergunta: "Deseja realmente apontar esta operação?" Botões: **Cancelar** (nad
 
 | Mensagem | Significado |
 |---|---|
+| "Carregando roteiro…" | Aguarde a lista das etapas. |
 | "OP encontrada. Etapa atual: X." | Tudo certo. |
 | "OP encontrada. Etapa atual: X. Ainda não disponível para {setor}." | A OP existe, mas ainda não chegou ao seu setor. Não dá para apontar. |
 | "Roteiro concluído. Etapas finalizadas não podem ser reabertas." | Todas as etapas terminaram. |
@@ -61,6 +62,7 @@ Pergunta: "Deseja realmente apontar esta operação?" Botões: **Cancelar** (nad
 | "Não foi possível carregar a OP {x}." | Falha na busca. Tente de novo. |
 | "Informe o código da OP." | Você clicou em Carregar com o campo vazio. |
 | "OP não encontrada" (embaixo do campo) | Você tentou parar o posto com uma OP que não existe. |
+| "Carregue e selecione uma operação antes de iniciar." (ou "...apontar." / "...registrar a primeira peça.") | Você clicou em um botão sem ter carregado a OP e escolhido a etapa. |
 
 ## Problemas comuns
 

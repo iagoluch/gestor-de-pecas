@@ -21,7 +21,7 @@ Passos:
 2. Digite a **Senha**.
 3. Clique em **Entrar** (ou aperte Enter).
 
-Se tudo estiver certo, você cai direto na tela do posto, em `/operador`.
+Se tudo estiver certo, você cai direto na tela do posto, em `/operador`. (Contas da gestão, do Andon e da manutenção vão para as telas delas.)
 
 ### Problemas comuns no login
 
@@ -29,7 +29,7 @@ Se tudo estiver certo, você cai direto na tela do posto, em `/operador`.
 |---|---|---|
 | Mensagem vermelha com o motivo (vinda do sistema) | Usuário ou senha não conferem, ou a conta tem algum bloqueio. | Confira o que digitou. A senha é apagada e o cursor volta nela: digite de novo. |
 | "Não foi possível entrar." | O sistema não respondeu. | Tente de novo. Se repetir, avise a liderança. |
-| Aviso de campo obrigatório | Você deixou Usuário ou Senha em branco. | Preencha os dois. |
+| "Preencha Usuário e Senha." (ou "Preencha Usuário." / "Preencha Senha.") | Você deixou campo em branco (só espaços também conta como vazio). O cursor vai para o primeiro campo vazio. | Preencha o que falta. |
 
 Operadores não são obrigados a trocar a senha ao entrar. Se esquecer a senha, procure a liderança.
 
