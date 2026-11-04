@@ -13,6 +13,7 @@ import "./styles/quality-templates.css";
 import "./styles/quality-spc.css";
 import "./styles/maintenance.css";
 import "./styles/dashboard-customizer.css";
+import "./styles/help.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -20,6 +20,7 @@ import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
 import { AIPage } from "./pages/AIPage";
 import { OperatorPortalPage } from "./pages/operator/OperatorPortalPage";
+import { HelpPage } from "./help/HelpPage";
 import {
   AnalyticsCapacityPage,
   AnalyticsChronoPage,
@@ -233,6 +234,9 @@ export default function App() {
         <Route path="rastreabilidade/lote-material-nesting" element={<TraceabilityNestingPage />} />
       </Route>
       <Route path="/operador/*" element={<RequireAuth operator><OperatorPortalPage /></RequireAuth>} />
+      <Route path="/ajuda" element={<RequireAuth><HelpPage /></RequireAuth>} />
+      <Route path="/ajuda/:manual" element={<RequireAuth><HelpPage /></RequireAuth>} />
+      <Route path="/ajuda/:manual/:topico" element={<RequireAuth><HelpPage /></RequireAuth>} />
       <Route path="/manutencao" element={<RequireAuth maintenance><MaintenanceTerminalPage /></RequireAuth>} />
       <Route path="*" element={<RoleHome />} />
     </Routes>

@@ -8,6 +8,7 @@ import { CommandPalette } from "../components/CommandPalette";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { HelpButton } from "../components/HelpButton";
 import { assets } from "../config/assets";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 import { isSectionActive, managementSections, sectionPathFor, sectionVisibleFor } from "../config/navigation";
@@ -117,6 +118,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <kbd>Ctrl K</kbd>
           </button>
           <div className="topbar__clock" aria-label="Horário do sistema"><i aria-hidden="true" /><SystemClock /></div>
+          <HelpButton manual="gestao" />
           <ThemeToggle compact />
           <ChamadaSino />
           <div className="topbar__user">

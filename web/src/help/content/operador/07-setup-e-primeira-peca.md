@@ -1,0 +1,99 @@
+---
+titulo: Setup e primeira peça
+grupo: Tela do posto
+ordem: 7
+rotas:
+---
+
+**Setup** é a preparação da máquina para fabricar a peça. **Primeira peça** é a conferência da primeira unidade feita depois do setup. Em alguns setores, o lote só é liberado depois que a primeira peça for aprovada.
+
+O botão **Setup** só existe nos setores que têm setup.
+
+## Registrar o Setup
+
+O botão **Setup** fica ativo quando: a etapa está selecionável, a OP está em Em processo, Parada, Retrabalho ou Setup, e o Setup ainda não foi registrado (ou a conferência da primeira peça está pendente).
+
+1. Selecione a etapa.
+2. Clique em **Setup**.
+3. Abre **Confirmar Setup**: "Confirme o registro de setup para a operação selecionada."
+4. Clique em **Confirmar** (mostra "Enviando…") ou **Cancelar**.
+5. Se o setor exige conferência da primeira peça, abre o popup **Setup e Qualidade**.
+
+Com o Setup em curso, clicar de novo em **Setup** reabre a conferência, se ela ainda estiver pendente.
+
+## Aviso do portão
+
+Quando o sistema exige a primeira peça, aparece: "Aponte o Setup / Inicie a produção e depois aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."
+
+Em resumo: sem aprovar a primeira peça, o botão **Finalizar** fica bloqueado.
+
+## Popup "Setup e Qualidade" (Caldeiraria)
+
+Ele tem três modos, conforme a situação.
+
+### Modo 1 — Primeira peça bloqueada
+
+Aparece quando a primeira peça foi reprovada para retrabalho e a OP está bloqueada. O popup mostra o texto do sistema e: "O responsável precisa estar no posto e informar o próprio crachá. Não existe login para ele: a autorização fica registrada com OP, recurso, operador, horário e decisão."
+
+| Campo ou botão | O que faz |
+|---|---|
+| **Crachá do responsável** | O responsável passa o próprio crachá. |
+| **Chamar responsável** | Abre o chamado (veja [Chamar alguém](topico:11-chamar-alguem)) com motivo "Qualidade". |
+| **Observação** | Texto livre. |
+| **Cancelar** | Fecha sem liberar nada. |
+| **Autorizar e liberar** | Libera a OP. Depois abre o Retrabalho. |
+
+### Modo 2 — Produto sem cotas cadastradas
+
+O popup mostra o cadastro de cotas do produto, para o responsável cadastrar as medidas padrão. Veja [Qualidade e inspeção](topico:40-qualidade-e-inspecao). Ao salvar: "Cotas padrão salvas para este produto."
+
+### Modo 3 — Medição da primeira peça
+
+Para cada cota aparece:
+
+| Item | O que é |
+|---|---|
+| **Cota N — descrição** | Qual medida conferir. |
+| **Padrão** | O valor esperado. |
+| **Faixa aceita** | Do menor ao maior valor aceito. |
+| **Medida (mm)** | Você digita o valor medido. |
+| **Situação** | Só aparece nas cotas que não têm faixa automática: escolha Selecione, Conforme ou Não conforme. |
+
+Se a peça for reprovada, aparece **Destino da peça reprovada**:
+
+- **Retrabalho — bloqueia a OP até o responsável**: a OP fica bloqueada até o responsável autorizar.
+- **Refugo — consome o saldo e exige outra peça**: exige **Crachá do responsável que autoriza o refugo** e uma nova primeira peça.
+
+Botão **Liberar lote**. Fica apagado, com o motivo escrito, enquanto faltar algo:
+
+- "Informe a medida de todas as cotas para liberar o lote."
+- "Informe o crachá do responsável para registrar o refugo."
+
+Quando o lote é liberado, o popup fecha e a OP volta à produção sozinha. Se o destino foi Refugo, o popup fecha e a produção é retomada.
+
+### Outras mensagens do popup
+
+| Mensagem | O que fazer |
+|---|---|
+| "Carregando o Setup/Qualidade…" | Aguarde. |
+| "Aponte o Setup desta operação pelo botão Setup do posto: ..." | Feche e clique em **Setup**. |
+| "Esta operação não possui o Setup/Qualidade estruturado." | Não há checklist. Clique em **Fechar** e fale com a liderança. |
+
+**Fechar** e **Cancelar** nunca liberam nada.
+
+## Popup "Primeira peça" (Solda e Pintura, sem checklist)
+
+| Campo | Opções |
+|---|---|
+| **Resultado da primeira peça** | "Conforme — libera o lote"; "Retrabalho — bloqueia a OP até o responsável"; "Refugo — produzir outra primeira peça" |
+| **Observação** | Texto livre. |
+
+Clique em **Registrar primeira peça**. Se o resultado for Conforme, o lote é liberado e você segue para **Finalizar**.
+
+## Problemas comuns
+
+| Situação | Causa | O que fazer |
+|---|---|---|
+| **Finalizar** apagado | Primeira peça ainda não aprovada. | Clique em **Setup** e conclua a conferência. |
+| **Liberar lote** apagado | Falta medida ou crachá. | Leia o motivo escrito embaixo do botão. |
+| OP bloqueada | Primeira peça foi para retrabalho. | O responsável vem ao posto e usa o próprio crachá em **Autorizar e liberar**. |

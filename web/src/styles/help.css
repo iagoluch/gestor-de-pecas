@@ -1,0 +1,50 @@
+/* Manual dentro do sistema (/ajuda). Usa os tokens do tema claro/escuro. */
+.help-button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.help { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.help__top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+.help__brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+.help__brand strong { display: block; font-size: 1.1rem; }
+.help__brand small { color: var(--text-muted, var(--text)); opacity: .75; }
+.help__logo { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.3rem; background: var(--primary); color: #fff; }
+.help__switch { display: flex; gap: 4px; }
+.help__switch a { padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); text-decoration: none; font-weight: 600; }
+.help__switch a.is-on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.help__top-actions { display: flex; align-items: center; gap: 8px; }
+.help__btn { padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.help__btn:hover { border-color: var(--primary); }
+.help__body { flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: start; }
+.help__tree { position: sticky; top: 63px; max-height: calc(100vh - 63px); overflow: auto; padding: 14px; border-right: 1px solid var(--border); background: var(--surface); }
+.help__search { width: 100%; padding: 8px 10px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); color: var(--text); font: inherit; }
+.help__group h2 { margin: 14px 0 4px; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; opacity: .65; }
+.help__tree ul { list-style: none; margin: 0; padding: 0; }
+.help__tree li a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text); text-decoration: none; line-height: 1.3; }
+.help__tree li a:hover { background: var(--bg); }
+.help__tree li a.is-on { background: var(--primary); color: #fff; font-weight: 600; }
+.help__results li a b { display: block; }
+.help__results li a small { opacity: .65; }
+.help__empty { opacity: .7; padding: 8px; }
+.help__content { padding: 28px clamp(16px, 4vw, 56px) 60px; max-width: 980px; }
+.help__title { margin: 0 0 18px; padding-bottom: 10px; border-bottom: 3px solid var(--primary); font-size: 1.9rem; }
+.help__prose { line-height: 1.65; font-size: 1.02rem; }
+.help__prose h2 { margin: 28px 0 8px; font-size: 1.35rem; }
+.help__prose h3 { margin: 20px 0 6px; font-size: 1.1rem; }
+.help__prose p, .help__prose ul, .help__prose ol { margin: 8px 0; }
+.help__prose code { padding: 1px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); font-size: .92em; }
+.help__prose blockquote { margin: 14px 0; padding: 10px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; }
+.help__prose a { color: var(--primary); }
+.help__prose img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; margin: 10px 0; }
+.help__table { overflow-x: auto; margin: 12px 0; }
+.help__table table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+.help__table th, .help__table td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+.help__table th { background: var(--surface); }
+.help__pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+.help__pager a { color: var(--primary); text-decoration: none; font-weight: 600; }
+@media (max-width: 860px) {
+  .help__body { grid-template-columns: 1fr; }
+  .help__tree { position: static; max-height: 260px; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+@media print {
+  .help__top, .help__tree, .help__pager { display: none !important; }
+  .help__body { display: block; }
+  .help__content { max-width: none; padding: 0; }
+}

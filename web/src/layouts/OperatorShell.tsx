@@ -3,6 +3,7 @@ import { ChamadaButton } from "../components/ChamadaButton";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { HelpButton } from "../components/HelpButton";
 import { assets } from "../config/assets";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
@@ -59,6 +60,7 @@ export function OperatorShell({
           )
         ) : null}
         <div className="operator-topbar__actions">
+          <HelpButton manual="operador" />
           <ThemeToggle compact />
           <LogoutButton compact />
         </div>
