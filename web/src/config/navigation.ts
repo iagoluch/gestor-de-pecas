@@ -44,9 +44,6 @@ export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
 /** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
 export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
 
-/** Sugestões de manutenção: admin pelo nível efetivo; perfil de Manutenção pelo nível atribuído à conta (`assigned_level`). */
-export const MAINTENANCE_LEVELS = ["admin"] as const;
-export const MAINTENANCE_ASSIGNED_LEVELS = ["manutencao"] as const;
 
 /** Melhoria Contínua: admin pelo nível efetivo; o setor pelo nível atribuído à conta (efetivo `lider`, igual ao de outros líderes). */
 export const IMPROVEMENT_LEVELS = ["admin"] as const;
@@ -201,79 +198,10 @@ export const managementSections: ManagementSection[] = [
     icon: assets.navigation.production,
     defaultPath: "/producao/ordens",
     tabs: [
-      { label: "Ordens de Produção", path: "/producao/ordens", screen: "production-orders" },
+      { label: "Consulta de OP", path: "/producao/ordens", screen: "production-orders" },
+      { label: "Execução das OPs", path: "/producao/execucao", screen: "production-execution" },
       { label: "Produção realizada", path: "/producao/realizada", screen: "production-completed" },
       { label: "Planejado × Realizado", path: "/producao/planejado-realizado", screen: "production-plan-actual" },
-    ],
-  },
-  {
-    id: "manufacturing",
-    label: "Manufatura",
-    icon: assets.navigation.manufacturing,
-    defaultPath: "/manufatura/tempo-padrao",
-    // Seção da engenharia de manufatura (decisão do usuário, 07/10/2026): o
-    // cadastro do tempo padrão saiu de Produção e ganhou casa própria; novas
-    // telas da engenharia entram aqui. O gestor comum não vê a seção nem a rota.
-    levels: STANDARD_TIME_LEVELS,
-    tabs: [
-      { label: "Tempo padrão", path: "/manufatura/tempo-padrao", screen: "manufacturing-standard-time", levels: STANDARD_TIME_LEVELS },
-    ],
-  },
-  {
-    id: "quality",
-    label: "Qualidade",
-    icon: assets.navigation.quality,
-    defaultPath: "/qualidade/cotas",
-    // Seção da conta Qualidade (decisão do usuário, 07/10/2026): as cotas padrão
-    // por produto saíram de Produção; novas telas dela entram aqui. O gestor
-    // comum não vê a seção nem a rota.
-    levels: QUALITY_TEMPLATE_LEVELS,
-    tabs: [
-      { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
-      // SPC somente leitura: a API (`GET /quality/spc`) usa a mesma guarda das cotas padrão.
-      { label: "SPC", path: "/qualidade/spc", screen: "quality-spc", levels: QUALITY_TEMPLATE_LEVELS },
-      // Decisão de RNC: a API (`/quality/rnc`) usa a guarda da Qualidade (Qualidade e admin).
-      { label: "Decisão de RNC", path: "/qualidade/rnc", screen: "quality-rnc", levels: QUALITY_TEMPLATE_LEVELS },
-    ],
-  },
-  {
-    id: "maintenance",
-    label: "Manutenção",
-    icon: assets.navigation.manufacturing,
-    defaultPath: "/manutencao/sugestoes",
-    // Sugestões de paradas de manutenção (26/10/2026): só o perfil de Manutenção
-    // (nível atribuído `manutencao`) e o admin. O gestor comum não vê a seção
-    // nem a rota; a API (`/maintenance/*`) recusa os demais.
-    levels: MAINTENANCE_LEVELS,
-    assignedLevels: MAINTENANCE_ASSIGNED_LEVELS,
-    tabs: [
-      { label: "Sugestões", path: "/manutencao/sugestoes", screen: "maintenance-suggestions", levels: MAINTENANCE_LEVELS, assignedLevels: MAINTENANCE_ASSIGNED_LEVELS },
-    ],
-  },
-  {
-    id: "diretoria",
-    label: "Diretoria",
-    icon: assets.navigation.diretoria,
-    defaultPath: "/diretoria",
-    // Aba da diretoria (spec de 16/10/2026): custo de produção por produto.
-    // O gestor comum não vê a seção nem a rota.
-    levels: DIRECTOR_LEVELS,
-    tabs: [
-      { label: "Diretoria", path: "/diretoria", screen: "diretoria", levels: DIRECTOR_LEVELS },
-    ],
-  },
-  {
-    id: "melhoria",
-    label: "Melhoria Contínua",
-    icon: assets.navigation.melhoria,
-    defaultPath: "/melhoria-continua",
-    // Visão de oportunidades (23/10/2026), exclusiva do setor de Melhoria
-    // Contínua e do admin (27/10/2026): as consultas são as das Análises, então
-    // o corte é só de menu e rota.
-    levels: IMPROVEMENT_LEVELS,
-    assignedLevels: IMPROVEMENT_ASSIGNED_LEVELS,
-    tabs: [
-      { label: "Oportunidades", path: "/melhoria-continua", screen: "melhoria-oportunidades", levels: IMPROVEMENT_LEVELS, assignedLevels: IMPROVEMENT_ASSIGNED_LEVELS },
     ],
   },
   {
@@ -320,6 +248,62 @@ export const managementSections: ManagementSection[] = [
     tabs: [
       { label: "OP / Produto", path: "/rastreabilidade/op-produto", screen: "traceability-order" },
       { label: "Lote / Material / Nesting", path: "/rastreabilidade/lote-material-nesting", screen: "traceability-nesting" },
+    ],
+  },
+  // Abaixo: abas restritas por setor/nível (o que cada conta vê varia).  Acima: abas comuns a todos.
+  {
+    id: "manufacturing",
+    label: "Manufatura",
+    icon: assets.navigation.manufacturing,
+    defaultPath: "/manufatura",
+    // Seção da engenharia de manufatura. Hoje vazia (decisão do usuário,
+    // 04/11/2026): o tempo padrão sai do Gestor e a engenharia ajusta direto no
+    // Protheus. Novas telas da engenharia entram aqui. O gestor comum não vê a
+    // seção nem a rota.
+    levels: STANDARD_TIME_LEVELS,
+    tabs: [],
+  },
+  {
+    id: "quality",
+    label: "Qualidade",
+    icon: assets.navigation.quality,
+    defaultPath: "/qualidade/cotas",
+    // Seção da conta Qualidade (decisão do usuário, 07/10/2026): as cotas padrão
+    // por produto saíram de Produção; novas telas dela entram aqui. O gestor
+    // comum não vê a seção nem a rota.
+    levels: QUALITY_TEMPLATE_LEVELS,
+    tabs: [
+      { label: "Cotas padrão", path: "/qualidade/cotas", screen: "quality-templates", levels: QUALITY_TEMPLATE_LEVELS },
+      // SPC somente leitura: a API (`GET /quality/spc`) usa a mesma guarda das cotas padrão.
+      { label: "SPC", path: "/qualidade/spc", screen: "quality-spc", levels: QUALITY_TEMPLATE_LEVELS },
+      // Decisão de RNC: a API (`/quality/rnc`) usa a guarda da Qualidade (Qualidade e admin).
+      { label: "Decisão de RNC", path: "/qualidade/rnc", screen: "quality-rnc", levels: QUALITY_TEMPLATE_LEVELS },
+    ],
+  },
+  {
+    id: "diretoria",
+    label: "Diretoria",
+    icon: assets.navigation.diretoria,
+    defaultPath: "/diretoria",
+    // Aba da diretoria (spec de 16/10/2026): custo de produção por produto.
+    // O gestor comum não vê a seção nem a rota.
+    levels: DIRECTOR_LEVELS,
+    tabs: [
+      { label: "Diretoria", path: "/diretoria", screen: "diretoria", levels: DIRECTOR_LEVELS },
+    ],
+  },
+  {
+    id: "melhoria",
+    label: "Melhoria Contínua",
+    icon: assets.navigation.melhoria,
+    defaultPath: "/melhoria-continua",
+    // Visão de oportunidades (23/10/2026), exclusiva do setor de Melhoria
+    // Contínua e do admin (27/10/2026): as consultas são as das Análises, então
+    // o corte é só de menu e rota.
+    levels: IMPROVEMENT_LEVELS,
+    assignedLevels: IMPROVEMENT_ASSIGNED_LEVELS,
+    tabs: [
+      { label: "Oportunidades", path: "/melhoria-continua", screen: "melhoria-oportunidades", levels: IMPROVEMENT_LEVELS, assignedLevels: IMPROVEMENT_ASSIGNED_LEVELS },
     ],
   },
   ...AREA_SECTIONS,

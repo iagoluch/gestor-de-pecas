@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { EmptyState, LoadingState } from "./components/DataState";
-import { DIRECTOR_LEVELS, IMPROVEMENT_ASSIGNED_LEVELS, IMPROVEMENT_LEVELS, MAINTENANCE_ASSIGNED_LEVELS, MAINTENANCE_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
+import { DIRECTOR_LEVELS, IMPROVEMENT_ASSIGNED_LEVELS, IMPROVEMENT_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -33,12 +33,13 @@ import {
 import { AuditAlertsIssuesPage, AuditAppointmentsPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
 import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage } from "./pages/operations/OperationsPages";
-import { ProductionCompletedPage, ProductionOrdersPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
-import { MaintenanceSuggestionsPage, MaintenanceTerminalPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
+import { OrderConsultationPage } from "./pages/production/OrderConsultationPage";
+import { ProductionCompletedPage, ProductionExecutionPage, ProductionPlanActualPage } from "./pages/production/ProductionPages";
+import { MaintenanceTerminalPage } from "./pages/maintenance/MaintenanceSuggestionsPage";
 import { QualityRncDecisionPage } from "./pages/production/QualityRncDecisionPage";
 import { QualitySpcPage } from "./pages/production/QualitySpcPage";
 import { QualityTemplatesPage } from "./pages/production/QualityTemplatesPage";
-import { StandardTimePage } from "./pages/production/StandardTimePage";
+import { PageFrame } from "./components/PageFrame";
 import { DirectorPage } from "./pages/director/DirectorPage";
 import { ImprovementPage } from "./pages/improvement/ImprovementPage";
 import { ReportsPage } from "./pages/reports/ReportsPages";
@@ -89,8 +90,17 @@ function RequireAdmin({ children }: PropsWithChildren) {
   );
 }
 
+/** Seção Manufatura vazia por enquanto (04/11/2026): sem abas, só um aviso. */
+function ManufacturingEmptyPage() {
+  return (
+    <PageFrame sectionId="manufacturing" title="Manufatura" subtitle="Área da engenharia de manufatura." filters={false}>
+      <EmptyState title="Nenhuma tela por enquanto" detail="O tempo padrão é ajustado direto no Protheus. Novas telas da engenharia de manufatura entram aqui." />
+    </PageFrame>
+  );
+}
+
 /**
- * Tempo padrão: só engenharia de manufatura e admin. O gestor comum não vê a
+ * Acesso da engenharia de manufatura: só ela e admin. O gestor comum não vê a
  * aba (menu filtrado) e, pela URL direta, a página nem monta nem chama a API.
  */
 function RequireStandardTimeAccess({ children }: PropsWithChildren) {
@@ -116,26 +126,6 @@ function RequireQualityTemplateAccess({ children, detail = "Esta tela é exclusi
     <div className="page-wrap">
       <section className="page-panel">
         <EmptyState title="Acesso restrito à Qualidade" detail={detail} />
-      </section>
-    </div>
-  );
-}
-
-/**
- * Sugestões de manutenção: só o perfil de Manutenção e o admin. O perfil de Manutenção tem nível
- * efetivo `lider`; quem o distingue é o nível atribuído à conta (`assigned_level`).
- * Os demais não veem o item de menu e, pela URL direta, a página nem monta nem
- * chama a API.
- */
-function RequireMaintenanceAccess({ children }: PropsWithChildren) {
-  const { user } = useAuth();
-  const allowed = Boolean(user && ((MAINTENANCE_LEVELS as readonly string[]).includes(user.role)
-    || (user.assigned_level && (MAINTENANCE_ASSIGNED_LEVELS as readonly string[]).includes(user.assigned_level))));
-  if (allowed) return children;
-  return (
-    <div className="page-wrap">
-      <section className="page-panel">
-        <EmptyState title="Acesso restrito à Manutenção" detail="Esta tela é exclusiva da Manutenção e da administração. Peça a elas se precisar consultar as sugestões de manutenção." />
       </section>
     </div>
   );
@@ -204,14 +194,14 @@ export default function App() {
 
         <Route path="areas/:areaId" element={<AreaPage />} />
 
-        <Route path="producao/ordens"element={<ProductionOrdersPage />} />
+        <Route path="producao/ordens" element={<OrderConsultationPage />} />
+        <Route path="producao/execucao" element={<ProductionExecutionPage />} />
         <Route path="producao/realizada" element={<ProductionCompletedPage />} />
         <Route path="producao/planejado-realizado" element={<ProductionPlanActualPage />} />
-        <Route path="manufatura/tempo-padrao" element={<RequireStandardTimeAccess><StandardTimePage /></RequireStandardTimeAccess>} />
+        <Route path="manufatura" element={<RequireStandardTimeAccess><ManufacturingEmptyPage /></RequireStandardTimeAccess>} />
         <Route path="qualidade/cotas" element={<RequireQualityTemplateAccess><QualityTemplatesPage /></RequireQualityTemplateAccess>} />
         <Route path="qualidade/rnc" element={<RequireQualityTemplateAccess detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar registrar uma decisão de RNC."><QualityRncDecisionPage /></RequireQualityTemplateAccess>} />
         <Route path="qualidade/spc" element={<RequireQualityTemplateAccess detail="Esta tela é exclusiva da Qualidade e da administração. Peça a elas se precisar consultar o SPC."><QualitySpcPage /></RequireQualityTemplateAccess>} />
-        <Route path="manutencao/sugestoes" element={<RequireMaintenanceAccess><MaintenanceSuggestionsPage /></RequireMaintenanceAccess>} />
 
         <Route path="diretoria" element={<RequireDiretoriaAccess><DirectorPage /></RequireDiretoriaAccess>} />
 

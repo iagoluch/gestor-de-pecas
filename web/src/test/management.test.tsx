@@ -12,7 +12,7 @@ import { managementRoutes, sectionById } from "../config/navigation";
 import { FilterProvider, useManagementFilters } from "../filters/FilterContext";
 import { AnalyticsCapacityPage, AnalyticsDowntimesPage, AnalyticsOeePage, AnalyticsReliabilityPage } from "../pages/analytics/AnalyticsPages";
 import { OperationsOverviewPage, OperationsResourcesPage } from "../pages/operations/OperationsPages";
-import { ProductionOrdersPage } from "../pages/production/ProductionPages";
+import { ProductionExecutionPage } from "../pages/production/ProductionPages";
 import { ManagementOverviewPage } from "../pages/ManagementOverviewPage";
 import { TraceabilityOrderPage } from "../pages/traceability/TraceabilityPages";
 
@@ -93,8 +93,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(46);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(46);
+    expect(managementRoutes).toHaveLength(45);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(45);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
@@ -659,7 +659,7 @@ describe("KPIs gerenciais da Wave 2", () => {
       page: { total: 2, page: 1, page_size: 200, pages: 1 },
     }));
 
-    const { container } = render(<MemoryRouter><FilterProvider><ProductionOrdersPage /></FilterProvider></MemoryRouter>);
+    const { container } = render(<MemoryRouter><FilterProvider><ProductionExecutionPage /></FilterProvider></MemoryRouter>);
     await screen.findByText("Quantidade planejada");
     expect(screen.getByText("200")).toBeInTheDocument();
     expect(screen.getByText("160")).toBeInTheDocument();
