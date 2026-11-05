@@ -594,6 +594,7 @@ async def _shift_boundary_loop(application: FastAPI) -> None:
     clock = application.state.clock
     service = None
     standard_time_state: dict = {}
+    last_signature = None
     while True:
         try:
             await _standard_time_daily_tick(application, standard_time_state)
@@ -618,7 +619,14 @@ async def _shift_boundary_loop(application: FastAPI) -> None:
                 load_manufacturing_rules, service.db
             )
             result = await asyncio.to_thread(service.apply_due)
-            if int(result.get("count") or 0):
+            # Virada de horário muda o estado exibido (ex.: recurso ocioso entra
+            # em almoço) mesmo sem gravar nada (count == 0). Avisar também
+            # quando surge um limite ou intervalo novo evita tela parada.
+            now = clock.now()
+            signature = (service.due_boundaries(now), service.due_break_events(now))
+            moved = last_signature is not None and signature != last_signature
+            last_signature = signature
+            if int(result.get("count") or 0) or moved:
                 application.state.realtime.publish("shift_boundary")
         except asyncio.CancelledError:
             raise

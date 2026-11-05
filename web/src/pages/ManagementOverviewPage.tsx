@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LineChart, Sparkline, StackBar } from "../components/charts";
 import { ErrorState, LoadingState, EmptyState } from "../components/DataState";
@@ -29,6 +29,12 @@ function metricText(metric: MetricValue) {
   return `${formatted}${metric.unit ?? ""}`;
 }
 
+/** Barra de OEE da linha do setor; os recursos expandidos usam a mesma. */
+function oeeBar(oee: number | null) {
+  if (oee === null) return "—";
+  return <span className="sector-oee"><span><i style={{ "--w": `${Math.min(100, oee)}%`, "--c": "var(--purple)" } as CSSProperties} /></span><b>{oee.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b></span>;
+}
+
 function hours(seconds: number) {
   return `${(seconds / 3600).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`;
 }
@@ -39,13 +45,15 @@ const hasReading = (metric: MetricValue) => metric.availability === "disponivel"
 function kpiTrend(current: MetricValue, previous?: MetricValue): { text: string; up: boolean } | undefined {
   if (current.value === null || !hasReading(current) || !previous || previous.value === null || !hasReading(previous)) return undefined;
   const diff = current.value - previous.value;
-  return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pp`, up: diff >= 0 };
+  if (Math.abs(diff) < 0.05) return undefined; // Variação zero/irrelevante: não mostra seta
+  return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pp`, up: diff > 0 };
 }
 
 function quantityTrend(current: number, previous?: number): { text: string; up: boolean } | undefined {
   if (previous === undefined || previous <= 0) return undefined;
   const diff = ((current - previous) / previous) * 100;
-  return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, up: diff >= 0 };
+  if (Math.abs(diff) < 0.05) return undefined; // Variação zero/irrelevante: não mostra seta
+  return { text: `${Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, up: diff > 0 };
 }
 
 const TIME_COLORS: Record<string, string> = {
@@ -84,6 +92,21 @@ function ago(iso: string) {
   if (minutes < 60) return `há ${minutes} min`;
   const h = Math.floor(minutes / 60);
   return h < 24 ? `há ${h} h` : `há ${Math.floor(h / 24)} d`;
+}
+
+function groupLiveSectors(events: Array<{ resource: string; resource_name?: string | null; sector: string | null; state: string; at: string }>) {
+  const map = new Map<string, { sector: string; total: number; counts: Map<string, number>; lastAt: string; lastState: string; lastResource: string }>();
+  for (const event of events) {
+    const sector = event.sector || "Sem setor";
+    const group = map.get(sector) ?? { sector, total: 0, counts: new Map(), lastAt: event.at, lastState: event.state, lastResource: event.resource_name ?? event.resource };
+    group.total += 1;
+    group.counts.set(event.state, (group.counts.get(event.state) ?? 0) + 1);
+    if (event.at > group.lastAt) Object.assign(group, { lastAt: event.at, lastState: event.state, lastResource: event.resource_name ?? event.resource });
+    map.set(sector, group);
+  }
+  return [...map.values()]
+    .map((group) => ({ ...group, states: [...group.counts.entries()].sort((a, b) => b[1] - a[1]) as Array<[string, number]> }))
+    .sort((a, b) => a.sector.localeCompare(b.sector, "pt-BR"));
 }
 
 function eventColor(state: string) {
@@ -192,6 +215,7 @@ export function ManagementOverviewPage() {
   // Série para gráficos/sparklines: opcional — se falhar ou demorar, a página inteira continua igual.
   const trendQuery = useApiQuery<OverviewTrend>(`/api/v1/management/overview/trend?${filters.query}`, { ignoreLiveTick: true });
   const trend = trendQuery.data && Array.isArray(trendQuery.data.points) && trendQuery.data.availability !== "sem_registros" ? trendQuery.data : null;
+  const liveSectors = useMemo(() => groupLiveSectors(trend?.recent_events ?? []), [trend]);
   // Cards novos só buscam quando estão visíveis: quem nunca os adicionou não paga a chamada.
   const chamadasQuery = useApiQuery<{ items: ChamadaResumo[] }>(visibleCards.chamadas ? "/api/v1/chamadas/admin/historico" : null);
   const andonQuery = useApiQuery<AndonSnapshot>(visibleCards.andon ? "/api/v1/andon" : null);
@@ -201,6 +225,13 @@ export function ManagementOverviewPage() {
   }, []);
   // Painel "de onde vem este número" (composição do tempo): guarda só o id da métrica.
   const [explainedMetric, setExplainedMetric] = useState<string | null>(null);
+  // Setores com a linha aberta na tabela de setores (mostra os recursos do setor).
+  const [openSectors, setOpenSectors] = useState<Set<string>>(new Set());
+  const toggleSector = (name: string) => setOpenSectors((current) => {
+    const next = new Set(current);
+    if (!next.delete(name)) next.add(name);
+    return next;
+  });
   const closeExplanation = useCallback(() => setExplainedMetric(null), []);
   // A composição soma N recursos e sobe N minutos por minuto: só muda na virada do minuto, para não parecer segundos.
   const heldComposition = useOncePerMinute(query.data?.time_composition, filters.query);
@@ -451,13 +482,21 @@ export function ManagementOverviewPage() {
           ))}
           {renderBlock("live_events", (
           <SectionCard title="Agora na fábrica">
-            {!trend || trend.recent_events.length === 0 ? <EmptyState title="Sem eventos recentes" detail="Mudanças de estado dos recursos aparecem aqui." /> : (
+            {liveSectors.length === 0 ? <EmptyState title="Sem eventos recentes" detail="Mudanças de estado dos recursos aparecem aqui." /> : (
               <ul className="feed">
-                {trend.recent_events.slice(0, 8).map((event, index) => (
-                  <li key={`${event.resource}-${event.at}`} style={{ animationDelay: `${index * 60}ms` }}>
-                    <span className="feed__dot" style={{ "--c": eventColor(event.state) } as React.CSSProperties} aria-hidden="true">{displayName(event.resource_name ?? event.resource).slice(0, 2).toUpperCase()}</span>
-                    <span><strong>{displayName(event.resource_name ?? event.resource)}</strong> · {displayText(event.state)}</span>
-                    <span className="feed__time">{ago(event.at)}</span>
+                {liveSectors.map((group, index) => (
+                  <li key={group.sector} style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
+                    <span className="feed__dot" style={{ "--c": eventColor(group.lastState) } as React.CSSProperties} aria-hidden="true">{displayName(group.sector).slice(0, 2).toUpperCase()}</span>
+                    <span className="feed__text">
+                      <Link className="feed__name" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(group.sector)}`}>{displayName(group.sector)}</Link>
+                      <span className="feed__detail">{group.total} {group.total === 1 ? "recurso" : "recursos"} · última mudança: {displayName(group.lastResource)}</span>
+                    </span>
+                    <span className="feed__chips">
+                      {group.states.map(([state, count]) => (
+                        <span key={state} className="feed__state" style={{ "--c": eventColor(state) } as React.CSSProperties}>{count} {displayText(state)}</span>
+                      ))}
+                    </span>
+                    <span className="feed__time">{ago(group.lastAt)}</span>
                   </li>
                 ))}
               </ul>
@@ -490,14 +529,24 @@ export function ManagementOverviewPage() {
                     {data.sectors.map((sector) => {
                       const summary = sectorSummary.get(sector.setor);
                       const oee = data.sector_kpis?.find((item) => item.setor === sector.setor)?.metrics.oee?.value ?? null;
+                      const isOpen = openSectors.has(sector.setor);
+                      const sectorResources = (data.resource_kpis ?? []).filter((item) => (item.sector || "").trim() === sector.setor);
                       return (
-                        <tr key={sector.setor}>
-                          <th><Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(sector.setor)}`}>{displayName(sector.setor)}</Link></th>
+                        <Fragment key={sector.setor}>
+                        <tr>
+                          <th>
+                            <button
+                              type="button"
+                              className="sector-toggle"
+                              aria-expanded={isOpen}
+                              aria-label={`${isOpen ? "Recolher" : "Ver"} recursos de ${displayName(sector.setor)}`}
+                              onClick={() => toggleSector(sector.setor)}
+                            >{isOpen ? "▾" : "▸"}</button>
+                            <Link className="table-link" to={`/consulta-operacional/recursos?setor=${encodeURIComponent(sector.setor)}`}>{displayName(sector.setor)}</Link>
+                          </th>
                           {trend ? (
                             <td>
-                              {oee === null ? "—" : (
-                                <span className="sector-oee"><span><i style={{ "--w": `${Math.min(100, oee)}%`, "--c": "var(--purple)" } as React.CSSProperties} /></span><b>{oee.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b></span>
-                              )}
+                              {oeeBar(oee)}
                             </td>
                           ) : null}
                           {trend ? <td>{summary && summary.resources_total > 0 ? `${summary.resources_with_production} de ${summary.resources_total}` : "—"}</td> : null}
@@ -515,6 +564,30 @@ export function ManagementOverviewPage() {
                             </td>
                           ) : null}
                         </tr>
+                        {isOpen && sectorResources.length === 0 ? (
+                          <tr className="sector-resource-row"><th colSpan={trend ? 12 : 9}>Sem recursos com leitura neste período.</th></tr>
+                        ) : null}
+                        {isOpen ? sectorResources.map((item) => {
+                          const resourceOee = item.metrics.oee?.value ?? null;
+                          const produced = (item.kpi_time_bases?.productive_gross_seconds ?? 0) > 0;
+                          return (
+                            <tr key={item.resource} className="sector-resource-row">
+                              <th>{item.resource_name || displayName(item.resource)}</th>
+                              {trend ? <td>{oeeBar(resourceOee)}</td> : null}
+                              {trend ? <td>{produced ? "Sim" : "Não"}</td> : null}
+                              <td>{quantityText(item.producao_boa ?? 0)}</td>
+                              <td>{quantityText(item.refugo ?? 0)}</td>
+                              <td>{quantityText(item.retrabalho ?? 0)}</td>
+                              <td>—</td>
+                              <td>{hours(item.tempo_produtivo_segundos ?? 0)}</td>
+                              <td>{formatHours(item.tempo_producao_segundos ?? 0)}</td>
+                              <td>{formatHours(item.tempo_setup_segundos ?? 0)}</td>
+                              <td>{formatHours(item.tempo_parada_segundos ?? 0)}</td>
+                              {trend ? <td /> : null}
+                            </tr>
+                          );
+                        }) : null}
+                        </Fragment>
                       );
                     })}
                   </tbody>

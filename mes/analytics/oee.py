@@ -276,7 +276,7 @@ def _no_demand_exception(time_bases: dict[str, float], no_demand_seconds: float)
             None,
             DataAvailability.NOT_APPLICABLE,
             "%",
-            "Sem quantidade produzida no período integralmente sem demanda.",
+            "Sem produção no período.",
         ),
         oee=MetricValue(0.0, DataAvailability.AVAILABLE, "%", reason),
         time_bases={

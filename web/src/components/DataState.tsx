@@ -37,7 +37,7 @@ export function EmptyState({ title, detail, state }: { title?: string; detail?: 
   const body = detail ?? (effectiveState ? systemStateSentence(effectiveState) : null);
   return (
     <div className="state-box state-box--empty">
-      <strong>{title ?? resolved ?? "Sem registros"}</strong>
+      <strong>{title ?? resolved ?? "Sem dados"}</strong>
       {body ? <span>{body}</span> : null}
     </div>
   );

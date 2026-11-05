@@ -26,7 +26,7 @@ Cada bloco é independente. Se um falhar, os outros continuam. Os nomes abaixo s
 | O que precisa de atenção | Até 4 exceções, com contador "N exceções" e botão **Ver evidências**. Sem nada: "Nenhuma exceção identificada". | Leva a Tempo padrão, OEE ou Paradas & Setup, conforme o caso. |
 | Composição do tempo | Média por recurso em destaque e o texto "total X somado de N máquinas". Itens fora do total aparecem como "não somado". | Abre Horas & Utilização. Clicar num item abre "de onde vem". |
 | Maiores perdas | Até 4 maiores perdas de tempo. | Abre Paradas & Setup. |
-| Agora na fábrica | Até 8 eventos recentes, com "há N min/h/d". Sem nada: "Sem eventos recentes". | Nada. |
+| Agora na fábrica | Uma linha por setor (todos), com a quantidade de recursos em cada estado (ex.: 3 Produzindo, 1 Parado) e a última mudança com "há N min/h/d". Sem nada: "Sem eventos recentes". | O nome do setor abre Consulta Operacional, aba Recursos, naquele setor. |
 | Setores — leitura rápida e execução real | Cartões de destaque e uma tabela (veja abaixo). | O nome do setor abre Consulta Operacional, aba Recursos, naquele setor. |
 | Recursos com maior impacto | Até 4 máquinas ou postos que mais pesam. | Abre Paradas & Setup filtrado pelo recurso. |
 | Inconsistências de dados | Até 4 problemas de registro. Sem nada: "Sem inconsistências abertas". | Abre Auditoria, aba Alertas e inconsistências. |

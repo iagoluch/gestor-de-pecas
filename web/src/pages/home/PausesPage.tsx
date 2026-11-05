@@ -15,7 +15,7 @@ import { usePersistentFilters } from "../../hooks/usePersistentFilters";
 import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useDraft } from "../../hooks/useDraft";
-import { displayName } from "../../utils/format";
+import { displayName, pluralize } from "../../utils/format";
 
 interface AutomaticPause {
   id: number;
@@ -193,8 +193,8 @@ export function ManagementPausesPage() {
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Pausas ativas" value={String(query.data?.active ?? 0)} detail={`${query.data?.count ?? 0} configuradas`} accent="primary" />
         <MetricCard label="Setores cobertos" value={String(setoresConfigurados.size)} detail={`de ${SETORES.length} setores`} accent="success" />
-        <MetricCard label="Almoço" value={`${items.filter((item) => item.ativo && /almo/i.test(item.nome)).length} setor(es)`} accent="warning" />
-        <MetricCard label="Café" value={`${items.filter((item) => item.ativo && /caf/i.test(item.nome)).length} setor(es)`} accent="teal" />
+        <MetricCard label="Almoço" value={`${items.filter((item) => item.ativo && /almo/i.test(item.nome)).length} ${pluralize(items.filter((item) => item.ativo && /almo/i.test(item.nome)).length, "setor")}`} accent="warning" />
+        <MetricCard label="Café" value={`${items.filter((item) => item.ativo && /caf/i.test(item.nome)).length} ${pluralize(items.filter((item) => item.ativo && /caf/i.test(item.nome)).length, "setor")}`} accent="teal" />
       </div>
 
       {mensagem ? <Notice>{mensagem}</Notice> : null}
@@ -241,7 +241,7 @@ export function ManagementPausesPage() {
       <SectionCard
         title="Pausas por setor"
         className="content-section section-card--table"
-        action={<span className="section-count">{filtradas.length} pausa(s)</span>}
+        action={<span className="section-count">{`${filtradas.length} ${pluralize(filtradas.length, "pausa")}`}</span>}
       >
         {filtradas.length ? (
           <DataTable

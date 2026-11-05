@@ -69,6 +69,7 @@ export function AssistantDock() {
         <button
           type="button"
           className="dock__toggle"
+          title="Atalhos"
           aria-label="Atalhos: chamar alguém e IA"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}

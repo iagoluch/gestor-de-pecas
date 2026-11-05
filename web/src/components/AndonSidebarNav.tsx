@@ -139,6 +139,7 @@ export function AndonSidebarNav() {
               </div>
             </div>
           </div>
+          <small className="sidebar__credit">Desenvolvido por:<br />Iago Luchtenberg da Silva</small>
         </div>
       </aside>
     </>

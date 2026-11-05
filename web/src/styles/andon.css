@@ -1201,7 +1201,8 @@ body:has(.andon-page--manager) #root {
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 1.2vw;
   padding: 0.7vw 1.2vw 0.8vw;
   border-top: 1px solid var(--border);
   font-size: clamp(14px, 1.3vw, 48px);
@@ -1209,7 +1210,7 @@ body:has(.andon-page--manager) #root {
   color: var(--text);
   background: var(--surface-alt);
 }
-.andon-map__legend-item { display: inline-flex; align-items: center; margin: 0.2vw 1.2vw; white-space: nowrap; }
+.andon-map__legend-item { display: inline-flex; align-items: center; margin: 0.2vw 0; white-space: nowrap; }
 .andon-map__swatch {
   display: inline-block;
   width: 1.4em;
@@ -1225,10 +1226,14 @@ body:has(.andon-page--manager) #root {
 .andon-map__tile--hover { cursor: pointer; }
 .andon-map__tile--hover:hover rect { stroke: var(--text); stroke-width: 3; }
 .andon-map__card {
-  position: absolute;
-  z-index: 5;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
   width: 280px;
-  max-width: 45%;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-card);

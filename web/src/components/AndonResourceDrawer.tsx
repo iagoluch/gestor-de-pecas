@@ -5,12 +5,12 @@ import type { AndonResource } from "../types/andon";
 import { availabilityLabel, displayName, displayText, formatDateTime, formatDuration } from "../utils/format";
 
 function metricText(metric: MetricValue) {
-  if (metric.value === null || metric.value === undefined) return "Não disponível";
+  if (metric.value === null || metric.value === undefined) return "—";
   return `${metric.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}${metric.unit ?? "%"}`;
 }
 
 function quantityText(value: number | null | undefined) {
-  return value === null || value === undefined ? "Não disponível" : value.toLocaleString("pt-BR");
+  return value === null || value === undefined ? "—" : value.toLocaleString("pt-BR");
 }
 
 function DetailMetric({ label, metric, featured = false }: { label: string; metric: MetricValue; featured?: boolean }) {
@@ -78,7 +78,7 @@ export function AndonResourceDrawer({
             </div>
             <div>
               <span>Tempo no estado</span>
-              <strong>{liveDuration === null ? "Não disponível" : formatDuration(liveDuration)}</strong>
+              <strong>{liveDuration === null ? "—" : formatDuration(liveDuration)}</strong>
             </div>
             <div>
               <span>Início</span>
@@ -103,7 +103,7 @@ export function AndonResourceDrawer({
               {operation?.op ? <div><dt>OP</dt><dd>{operation.op}</dd></div> : null}
               {operation?.operation !== null && operation?.operation !== undefined ? <div><dt>Operação</dt><dd>{operation.operation}</dd></div> : null}
               {operation?.product || operation?.product_description ? <div><dt>Produto</dt><dd>{operation.product_description ?? operation.product}</dd></div> : null}
-              <div><dt>Operador</dt><dd>{operation?.operator ?? "Não disponível"}</dd></div>
+              <div><dt>Operador</dt><dd>{operation?.operator ?? "—"}</dd></div>
               <div><dt>Quantidade boa</dt><dd>{quantityText(operation?.good_quantity)}</dd></div>
               <div><dt>Quantidade prevista</dt><dd>{quantityText(operation?.planned_quantity)}</dd></div>
               <div><dt>Refugo</dt><dd>{quantityText(operation?.scrap_quantity)}</dd></div>

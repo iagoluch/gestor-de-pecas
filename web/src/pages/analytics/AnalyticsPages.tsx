@@ -207,7 +207,7 @@ function evolutionPeriod(point: NonNullable<OeeResponse["evolution"]>["points"][
 
 function evolutionMetric(value: MetricValue | undefined) {
   return value?.value === null || value?.value === undefined
-    ? "Não disponível"
+    ? "—"
     : formatPercent(value.value);
 }
 
@@ -525,7 +525,7 @@ function SegmentPage() {
               { key: "classification", label: "Classificação", render: (row) => <StatusBadge value={isStop ? (row.programada ? "Programada" : "Não programada") : (row.tipo_setup ?? "Setup")} /> },
               { key: "start", label: "Início", render: (row) => formatDateTime(row.inicio) },
               { key: "time", label: "Tempo", render: (row) => formatDuration(row.segundos) },
-              { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+              { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
             ]}
           />
         </SectionCard>
@@ -730,9 +730,9 @@ export function AnalyticsStandardPage() {
           rows={rows}
           rowKey={(row, index) => row.apontamento_id ?? `${row.op}-${index}`}
           columns={[
-            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
             { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
-            { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
+            { key: "product", label: "Produto", render: (row) => row.produto ?? "—" },
             { key: "resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
             { key: "good", label: "Peças boas", render: (row) => formatNumber(row.quantidade_boa) },
             { key: "standard", label: "Padrão estimado", render: (row) => formatDuration(row.tempo_padrao_estimado_segundos) },
@@ -877,7 +877,7 @@ export function AnalyticsCapacityPage() {
               label: "Fila (h)",
               render: (row) => (
                 <>
-                  {row.fila_horas_segundos == null ? "Não disponível" : formatHours(row.fila_horas_segundos)}
+                  {row.fila_horas_segundos == null ? "—" : formatHours(row.fila_horas_segundos)}
                   {row.fila_excede_livre ? <> <span className="status-badge status-badge--warning">Fila maior que o tempo livre</span></> : null}
                   {row.fila_horas_estimadas_segundos ? <small> (inclui {formatHours(row.fila_horas_estimadas_segundos)} de tempo estimado)</small> : null}
                   {row.fila_sem_tempo_padrao ? <small> (parcial: {formatNumber(row.fila_sem_tempo_padrao)} sem tempo padrão)</small> : null}
@@ -954,7 +954,7 @@ export function AnalyticsReliabilityPage() {
                 { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
                 { key: "failures", label: "Quebras", render: (row) => formatNumber(row.falhas) },
                 { key: "downtime", label: "Tempo parado", render: (row) => formatHours(row.tempo_reparo_segundos) },
-                { key: "mttr", label: "MTTR", render: (row) => row.mttr_segundos == null ? "Não disponível" : formatDuration(row.mttr_segundos) },
+                { key: "mttr", label: "MTTR", render: (row) => row.mttr_segundos == null ? "—" : formatDuration(row.mttr_segundos) },
               ]}
             />
           ) : <EmptyState title="Nenhuma quebra no período" detail={data?.reason} />}

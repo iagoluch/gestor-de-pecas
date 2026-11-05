@@ -4,7 +4,7 @@ import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
-import { displayName } from "../../utils/format";
+import { displayName, pluralize } from "../../utils/format";
 
 interface Chamada {
   id: number;
@@ -99,7 +99,7 @@ export function ManagementChamadasPage() {
       <SectionCard
         title="Últimas chamadas"
         className="content-section section-card--table"
-        action={<span className="section-count">{historico.length} chamada(s)</span>}
+        action={<span className="section-count">{`${historico.length} ${pluralize(historico.length, "chamada")}`}</span>}
       >
         <DataTable
           rows={historico}

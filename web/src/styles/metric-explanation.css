@@ -78,8 +78,8 @@ button.mx-row:focus-visible, .mx-stretch:focus-visible { outline: none; box-shad
 .time-composition__note { margin: -6px 0 0; color: var(--muted); font-size: var(--text-xs); }
 
 /* Número clicável dentro de tabelas (Operações > Tempo). */
-.metric-link { margin: 0; padding: 2px 4px; border: 0; border-bottom: 1px dotted var(--muted); border-radius: 4px; color: inherit; background: transparent; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
-.metric-link:hover { border-bottom-color: var(--primary); color: var(--primary); }
+.metric-link { margin: 0; padding: 2px 4px; border: 0; border-radius: 4px; color: inherit; background: transparent; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.metric-link:hover { color: var(--primary); }
 .metric-link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ---- Chat com a IA dentro do painel ---- */

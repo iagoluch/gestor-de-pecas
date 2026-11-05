@@ -45,11 +45,11 @@ describe("cartões de severidade leem as chaves do backend", () => {
 
 describe("formatPieces", () => {
   it("sem valor não ganha o sufixo de peças", () => {
-    expect(formatPieces(null)).toBe("Não disponível");
-    expect(formatPieces(undefined)).toBe("Não disponível");
+    expect(formatPieces(null)).toBe("—");
+    expect(formatPieces(undefined)).toBe("—");
   });
   it("com valor mostra a quantidade em peças", () => {
-    expect(formatPieces(0)).toBe("0 peça(s)");
-    expect(formatPieces(1200)).toBe("1.200 peça(s)");
+    expect(formatPieces(0)).toBe("0 peças");
+    expect(formatPieces(1200)).toBe("1.200 peças");
   });
 });

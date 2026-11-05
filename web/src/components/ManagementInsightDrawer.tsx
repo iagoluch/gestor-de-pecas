@@ -4,14 +4,14 @@ import { Link } from "react-router-dom";
 import type { InsightEvidence, KpiExplanation, ManagementException } from "../types/api";
 import { availabilityLabel, displayText, formatDateTime, formatHours, formatNumber, humanize } from "../utils/format";
 
-function text(value: unknown, fallback = "Não disponível") {
+function text(value: unknown, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return displayText(String(value), fallback);
 }
 
 function impact(value: unknown, unit: unknown) {
   const numeric = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numeric)) return "Não disponível";
+  if (!Number.isFinite(numeric)) return "—";
   if (unit === "s") return formatHours(numeric);
   if (unit === "%" || unit === "p.p.") return `${formatNumber(numeric, 1)} ${unit}`;
   return `${formatNumber(numeric, 1)}${unit ? ` ${unit}` : ""}`;

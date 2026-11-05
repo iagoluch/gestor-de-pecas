@@ -83,11 +83,11 @@ export function ProductionExecutionPage() {
           columns={[
             // GE-09: OP fixa e Status logo ao lado, para não sumirem na rolagem;
             // a sequência acompanha a operação em vez de ocupar coluna própria.
-            { key: "op", label: "OP", sticky: true, sortValue: (row) => row.op, render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+            { key: "op", label: "OP", sticky: true, sortValue: (row) => row.op, render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
             { key: "status", label: "Status", sortValue: (row) => row.status, render: (row) => <StatusBadge value={row.status} /> },
-            { key: "product", label: "Produto", sortValue: (row) => row.produto, render: (row) => <span title={row.descricao ?? undefined}>{row.produto ?? "Não disponível"}</span> },
-            { key: "operation", label: "Operação", sortValue: (row) => row.sequencia, render: (row) => row.operacao_atual ? (row.sequencia ? `${row.sequencia} · ${displayName(row.operacao_atual)}` : displayName(row.operacao_atual)) : "Não disponível" },
-            { key: "resource", label: "Recurso", sortValue: (row) => row.recurso_real ?? row.recurso_planejado, render: (row) => row.recurso_real ?? row.recurso_planejado ?? "Não disponível" },
+            { key: "product", label: "Produto", sortValue: (row) => row.produto, render: (row) => <span title={row.descricao ?? undefined}>{row.produto ?? "—"}</span> },
+            { key: "operation", label: "Operação", sortValue: (row) => row.sequencia, render: (row) => row.operacao_atual ? (row.sequencia ? `${row.sequencia} · ${displayName(row.operacao_atual)}` : displayName(row.operacao_atual)) : "—" },
+            { key: "resource", label: "Recurso", sortValue: (row) => row.recurso_real ?? row.recurso_planejado, render: (row) => row.recurso_real ?? row.recurso_planejado ?? "—" },
             { key: "priority", label: "Prioridade", sortValue: (row) => row.prioridade, render: (row) => displayName(row.prioridade) },
             { key: "planned", label: "Planejada", sortValue: (row) => row.quantidade_planejada, render: (row) => formatNumber(row.quantidade_planejada) },
             { key: "good", label: "Boa", sortValue: (row) => row.quantidade_boa, render: (row) => formatNumber(row.quantidade_boa) },
@@ -158,7 +158,6 @@ export function ProductionCompletedPage() {
               { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
             ]}
           /> : <EmptyState detail={data?.production.reason ?? undefined} />}
-          <p className="section-note">Fonte de qualidade: {data?.quality?.reason ?? "Não disponível"}</p>
         </SectionCard>
       </div>
     </PageFrame>
@@ -194,9 +193,9 @@ export function ProductionPlanActualPage() {
           rows={rows}
           rowKey={(row, index) => row.apontamento_id ?? `${row.op}-${index}`}
           columns={[
-            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
             { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
-            { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
+            { key: "product", label: "Produto", render: (row) => row.produto ?? "—" },
             { key: "planned-resource", label: "Recurso planejado", render: (row) => displayName(row.recurso_planejado) },
             { key: "real-resource", label: "Recurso real", render: (row) => displayName(row.recurso_real) },
             { key: "planned-qty", label: "Quantidade plano", render: (row) => formatNumber(row.quantidade_planejada) },

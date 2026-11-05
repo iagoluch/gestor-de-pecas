@@ -17,9 +17,9 @@ function clockDuration(seconds: number): string {
 
 /** Formata o número na unidade do contrato. `hours` chega em horas e vira "2h 30m". */
 export function formatValue(value: number | string | null | undefined, unit: ValueUnit): string {
-  if (value === null || value === undefined || value === "") return "Não disponível";
+  if (value === null || value === undefined || value === "") return "—";
   if (unit === "text" || typeof value === "string") return String(value);
-  if (!Number.isFinite(value)) return "Não disponível";
+  if (!Number.isFinite(value)) return "—";
   switch (unit) {
     case "pct": return formatPercent(value);
     case "brl": return brl.format(value);

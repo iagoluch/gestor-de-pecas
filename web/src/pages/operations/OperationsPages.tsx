@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useOptionalAuth } from "../../auth/AuthContext";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
@@ -15,7 +14,6 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useOperationsStream } from "../../hooks/useOperationsStream";
-import { AreaQueuePanel } from "../areas/AreaQueuePanel";
 import { buildResourceCountExplanation, buildStoppedOrdersExplanation, type ResourceCountMetric } from "./operationsExplanations";
 import { buildSumExplanation, ROW_LIMIT, sumQuantities, type ExplanationScope, type SumMetric } from "../production/productionExplanations";
 import { localDate, referenceNow, useReferenceClock } from "../../system/ReferenceClock";
@@ -141,7 +139,6 @@ export function OperationsOverviewPage() {
 
 export function OperationsResourcesPage() {
   const filters = useManagementFilters();
-  const user = useOptionalAuth()?.user;
   const [params, setParams] = useSearchParams();
   const sector = params.get("setor");
   // O link "?setor=X" (Início) vira o filtro da barra: assim o seletor mostra
@@ -157,12 +154,6 @@ export function OperationsResourcesPage() {
   if (query.loading || sector !== null) return <LoadingPage title={title} subtitle={subtitle} period={false} />;
   if (query.error && !query.data) return <PageFrame sectionId="operations" title={title} subtitle={subtitle} period={false}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
-  // Fila de prioridades da área (antes só na seção do setor): aparece quando o filtro de setor é
-  // um setor de área cuja fila a conta pode ordenar (`queue_areas`: líder/supervisor e admin).
-  const filteredSector = filters.filters.sector.trim().toLocaleLowerCase("pt-BR");
-  const queueArea = filteredSector
-    ? user?.areas?.find((area) => user.queue_areas?.includes(area.id) && area.setores.some((setor) => setor.toLocaleLowerCase("pt-BR") === filteredSector))
-    : undefined;
   return (
     <PageFrame staleError={query.error} sectionId="operations" title={title} subtitle={subtitle} period={false}>
       <div className="metric-grid metric-grid--four">
@@ -185,16 +176,15 @@ export function OperationsResourcesPage() {
             { key: "resource", label: "Recurso", render: (row) => <strong>{formatResourceName(row.recurso_nome ?? row.recurso)}</strong> },
             { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
             { key: "state", label: "Estado", render: (row) => <StatusBadge value={row.categoria ?? row.codigo_status} /> },
-            { key: "op", label: "OP", render: (row) => row.ops_ativas[0]?.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.ops_ativas[0].op!)}`}>{row.ops_ativas[0].op}</Link> : "Não disponível" },
-            { key: "product", label: "Produto", render: (row) => row.ops_ativas[0]?.produto ?? "Não disponível" },
-            { key: "operator", label: "Operador", render: (row) => row.ops_ativas[0]?.operador_inicio ?? "Não disponível" },
+            { key: "op", label: "OP", render: (row) => row.ops_ativas[0]?.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.ops_ativas[0].op!)}`}>{row.ops_ativas[0].op}</Link> : "—" },
+            { key: "product", label: "Produto", render: (row) => row.ops_ativas[0]?.produto ?? "—" },
+            { key: "operator", label: "Operador", render: (row) => row.ops_ativas[0]?.operador_inicio ?? "—" },
             { key: "start", label: "Início", render: (row) => formatDateTime(row.inicio) },
             { key: "duration", label: "Duração", render: (row) => formatDuration(row.duracao_segundos) },
             { key: "reason", label: "Motivo", render: (row) => displayName(row.motivo) },
           ]}
         />
       </SectionCard>
-      {queueArea ? <AreaQueuePanel key={queueArea.id} areaId={queueArea.id} /> : null}
     </PageFrame>
   );
 }
@@ -236,8 +226,8 @@ function OrdersTable({ rows }: { rows: PagedOrders["items"] }) {
         rows={rows}
         rowKey={(row, index) => row.apontamento_id ?? `${row.op}-${index}`}
         columns={[
-          { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
-          { key: "product", label: "Produto", render: (row) => row.produto ?? "Não disponível" },
+          { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
+          { key: "product", label: "Produto", render: (row) => row.produto ?? "—" },
           { key: "operation", label: "Operação", render: (row) => displayName(row.operacao_atual) },
           { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_real) },
           { key: "planned", label: "Planejado", render: (row) => formatNumber(row.quantidade_planejada) },

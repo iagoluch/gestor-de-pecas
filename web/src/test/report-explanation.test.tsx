@@ -150,10 +150,10 @@ describe("Relatórios: uma aba só, com seletor de tipo", () => {
 });
 
 describe("Produção realizada: traz o que era exclusivo do relatório de Produção", () => {
-  it("cartão de OPs e a fonte de qualidade continuam visíveis", async () => {
+  it("cartão de OPs continua visível e a nota interna de qualidade não é renderizada", async () => {
     mountFetch("producao");
     page(<ProductionCompletedPage />);
     expect(await screen.findByText("OPs")).toBeInTheDocument();
-    expect(screen.getByText("Fonte de qualidade: Fonte de teste")).toBeInTheDocument();
+    expect(screen.queryByText(/Fonte de qualidade:/)).not.toBeInTheDocument();
   });
 });

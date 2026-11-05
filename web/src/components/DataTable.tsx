@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { EmptyState } from "./DataState";
 
 export interface TableColumn<T> {
@@ -35,6 +35,12 @@ export function DataTable<T>({
   emptyTitle?: string;
 }) {
   const [sort, setSort] = useState<Sort | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const handleScroll = () => {
+    const el = wrapRef.current;
+    if (el) setScrolled(el.scrollTop > 0);
+  };
   if (!rows.length) return <EmptyState title={emptyTitle} />;
   const sortColumn = sort ? columns.find((column) => column.key === sort.key) : undefined;
   const indexed = rows.map((row, index) => ({ row, index }));
@@ -51,7 +57,7 @@ export function DataTable<T>({
   const toggle = (key: string) => setSort((current) =>
     current?.key === key ? { key, dir: current.dir === "ascending" ? "descending" : "ascending" } : { key, dir: "ascending" });
   return (
-    <div className="table-scroll data-table-wrap">
+    <div ref={wrapRef} className={`table-scroll data-table-wrap${scrolled ? " scrolled" : ""}`} onScroll={handleScroll}>
       <table className="data-table">
         <thead>
           <tr>{columns.map((column) => (

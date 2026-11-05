@@ -92,13 +92,13 @@ export function AuditAppointmentsPage() {
           rows={rows}
           rowKey={(row, index) => row.apontamento_id ?? index}
           columns={[
-            { key: "id", label: "ID", render: (row) => row.apontamento_id ?? "Não disponível" },
-            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+            { key: "id", label: "ID", render: (row) => row.apontamento_id ?? "—" },
+            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
             { key: "operation", label: "Operação", render: (row) => displayName(row.operacao_atual) },
             { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
             { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_real) },
             { key: "divergence", label: "Recurso divergente", render: (row) => row.recurso_divergente ? <ResourceDivergenceBadge planned={row.recurso_planejado} actual={row.recurso_apontado || row.recurso_real} /> : "—" },
-            { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "Não disponível" },
+            { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "—" },
             { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status} /> },
             { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
             { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
@@ -226,7 +226,7 @@ export function AuditAlertsIssuesPage() {
             { key: "message", label: "Descrição", render: (row) => displayText(row.message ?? row.mensagem) },
             { key: "sector", label: "Setor", render: (row) => displayName(row.sector) },
             { key: "resource", label: "Recurso", render: (row) => displayName(row.resource) },
-            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "Não disponível" },
+            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
             { key: "start", label: "Início", render: (row) => formatDateTime(row.start) },
             { key: "source", label: "Fonte", render: (row) => displayName(row.source) },
           ]}

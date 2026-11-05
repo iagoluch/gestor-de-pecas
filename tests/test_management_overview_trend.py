@@ -390,7 +390,7 @@ class OverviewTrendRecentEventsTests(unittest.TestCase):
         filters = AnalyticsFilter(datetime(2026, 8, 19), datetime(2026, 8, 21))
         self.assertEqual(_service().get_overview_trend(filters)["recent_events"], [])
 
-    def test_eventos_ordenados_limitados_a_8_e_dentro_do_periodo(self):
+    def test_estado_vigente_de_todos_os_recursos_ordenado_por_recencia(self):
         rows = [
             self._row(f"R{i}", datetime(2026, 8, 20, 8, i)) for i in range(10)
         ] + [self._row("FORA", datetime(2026, 8, 1, 8, 0))]
@@ -401,7 +401,8 @@ class OverviewTrendRecentEventsTests(unittest.TestCase):
         )
         events = _service(repo).get_overview_trend(filters)["recent_events"]
 
-        self.assertEqual(len(events), 8)
+        # 10 recursos + o que começou antes do período (ainda vigente): todos entram.
+        self.assertEqual(len(events), 11)
         self.assertEqual(events[0], {
             "resource": "R9", "resource_name": "R9", "sector": "Dobra", "state": "producao",
             "at": datetime(2026, 8, 20, 8, 9).isoformat(),
@@ -409,7 +410,7 @@ class OverviewTrendRecentEventsTests(unittest.TestCase):
         # Código com nome oficial publica o nome limpo, sem alterar a identidade.
         torno = _service(_EventsRepo([self._row("TORNOC", datetime(2026, 8, 20, 8, 0))])).get_overview_trend(filters)["recent_events"]
         self.assertEqual((torno[0]["resource"], torno[0]["resource_name"]), ("TORNOC", "Torno Mecânico"))
-        self.assertNotIn("FORA", [e["resource"] for e in events])
+        self.assertIn("FORA", [e["resource"] for e in events])  # vigente, mesmo começando antes do período
         self.assertEqual(
             [e["at"] for e in events], sorted((e["at"] for e in events), reverse=True)
         )

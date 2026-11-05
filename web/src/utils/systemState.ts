@@ -288,7 +288,7 @@ export function systemStateLabelOrNull(value: unknown): string | null {
 
 /** Frase de estado vazio para uma superfície sem dado no filtro atual. */
 export function systemStateSentence(value: unknown, fallback = "Nenhum dado disponível para o filtro atual."): string {
-  return humanizeSystemState(value, { style: "sentence", fallback });
+  return filterBackendNoise(humanizeSystemState(value, { style: "sentence", fallback }));
 }
 
 /** Rótulo curto derivado da camada central; mantido para os cards existentes. */
@@ -301,6 +301,23 @@ export const availabilityLabel: Record<Availability, string> = {
   nao_aplicavel: SYSTEM_STATES.nao_aplicavel.label,
   inconsistente: SYSTEM_STATES.inconsistente.label,
 };
+
+const BACKEND_NOISE_PATTERNS = [
+  /exce[çc][aã]o corporativa/i,
+  /f[oó]rmula oficial/i,
+  /fonte can[oô]nica/i,
+  /diferen[çc]a:/i,
+  /n[aã]o ser[aá] inventado/i,
+  /pipeline/i,
+  /contrato confirmado/i,
+];
+
+function filterBackendNoise(text: string): string {
+  for (const pattern of BACKEND_NOISE_PATTERNS) {
+    if (pattern.test(text)) return "";
+  }
+  return text;
+}
 
 /**
  * Só os identificadores inequivocamente técnicos entram na substituição dentro
@@ -317,10 +334,13 @@ const TOKEN_PATTERN = new RegExp(`\\b(${TECHNICAL_TOKENS.join("|")})\\b`, "gi");
 /**
  * Substitui estados técnicos e identificadores internos que apareçam dentro de
  * um texto livre vindo do backend (justificativa, motivo, resposta da IA).
+ * Também remove ruído de backend (frases internas de diagnóstico).
  */
 export function humanizeSystemStateIn(text: string): string {
   if (!text) return text;
-  return text.replace(TOKEN_PATTERN, (match) => {
+  const filtered = filterBackendNoise(text);
+  if (!filtered) return "";
+  return filtered.replace(TOKEN_PATTERN, (match) => {
     const state = resolveSystemState(match);
     if (state) return SYSTEM_STATES[state].label;
     return internalTermLabel(match) ?? match;

@@ -18,10 +18,10 @@ export function ResourceCard({ resource }: { resource: ResourceRow }) {
         <StatusBadge value={resource.categoria ?? resource.codigo_status} />
       </header>
       <dl>
-        <div><dt>OP</dt><dd>{operation?.op ? <Link to={`/rastreabilidade/op-produto?op=${encodeURIComponent(operation.op)}`}>{operation.op}</Link> : "Não disponível"}</dd></div>
+        <div><dt>OP</dt><dd>{operation?.op ? <Link to={`/rastreabilidade/op-produto?op=${encodeURIComponent(operation.op)}`}>{operation.op}</Link> : "—"}</dd></div>
         <div><dt>Operação</dt><dd>{displayName(operation?.operacao)}</dd></div>
-        <div><dt>Produto</dt><dd>{operation?.produto ?? "Não disponível"}</dd></div>
-        <div><dt>Operador</dt><dd>{operation?.operador_inicio ?? "Não disponível"}</dd></div>
+        <div><dt>Produto</dt><dd>{operation?.produto ?? "—"}</dd></div>
+        <div><dt>Operador</dt><dd>{operation?.operador_inicio ?? "—"}</dd></div>
         <div><dt>Início</dt><dd>{formatDateTime(resource.inicio ?? operation?.inicio)}</dd></div>
         <div><dt>Duração</dt><dd>{formatDuration(resource.duracao_segundos)}</dd></div>
         {showCurrentStretch ? (

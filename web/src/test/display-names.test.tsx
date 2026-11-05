@@ -32,7 +32,7 @@ describe("nomes técnicos nunca aparecem crus", () => {
     expect(humanize("prototipo")).toBe("Operador Protótipo");
     expect(displayName("PCMIXQ01001")).toBe("PCMIXQ01001");
     expect(displayName("falta_de_material")).toBe("Falta De Material");
-    expect(displayName(null)).toBe("Não disponível");
+    expect(displayName(null)).toBe("—");
     expect(displayName("", "—")).toBe("—");
   });
 

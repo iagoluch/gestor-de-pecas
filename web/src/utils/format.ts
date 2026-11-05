@@ -7,13 +7,15 @@ import { humanizeSlug, humanizeSystemStateIn, internalTermLabel, roleLabelOrNull
 export { availabilityLabel, humanizeSystemState, roleLabelOrNull, systemStateSentence } from "./systemState";
 
 export function formatNumber(value: number | null | undefined, digits = 0) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "Não disponível";
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return value.toLocaleString("pt-BR", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
 
 export function formatPieces(value: number | null | undefined) {
   const text = formatNumber(value);
-  return value === null || value === undefined || Number.isNaN(value) ? text : `${text} peça(s)`;
+  if (value === null || value === undefined || Number.isNaN(value)) return text;
+  const n = Number(value);
+  return `${text} ${pluralize(n, "peça")}`;
 }
 
 function normalizeMeasurementToken(token: string) {
@@ -30,16 +32,16 @@ function normalizeMeasurementToken(token: string) {
 
 /** Formata cotas sem alterar o valor persistido nem perder tolerâncias. */
 export function formatMeasurement(value: string | number | null | undefined) {
-  if (value === null || value === undefined || String(value).trim() === "") return "Não disponível";
+  if (value === null || value === undefined || String(value).trim() === "") return "—";
   return String(value).replace(/[+-]?\d+(?:[.,]\d+)?/g, normalizeMeasurementToken);
 }
 
 export function formatPercent(value: number | null | undefined) {
-  return value === null || value === undefined ? "Não disponível" : `${formatNumber(value, 1)}%`;
+  return value === null || value === undefined ? "—" : `${formatNumber(value, 1)}%`;
 }
 
 export function formatDuration(seconds: number | null | undefined) {
-  if (seconds === null || seconds === undefined) return "Não disponível";
+  if (seconds === null || seconds === undefined) return "—";
   const total = Math.max(0, Math.round(seconds));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -48,7 +50,7 @@ export function formatDuration(seconds: number | null | undefined) {
 }
 
 export function formatSignedDuration(seconds: number | null | undefined) {
-  if (seconds === null || seconds === undefined) return "Não disponível";
+  if (seconds === null || seconds === undefined) return "—";
   const sign = seconds < 0 ? "−" : seconds > 0 ? "+" : "";
   return `${sign}${formatDuration(Math.abs(seconds))}`;
 }
@@ -67,7 +69,7 @@ export function formatRecordedTimeDetail(totalSeconds: number | null | undefined
 }
 
 export function formatHours(seconds: number | null | undefined) {
-  if (seconds === null || seconds === undefined) return "Não disponível";
+  if (seconds === null || seconds === undefined) return "—";
   const total = Math.max(0, Math.round(seconds));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -77,7 +79,7 @@ export function formatHours(seconds: number | null | undefined) {
 }
 
 export function formatDateTime(value: string | null | undefined) {
-  if (!value) return "Não disponível";
+  if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -89,7 +91,7 @@ export function formatDateTime(value: string | null | undefined) {
  * apenas formatado (snake_case vira texto com acento e capitalização).
  */
 export function humanize(value: string | null | undefined) {
-  if (!value) return "Não disponível";
+  if (!value) return "—";
   return systemStateLabelOrNull(value) ?? internalTermLabel(value) ?? roleLabelOrNull(value) ?? humanizeSlug(value);
 }
 
@@ -104,7 +106,7 @@ export function isTechnicalName(value: string | null | undefined) {
  * Para campo de nome livre (setor, recurso, motivo, origem): preserva o nome
  * cadastrado e só trata o que é identificador técnico ou estado conhecido.
  */
-export function displayName(value: string | number | null | undefined, fallback = "Não disponível") {
+export function displayName(value: string | number | null | undefined, fallback = "—") {
   const text = String(value ?? "").trim();
   if (!text) return fallback;
   // "prototipo" é nível de acesso ("Operador Protótipo") e também nome de setor: aqui é setor.
@@ -115,7 +117,7 @@ export function displayName(value: string | number | null | undefined, fallback 
 }
 
 /** Texto livre vindo do backend (motivo, mensagem): troca só os identificadores técnicos embutidos. */
-export function displayText(value: string | null | undefined, fallback = "Não disponível") {
+export function displayText(value: string | null | undefined, fallback = "—") {
   const text = String(value ?? "").trim();
   return text ? displayName(humanizeSystemStateIn(text)) : fallback;
 }
@@ -131,4 +133,9 @@ export function formatResourceName(value: string | null | undefined) {
 export function formatPercentOneDecimal(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+/** Pluralização correta em PT-BR: "1 item", "2 itens". */
+export function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? singular : (plural ?? `${singular}s`);
 }

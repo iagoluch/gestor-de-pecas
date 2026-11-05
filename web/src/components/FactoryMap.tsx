@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type { MetricValue } from "../types/api";
 import type { AndonResource, AndonSnapshot } from "../types/andon";
@@ -23,14 +23,31 @@ function qty(value: number | null | undefined) {
 }
 
 /** Cartão do hover (só na visão gerencial): estado, indicadores e o que está apontado no recurso. */
-function MapTileCard({ resource, x, y, flip }: { resource: AndonResource; x: number; y: number; flip: boolean }) {
+function MapTileCard({ resource, x, y }: { resource: AndonResource; x: number; y: number }) {
   const { state, metrics, operation, cut, ops_ativas: ops } = resource;
+  const ref = useRef<HTMLElement>(null);
+  // O cartão é `fixed` (o mapa corta o que passa da borda dele). Com apontamento
+  // ativo ele fica alto: mede o tamanho real e o encaixa dentro da janela,
+  // trocando de lado do cursor ou subindo quando não cabe.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const margin = 8;
+    const gap = 14;
+    const { width, height } = el.getBoundingClientRect();
+    let left = x + gap;
+    if (left + width > window.innerWidth - margin) left = x - gap - width;
+    let top = y + gap;
+    if (top + height > window.innerHeight - margin) top = window.innerHeight - margin - height;
+    el.style.left = `${Math.max(margin, left)}px`;
+    el.style.top = `${Math.max(margin, top)}px`;
+  }, [x, y, resource]);
   const headline = state.display_label || state.label;
   const reasonText = state.reason || state.activity_description;
   const detail = reasonText && reasonText !== headline ? reasonText : null;
   const extraOps = ops && ops.length > 1 ? ops : null;
   return (
-    <aside className="andon-map__card" style={{ top: y, ...(flip ? { right: x } : { left: x }) }} role="tooltip">
+    <aside ref={ref} className="andon-map__card" role="tooltip">
       <h3>{resource.name} <small>{resource.code}</small></h3>
       <p className="andon-map__card-state">
         {headline}
@@ -72,15 +89,9 @@ function MapTileCard({ resource, x, y, flip }: { resource: AndonResource; x: num
  */
 export function FactoryMap({ sectors, interactive = false }: { sectors: AndonSnapshot["sectors"]; interactive?: boolean }) {
   const model = useMemo(() => buildFactoryMap(sectors), [sectors]);
-  const [hover, setHover] = useState<{ key: string; x: number; y: number; flip: boolean } | null>(null);
+  const [hover, setHover] = useState<{ key: string; x: number; y: number } | null>(null);
   const hovered = hover ? Object.values(model.tiles).flat().find((tile) => tile.key === hover.key) : undefined;
-  const track = (key: string) => (event: MouseEvent<SVGGElement>) => {
-    const box = event.currentTarget.ownerSVGElement?.parentElement?.getBoundingClientRect();
-    if (!box) return;
-    const x = event.clientX - box.left;
-    const flip = x > box.width / 2;
-    setHover({ key, x: flip ? box.width - x + 14 : x + 14, y: Math.min(event.clientY - box.top + 14, box.height - 40), flip });
-  };
+  const track = (key: string) => (event: MouseEvent<SVGGElement>) => setHover({ key, x: event.clientX, y: event.clientY });
   return (
     <div className="andon-map">
       <header className="andon-map__header">
@@ -139,7 +150,7 @@ export function FactoryMap({ sectors, interactive = false }: { sectors: AndonSna
           );
         })}
       </svg>
-      {interactive && hover && hovered ? <MapTileCard resource={hovered.resource} x={hover.x} y={hover.y} flip={hover.flip} /> : null}
+      {interactive && hover && hovered ? <MapTileCard resource={hovered.resource} x={hover.x} y={hover.y} /> : null}
       <footer className="andon-map__legend">
         {MAP_LEGEND.map((item) => (
           <span className="andon-map__legend-item" key={item.state}>

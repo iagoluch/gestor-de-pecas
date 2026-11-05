@@ -87,7 +87,7 @@ interface OrderConsultation {
 }
 
 const TITLE = "Produção — Consulta de OP";
-const SUBTITLE = "Escolha uma OP para ver o roteiro completo, na ordem das operações. Consulta de gestão; a rastreabilidade fica em Rastreabilidade.";
+const SUBTITLE = "Consulta de OPs";
 const NA_TEXT = "Tempo padrão não cadastrado no Protheus. A engenharia de manufatura ajusta direto no ERP.";
 
 /** Mensagem humana por `code`; nunca o código técnico. */

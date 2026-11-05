@@ -498,6 +498,8 @@ export interface ManagementOverview {
   /** Destaques por setor (maior produção, maior refugo…): os mesmos de `/management/sectors`. */
   sector_highlights?: Array<{ key: string; label: string; sector: string; value: number; unit: "peças" | "s" }>;
   sector_kpis?: Array<{ setor: string; metrics: Record<string, MetricValue> }>;
+  /** Um item por recurso (mesmo cálculo canônico do setor); a tela inicial os mostra ao expandir a linha do setor. */
+  resource_kpis?: Array<{ resource: string; resource_name?: string; sector: string; metrics: Record<string, MetricValue>; kpi_time_bases: Record<string, number>; producao_boa?: number; refugo?: number; retrabalho?: number; tempo_producao_segundos?: number; tempo_setup_segundos?: number; tempo_parada_segundos?: number; tempo_produtivo_segundos?: number }>;
   /** Corte (SigmaNEST): um item por nesting. `tarefa` e `programa` (o "Plano" do Andon) são os únicos campos que a Visão Geral lê. */
   cutting?: {
     /** Total de planos cortados no período: cada nesting (repetição da chapa) conta 1. */

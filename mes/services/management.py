@@ -38,7 +38,7 @@ from mes.services.calendar import CalendarService
 
 class ManagementService:
     _MAX_OEE_EVOLUTION_POINTS = 31
-    _TREND_RECENT_EVENTS_LIMIT = 8
+    _TREND_RECENT_EVENTS_LIMIT = 1000  # um por recurso: o card cobre todos os setores
     # Mesmo piso da validação de período da API: antes disso não há histórico.
     _MIN_PERIOD_YEAR = 2000
     _TREND_KPI_KEYS = ("oee", "availability", "performance", "ftt")
@@ -492,6 +492,11 @@ class ManagementService:
             "retrabalho_quantidade": rework_qty,
         }
         resource_kpis = []
+        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+        catalog_names = {
+            str(row.get("codigo") or "").strip().casefold(): row.get("nome")
+            for row in (catalog_loader() if callable(catalog_loader) else None) or []
+        }
         no_demand_exception_resources = []
         for resource_input in sorted(
             resource_inputs.values(),
@@ -533,11 +538,27 @@ class ManagementService:
             )
             resource_kpis.append({
                 "resource": resource_input["resource"],
+                "resource_name": resource_display_name(
+                    str(resource_input["resource"] or ""),
+                    catalog_names.get(str(resource_input["resource"] or "").strip().casefold()),
+                ),
                 "sector": resource_input["sector"],
                 "performance_estimada": resource_estimated_performance.to_dict(),
                 "pecas_boas_tempo_estimado": resource_input["good_with_estimated_standard"],
                 "metrics": resource_calculation.metrics_dict(),
                 "kpi_time_bases": dict(resource_calculation.time_bases),
+                # Mesmas colunas da linha do setor (tela inicial: recursos do setor ao expandir).
+                "producao_boa": resource_input["good"],
+                "refugo": resource_input["scrap"],
+                "retrabalho": resource_input["rework"],
+                "tempo_producao_segundos": resource_input["seconds"][EventCategory.PRODUCTION],
+                "tempo_setup_segundos": resource_input["seconds"][EventCategory.SETUP],
+                "tempo_parada_segundos": resource_input["seconds"][EventCategory.DOWNTIME],
+                "tempo_produtivo_segundos": sum(
+                    resource_input["seconds"][category]
+                    for category in EventCategory
+                    if ManufacturingRules.is_productive(category)
+                ),
                 "kpi_calculation": {
                     **resource_calculation.trace_dict(),
                     **self._standard_origin_trace(
@@ -903,8 +924,7 @@ class ManagementService:
         if available_points == 1:
             return (
                 DataAvailability.INSUFFICIENT_DATA.value,
-                "Apenas um período possui OEE calculável; são necessários pelo "
-                "menos dois pontos para exibir a evolução.",
+                "Sem dados suficientes para exibir a evolução.",
             )
         return (
             DataAvailability.INSUFFICIENT_DATA.value,
@@ -1496,7 +1516,7 @@ class ManagementService:
         ]
 
     def _load_recent_state_events(self, filters: AnalyticsFilter) -> list[dict]:
-        """Estados de recurso ainda vigentes que começaram dentro do período.
+        """Estado vigente de cada recurso (um por recurso), até o fim do período.
 
         Usa a consulta barata já existente de estados abertos (uma linha por
         recurso); não há leitura de histórico de transições.
@@ -1506,22 +1526,24 @@ class ManagementService:
         if not callable(loader):
             return []
         catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
-        catalog_names = {
-            str(row.get("codigo") or "").strip().casefold(): row.get("nome")
+        catalog = {
+            str(row.get("codigo") or "").strip().casefold(): row
             for row in (catalog_loader() if callable(catalog_loader) else None) or []
         }
+        catalog_names = {key: row.get("nome") for key, row in catalog.items()}
         events = []
         for row in loader(
             setor=filters.setor, recurso=filters.recurso, reference_time=filters.fim
         ) or []:
             started = _dt(row.get("data_inicio"))
-            if started is None or started < filters.inicio or started > filters.fim:
+            # "Agora" = estado vigente: vale mesmo que tenha começado antes do período.
+            if started is None or started > filters.fim:
                 continue
             code = str(row.get("recurso") or "").strip()
             events.append({
                 "resource": row.get("recurso"),
                 "resource_name": resource_display_name(code, catalog_names.get(code.casefold())) or None,
-                "sector": row.get("tipo_setor"),
+                "sector": (catalog.get(code.casefold()) or {}).get("tipo_setor") or row.get("tipo_setor"),
                 "state": row.get("status_nome") or row.get("categoria"),
                 "at": started,
             })
@@ -1667,6 +1689,30 @@ class ManagementService:
 
 
     def _load_resource_states(self, filters):
+        available, rows = self._load_resource_states_raw(filters)
+        return available, self._with_catalog_sector(rows)
+
+    def _with_catalog_sector(self, rows):
+        """O setor do recurso é o do cadastro, não o gravado no estado.
+
+        O estado de fim de turno herda o setor da OP (ex.: "Solda" antigo) e
+        prendia um recurso do Protótipo no setor errado nas telas gerenciais.
+        """
+        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+        if not callable(catalog_loader):
+            return rows
+        sectors = {
+            str(item.get("codigo") or "").strip().casefold(): str(item.get("tipo_setor") or "").strip()
+            for item in catalog_loader() or []
+        }
+        return [
+            {**row, "tipo_setor": sectors[code]}
+            if (code := str(row.get("recurso") or "").strip().casefold()) in sectors and sectors[code]
+            else row
+            for row in rows
+        ]
+
+    def _load_resource_states_raw(self, filters):
         prefetch = getattr(self, "_prefetch", None)
         if prefetch is not None and prefetch.state_sliceable:
             return prefetch.state_rows(filters.inicio, filters.fim)

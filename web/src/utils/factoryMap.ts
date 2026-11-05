@@ -29,7 +29,7 @@ export const MAP_AREAS: ReadonlyArray<MapArea> = [
   { id: "laser", label: "LASER", x: 255, y: 302, w: 160, h: 93 },
   { id: "dobra", label: "DOBRA", x: 439, y: 302, w: 342, h: 93 },
   { id: "usinagem", label: "USINAGEM", x: 805, y: 303, w: 160, h: 92 },
-  { id: "projetos", label: "PROJETOS / FERRAM.", x: 989, y: 303, w: 201, h: 92, fontSize: 18 },
+  { id: "projetos", label: "PROJETOS / FERRAMENTARIA", x: 989, y: 303, w: 201, h: 92, fontSize: 18 },
   { id: "solda-aluminio-a", label: "SOLDA ALUM.", x: 70, y: 412, w: 156, h: 91, fontSize: 17 },
   { id: "solda-aluminio-b", label: "SOLDA DE ALUMÍNIO", x: 250, y: 412, w: 660, h: 91 },
   { id: "serras", label: "SERRAS", x: 934, y: 412, w: 256, h: 91 },
