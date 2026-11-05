@@ -19,18 +19,18 @@ Esta tela **não usa** os filtros globais. O número da OP fica no endereço (`?
 
 | Cartão | O que significa |
 |---|---|
-| Situação atual | Status da última operação da OP. |
-| Peças boas | Soma das boas; detalhe diz quantas operações foram percorridas. |
-| Perdas | Refugo + retrabalho. Fica vermelho se maior que zero. |
+| Situação atual | Status da última operação da lista (a de baixo). "Não disponível" se a OP não tem operações. O detalhe mostra o número da OP. |
+| Peças boas | Soma das boas de todas as operações da lista; o detalhe diz quantas operações foram percorridas. |
+| Perdas | Refugo + retrabalho somados das operações. O detalhe separa os dois. Fica vermelho se maior que zero. |
 | Eventos registrados | Quantidade de eventos na linha do tempo. Mostra também quantos nestings de Corte estão ligados. |
 
 ## Inspeção dispensada
 
-Aparece um selo amarelo se a Qualidade dispensou a inspeção: "A inspeção desta OP foi dispensada, sem medição de peças." Colunas: Operação, Recurso, Quantidade, Motivo, Autorizado por, Crachá, Data.
+Aparece um selo amarelo se a Qualidade dispensou a inspeção: "A inspeção desta OP foi dispensada, sem medição de peças." Se houve mais de uma dispensa, a frase vira "N inspeções desta OP foram dispensadas, sem medição de peças." Colunas: Operação, Recurso, Quantidade, Motivo, Autorizado por, Crachá, Data.
 
 ## Operações e produto
 
-Colunas: Operação, Descrição, Produto, Setor, Recurso real, Recurso divergente, Operador, Boas, Refugo, Retrabalho, Status, Origem ("Apontamento número").
+Colunas: Operação, Descrição, Produto, Setor, Recurso real, Recurso divergente (traço quando a máquina foi a planejada), Operador (quem iniciou; se não houver, quem finalizou), Boas, Refugo, Retrabalho, Status, Origem ("Apontamento número"). Campo sem dado mostra "Não disponível".
 
 ## Nestings de Corte da OP
 
@@ -45,13 +45,13 @@ Só aparece se a OP veio de um plano de corte. Colunas: Tarefa/lote, Programa, N
 | Operador, Data/hora | Quem inspecionou e quando. |
 | Cotas fora do padrão | Quantas medidas ficaram fora. |
 | RNC | Número do RNC, se houve. Veja [RNC](topico:62-qualidade-rnc). |
-| Ver cotas / Ocultar cotas | Abre a tabela Cota, Padrão, Medido, Situação (Conforme ou Não conforme). |
+| Cotas (botão Ver cotas / Ocultar cotas) | Abre a tabela Cota, Padrão, Medido, Situação (Conforme ou Não conforme). |
 
 Vazio: "Nenhuma peça inspecionada — Esta OP não tem inspeção registrada pela Qualidade." Ou "Nenhuma cota medida nesta peça". Medidas em [Qualidade — Cotas](topico:60-qualidade-cotas).
 
 ## Linha do tempo
 
-Eventos em ordem cronológica. Colunas: Data e hora, Máquina/recurso, OP, Operação, Evento, Status, Operador, Quantidade, Motivo/detalhe, Registro original ("Fonte não disponível" quando não há).
+O bloco se chama "Linha do tempo da OP (número) — eventos em ordem cronológica". Colunas: Data e hora, Máquina/recurso, OP, Operação, Evento, Status, Operador, Quantidade, Motivo/detalhe, Registro original ("Fonte não disponível" quando não há).
 
 ## Quem pode ver
 

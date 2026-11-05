@@ -9,7 +9,7 @@ Tela **Painéis Operacionais — Mapa da fábrica**. Desenho da planta com cada 
 
 ## O que você vê
 
-A planta mostra as áreas (por exemplo estoque de chapas, plasma, rebarbação, robô, expedição, almoxarifado, destaque, laser, dobra, usinagem, projetos/ferramentaria, solda, serras). Dentro delas, cada máquina é um bloco colorido.
+A planta mostra as áreas (estoque de chapas, plasma, rebarbação, robô, expedição, almoxarifado, destaque, laser, dobra, usinagem, projetos/ferramentaria, solda de alumínio, serras, protótipo, estoque de tubos, robô de solda, cabine de secagem, pintura, jateamento e solda de aço). Dentro delas, cada máquina é um bloco colorido.
 
 Todos os postos apontáveis aparecem, estando ativos ou não.
 
@@ -26,7 +26,9 @@ Todos os postos apontáveis aparecem, estando ativos ou não.
 | Sem demanda | Cinza. Também cobre fila, fora de turno e desconhecido. |
 | Área sem apontamento | Área da planta sem posto apontável. |
 
-Se alguma máquina não tem posição na planta, aparece "N recurso(s) fora da planta".
+Se alguma máquina não tem posição na planta, aparece "N recurso(s) fora da planta". Isso acontece quando o setor ou grupo dela não tem área desenhada. Ela não some do sistema: continua no [Andon](topico:98-paineis-andon).
+
+As máquinas de Solda aparecem em ordem numérica (1, 2, … 10) nas áreas de Solda de aço e de alumínio. Pintura, cabine de secagem e jateamento são separados pelo nome do recurso.
 
 ## Passar o mouse (só gestão)
 
@@ -36,9 +38,9 @@ Na TV não há interação nem botões.
 
 ## Quem pode ver
 
-Gestão. Veja [perfis e acessos](topico:02-perfis-e-acessos).
+Somente gestão (a rota exige login de gestão). A TV vê esta mesma visão como primeira etapa do rodízio do Andon. Veja [perfis e acessos](topico:02-perfis-e-acessos).
 
 ## Problemas comuns
 
-- **Máquina fora da planta**: o posto ainda não tem lugar desenhado. Confirmar com a liderança/TI.
+- **Máquina fora da planta**: o setor ou grupo do posto ainda não tem lugar desenhado na planta. O desenho é fixo no sistema, então peça à TI para incluir a área. Enquanto isso, a máquina aparece normalmente no Andon.
 - **Tudo cinza**: fora de turno ou sem demanda. Veja [turnos](topico:17-turnos).

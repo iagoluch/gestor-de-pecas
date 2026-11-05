@@ -22,6 +22,8 @@ O "build" é a montagem das telas que você vê no navegador. O botão **Reinici
 |---|---|
 | "Build concluído em Ns. Atualize a página para ver as alterações." | Deu certo. |
 | "O build falhou. Veja o log abaixo." | Falhou. O registro aparece embaixo. Envie ao responsável técnico. |
-| "Não foi possível reconstruir o frontend." | O servidor não aceitou o pedido. |
+| "Não foi possível reconstruir o frontend." | Aparece no registro quando o servidor não devolve outra explicação. Se o servidor responder com um motivo, é ele que aparece no registro. |
+
+O registro (log) é mostrado também quando o build dá certo.
 
 Use só quando o responsável técnico pedir. Em dúvida, confirmar com a liderança.

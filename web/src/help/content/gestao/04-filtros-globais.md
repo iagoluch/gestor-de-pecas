@@ -11,7 +11,7 @@ Telas administrativas (Pausas, Crachás, Turnos e outras) não usam essa barra. 
 
 ## Período
 
-O período começa em **hoje** (da primeira à última hora do dia, pelo relógio do sistema).
+O período começa em **hoje**, pelo relógio do sistema. A consulta vai das 00:00:00 do dia **Início** até as 23:59:59 do dia **Fim**.
 
 | Botão | Período |
 |---|---|
@@ -22,17 +22,17 @@ O período começa em **hoje** (da primeira à última hora do dia, pelo relógi
 | **Este mês** | Do dia 1 até hoje. |
 | **Início** e **Fim** | Escolha as datas à mão. |
 
-Os atalhos aplicam na hora, e o botão do período ativo fica destacado. Telas que mostram a **situação de agora** exibem "Situação do dia corrente" no lugar do período.
+Os atalhos (Hoje até Este mês) aplicam na hora, junto com o que já estiver digitado nos outros campos, e o botão do período ativo fica destacado. Já as datas **Início** e **Fim** escolhidas à mão só valem depois de **Aplicar**. Telas que mostram a **situação de agora** exibem "Situação do dia corrente" no lugar do período.
 
 ## Setor
 
 A lista **Setor** traz "Todos os setores" e: Corte, Dobra, Usinagem, Serra, Caldeiraria, Pintura, Solda Aço, Solda Alumínio, Solda Robô, Proj. Ferramentaria, Protótipo, Montagem, Destaque, Almoxarifado.
 
-Se a sua conta é presa a um setor, aparece "Setor: X" fixo. Se for presa a vários, a lista não tem "Todos". Veja [Perfis](topico:02-perfis-e-acessos).
+A escolha de setor só vale depois de **Aplicar**. Se a sua conta é presa a um setor, aparece "Setor: X" fixo, sem lista. Se for presa a vários, a lista traz só esses setores e não tem "Todos os setores". Veja [Perfis](topico:02-perfis-e-acessos).
 
 ## Mais filtros
 
-O botão **Mais filtros** (vira **Menos filtros**) abre campos de texto. Um número ao lado mostra quantos estão preenchidos.
+O botão **Mais filtros** (vira **Menos filtros**) abre campos de texto. Um número ao lado mostra quantos estão preenchidos. Se algum já estiver preenchido (por exemplo, vindo de um clique na Visão Geral), a área abre sozinha junto com a tela. Os campos aparecem com "Todos" ou "Todas" como dica.
 
 | Campo | O que filtrar |
 |---|---|
@@ -46,8 +46,8 @@ O botão **Mais filtros** (vira **Menos filtros**) abre campos de texto. Um núm
 
 | Botão | O que faz |
 |---|---|
-| **Aplicar** | Valida o texto e o período digitados. Os campos de texto só valem depois de **Aplicar**. |
-| **Limpar** | Volta tudo ao padrão (hoje, todos os setores, sem filtros de texto). |
+| **Aplicar** | Passa a valer o que você mexeu: datas, setor e campos de texto. Enquanto você não clica, a tela continua com o filtro anterior. |
+| **Limpar** | Volta tudo ao padrão: hoje, todos os setores (ou o seu setor, se a conta for presa a um) e sem filtros de texto. Também fecha a área de **Mais filtros**. |
 
 Nem toda tela usa todos os campos. Cada tela mostra só os que fazem sentido para ela.
 
@@ -62,6 +62,6 @@ Nem toda tela usa todos os campos. Cada tela mostra só os que fazem sentido par
 
 | O que aparece | O que significa | O que fazer |
 |---|---|---|
-| "Carregando referência do sistema…" | O sistema ainda busca a data de hoje. | Aguarde alguns segundos. |
+| "Carregando referência do sistema…" | O sistema ainda busca a data de hoje (a tela só abre depois disso). | Aguarde alguns segundos. |
 | Números "zerados" ou diferentes do esperado | Algum filtro de outra tela ficou valendo. | Clique em **Limpar**. |
 | O filtro de setor não deixa escolher "Todos" | Sua conta é presa a setores. | É esperado. |

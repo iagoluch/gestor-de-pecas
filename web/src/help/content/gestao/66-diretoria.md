@@ -126,6 +126,6 @@ Paradas simultâneas com motivos diferentes na mesma máquina não são contadas
 | Você não tem acesso a esta explicação. | Só Admin e Diretoria abrem a conta aberta. |
 | Não foi possível carregar a explicação agora. | Clique em **Tentar novamente**. |
 | Sem custo cadastrado | Falta valor da hora; cadastre na aba Custos. |
-| Nenhum recurso cadastrado / Nenhum operador cadastrado | Os cadastros de base estão vazios; confirmar com a liderança. |
+| Nenhum recurso cadastrado / Nenhum operador cadastrado | Os cadastros de base (recursos e operadores) estão vazios. Peça ao Admin para conferir o Cadastro. |
 
-Se o valor da hora de alguém foi alterado por engano, a mudança pode ser conferida na tela de Alterações de custos (confirmar com a liderança quem tem acesso a ela).
+Todo valor da hora alterado fica registrado (quem mudou, quando, antes e depois). Esse registro de custos **não aparece em nenhuma tela**: só pode ser consultado por uma rota técnica do sistema, restrita a Admin e Diretoria. A tela **Alterações** (só Admin) não mostra valores em reais. Para conferir uma mudança feita por engano, peça ao Admin.

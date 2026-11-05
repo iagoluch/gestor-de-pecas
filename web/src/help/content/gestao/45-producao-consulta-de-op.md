@@ -132,7 +132,7 @@ Só podem ser desativadas etapas **criadas no Gestor, ainda ativas e sem apontam
 
 Sem alterações: "Nenhuma alteração no roteiro. O roteiro está como veio do Protheus."
 
-Toda alteração também vai para a auditoria (veja [Alterações](topico:18-alteracoes)).
+A lista mostra até 100 registros. Toda alteração também vai para a auditoria (veja [Alterações](topico:18-alteracoes)).
 
 ## Quem vê
 
@@ -142,7 +142,7 @@ Qualquer conta da gestão consulta. Só admin, manufatura e PCP alteram o roteir
 
 | O que aparece | O que significa | O que fazer |
 |---|---|---|
-| Só o PCP, a engenharia de manufatura e a administração alteram o roteiro de uma OP. | Sua conta não tem permissão. | Peça a quem tem. |
+| Só o PCP, a engenharia de manufatura e a conta administradora alteram o roteiro de uma OP. | Sua conta não tem permissão. | Peça a quem tem. |
 | Esta etapa já tem apontamento e não pode ser desativada. | Já houve produção nela. | Nada a fazer aqui. |
 | Só etapas adicionadas no Gestor e ainda ativas podem ser desativadas. Etapas do Protheus não são alteradas aqui. | Tentou desativar etapa do ERP ou já desativada. | Ajustes no ERP são feitos no Protheus. |
 | A descrição e o motivo precisam ter pelo menos 3 caracteres. | Texto curto demais. | Complete o texto. |

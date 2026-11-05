@@ -23,7 +23,7 @@ A tela carrega até 200 recursos por vez.
 |---|---|---|
 | Recursos no filtro | Total de recursos que passam pelo filtro. | Vem do total do servidor. |
 | Em produção agora | Número de recursos em produção. | Clicável. Se a lista tem menos que o total: "Lista com N de M recursos do filtro." |
-| Parados | Número de recursos em parada. | Detalhe "Verifique o motivo na tabela" ou "Nenhuma parada aberta". |
+| Parados | Número de recursos em parada. | Clicável. Detalhe "Verifique o motivo na tabela" ou "Nenhuma parada aberta". |
 | Maior parada aberta | Maior duração de parada, em HH:MM:SS. | Detalhe "Recurso — motivo" ou "Atualizado em" com a data. |
 
 ## Tabela "Recursos"
@@ -53,7 +53,7 @@ Como funciona está em [Áreas](topico:35-areas-tela-generica).
 
 ## Quem vê
 
-Qualquer conta da gestão. Líder e supervisor veem só o próprio setor.
+Qualquer conta da gestão. Líder e supervisor presos a um setor veem só o próprio setor (o servidor aplica o filtro).
 
 ## Problemas comuns
 

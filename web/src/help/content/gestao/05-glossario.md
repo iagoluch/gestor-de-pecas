@@ -11,7 +11,7 @@ Palavras que aparecem em várias telas, em ordem alfabética.
 |---|---|
 | **A esclarecer** | Tempo em que o recurso aparece em estados que não combinam entre si no mesmo instante. Não entra no total. Precisa de conferência. |
 | **Andon** | Painel feito para TV que mostra, por recurso, se está produzindo, parado, sem demanda ou fora de turno. |
-| **AE (eficiência global efetiva)** | Quanto do tempo disponível virou resultado: (tempo padrão das peças boas + apoio) ÷ tempo disponível. |
+| **AE (eficiência do ativo)** | Quanto do tempo disponível virou resultado: (tempo padrão das peças boas + apoio) ÷ tempo disponível × 100. |
 | **Apoio** | Setup + retrabalho + atividade sem OP. Conta no cálculo de Performance. |
 | **Atividade sem OP** | O recurso trabalhou, mas sem uma ordem de produção ligada. |
 | **Disponibilidade** | Tempo trabalhado ÷ tempo disponível × 100. Veja a conta em [Visão Geral](topico:10-visao-geral). |

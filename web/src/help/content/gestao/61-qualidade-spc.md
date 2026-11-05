@@ -7,7 +7,7 @@ rotas: /qualidade/spc
 
 A tela **Qualidade — SPC** mostra se as medidas das peças estão estáveis ao longo do tempo. SPC quer dizer controle estatístico do processo. Aqui é **só consulta**: nada é gravado e os números já chegam calculados do servidor.
 
-Texto da tela: "Cartas de controle e Cpk das cotas já medidas."
+Texto da tela: "Cartas de controle e Cpk das cotas já medidas. Somente consulta: os números vêm prontos do servidor."
 
 ## Quem pode ver
 
@@ -53,14 +53,14 @@ O Cpk é o menor entre CPU e CPL. Fórmulas: CPU = (limite máximo − média) �
 
 Como ler: quanto maior, melhor. Valores abaixo de 1 indicam que o processo tende a sair da tolerância. Os valores de referência da empresa: confirmar com a liderança.
 
-Abaixo do número há sempre um rótulo: "Cpk dentro da OP/lote (variação curta); não é a capacidade da máquina." Ou seja, o Cpk mede a variação dentro de uma mesma OP, não a capacidade total da máquina.
+Abaixo do número há sempre um rótulo. Na carta X-barra e R: "Cpk dentro da OP/lote (variação curta); não é a capacidade da máquina." Ou seja, o Cpk mede a variação dentro de uma mesma OP. Na carta de valores individuais: "Cpk de curto prazo entre peças consecutivas (pode cruzar OPs); não é a capacidade da máquina." Nos dois casos não é a capacidade total da máquina.
 
 ### Tipo de carta
 
 | Tipo | Quando | O que cada ponto é |
 |---|---|---|
-| X-barra e R | Quando, em geral, a inspeção mede 2 ou mais peças por OP | Um grupo de peças da mesma OP: média e amplitude (maior menos menor). |
-| Valores individuais e amplitude móvel | Quando quase só se mede 1 peça por OP | Cada medida é um ponto; a amplitude é a diferença para a peça anterior. |
+| X-barra e R | Quando o grupo típico (a mediana dos grupos) tem 2 ou mais peças | Um grupo de peças da mesma OP: média e amplitude (maior menos menor). |
+| Valores individuais e amplitude móvel | Quando o grupo típico tem só 1 peça (em geral, 1 peça por OP) | Cada medida é um ponto; a amplitude é a diferença para a peça anterior. |
 
 Regras do sistema para os grupos: inspeção com mais de 10 peças é cortada em blocos de 5 (se sobrar 1 peça, ela vai para o bloco anterior). Na carta X-barra e R, grupos de 1 peça ficam fora; a tela avisa "N subgrupo(s) de 1 peça ficaram fora da carta."
 

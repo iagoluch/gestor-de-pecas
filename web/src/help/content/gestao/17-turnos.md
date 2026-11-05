@@ -22,7 +22,7 @@ Tela **IagoDev — Turnos**: "Horários em que o sistema fecha e reabre o aponta
 - **Hora extra que termina quando o expediente começa** (ex.: H1 06:00 às 08:00): não tem corte próprio. Quem já trabalha continua visível e não vira "Sem demanda".
 - **Fora de turno** (ex.: 21:30 às 06:00): ninguém trabalha. Recurso parado nessa faixa não conta como "Sem demanda".
 
-Regra da planta: turno único, com hora extra também no fim de semana. Detalhes além disso: confirmar com a liderança.
+Regra da planta: turno único, com hora extra também no fim de semana. O expediente oficial abre só nos dias de trabalho da planta. Se o sistema ficou desligado, a recuperação dos fechamentos e aberturas atrasados cobre um fim de semana inteiro.
 
 ## Tabela "Turnos configurados"
 

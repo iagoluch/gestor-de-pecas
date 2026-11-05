@@ -22,7 +22,7 @@ Situação, Perfil (Responsável por retrabalho ou Operador sem designação), O
 
 ## Tabela "Crachás cadastrados"
 
-Colunas: Crachá, Nome, Situação, Perfil, Origem, Telegram (Vinculado ou Não vinculado) e Ações.
+Colunas: Crachá, Nome, Situação, Perfil (na tabela aparece "Responsável por retrabalho" ou "Operador"), Origem, Telegram (Vinculado ou Não vinculado) e Ações. A lista vem em ordem alfabética de nome. O botão **Novo crachá** fica no topo da tela.
 
 Menu de ações:
 

@@ -11,18 +11,20 @@ Tela **Manutenção — Sugestões**. Lista paradas de máquina que provavelment
 
 ## Quem pode ver
 
-- Conta de **Manutenção** (perfil próprio, abre direto nesta tela, no visual de terminal, sem o menu da gestão).
-- **Administração**.
+- Conta de **Manutenção** (abre direto nesta tela, no visual de terminal, sem o menu da gestão). Essa conta **não acessa** as telas da gestão nem o Andon: só esta tela.
+- **Administração**, pelo menu normal da gestão.
 
 Outros perfis veem: "Seu perfil não tem acesso às sugestões de manutenção. Só a Manutenção e a administração usam esta tela."
 
 ## Como a sugestão nasce
 
-O sistema olha as paradas dos últimos 7 dias. Vira sugestão quando a parada:
+O sistema olha as paradas dos últimos 7 dias (contados desde a meia-noite de 7 dias atrás). Vira sugestão quando a parada:
 
 - é de motivo de **manutenção corretiva** (falha de equipamento);
 - é **não planejada**;
 - dura **10 minutos ou mais** (paradas menores são ignoradas como ruído).
+
+A tela mostra no máximo as 200 mais recentes de cada aba; se chegar nesse limite, avisa "Mostrando as 200 mais recentes. Decida estas para ver as anteriores."
 
 A geração acontece ao abrir a tela e não duplica: a mesma parada gera uma sugestão só.
 
@@ -36,7 +38,7 @@ A geração acontece ao abrir a tela e não duplica: a mesma parada gera uma sug
 
 ## Colunas
 
-Recurso, Setor ("Não informado" se vazio), Início da parada, Duração (ex.: 45 s, 25 min, 1 h 05 min), Motivo, OP ("Sem OP").
+Recurso, Setor ("Não informado" se vazio), Início (da parada), Duração (ex.: 45 s, 25 min, 1 h 05 min), Motivo ("Não informado" se vazio), OP ("Sem OP").
 
 Em **Sugeridas** há ainda a coluna Decisão: caixa "Nota (opcional)" (até 500 caracteres) e botões **Aceitar** e **Descartar**.
 
@@ -59,6 +61,6 @@ Em **Aceitas/Descartadas**: Decidida por (selo + nome), Quando e Nota ("Sem nota
 
 ## Trava da Qualidade
 
-A conta de Manutenção também tem uma restrição na tela de edição de templates/desenhos da Qualidade: o que ela pode fazer ali está limitado. Detalhes exatos: confirmar com a liderança.
+A conta de Manutenção usa a base de permissões do Líder, mas o sistema barra nela a **alteração das cotas padrão já salvas** da Qualidade. Quem edita cotas continua sendo Supervisor/Líder, Qualidade e Admin.
 
 Veja [perfis e acessos](topico:02-perfis-e-acessos) e [paradas](topico:72-analises-paradas).

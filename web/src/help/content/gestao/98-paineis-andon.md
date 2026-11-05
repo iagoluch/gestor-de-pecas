@@ -68,7 +68,7 @@ Estado atual, Tempo no estado, Início. OEE e componentes (OEE, Disponibilidade,
 
 ## Quem pode ver
 
-Gestão (quadro completo) e o perfil de TV Andon (rodízio). Veja [perfis e acessos](topico:02-perfis-e-acessos).
+Contas com acesso ao Andon: gestão (quadro completo) e o perfil de TV Andon (rodízio). O Andon mostra todos os setores, sem o corte por setor que existe nas telas de análise. Veja [perfis e acessos](topico:02-perfis-e-acessos).
 
 ## Problemas comuns
 
@@ -76,4 +76,4 @@ Gestão (quadro completo) e o perfil de TV Andon (rodízio). Veja [perfis e aces
 - **"Sem conexão com o servidor…"**: a TV perdeu a rede; volta sozinha.
 - **Máquina cinza tracejada**: sem demanda; não é falha.
 - **Balão não apareceu**: só aparecem para máquinas fora da tela atual.
-- **Números de OEE/Disp./Perf./FTT**: a origem do cálculo está em [OEE](topico:70-analises-oee); detalhes finos, confirmar com a liderança.
+- **Números de OEE/Disp./Perf./FTT**: vêm do mesmo cálculo da Visão Geral e das análises. A fórmula está em [OEE](topico:70-analises-oee). Traço (—) significa que não há dado para aquela máquina.

@@ -11,7 +11,7 @@ Tela **IagoDev — Cadastro**: "Login de quem acessa o sistema — a mesma tela 
 
 | Cartão | Significado |
 |---|---|
-| Usuários ativos | "N cadastrados". |
+| Usuários ativos | Quantos estão ativos. Embaixo: "N cadastrados". |
 | Contas admin | Acesso total, incluindo Cadastro. |
 | Inativos | Contas bloqueadas. |
 | Sem conta admin | Sim ou Não. Se Sim, ninguém gerencia usuários nem contatos de chamada. |
@@ -36,7 +36,7 @@ Na **sua própria conta**, Desativar e Excluir ficam bloqueados ("Sua própria c
 
 1. Clique em **Novo usuário**.
 2. **Nome** (obrigatório).
-3. **Nível de acesso** (agrupado). O nível decide o que a pessoa vê: [Perfis](topico:02-perfis-e-acessos).
+3. **Nível de acesso** (agrupado; um usuário novo começa em "Operador destaque"). O nível decide o que a pessoa vê: [Perfis](topico:02-perfis-e-acessos).
 4. **Unidade** (texto livre, até 40 caracteres, ex.: 4).
 5. **Senha** (novo usuário). Ao editar: "Nova senha (deixe em branco para manter a atual)".
 6. **Ativo**. Salve.
@@ -49,8 +49,10 @@ Tabela "Níveis personalizados": Nível, "Permissões de" e Excluir (só se nenh
 
 1. Clique em **Novo nível**.
 2. Dê o **Nome do nível** (até 60 caracteres).
-3. Escolha em "Copiar as permissões de" o nível base.
-4. Salve.
+3. Escolha em "Copiar as permissões de" o nível base (começa em "Gestor"; "Admin" não aparece na lista).
+4. Clique em **Criar nível**.
+
+A tabela "Níveis personalizados" só aparece depois que existe pelo menos um.
 
 ## Mensagens
 

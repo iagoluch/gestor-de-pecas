@@ -17,13 +17,13 @@ Usa a barra de filtros do topo. Veja [Filtros globais](topico:04-filtros-globais
 | Cartão | Aparece em | Significado |
 |---|---|---|
 | Parada não planejada | Paradas | Tempo parado fora do plano. Detalhe: média por recurso. |
-| Parada planejada | Paradas | Tempo parado previsto. |
-| Tempo total de setup | Setup | Total de horas em setup. |
-| Ocorrências | Ambos | Quantas paradas (ou setups). Detalhe: duração média por ocorrência. Clicável. |
-| Recurso mais parado / Recurso com mais setup | Ambos | Máquina com mais horas. |
-| Maior parada / Setup mais longo | Ambos | Maior bloco de tempo por motivo. "Nenhuma" se vazio. |
+| Parada planejada | Paradas | Tempo parado previsto. Detalhe: média por recurso. |
+| Tempo total de setup | Setup | Total de horas em setup. Detalhe: média por recurso. |
+| Ocorrências | Ambos | Quantas paradas (ou setups). Detalhe: "Média de X por ocorrência". Clicável: abre a lista que forma o número. |
+| Recurso mais parado / Recurso com mais setup | Ambos | Máquina com mais horas (o detalhe mostra as horas). "Não determinado" se não houver registros. |
+| Maior parada / Setup mais longo | Ambos | O motivo que mais tempo somou: mostra as horas e, embaixo, o nome do motivo. "Nenhuma" se vazio. |
 
-Valores de horas são clicáveis e abrem a conta aberta.
+Os valores de horas (parada não planejada, parada planejada e total de setup) são clicáveis e abrem a conta aberta. A média por recurso só aparece com 2 ou mais recursos.
 
 ## Pareto por motivo
 
@@ -36,10 +36,10 @@ Valores de horas são clicáveis e abrem a conta aberta.
 | Recurso | Máquina ou posto. |
 | Setor | Setor do recurso. |
 | Motivo | Motivo informado. |
-| Classificação | Paradas: "Programada" ou "Não programada". Setup: o tipo do setup. |
+| Classificação | Paradas: "Programada" ou "Não programada". Setup: o tipo do setup (ou "Setup" se não houver tipo). |
 | Início | Data e hora de início. |
 | Tempo | Duração. |
-| OP | OP ligada à ocorrência; clique para abrir a OP em Rastreabilidade. "Não disponível" se não houver. |
+| OP | OP ligada à ocorrência; clique para abrir a OP em Rastreabilidade. "—" se não houver. |
 
 Em Paradas, pode aparecer uma linha "diferença: ± horas, motivo: ..." quando o total difere da soma da lista; o motivo explica.
 

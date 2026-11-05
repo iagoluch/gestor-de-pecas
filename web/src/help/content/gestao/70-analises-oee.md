@@ -14,14 +14,14 @@ Usa a barra de filtros do topo (período, setor, recurso). Veja [Filtros globais
 | Cartão | O que significa | Conta em palavras |
 |---|---|---|
 | OEE | Eficiência geral. | Disponibilidade × Performance × FTT. |
-| Disponibilidade | Quanto do tempo disponível a máquina trabalhou. | Tempo trabalhado ÷ tempo disponível. |
-| Performance | Se o ritmo bateu com o tempo padrão. | (Tempo padrão das peças boas + apoio) ÷ tempo trabalhado. |
+| Disponibilidade | Quanto do tempo disponível a máquina trabalhou. | Tempo trabalhado ÷ tempo disponível. O tempo disponível é o trabalhado mais as paradas (e o tempo sem classificação). Fora de turno, fila e sem demanda não entram. |
+| Performance | Se o ritmo bateu com o tempo padrão. | (Tempo padrão das peças boas + apoio) ÷ tempo trabalhado. "Apoio" é o tempo de setup, retrabalho e atividade sem OP. |
 | FTT / Qualidade | Peças boas de primeira. | Boas ÷ (boas + refugo + retrabalho). |
-| AE | "Produtivo líquido sobre tempo disponível." | Parte do tempo disponível que virou produção líquida. |
-| Produtividade | "Produtivo bruto sobre tempo operacional." | Produção ÷ tempo operacional. |
-| Utilização | "Tempo trabalhado sobre tempo operacional." | Trabalhado ÷ operacional. |
+| AE | "Produtivo líquido sobre tempo disponível." | (Tempo padrão das peças boas + apoio) ÷ tempo disponível. |
+| Produtividade | "Produtivo bruto sobre tempo operacional." | Tempo em Produção (sem setup, retrabalho nem atividade sem OP) ÷ tempo operacional. |
+| Utilização | "Tempo trabalhado sobre tempo operacional." | Trabalhado ÷ operacional. O tempo operacional é o mesmo tempo disponível; por isso, hoje a Utilização dá o mesmo número da Disponibilidade. |
 
-Os números são clicáveis: abre um painel com a conta aberta.
+Os números são clicáveis (quando há valor): abre um painel com a conta aberta.
 
 ### Exemplo simples
 
@@ -39,11 +39,15 @@ Mensagens: "Sem perda registrada no período." e "Sem dado suficiente no períod
 
 ## Perdas por motivo
 
-Quebra em: Fora de turno, Parada planejada, Parada não planejada, Ritmo (performance), Refugo e Retrabalho.
+Quebra em: Fora de turno, Parada planejada, Parada não planejada, Ritmo (performance), Refugo e Retrabalho. Os quatro primeiros aparecem em tempo (horas e minutos); Refugo e Retrabalho em peças. "Ritmo" é a diferença entre o tempo padrão das peças e o tempo trabalhado.
+
+## Período sem demanda
+
+Se o período inteiro foi "sem demanda" (recurso sem serviço, sem produção), a regra da empresa é: Disponibilidade 100%, Performance 0% e OEE 0%. O FTT fica "não se aplica".
 
 ## Quando não há número
 
-"Dados insuficientes" ou outro estado no lugar do valor significa que falta dado para calcular. A tela não inventa número. Valores de referência da empresa (meta de OEE): confirmar com a liderança.
+"Dados insuficientes" ou outro estado no lugar do valor significa que falta dado para calcular. A tela não inventa número. O sistema não mostra meta de OEE nesta tela. Se a empresa tem uma meta, confirmar com a liderança.
 
 ## Problemas comuns
 

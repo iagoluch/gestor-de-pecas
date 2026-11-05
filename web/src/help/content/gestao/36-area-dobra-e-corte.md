@@ -21,4 +21,4 @@ Quem abre o endereço sem ter a área vê: "Área indisponível para a sua conta
 
 ## Fila de prioridades
 
-Líder e supervisor da área ordenam a fila. No Corte a fila é automática, então o painel só lista os postos de Dobra com fila manual. Regras e mensagens estão em [Áreas](topico:35-areas-tela-generica).
+Líder e supervisor da área ordenam a fila. O admin também ordena; o Gerente industrial só enxerga. No Corte a fila é automática, então o painel só lista os postos de Dobra com fila manual. Regras e mensagens estão em [Áreas](topico:35-areas-tela-generica).

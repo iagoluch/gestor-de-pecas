@@ -15,11 +15,11 @@ Tela **IagoDev — Alterações**: "Quem mudou usuários, níveis, turnos, pausa
 | Quem | Nome ou id (até 80 caracteres). |
 | De / Até | Datas. |
 
-Botões: **Filtrar** e **Limpar**.
+Botões: **Filtrar** (só aplica quando você clica) e **Limpar**. Clique em um título de coluna para ordenar.
 
 ## Lista "Mais recentes primeiro"
 
-Mostra a contagem e o aviso "Mostrando as 200 mais recentes. Use os filtros para ver as anteriores."
+Mostra a contagem ("N alteração(ões)"). Quando chega a 200 registros, aparece o aviso "Mostrando as 200 mais recentes. Use os filtros para ver as anteriores."
 
 | Coluna | Significado |
 |---|---|
@@ -29,7 +29,7 @@ Mostra a contagem e o aviso "Mostrando as 200 mais recentes. Use os filtros para
 | Ação | Criou, Alterou ou Excluiu. |
 | Mudança | "Campo: antes → depois". Sem campos registrados: "Sem diferença nos campos registrados". |
 
-Campo vazio aparece como "vazio". Campos que podem aparecer: Nome, Nível, Unidade, Ativo (Sim/Não), Rótulo, Nível base, Tipo, Início, Fim, Ordem, Setor, RNC, Decisão, Justificativa, Sugestão, Recurso, Início da parada, Situação (Sugerida, Aceita, Descartada) e Nota.
+Campo vazio aparece como "vazio". Campos que podem aparecer: Nome, Nível, Unidade, Ativo (Sim/Não), Rótulo, Nível base, Tipo, Início, Fim, Ordem, Setor, RNC (id), RNC, Decisão, Justificativa, Sugestão (id), Recurso, Início da parada, Situação (Sugerida, Aceita, Descartada) e Nota.
 
 Valores em dinheiro não aparecem aqui (ficam na aba Diretoria).
 

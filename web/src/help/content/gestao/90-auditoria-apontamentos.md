@@ -19,16 +19,18 @@ Usa os [filtros globais](topico:04-filtros-globais) do topo (período, setor, re
 
 ## Cartões do topo
 
-Os cartões contam apenas as linhas carregadas (até 200).
+O cartão "Apontamentos" mostra o total do período, vindo do servidor. Os outros três contam apenas as linhas carregadas (até 200).
 
 | Cartão | O que significa |
 |---|---|
 | Apontamentos | Total de registros no período. |
-| Finalizados | Quantos já terminaram. O detalhe diz "N ainda em aberto". |
-| Recursos envolvidos | Quantas máquinas/postos diferentes aparecem. |
-| Operadores envolvidos | Quantas pessoas diferentes registraram ("Quem registrou no período"). |
+| Finalizados | Quantos já terminaram (status Finalizado). O detalhe diz "N ainda em aberto": é todo registro carregado que não está finalizado. |
+| Recursos envolvidos | Quantas máquinas/postos diferentes aparecem nas linhas carregadas. |
+| Operadores envolvidos | Quantas pessoas diferentes iniciaram registros nas linhas carregadas ("Quem registrou no período"). |
 
 ## Tabela
+
+O bloco se chama "Apontamentos do período".
 
 | Coluna | O que mostra |
 |---|---|
@@ -38,7 +40,7 @@ Os cartões contam apenas as linhas carregadas (até 200).
 | Setor | Setor do posto. |
 | Recurso | Máquina/posto onde foi apontado. |
 | Recurso divergente | Selo "planejado × apontado" quando a OP foi feita em máquina diferente da planejada. Traço (—) se não houve diferença. |
-| Operador | Quem iniciou (ou quem finalizou). |
+| Operador | Quem iniciou; se não houver, quem finalizou; senão "—". |
 | Status | Situação do registro (em processo, finalizado, parada etc.). |
 | Boas, Refugo, Retrabalho | Quantidades registradas. |
 | Início, Fim | Data e hora. Fim vazio = ainda aberto. |
@@ -51,6 +53,6 @@ Somente a gestão. Líder e supervisor veem só o próprio setor. Veja [perfis e
 
 ## Problemas comuns
 
-- **"Não disponível"** no lugar da tabela: não há registros no período/filtro. Amplie o período.
+- **"Sem registros"** ("Nenhum registro encontrado para o período.") no lugar da tabela: não há apontamentos no período/filtro. Amplie o período.
 - **Cartões não batem com o total real**: a tela carrega no máximo 200 linhas. Reduza o período.
 - **Recurso divergente aparece**: a OP rodou em máquina diferente da planejada. Confirme com o líder do setor se foi troca autorizada.

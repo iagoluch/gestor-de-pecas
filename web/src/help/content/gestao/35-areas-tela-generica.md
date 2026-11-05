@@ -44,7 +44,7 @@ A área vem do **nível** da conta (veja [Perfis e acessos](topico:02-perfis-e-a
 
 Admin e Gerente industrial **não têm seções de área no menu**. Eles usam o filtro Setor em [Consulta Operacional — Recursos](topico:31-consulta-recursos). Mesmo assim, o endereço `/areas/<área>` abre para eles.
 
-Contas de líder e supervisor só recebem dados do próprio setor. Isso é feito no servidor, não só na tela.
+Contas de líder e supervisor ligadas a uma área só recebem dados dos setores dela. Isso é feito no servidor, não só na tela. Se pedirem outro setor, o servidor devolve o primeiro setor permitido. O Líder Almoxarifado não tem área e não fica preso a setor.
 
 ## O que a tela mostra
 
@@ -56,7 +56,7 @@ Sem período nem filtros. Sempre o dia corrente. A tela lê os recursos do dia e
 |---|---|---|
 | Recursos da área | Quantos recursos a área tem. | Conta as linhas da tabela. |
 | Em produção agora | "X de Y". | Verde. Clicável. O painel diz: "Recursos dos setores da área ..." |
-| Parados | Recursos em parada. | Vermelho se houver ("Verifique o motivo na tabela"). Verde com "Nenhuma parada aberta". |
+| Parados | Recursos em parada. | Clicável. Vermelho se houver ("Verifique o motivo na tabela"). Verde com "Nenhuma parada aberta". |
 | OPs em execução | Soma das OPs ativas. | Azul. Clicável. |
 
 ### Tabela "Recursos"

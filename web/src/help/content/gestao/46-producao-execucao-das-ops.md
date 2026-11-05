@@ -18,7 +18,7 @@ A tela carrega até 200 linhas.
 
 ## Cartões do topo
 
-Todos podem ser clicados para ver de onde vem o número (soma por OP). Se a lista foi cortada: "Soma das N linhas carregadas; o filtro tem M no total."
+Todos, menos "Ordens no filtro", podem ser clicados para ver de onde vem o número (soma por OP). Se a lista foi cortada: "Soma das N linhas carregadas; o filtro tem M no total."
 
 | Cartão | O que mostra | Como é calculado |
 |---|---|---|

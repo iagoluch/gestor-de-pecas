@@ -53,7 +53,7 @@ Gráfico de barras. Cada barra é um setor, com o rótulo "N peças". Sem dados,
 | Refugo | Refugo do setor. |
 | Retrabalho | Retrabalho do setor. |
 
-Abaixo da tabela: "Fonte de qualidade:" com o motivo informado pelo sistema.
+Sem dados no período, a tabela dá lugar a uma mensagem de vazio com o motivo informado pelo sistema.
 
 ## Quem vê
 

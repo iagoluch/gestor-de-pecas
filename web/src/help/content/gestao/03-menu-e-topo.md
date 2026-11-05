@@ -21,7 +21,7 @@ Cada item é uma **seção**. Clique para abrir a primeira aba dela. As abas da 
 | Rastreabilidade | OP / Produto | OP / Produto, Lote / Material / Nesting |
 | Manufatura | Manufatura | sem abas por enquanto (o tempo padrão é ajustado direto no Protheus) |
 | Qualidade | Cotas padrão | Cotas padrão, SPC, Decisão de RNC |
-| Diretoria | Diretoria | sem abas |
+| Diretoria | Diretoria | Diretoria (uma aba só) |
 | Melhoria Contínua | Oportunidades | Oportunidades |
 | Seções por área | Recursos | Recursos |
 | IagoDev | Crachás | Crachás, Cadastro, Chamadas do IagoDev, Turnos, Alterações, Sistema |
@@ -58,7 +58,7 @@ O menu vira uma gaveta. O botão de três linhas (**Abrir navegação**) abre. F
 ### Busca no topo (Ctrl K)
 
 1. Clique em **Ir para qualquer tela…** ou aperte **Ctrl K** (no Mac, Cmd K).
-2. Digite parte do nome da seção ou da aba. Exemplo: "paradas".
+2. Digite parte do nome da seção ou da aba (o campo mostra "Digite o nome de uma tela…"). Exemplo: "paradas".
 3. Use as setas do teclado para escolher e aperte **Enter**. **Esc** fecha.
 
 Cada resultado mostra a aba em negrito e a seção em letra pequena. A busca ignora maiúsculas e só lista telas que o seu nível pode abrir. Sem resultado, aparece "Nenhuma tela encontrada".
@@ -69,14 +69,14 @@ Mostra um número vermelho com as chamadas novas para a sua conta (acima de 99 m
 
 ## Botão redondo "?" no canto da tela (atalhos)
 
-É outro "?", diferente do manual do topo. Fica no canto inferior e abre dois atalhos:
+É outro "?", diferente do manual do topo. Fica no canto da tela. Clique nele (ou passe o mouse) para abrir os dois atalhos:
 
 | Atalho | O que faz |
 |---|---|
 | **Perguntar à IA** | Abre uma janela pequena "IA Industrial" com ícone para abrir em página inteira. Só aparece se a IA estiver ligada e você não estiver na tela de IA. Veja [IA](topico:21-ia). |
 | **Chamar alguém** | Abre o botão de chamada para avisar uma pessoa cadastrada. |
 
-Esc fecha o painel.
+**Esc** fecha o painel da IA e os atalhos.
 
 ## Cabeçalho de cada tela
 
@@ -84,7 +84,7 @@ Cada tela mostra o título no formato "Seção — Aba" e uma frase explicando o
 
 Se a atualização dos dados falhar e a tela já tinha dados antigos, aparece o aviso: "Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados."
 
-A aba **IA** some do menu quando a IA está desligada no servidor.
+A aba **IA** some da barra de abas da Tela inicial quando a IA está desligada no servidor. Enquanto o sistema ainda não respondeu, ou se a consulta falhar, a aba continua aparecendo.
 
 ## Problemas comuns
 

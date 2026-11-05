@@ -59,7 +59,9 @@ Desativar e ativar pedem confirmação. **Remover** pede confirmação com o avi
 
 ## Quem pode
 
-A tela não tem trava de administrador no menu. Quem pode gravar no servidor: confirmar com a liderança. Se a pausa conta como parada planejada nos indicadores: confirmar com a liderança.
+Qualquer conta da gestão abre a tela e grava pausas. Contas presas a um setor (líder e supervisor) só veem e mexem nas pausas do próprio setor, porque elas mudam o OEE dele. Se tentar mexer em pausa de outro setor, o servidor responde "Essa pausa é de outro setor.". Toda alteração fica registrada na tela [Alterações](topico:18-alteracoes).
+
+O serviço de turno lê as pausas ativas a cada ciclo e gera sozinho o início e o fim de cada intervalo. Se um setor desativar todas as suas pausas, nenhuma é aplicada a ele. Se a pausa conta como "Parada planejada" nos indicadores de cada tela: confirmar com a liderança.
 
 ## Problemas comuns
 

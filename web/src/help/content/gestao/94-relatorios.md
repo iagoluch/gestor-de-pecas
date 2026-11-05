@@ -27,7 +27,7 @@ Durante a geração o botão mostra "Gerando…". Se falhar: "Não foi possível
 
 O Excel só apresenta os números; não recalcula nada. Traço (—) significa dado não disponível, nunca zero.
 
-Nome do arquivo: confirmar com a liderança/TI (a tela e o servidor sugerem nomes parecidos, no formato relatório_tipo_modo ou gestor_tipo_data).
+Nome do arquivo: o servidor define, no formato `gestor_<tipo>_AAAA-MM-DD.xlsx` para o técnico e `gestor_<tipo>_AAAA-MM-DD_simples.xlsx` para o simples (por exemplo `gestor_gerencial_2026-11-05.xlsx`). O tipo vem com sublinhado, como `dados_analiticos`.
 
 ## Tipo Gerencial
 
@@ -59,7 +59,7 @@ Frase: "Indicadores com disponibilidade e justificativa explícitas."
 Frase: "Conjunto analítico para conferência e exportação, sem editar a origem."
 
 - Cartões: Ordens, Inconsistências, Nestings, Período.
-- Tabela Ordens: OP, Produto, Operação, Setor, Recurso, Boas, Refugo, Status.
+- Tabela "Ordens — dados analíticos": OP, Produto, Operação, Setor, Recurso, Boas, Refugo, Status.
 - Planilha técnica: Visão Geral, Ordens, Inconsistências, Diagnósticos, Nestings.
 
 ## Relatório de produção
@@ -68,12 +68,12 @@ Existe um tipo "produção" que só se exporta pela tela [Produção realizada](
 
 ## Quem pode ver
 
-Somente usuários da gestão.
+Somente contas com acesso à gestão. O Excel segue os mesmos filtros e o mesmo escopo de setor da tela (líder e supervisor só do próprio setor).
 
 ## Problemas comuns
 
 - **"Não foi possível gerar o Excel."**: tente de novo com período menor. Se repetir, avise a TI com o motivo mostrado.
-- **Traço (—) nos números**: o dado não existe no período. Não é zero.
+- **Traço (—) nos números**: o dado não existe no período. Não é zero. Nas tabelas, texto "Não disponível" tem o mesmo sentido.
 - **Planilha simples tem menos informação**: é proposital; use o Export técnico para o detalhe.
 
 Veja [OEE](topico:70-analises-oee) e [glossário](topico:05-glossario) para o significado dos indicadores.

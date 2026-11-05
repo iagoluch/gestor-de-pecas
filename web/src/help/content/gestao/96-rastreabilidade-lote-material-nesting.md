@@ -20,7 +20,7 @@ O campo **Buscar tarefa, material ou nesting** procura em tarefa, programa, nest
 | Nestings no filtro | Quantos nestings entram no filtro. |
 | Tempo previsto | Soma do tempo previsto. |
 | Tempo realizado | Soma do tempo realizado. |
-| Desvio do previsto | (realizado − previsto) ÷ previsto × 100. Vermelho se o realizado passou do previsto. "Sem previsto no filtro" se o previsto é zero. |
+| Desvio do previsto | (realizado − previsto) ÷ previsto × 100. Vermelho se o realizado passou do previsto. "Sem previsto no filtro" se o previsto é zero. O detalhe mostra a diferença em horas (com sinal). |
 
 As somas são feitas sobre **todo** o filtro, não só sobre a página. Os valores são clicáveis para ver o cálculo, mas só enquanto não há busca ativa.
 
@@ -39,7 +39,7 @@ Regra da tela: aproveitamento = (1 − fração de sucata) × 100, por nesting. 
 | Tarefa/lote | Tarefa do Corte. |
 | Programa, Nesting | Identificação do programa e da chapa. |
 | Máquina | Máquina de corte. |
-| Material, Espessura (mm) | Material e espessura. |
+| Material, Espessura | Material e espessura (o valor já vem com "mm"). |
 | Tempo previsto | Tempo planejado. |
 | Tempo total | Tempo realizado total do nesting. |
 | Tempo no período | Parte do tempo que caiu dentro do período filtrado. É outra grandeza, não some com o total. |

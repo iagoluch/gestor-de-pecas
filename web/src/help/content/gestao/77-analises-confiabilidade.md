@@ -30,10 +30,10 @@ Quebra ainda em andamento conta no número de quebras, mas só reparos concluíd
 
 | Cartão | Significado |
 |---|---|
-| MTBF | "Tempo operacional entre quebras". |
-| MTTR | "Tempo médio até voltar a produzir". |
-| Quebras no período | Total, clicável (mostra a soma por equipamento). Detalhe: horas de máquina parada. |
-| Equipamento mais crítico | Quem mais quebrou. "Nenhum" se não houve. |
+| MTBF | "Tempo operacional entre quebras". Quando não dá para calcular, o cartão mostra o estado (por exemplo, "Sem registros") e o motivo. |
+| MTTR | "Tempo médio até voltar a produzir". Mesmo comportamento do MTBF. |
+| Quebras no período | Total, clicável (mostra a soma por equipamento). Detalhe: "N h de máquina parada" (só quando o cálculo é possível). |
+| Equipamento mais crítico | Quem mais quebrou. Embaixo: quebras e tempo parado. "Nenhum" se não houve ("Nenhuma quebra registrada"). |
 
 ## Tabelas
 
@@ -44,9 +44,9 @@ Quebra ainda em andamento conta no número de quebras, mas só reparos concluíd
 
 | Mensagem | Motivo |
 |---|---|
-| Catálogo de motivos sem classe de manutenção corretiva | Não há base para separar quebra de perda comum; confirmar com a liderança. |
+| Catálogo de motivos sem classe de manutenção corretiva | Não há base para separar quebra de perda comum. Peça ao Admin para conferir a classificação dos motivos de parada. |
 | Nenhuma falha de equipamento registrada no período. | Bom sinal, ou paradas lançadas com outro motivo. |
-| Falhas registradas sem tempo operacional medido | MTBF não calculável. |
+| Falhas registradas sem tempo operacional medido no período | MTBF não calculável: ele depende do tempo físico produtivo. |
 | Nenhuma quebra no período / Nenhuma causa registrada | Listas vazias. |
 
 Veja também: [Paradas e Setup](topico:72-analises-paradas).
