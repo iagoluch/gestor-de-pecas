@@ -36,6 +36,6 @@ Aviso pendente por mais de 5 minutos vira "Sem confirmação". Passe o mouse em 
 |---|---|
 | "Nenhuma chamada registrada ainda" | Nada: ainda ninguém chamou. |
 | Erro ao carregar | Use o botão para tentar novamente. |
-| Muitos "Sem confirmação" | Confira os contatos em [Chamadas do IagoDev](topico:16-chamadas-iagodev). |
+| Muitos "Sem confirmação" | Avise o administrador do sistema. |
 
 Relacionado: [O topo e o menu lateral](topico:03-menu-e-topo).

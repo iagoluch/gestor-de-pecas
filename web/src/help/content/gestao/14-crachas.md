@@ -59,4 +59,4 @@ O responsável **não tem login**. Ele é identificado pelo crachá.
 | "Nenhum crachá no filtro atual" | Limpe os filtros. |
 | "Nenhum crachá cadastrado" | Sem crachá, nenhuma exceção operacional pode ser autorizada. Cadastre. |
 
-Relacionados: [Chamadas do IagoDev](topico:16-chamadas-iagodev), [Cadastro](topico:20-cadastro).
+Relacionados: [Cadastro](topico:20-cadastro).

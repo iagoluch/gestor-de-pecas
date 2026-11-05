@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -109,6 +109,7 @@ export function HelpPage() {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   skipHtml
+                  urlTransform={(url) => (url.startsWith("topico:") ? url : defaultUrlTransform(url))}
                   components={{
                     table({ node, ...props }) { void node; return <div className="help__table"><table {...props} /></div>; },
                     a({ node, href, children, ...props }) {
