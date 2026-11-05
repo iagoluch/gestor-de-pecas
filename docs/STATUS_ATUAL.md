@@ -1,6 +1,6 @@
 # STATUS ATUAL — Gestor de Peças
 
-**Atualizado em:** 04/11/2026 (consulta de OP com etapa extra, tempo padrão só Protheus, tela inicial personalizável, Corte só apontado, sem aba Manutenção; simulação TESTE de 09/10 e marcos do REAL preservados abaixo).
+**Atualizado em:** 05/11/2026 (manual dentro do sistema; 04/11: consulta de OP com etapa extra, tempo padrão só Protheus, tela inicial personalizável, Corte só apontado, sem aba Manutenção; simulação TESTE de 09/10 e marcos do REAL preservados abaixo).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este
 arquivo cobre **o que aconteceu depois disso**, para qualquer agente (Codex,
@@ -11,6 +11,15 @@ ferramenta.
 Ordem de leitura recomendada para contexto rápido: `AGENTS.md` → `ROADMAP.md`
 (seção 5, "Próxima ação concreta") → **este arquivo** → o `git log` desde o
 commit `4a60564`.
+
+### Manual dentro do sistema — 05/11/2026 (commitado e enviado)
+
+Commits: `f8493cd` (infra + Manual do Operador), `46f7b53` (revisão do Operador), `e2d7bb5` (Manual da Gestão), `4864b85` (revisão da Gestão contra o código).
+
+- **Onde:** rota `/ajuda` (`web/src/help/`), ícone "?" no topo do posto (`OperatorShell`) e da gestão (`AppShell`); abre em nova aba já no tópico da tela. Textos em `web/src/help/content/{operador,gestao}/*.md` (cabeçalho `titulo/grupo/ordem/rotas`; links `topico:<arquivo>`). Gestão lê os dois manuais.
+- **Diretoria restrita:** tópico com `acesso: diretoria` (`66-diretoria.md`) só aparece para `admin`/`diretoria` (índice, busca, "?", link direto, paginação), via `DIRECTOR_LEVELS`. O repositório é público: o texto é explicativo, sem custos reais.
+- **Pendências:** reiniciar a API 8001 (serve `web/dist`); testar a trava logado com usuário fora da diretoria; confirmar com a liderança: pausa automática = parada planejada?, Cpk de referência, hora extra de fim de semana, conteúdo das planilhas Export técnico/simples.
+- **Corte:** as funções mortas do corte legado foram removidas em `1103679` (a nota "aguarda decisão" abaixo está superada).
 
 ### Estado do trabalho — 04/11/2026 (tudo commitado e enviado)
 
