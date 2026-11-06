@@ -8,6 +8,7 @@ from app.core.operator_sectors import (
 from app.core.quality import can_edit_quality_template, sector_has_quality
 
 USER_LEVELS = (
+    "desenvolvedor",
     "admin",
     "lider",
     "supervisor",
@@ -32,6 +33,7 @@ USER_LEVELS = (
 )
 
 MANAGEMENT_WEB_LEVELS = (
+    "desenvolvedor",
     "admin",
     "lider",
     "supervisor",
@@ -44,6 +46,17 @@ MANAGEMENT_WEB_LEVELS = (
 DEFAULT_USER_LEVEL = "operador_destaque"
 
 NAVIGATION_BY_LEVEL = {
+    "desenvolvedor": (
+        "Tela Inicial",
+        "Tarefas",
+        "Dobra",
+        "Usinagem",
+        "Serra",
+        "Corte",
+        "Consulta Operacional",
+        "Relatórios",
+        "Cadastro",
+    ),
     "admin": (
         "Tela Inicial",
         "Tarefas",
@@ -108,6 +121,7 @@ for _operator_level in OPERATOR_LEVELS:
 # Indices estaveis do QTabWidget da Consulta Operacional.
 ALL_OPERATIONAL_CONSULTATION_TABS = (0, 1, 2, 3, 4, 5, 6, 7, 8)
 CONSULTATION_TABS_BY_LEVEL = {
+    "desenvolvedor": ALL_OPERATIONAL_CONSULTATION_TABS,
     "admin": ALL_OPERATIONAL_CONSULTATION_TABS,
     "lider": ALL_OPERATIONAL_CONSULTATION_TABS,
     "supervisor": ALL_OPERATIONAL_CONSULTATION_TABS,
@@ -128,27 +142,33 @@ CONSULTATION_TABS_BY_LEVEL = {
 for _operator_level in OPERATOR_LEVELS:
     CONSULTATION_TABS_BY_LEVEL.setdefault(_operator_level, ())
 
-USER_MANAGEMENT_LEVELS = ("admin",)
+#: Desenvolvedor (programa o sistema, controle total) e admin (configura a
+#: fábrica). O desenvolvedor passa em tudo o que o admin passa; só ele mexe nas
+#: contas de admin e de desenvolvedor (ver ``can_manage_account``).
+DEVELOPER_LEVEL = "desenvolvedor"
+ADMIN_LEVELS = (DEVELOPER_LEVEL, "admin")
+
+USER_MANAGEMENT_LEVELS = ADMIN_LEVELS
 
 #: Edição de tempo padrão manual: só a engenharia de manufatura e o admin
 #: (decisão do usuário, 06/10/2026). O gestor lê o resultado, não edita.
-STANDARD_TIME_LEVELS = ("admin", "manufatura")
+STANDARD_TIME_LEVELS = (*ADMIN_LEVELS, "manufatura")
 
 #: Incluir/desativar etapa no roteiro de uma OP (Consulta de OP, 04/11/2026): PCP,
 #: engenharia de manufatura e admin. ``pcp`` é nível personalizado (molde
 #: ``lider``): o nível efetivo da sessão é ``lider`` e só o nível ATRIBUÍDO à
 #: conta o distingue; por isso a checagem olha os dois.
-ROUTE_STEP_LEVELS = ("admin", "manufatura", "pcp")
+ROUTE_STEP_LEVELS = (*ADMIN_LEVELS, "manufatura", "pcp")
 
 #: Cadastro/edição das cotas padrão por produto na tela de gestão: só a
 #: Qualidade (conta ``qualidade``) e o admin (decisão do usuário, 06/10/2026).
 #: Controla a LISTAGEM gerencial; a edição em si segue o endpoint da Qualidade e
 #: ``QUALITY_TEMPLATE_EDITOR_LEVELS`` (que também inclui Supervisor/Líder).
-QUALITY_TEMPLATE_MANAGEMENT_LEVELS = ("admin", "qualidade")
+QUALITY_TEMPLATE_MANAGEMENT_LEVELS = (*ADMIN_LEVELS, "qualidade")
 
 #: Aba Diretoria (custo de produção): só a diretoria e o admin (spec de
 #: 16/10/2026). O gestor comum não vê o menu nem as rotas.
-DIRECTOR_LEVELS = ("admin", "diretoria")
+DIRECTOR_LEVELS = (*ADMIN_LEVELS, "diretoria")
 
 #: Sugestões de manutenção (migration 68, 26/10/2026): o nível ``manutencao`` é
 #: personalizado (``niveis_acesso``, molde ``lider``), então o nível EFETIVO da
@@ -170,6 +190,27 @@ def navigation_for_level(level):
 
 def consultation_tabs_for_level(level):
     return CONSULTATION_TABS_BY_LEVEL.get(normalize_user_level(level), ())
+
+
+def is_admin_level(level):
+    """Admin ou desenvolvedor: a única checagem de "é administrador?" do sistema."""
+
+    return normalize_user_level(level) in ADMIN_LEVELS
+
+
+def is_developer_level(level):
+    return normalize_user_level(level) == DEVELOPER_LEVEL
+
+
+def can_manage_account(actor_level, target_level):
+    """Quem pode criar/editar/desativar/excluir uma conta de nível ``target_level``.
+
+    Contas de admin e de desenvolvedor: só o desenvolvedor. As demais: qualquer admin.
+    """
+
+    if is_developer_level(actor_level):
+        return True
+    return is_admin_level(actor_level) and not is_admin_level(target_level)
 
 
 def can_manage_users(level):
@@ -207,7 +248,7 @@ def can_manage_maintenance(level, assigned_level=None):
     ``level`` é o nível efetivo da sessão; ``assigned_level`` o gravado na conta.
     """
 
-    return normalize_user_level(level) == "admin" or (
+    return is_admin_level(level) or (
         str(assigned_level or "").strip().lower() == MAINTENANCE_ASSIGNED_LEVEL
         and can_access_management_web(level)
     )
@@ -221,7 +262,7 @@ def is_maintenance_only(level, assigned_level=None):
     e ``andon_access`` saem falsos e todas as rotas gerenciais a recusam.
     """
 
-    return normalize_user_level(level) != "admin" and can_manage_maintenance(level, assigned_level)
+    return not is_admin_level(level) and can_manage_maintenance(level, assigned_level)
 
 
 def can_access_management_web(level):

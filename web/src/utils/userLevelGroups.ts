@@ -28,7 +28,7 @@ const SETORES: { label: string; match: (nivel: string) => boolean }[] = [
   {
     label: "Gestão e apoio",
     match: (n) => [
-      "admin", "diretoria", "gerente_industrial", "gestor", "manufatura", "qualidade", "pcp", "projetos_adm",
+      "desenvolvedor", "admin", "diretoria", "gerente_industrial", "gestor", "manufatura", "qualidade", "pcp", "projetos_adm",
       "melhoria_continua", "controladoria", "manutencao", "andon", "lider", "supervisor",
     ].includes(n),
   },

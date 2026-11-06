@@ -169,3 +169,30 @@ class MaintenanceOnlyApiForbiddenTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DesenvolvedorEAdminPermissionTests(unittest.TestCase):
+    """O desenvolvedor passa em tudo o que o admin passa; só ele gerencia contas admin/dev."""
+
+    def test_desenvolvedor_herda_tudo_do_admin(self):
+        from app.core import permissions as p
+
+        self.assertIn("desenvolvedor", p.USER_LEVELS)
+        for fn in (
+            p.can_manage_users, p.can_manage_standard_time, p.can_manage_route_steps,
+            p.can_manage_quality_templates, p.can_view_director_tab, p.can_manage_maintenance,
+            p.can_access_management_web, p.can_access_andon_web,
+        ):
+            self.assertEqual(fn("desenvolvedor"), fn("admin"), fn.__name__)
+        self.assertEqual(p.navigation_for_level("desenvolvedor"), p.navigation_for_level("admin"))
+        self.assertEqual(p.consultation_tabs_for_level("desenvolvedor"), p.consultation_tabs_for_level("admin"))
+        self.assertFalse(p.is_maintenance_only("desenvolvedor"))
+
+    def test_so_o_desenvolvedor_gerencia_contas_admin_e_dev(self):
+        from app.core.permissions import can_manage_account
+
+        for alvo in ("admin", "desenvolvedor"):
+            self.assertTrue(can_manage_account("desenvolvedor", alvo))
+            self.assertFalse(can_manage_account("admin", alvo))
+        self.assertTrue(can_manage_account("admin", "operador_corte"))
+        self.assertFalse(can_manage_account("gestor", "operador_corte"))

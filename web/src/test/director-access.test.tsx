@@ -38,7 +38,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("Diretoria — acesso por nível", () => {
   it("espelha os níveis do backend", () => {
-    expect([...DIRECTOR_LEVELS]).toEqual(["admin", "diretoria"]);
+    expect([...DIRECTOR_LEVELS]).toEqual(["desenvolvedor", "admin", "diretoria"]);
   });
 
   it.each(["diretoria", "admin"])("o item Diretoria aparece no menu para %s", async (role) => {

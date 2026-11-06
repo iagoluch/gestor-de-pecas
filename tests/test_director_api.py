@@ -70,7 +70,7 @@ class DirectorAccessTests(_ApiCase):
         self._build(_with_rates(_Repo()))
 
     def test_diretoria_e_admin_recebem_r_em_painel_ficha_e_custos(self):
-        for role in ("diretoria", "admin"):
+        for role in ("diretoria", "admin", "desenvolvedor"):
             self._as(role)
             panel = self.client.get(f"{BASE}/painel", params={"periodo": "hoje"})
             self.assertEqual(panel.status_code, 200, (role, panel.text))
@@ -113,7 +113,7 @@ class DirectorAccessTests(_ApiCase):
             self.assertEqual(self.db.operator_rates[2], Decimal(str(value)).quantize(Decimal("0.01")))
 
     def test_todo_outro_nivel_recebe_403_nas_cinco_rotas(self):
-        others = [level for level in USER_LEVELS if level not in ("admin", "diretoria")]
+        others = [level for level in USER_LEVELS if level not in ("desenvolvedor", "admin", "diretoria")]
         self.assertGreater(len(others), 10)
         before = (dict(self.db.resource_rates), dict(self.db.operator_rates))
         for level in others:

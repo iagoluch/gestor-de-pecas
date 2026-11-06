@@ -167,6 +167,7 @@ const SLUG_WORDS: Record<string, string> = {
  * (`estacaoNaco`, `estacaoNalu`, `robo1`, `projetos`, `prototipo`) vêm do catálogo.
  */
 const ROLE_LABELS: Record<string, string> = {
+  desenvolvedor: "Desenvolvedor",
   admin: "Administrador",
   lider: "Líder",
   supervisor: "Supervisor",

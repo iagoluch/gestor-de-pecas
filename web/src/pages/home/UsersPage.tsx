@@ -17,6 +17,7 @@ import { Notice } from "../../components/Notice";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useDraft } from "../../hooks/useDraft";
 import { useAuth } from "../../auth/AuthContext";
+import { isAdminRole } from "../../config/navigation";
 
 interface UserAccount {
   id: number;
@@ -66,6 +67,7 @@ const TELAS = [
 ];
 const SEM_UNIDADE = "__sem";
 const PROPRIA_CONTA = "Sua própria conta: peça a outro administrador para desativar ou rebaixar.";
+const SO_DESENVOLVEDOR = "Contas de administrador e de desenvolvedor só o desenvolvedor gerencia.";
 const PROPRIA_CONTA_EXCLUIR = "Sua própria conta: peça a outro administrador para excluir.";
 
 /**
@@ -86,7 +88,8 @@ export function ManagementUsersPage() {
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const niveis = query.data?.levels ?? [];
   const personalizados = query.data?.custom_levels ?? [];
-  const niveisBase = niveis.filter((nivel) => nivel !== "admin" && !personalizados.some((item) => item.nome === nivel));
+  const podeGerenciar = (nivel: string) => user?.role === "desenvolvedor" || !isAdminRole(nivel);
+  const niveisBase = niveis.filter((nivel) => !isAdminRole(nivel) && !personalizados.some((item) => item.nome === nivel));
   const rotuloNivel = (nivel: string) => personalizados.find((item) => item.nome === nivel)?.rotulo ?? humanize(nivel);
   const gruposDeNiveis = (lista: string[]) => groupLevelsBySector(lista, (nivel) => nivel, rotuloNivel);
   const [novoNivel, setNovoNivel] = useState<{ rotulo: string; nivel_base: string } | null>(null);
@@ -221,7 +224,7 @@ export function ManagementUsersPage() {
   }
 
   const ativos = query.data?.active ?? 0;
-  const admins = items.filter((item) => item.nivel === "admin").length;
+  const admins = items.filter((item) => isAdminRole(item.nivel)).length;
 
   return (
     <PageFrame staleError={query.error}
@@ -340,23 +343,24 @@ export function ManagementUsersPage() {
                   <span className="pause-actions">
                     <button
                       type="button"
-                      disabled={salvando}
+                      disabled={salvando || !podeGerenciar(row.nivel)}
+                      title={!podeGerenciar(row.nivel) ? SO_DESENVOLVEDOR : undefined}
                       onClick={() => abrirEdicao({ id: row.id, nome: row.nome, nivel: row.nivel_atribuido ?? row.nivel, unidade: row.unidade ?? "", ativo: row.ativo, senha: "" })}
                     >
                       Editar
                     </button>
                     <button
                       type="button"
-                      disabled={salvando || (row.id === user?.id && row.ativo)}
-                      title={row.id === user?.id && row.ativo ? PROPRIA_CONTA : undefined}
+                      disabled={salvando || !podeGerenciar(row.nivel) || (row.id === user?.id && row.ativo)}
+                      title={row.id === user?.id && row.ativo ? PROPRIA_CONTA : !podeGerenciar(row.nivel) ? SO_DESENVOLVEDOR : undefined}
                       onClick={() => void alternarSituacao(row)}
                     >
                       {row.ativo ? "Desativar" : "Ativar"}
                     </button>
                     <button
                       type="button"
-                      disabled={salvando || row.id === user?.id}
-                      title={row.id === user?.id ? PROPRIA_CONTA_EXCLUIR : undefined}
+                      disabled={salvando || !podeGerenciar(row.nivel) || row.id === user?.id}
+                      title={row.id === user?.id ? PROPRIA_CONTA_EXCLUIR : !podeGerenciar(row.nivel) ? SO_DESENVOLVEDOR : undefined}
                       onClick={() => void excluir(row)}
                     >
                       Excluir
@@ -443,7 +447,7 @@ export function ManagementUsersPage() {
             <label>
               Nível de acesso
               <select value={editando.nivel} disabled={editando.id === user?.id} onChange={(event) => setEditando({ ...editando, nivel: event.target.value })}>
-                {gruposDeNiveis(niveis.filter((nivel) => nivel === editando.nivel || !(query.data?.unassignable_levels ?? []).includes(nivel))).map(({ label, levels }) => (
+                {gruposDeNiveis(niveis.filter((nivel) => nivel === editando.nivel || (!(query.data?.unassignable_levels ?? []).includes(nivel) && (user?.role === "desenvolvedor" || !isAdminRole(nivel))))).map(({ label, levels }) => (
                   <optgroup key={label} label={label}>
                     {levels.map((nivel) => <option key={`${label}:${nivel}`} value={nivel}>{rotuloNivel(nivel)}</option>)}
                   </optgroup>

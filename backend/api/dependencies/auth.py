@@ -15,6 +15,8 @@ from app.core.permissions import (
     can_manage_standard_time,
     can_view_director_tab,
     is_maintenance_only,
+    is_admin_level,
+    is_developer_level,
     is_sector_operator,
     normalize_user_level,
     operator_sector_for_user_level,
@@ -183,10 +185,22 @@ def require_admin_user(user: SessionUser = Depends(get_current_user)) -> Session
     usuários e a lista de contatos de chamada (decisão do usuário, 14/09/2026).
     """
 
-    if user.role != "admin":
+    if not is_admin_level(user.role):
         raise AppError(
             "admin_access_denied",
             "Só a conta administradora tem acesso a esta área.",
+            status_code=403,
+        )
+    return user
+
+
+def require_developer_user(user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    """Só o desenvolvedor (controle total, acima do admin)."""
+
+    if not is_developer_level(user.role):
+        raise AppError(
+            "developer_access_denied",
+            "Só a conta do desenvolvedor tem acesso a esta ação.",
             status_code=403,
         )
     return user

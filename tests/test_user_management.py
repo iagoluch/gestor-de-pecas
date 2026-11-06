@@ -6,7 +6,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from app.core.permissions import USER_LEVELS
+from app.core.permissions import USER_LEVELS, is_admin_level
 from backend.api.config import WebSettings
 from backend.api.database import get_database
 from backend.api.dependencies.auth import get_current_user, require_admin_user, require_csrf
@@ -38,6 +38,13 @@ def _admin_user():
     )
 
 
+def _dev_user():
+    return SessionUser(
+        id=901, name="Dev W", role="desenvolvedor",
+        management_access=True, andon_access=True, operator_access=False,
+    )
+
+
 class UserManagementApiTests(unittest.TestCase):
     def setUp(self):
         self.db = FakeDatabase()
@@ -49,7 +56,7 @@ class UserManagementApiTests(unittest.TestCase):
     def _as(self, user):
         self.app.dependency_overrides[get_current_user] = lambda: user
         self.app.dependency_overrides[require_admin_user] = (
-            lambda: user if user.role == "admin" else self._forbid()
+            lambda: user if is_admin_level(user.role) else self._forbid()
         )
 
     @staticmethod
@@ -167,7 +174,7 @@ class UserManagementApiTests(unittest.TestCase):
         self.assertIsNone(limpo.json()["item"]["unidade"])
 
     def test_admin_edita_nivel_situacao_e_senha_sem_exigir_senha_de_novo(self):
-        self._as(_admin_user())
+        self._as(_dev_user())  # promover a admin: só o desenvolvedor
         usuario_id = self.db.criar_usuario("Editar Depois", "senha-antiga", "gestor")
 
         editado = self.client.post(
@@ -256,21 +263,21 @@ class UserManagementApiTests(unittest.TestCase):
         )
 
     def test_admin_nao_desativa_nem_rebaixa_a_propria_conta(self):
-        admin = _admin_user()
-        admin_id = self.db.criar_usuario("Admin Z", "senha-forte-123", "admin")
+        admin = _dev_user()
+        admin_id = self.db.criar_usuario("Dev W", "senha-forte-123", "desenvolvedor")
         admin.id = admin_id
         self._as(admin)
 
-        for mudanca in ({"ativo": False, "nivel": "admin"}, {"ativo": True, "nivel": "operador_corte"}):
+        for mudanca in ({"ativo": False, "nivel": "desenvolvedor"}, {"ativo": True, "nivel": "operador_corte"}):
             resposta = self.client.post(
                 "/api/v1/management/users",
-                json={"id": admin_id, "nome": "Admin Z", **mudanca},
+                json={"id": admin_id, "nome": "Dev W", **mudanca},
             )
             self.assertEqual(resposta.status_code, 409)
             self.assertEqual(resposta.json()["code"], "user_self_lockout")
         proprio = next(u for u in self.db.users if u["id"] == admin_id)
         self.assertTrue(proprio["ativo"])
-        self.assertEqual(proprio["nivel"], "admin")
+        self.assertEqual(proprio["nivel"], "desenvolvedor")
 
     def test_admin_exclui_outra_conta_mas_nao_a_propria(self):
         admin = _admin_user()
@@ -337,8 +344,9 @@ class UserManagementApiTests(unittest.TestCase):
         r = self.client.post("/api/v1/management/levels", json={"rotulo": "Novo", "nivel_base": "gestor"})
         self.assertEqual(r.status_code, 403)
 
-    def test_admin_pode_criar_outra_conta_admin(self):
-        self._as(_admin_user())
+    def test_desenvolvedor_pode_criar_outra_conta_admin(self):
+        # Desde 06/11/2026 só o desenvolvedor cria conta admin (o admin não).
+        self._as(_dev_user())
         resposta = self.client.post(
             "/api/v1/management/users",
             json={"nome": "Segundo Admin", "nivel": "admin", "senha": "senha-forte-123"},
@@ -365,3 +373,77 @@ class UserManagementApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DesenvolvedorEAdminTests(UserManagementApiTests):
+    # herda setUp/_as; os testes da base são desligados abaixo (rodam só na classe original)
+    """Desenvolvedor (controle total) acima do admin (configurador da fábrica)."""
+
+    def _criar(self, nome, nivel):
+        return self.client.post(
+            "/api/v1/management/users",
+            json={"nome": nome, "nivel": nivel, "senha": "senha-forte-123"},
+        )
+
+    def test_admin_nao_cria_conta_admin_nem_desenvolvedor(self):
+        self._as(_admin_user())
+        for nivel in ("admin", "desenvolvedor"):
+            self.assertEqual(self._criar(f"X {nivel}", nivel).status_code, 403)
+
+    def test_admin_cria_conta_abaixo_dele(self):
+        self._as(_admin_user())
+        self.assertEqual(self._criar("Operador N", "operador_corte").status_code, 200)
+
+    def test_admin_nao_edita_nem_exclui_nem_desativa_conta_admin_ou_dev(self):
+        self._as(_dev_user())
+        alvo = self._criar("Conta Alvo", "desenvolvedor").json()["item"]["id"]
+        self._as(_admin_user())
+        editar = self.client.post(
+            "/api/v1/management/users",
+            json={"id": alvo, "nome": "Conta Alvo", "nivel": "desenvolvedor", "ativo": False},
+        )
+        self.assertEqual(editar.status_code, 403)
+        # tentar rebaixar o dev para um nível comum também é barrado (origem protegida)
+        rebaixar = self.client.post(
+            "/api/v1/management/users",
+            json={"id": alvo, "nome": "Conta Alvo", "nivel": "gestor", "ativo": True},
+        )
+        self.assertEqual(rebaixar.status_code, 403)
+        self.assertEqual(self.client.delete(f"/api/v1/management/users/{alvo}").status_code, 403)
+
+    def test_admin_nao_promove_conta_comum_a_admin(self):
+        self._as(_admin_user())
+        comum = self._criar("Comum", "manufatura").json()["item"]["id"]
+        promover = self.client.post(
+            "/api/v1/management/users",
+            json={"id": comum, "nome": "Comum", "nivel": "admin", "ativo": True},
+        )
+        self.assertEqual(promover.status_code, 403)
+
+    def test_desenvolvedor_gerencia_admin(self):
+        self._as(_dev_user())
+        alvo = self._criar("Admin Alvo", "admin").json()["item"]["id"]
+        desativar = self.client.post(
+            "/api/v1/management/users",
+            json={"id": alvo, "nome": "Admin Alvo", "nivel": "admin", "ativo": False},
+        )
+        self.assertEqual(desativar.status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/v1/management/users/{alvo}").status_code, 200)
+
+    def test_desenvolvedor_nao_muda_o_proprio_nivel(self):
+        self._as(_dev_user())
+        resposta = self.client.post(
+            "/api/v1/management/users",
+            json={"id": 901, "nome": "Dev W", "nivel": "admin", "ativo": True},
+        )
+        self.assertEqual(resposta.status_code, 409)
+
+    def test_nivel_personalizado_nao_pode_ter_base_admin_ou_dev(self):
+        self._as(_dev_user())
+        for base in ("admin", "desenvolvedor"):
+            r = self.client.post("/api/v1/management/levels", json={"rotulo": f"N {base}", "nivel_base": base})
+            self.assertEqual(r.status_code, 422)
+
+
+for _nome in [n for n in dir(UserManagementApiTests) if n.startswith("test_")]:
+    setattr(DesenvolvedorEAdminTests, _nome, None)

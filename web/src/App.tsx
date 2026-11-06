@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { EmptyState, LoadingState } from "./components/DataState";
-import { DIRECTOR_LEVELS, IMPROVEMENT_ASSIGNED_LEVELS, IMPROVEMENT_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
+import { DIRECTOR_LEVELS, IMPROVEMENT_ASSIGNED_LEVELS, isAdminRole, IMPROVEMENT_LEVELS, QUALITY_TEMPLATE_LEVELS, STANDARD_TIME_LEVELS } from "./config/navigation";
 import { FilterProvider } from "./filters/FilterContext";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./pages/LoginPage";
@@ -82,7 +82,7 @@ function RequireAuth({ management = false, andon = false, operator = false, main
  */
 function RequireAdmin({ children }: PropsWithChildren) {
   const { user } = useAuth();
-  if (user?.role === "admin") return children;
+  if (isAdminRole(user?.role)) return children;
   return (
     <div className="page-wrap">
       <section className="page-panel">

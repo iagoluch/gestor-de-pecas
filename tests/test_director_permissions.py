@@ -24,12 +24,12 @@ def _user(role):
 
 class DirectorPermissionTests(unittest.TestCase):
     def test_niveis_da_aba_sao_exatamente_admin_e_diretoria(self):
-        self.assertEqual(DIRECTOR_LEVELS, ("admin", "diretoria"))
+        self.assertEqual(DIRECTOR_LEVELS, ("desenvolvedor", "admin", "diretoria"))
 
     def test_so_admin_e_diretoria_veem_a_aba(self):
         for level in USER_LEVELS:
             self.assertEqual(
-                can_view_director_tab(level), level in ("admin", "diretoria"), level
+                can_view_director_tab(level), level in ("desenvolvedor", "admin", "diretoria"), level
             )
 
     def test_nivel_desconhecido_ou_vazio_nao_ve(self):
@@ -58,7 +58,7 @@ class RequireDiretoriaUserTests(unittest.TestCase):
         self.app.dependency_overrides[get_current_user] = lambda: _user(role)
 
     def test_admin_e_diretoria_passam(self):
-        for role in ("admin", "diretoria"):
+        for role in ("desenvolvedor", "admin", "diretoria"):
             self._as(role)
             response = self.client.get("/ping")
             self.assertEqual(response.status_code, 200, role)

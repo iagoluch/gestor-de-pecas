@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
 
 from app.core.password_policy import password_policy_error
-from app.core.permissions import USER_LEVELS, can_access_management_web, is_maintenance_only, is_sector_operator
+from app.core.permissions import (
+    USER_LEVELS,
+    can_access_management_web,
+    can_manage_account,
+    is_admin_level,
+    is_maintenance_only,
+    is_sector_operator,
+)
 from app.database.errors import PauseOrderConflictError
 from app.database.telegram_link_codes import TELEGRAM_LINK_CODE_TTL_SECONDS
 from backend.api.database import get_database
@@ -537,6 +544,21 @@ def _tela_do_nivel(nivel, nivel_atribuido=None) -> str:
     return "apontamento" if is_sector_operator(nivel) else "outro"
 
 
+def _exigir_conta_gerenciavel(actor: SessionUser, *niveis) -> None:
+    """Contas de admin e de desenvolvedor só o desenvolvedor cria, edita ou exclui.
+
+    Vale para o nível de origem E o de destino: o admin não promove ninguém
+    (nem a si) nem mexe em quem já está nesses níveis.
+    """
+
+    if any(n and not can_manage_account(actor.role, n) for n in niveis):
+        raise AppError(
+            "account_level_restricted",
+            "Contas de administrador e de desenvolvedor só o desenvolvedor gerencia.",
+            status_code=403,
+        )
+
+
 @router.get("/users")
 def list_users(
     _user: SessionUser = Depends(require_admin_user),
@@ -567,7 +589,7 @@ def create_level(
 ):
     rotulo = payload.rotulo.strip()
     nome = _slug_nivel(rotulo)
-    if not nome or payload.nivel_base not in USER_LEVELS or payload.nivel_base == "admin":
+    if not nome or payload.nivel_base not in USER_LEVELS or is_admin_level(payload.nivel_base):
         raise AppError(
             "invalid_user_level",
             "Informe um nome para o nível e um nível-base válido.",
@@ -614,6 +636,7 @@ def save_user(
     database=Depends(get_database),
 ):
     antes = None if payload.id is None else ler_estado(database, "obter_usuario_por_id", payload.id)
+    _exigir_conta_gerenciavel(_user, payload.nivel, (antes or {}).get("nivel"))
     custom_levels = list(database.listar_niveis_personalizados() or [])
     if payload.nivel not in USER_LEVELS and not any(
         item["nome"] == payload.nivel for item in custom_levels
@@ -663,10 +686,10 @@ def save_user(
         usuario_id = payload.id
         # Quem salva é sempre um admin ativo; barrar só a própria conta já
         # garante que o sistema nunca fica sem administrador pela tela.
-        if usuario_id == _user.id and (not payload.ativo or payload.nivel != "admin"):
+        if usuario_id == _user.id and (not payload.ativo or payload.nivel != _user.role):
             raise AppError(
                 "user_self_lockout",
-                "Você não pode desativar nem rebaixar a própria conta. Peça a outro administrador.",
+                "Você não pode desativar nem mudar o nível da própria conta. Peça a outro administrador.",
                 status_code=409,
             )
         database.salvar_usuario(
@@ -700,6 +723,7 @@ def delete_user(
             status_code=409,
         )
     antes = ler_estado(database, "obter_usuario_por_id", usuario_id)
+    _exigir_conta_gerenciavel(_user, (antes or {}).get("nivel"))
     if not database.excluir_usuario(usuario_id):
         raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
     auditar(database, _user, "usuario", usuario_id, antes=antes)

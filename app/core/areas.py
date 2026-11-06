@@ -35,7 +35,7 @@ AREAS_POR_NIVEL = {
 
 #: Únicos níveis que enxergam todas as áreas. As demais contas (Diretoria,
 #: Qualidade, Manufatura, Gestor…) só veem a área que o nível delas mapeia.
-NIVEIS_COM_TODAS_AS_AREAS = ("admin", "gerente_industrial")
+NIVEIS_COM_TODAS_AS_AREAS = ("desenvolvedor", "admin", "gerente_industrial")
 
 
 def areas_for_user(nivel_atribuido, nivel_efetivo):
@@ -115,7 +115,7 @@ def queue_areas_for_user(nivel_atribuido, nivel_efetivo=None):
     """
 
     atribuido = nivel_atribuido or nivel_efetivo
-    if atribuido == "admin":
+    if atribuido in ("desenvolvedor", "admin"):
         return list(AREAS)
     return list(AREAS_POR_NIVEL.get(atribuido, ()))
 

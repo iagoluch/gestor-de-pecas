@@ -87,7 +87,7 @@ QUALITY_SESSION_STATUSES = (QUALITY_SESSION_OPEN, QUALITY_SESSION_FINISHED)
 # O operador comum cadastra a primeira definição e depois só visualiza. A conta
 # ``qualidade`` (decisão do usuário, 06/10/2026) é a dona do cadastro padrão;
 # ela não é um perfil de operador nem habilita a fila de inspeção.
-QUALITY_TEMPLATE_EDITOR_LEVELS = ("admin", "supervisor", "lider", "qualidade")
+QUALITY_TEMPLATE_EDITOR_LEVELS = ("desenvolvedor", "admin", "supervisor", "lider", "qualidade")
 
 
 def _normalized(value):

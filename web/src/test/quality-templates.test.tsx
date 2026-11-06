@@ -76,7 +76,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("Qualidade (cotas padrão) — acesso por nível", () => {
   it("espelha os níveis do backend", () => {
-    expect([...QUALITY_TEMPLATE_LEVELS]).toEqual(["admin", "qualidade"]);
+    expect([...QUALITY_TEMPLATE_LEVELS]).toEqual(["desenvolvedor", "admin", "qualidade"]);
   });
 
   it.each(["qualidade", "admin"])("a seção Qualidade aparece para %s, com a aba Cotas padrão", async (role) => {

@@ -38,15 +38,19 @@ export interface ManagementTab {
   assignedLevels?: readonly string[];
 }
 
+/** Admin e desenvolvedor: espelha `ADMIN_LEVELS` do backend (o desenvolvedor passa em tudo o que o admin passa). */
+export const ADMIN_LEVELS = ["desenvolvedor", "admin"] as const;
+export const isAdminRole = (role: string | null | undefined) => Boolean(role && (ADMIN_LEVELS as readonly string[]).includes(role));
+
 /** Níveis do tempo padrão: espelha `STANDARD_TIME_LEVELS` do backend. */
-export const STANDARD_TIME_LEVELS = ["admin", "manufatura"] as const;
+export const STANDARD_TIME_LEVELS = [...ADMIN_LEVELS, "manufatura"] as const;
 
 /** Níveis das cotas padrão da Qualidade: espelha `QUALITY_TEMPLATE_MANAGEMENT_LEVELS` do backend. */
-export const QUALITY_TEMPLATE_LEVELS = ["admin", "qualidade"] as const;
+export const QUALITY_TEMPLATE_LEVELS = [...ADMIN_LEVELS, "qualidade"] as const;
 
 
 /** Melhoria Contínua: admin pelo nível efetivo; o setor pelo nível atribuído à conta (efetivo `lider`, igual ao de outros líderes). */
-export const IMPROVEMENT_LEVELS = ["admin"] as const;
+export const IMPROVEMENT_LEVELS = ADMIN_LEVELS;
 export const IMPROVEMENT_ASSIGNED_LEVELS = ["melhoria_continua"] as const;
 
 /** Passa na trava de nível (`levels`) ou, quando declarado, no nível atribuído (`assignedLevels`)? */
@@ -61,7 +65,7 @@ function levelAllowed(
 }
 
 /** Níveis da aba Diretoria: espelha `DIRECTOR_LEVELS` do backend. */
-export const DIRECTOR_LEVELS = ["admin", "diretoria"] as const;
+export const DIRECTOR_LEVELS = [...ADMIN_LEVELS, "diretoria"] as const;
 
 /**
  * A aba aparece para este nível? Usado pelo menu e pelo guarda de rota.
@@ -73,7 +77,7 @@ export function tabVisibleFor(
   areaIds?: readonly string[],
   assignedLevel?: string | null,
 ) {
-  if (tab.adminOnly && role !== "admin") return false;
+  if (tab.adminOnly && !isAdminRole(role)) return false;
   if (!levelAllowed(tab, role, assignedLevel)) return false;
   if (tab.area && !areaIds?.includes(tab.area)) return false;
   return true;
@@ -109,7 +113,7 @@ export function sectionVisibleFor(
   areaIds?: readonly string[],
   assignedLevel?: string | null,
 ) {
-  if (section.adminOnly && role !== "admin") return false;
+  if (section.adminOnly && !isAdminRole(role)) return false;
   if (!levelAllowed(section, role, assignedLevel)) return false;
   if (section.tabs.some((tab) => tab.area)) {
     if (seesAllAreas(areaIds)) return false;
