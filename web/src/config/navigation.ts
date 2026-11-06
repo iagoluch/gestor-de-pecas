@@ -326,6 +326,7 @@ export const managementSections: ManagementSection[] = [
       { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users", adminOnly: true },
       { label: "Chamadas do IagoDev", path: "/inicio/chamadas-dev", screen: "dev-chamadas", adminOnly: true },
       { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos", adminOnly: true },
+      { label: "Apontamento por setor", path: "/inicio/apontamento-por-setor", screen: "dev-apontamento-setor", adminOnly: true },
       { label: "Alterações", path: "/inicio/alteracoes", screen: "dev-alteracoes", adminOnly: true },
       { label: "Envios ao Protheus", path: "/inicio/envios-protheus", screen: "dev-envios-protheus", adminOnly: true },
       { label: "Log do Sistema", path: "/inicio/log-sistema", screen: "dev-log-sistema", adminOnly: true },

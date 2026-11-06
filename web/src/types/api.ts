@@ -33,6 +33,8 @@ export interface SessionUser {
   /** Nível gravado na conta (o `role` é o efetivo): distingue o perfil de Manutenção (`manutencao`) de um líder. */
   assigned_level?: string | null;
   maintenance_access?: boolean;
+  /** Gestão apontando "como" este setor (modo da aba Apontamento por setor); ausente/null = sessão normal. */
+  acting_sector?: string | null;
   /** Conta de gestão que entrou com a senha padrão: precisa definir outra antes de usar o sistema. */
   password_change_required?: boolean;
 }

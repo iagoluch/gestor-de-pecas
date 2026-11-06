@@ -1974,3 +1974,5 @@ label:has(> .required-mark) > :is(input, select, textarea, div) { flex-basis: 10
 .feed__state { flex: none; margin-left: auto; padding: 3px 10px; border-radius: var(--radius-pill); color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); font-size: var(--text-xs); font-weight: 700; text-transform: capitalize; }
 .feed__state + .feed__time { margin-left: 0; min-width: 44px; text-align: right; }
 .home-dashboard-block .feed { max-height: none; }
+
+.operator-acting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; background: var(--warning-bg, #fff3cd); color: var(--warning-fg, #5c4300); font-weight: 600; }

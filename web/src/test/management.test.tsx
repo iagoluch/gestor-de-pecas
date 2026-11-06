@@ -93,8 +93,8 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(47);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(47);
+    expect(managementRoutes).toHaveLength(48);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(48);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
@@ -123,6 +123,7 @@ describe("contrato gerencial Web", () => {
     // Envios ao Protheus (990eed2): reenviar ou descartar envios em erro, só admin.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Envios ao Protheus", path: "/inicio/envios-protheus", sectionId: "dev", adminOnly: true }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Log do Sistema", path: "/inicio/log-sistema", sectionId: "dev", adminOnly: true }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Apontamento por setor", path: "/inicio/apontamento-por-setor", sectionId: "dev", adminOnly: true }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Turnos", path: "/inicio/turnos", sectionId: "dev" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Confiabilidade", path: "/analises/confiabilidade", sectionId: "analytics" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "IA", path: "/inicio/ia", sectionId: "home" }));

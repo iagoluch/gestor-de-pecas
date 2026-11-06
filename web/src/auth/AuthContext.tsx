@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
-import { api, ApiError, SESSION_EXPIRED_EVENT } from "../api/client";
+import { api, ApiError, SESSION_EXPIRED_EVENT, setActingSector } from "../api/client";
 import { clearLastSnapshots } from "../hooks/useApiQuery";
 import type { SessionUser } from "../types/api";
 
@@ -10,6 +10,8 @@ interface AuthValue {
   login: (username: string, password: string) => Promise<SessionUser>;
   changePassword: (newPassword: string) => Promise<SessionUser>;
   logout: () => Promise<void>;
+  /** Entra no modo "apontar como setor" (nível do setor) e recarrega a sessão. A saída é `leaveActingSector`. */
+  actAsSector: (level: string) => Promise<SessionUser>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
+    setActingSector(null);
     const authenticated = await api.post<SessionUser>("/api/v1/auth/login", { username, password });
     setUser(authenticated);
     return authenticated;
@@ -51,14 +54,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const logout = useCallback(async () => {
+    setActingSector(null);
     await api.post<void>("/api/v1/auth/logout");
     clearLastSnapshots();
     setUser(null);
   }, []);
 
+  const actAsSector = useCallback(async (level: string) => {
+    setActingSector(level);
+    try {
+      const next = await api.get<SessionUser>("/api/v1/auth/session");
+      clearLastSnapshots();
+      setUser(next);
+      return next;
+    } catch (error) {
+      setActingSector(null);
+      throw error;
+    }
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, login, changePassword, logout }),
-    [user, loading, login, changePassword, logout],
+    () => ({ user, loading, login, changePassword, logout, actAsSector }),
+    [user, loading, login, changePassword, logout, actAsSector],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

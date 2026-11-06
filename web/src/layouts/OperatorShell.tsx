@@ -1,4 +1,6 @@
 import type { PropsWithChildren } from "react";
+import { leaveActingSector } from "../api/client";
+import { useOptionalAuth } from "../auth/AuthContext";
 import { ChamadaButton } from "../components/ChamadaButton";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
@@ -34,6 +36,8 @@ export function OperatorShell({
   /** Botão de chamada da liderança; a Manutenção não o usa. */
   calls?: boolean;
 }>) {
+  const auth = useOptionalAuth();
+  const acting = auth?.user?.acting_sector ?? null;
   const items = navigation ?? [];
   const current = activeNav ?? items[0]?.key;
   const hasTabs = items.length > 1;
@@ -83,10 +87,22 @@ export function OperatorShell({
           })}
         </nav>
       ) : null}
+      {acting ? (
+        <div className="operator-acting" role="status">
+          <span>{`Apontando como ${acting} — feito pela gestão`}</span>
+          <button
+            type="button"
+            className="button"
+            onClick={leaveActingSector}
+          >
+            Sair do modo setor
+          </button>
+        </div>
+      ) : null}
       <main className="operator-main">
         <div className="operator-content">{children}</div>
       </main>
-      {calls ? <ChamadaButton sector={sector} resource={resource} /> : null}
+      {calls && !acting ? <ChamadaButton sector={sector} resource={resource} /> : null}
     </div>
   );
 }

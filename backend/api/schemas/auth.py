@@ -42,6 +42,10 @@ class SessionUser(BaseModel):
     assigned_level: str | None = None
     #: Pode ver e decidir as sugestões de manutenção (conta Manutenção e admin).
     maintenance_access: bool = False
+    #: Admin/desenvolvedor apontando "como" um setor (Etapa 3): nome do setor.
+    #: Nesse modo a sessão vale como a do operador do setor, no nome da conta
+    #: seguido de "(gestão)"; sem este campo a sessão é a normal.
+    acting_sector: str | None = None
     #: Entrou com a senha padrão numa conta de gestão: a tela pede uma nova
     #: senha e a API recusa as demais rotas até ela ser definida.
     password_change_required: bool = False

@@ -825,6 +825,20 @@ def undo_audit(
     return {"ok": True}
 
 
+@router.get("/operator-sectors")
+def list_operator_sectors(_user: SessionUser = Depends(require_admin_user)):
+    """Setores em que a gestão pode apontar "como" o operador (aba Apontamento por setor)."""
+
+    from app.core.operator_sectors import OPERATOR_SECTOR_BY_LEVEL
+
+    return {
+        "items": [
+            {"level": s.level, "name": s.name, "resources": list(s.resources)}
+            for s in OPERATOR_SECTOR_BY_LEVEL.values()
+        ]
+    }
+
+
 @router.get("/system-log")
 def system_log(
     area: str | None = Query(default=None, max_length=20),

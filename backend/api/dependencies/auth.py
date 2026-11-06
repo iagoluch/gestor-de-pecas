@@ -39,6 +39,50 @@ def access_flags(role: str, assigned_level: str | None) -> dict[str, bool]:
     }
 
 
+ACTING_SECTOR_HEADER = "X-Acting-Sector"
+ACTING_NAME_SUFFIX = " (gestão)"
+
+
+def _acting_sector_level(request: Request, role: str) -> str | None:
+    """Nível do setor em que o admin/desenvolvedor está apontando (cabeçalho), ou ``None``.
+
+    Só admin/desenvolvedor usam o modo; qualquer outro nível que mande o
+    cabeçalho é recusado, nunca ignorado em silêncio.
+    """
+
+    level = (request.headers.get(ACTING_SECTOR_HEADER) or "").strip()
+    if not level:
+        return None
+    if not is_admin_level(role):
+        raise AppError("acting_sector_denied", "Só a gestão pode apontar por um setor.", status_code=403)
+    if operator_sector_for_user_level(level) is None:
+        raise AppError("acting_sector_invalid", "Setor inválido.", status_code=422)
+    return normalize_user_level(level)
+
+
+def _acting_user(row, level: str, claims) -> SessionUser:
+    """Sessão do operador do setor, mas com o id e o nome (marcado) de quem está agindo.
+
+    Perde as permissões de gestão de propósito: neste modo a conta só faz o
+    que o operador do setor faria.
+    """
+
+    sector = operator_sector_for_user_level(level)
+    return SessionUser(
+        id=int(row["id"]),
+        name=str(row.get("nome") or claims.username) + ACTING_NAME_SUFFIX,
+        role=level,
+        management_access=False,
+        andon_access=False,
+        operator_access=True,
+        operator_sector=sector.name,
+        operator_resources=sector.resources,
+        operator_automatic_queue=sector.automatic_queue,
+        acting_sector=sector.name,
+        password_change_required=False,
+    )
+
+
 def _session_user(request: Request, database, *, allow_password_change_pending: bool) -> SessionUser:
     settings = request.app.state.settings
     token = request.cookies.get(settings.session_cookie_name)
@@ -80,8 +124,11 @@ def _session_user(request: Request, database, *, allow_password_change_pending: 
             "Defina uma nova senha antes de continuar.",
             status_code=403,
         )
-    operator_sector = operator_sector_for_user_level(role)
     request.state.session_claims = claims
+    acting = _acting_sector_level(request, role)
+    if acting is not None:
+        return _acting_user(row, acting, claims)
+    operator_sector = operator_sector_for_user_level(role)
     return SessionUser(
         id=int(row["id"]),
         name=str(row.get("nome") or claims.username),

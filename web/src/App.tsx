@@ -14,6 +14,7 @@ import { ManagementBadgesPage } from "./pages/home/BadgesPage";
 import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
 import { DevChamadasContatosPage } from "./pages/home/ChamadasContatosPage";
 import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
+import { ActingSectorPage } from "./pages/home/ActingSectorPage";
 import { ChangeAuditPage } from "./pages/home/ChangeAuditPage";
 import { TotvsOutboxPage } from "./pages/home/TotvsOutboxPage";
 import { SystemLogPage } from "./pages/home/SystemLogPage";
@@ -183,6 +184,7 @@ export default function App() {
         <Route path="inicio/chamadas" element={<ManagementChamadasPage />} />
         <Route path="inicio/chamadas-dev" element={<RequireAdmin><DevChamadasContatosPage /></RequireAdmin>} />
         <Route path="inicio/turnos" element={<RequireAdmin><ManagementShiftsPage /></RequireAdmin>} />
+        <Route path="inicio/apontamento-por-setor" element={<RequireAdmin><ActingSectorPage /></RequireAdmin>} />
         <Route path="inicio/alteracoes" element={<RequireAdmin><ChangeAuditPage /></RequireAdmin>} />
         <Route path="inicio/envios-protheus" element={<RequireAdmin><TotvsOutboxPage /></RequireAdmin>} />
         <Route path="inicio/log-sistema" element={<RequireAdmin><SystemLogPage /></RequireAdmin>} />

@@ -24,6 +24,31 @@ export function apiErrorMessage(reason: unknown) {
 /** Disparado quando a API responde 401 fora do login (sessão expirada ou encerrada). */
 export const SESSION_EXPIRED_EVENT = "gestor:session-expired";
 
+const ACTING_KEY = "gestor:acting-sector";
+let actingSector: string | null = null;
+try {
+  actingSector = sessionStorage.getItem(ACTING_KEY);
+} catch {
+  /* sem storage: o modo vale só até recarregar */
+}
+
+/** Admin/desenvolvedor apontando "como" um setor: toda chamada leva o cabeçalho até sair do modo. */
+export function setActingSector(level: string | null) {
+  actingSector = level;
+  try {
+    if (level) sessionStorage.setItem(ACTING_KEY, level);
+    else sessionStorage.removeItem(ACTING_KEY);
+  } catch {
+    /* ignora */
+  }
+}
+
+/** Sai do modo setor e recarrega o app na aba: sessão e rota voltam juntas, sem passar por telas do outro perfil. */
+export function leaveActingSector() {
+  setActingSector(null);
+  window.location.assign("/inicio/apontamento-por-setor");
+}
+
 function cookie(name: string): string | undefined {
   return document.cookie
     .split(";")
@@ -38,6 +63,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  if (actingSector) headers.set("X-Acting-Sector", actingSector);
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     const csrf = cookie("gestor_csrf");
     if (csrf) headers.set("X-CSRF-Token", decodeURIComponent(csrf));
