@@ -24,6 +24,10 @@ const ENTITIES: Record<string, string> = {
   rnc_decisao: "Decisão de RNC",
   manutencao_sugestao: "Sugestão de manutenção",
   roteiro_etapa: "Etapa do roteiro",
+  calendario: "Calendário produtivo",
+  calendario_turno: "Turno do calendário",
+  calendario_recurso: "Calendário do recurso",
+  cracha: "Crachá",
 };
 
 const ACTIONS: Record<ChangeAction, string> = { criar: "Criou", alterar: "Alterou", excluir: "Excluiu" };

@@ -36,13 +36,16 @@ def encontrar(linhas, campo, valor):
     return None
 
 
-def auditar(database, user, entidade, chave, *, antes=None, depois=None):
-    """Grava a alteração; a ação sai de antes/depois. Nunca levanta erro."""
+def auditar(database, user, entidade, chave, *, antes=None, depois=None, acao=None):
+    """Grava a alteração; a ação sai de antes/depois. Nunca levanta erro.
+
+    ``acao`` força a ação quando o "antes" não é legível (gravação por upsert).
+    """
 
     try:
         if antes is None and depois is None:
             return False
-        acao = "criar" if antes is None else "excluir" if depois is None else "alterar"
+        acao = acao or ("criar" if antes is None else "excluir" if depois is None else "alterar")
         registrar = getattr(database, "registrar_auditoria", None)
         if not callable(registrar):
             return False

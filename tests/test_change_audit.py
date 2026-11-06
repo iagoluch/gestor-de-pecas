@@ -189,6 +189,30 @@ class RotasDeGestaoGravamAuditoriaTests(_ApiCase):
         for proibido in (SENHA, "outra-senha-456", "senha", "hash", "token", "session_version"):
             self.assertNotIn(proibido, texto)
 
+    def test_cracha_e_calendarios_gravam_auditoria_sem_segredos(self):
+        r = self.client.post(f"{M}/badges", json={"cracha": "9999", "nome": "Fulano", "ativo": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        log = self._unica()
+        self.assertEqual((log["entidade"], log["acao"]), ("cracha", "alterar"))
+        self.assertNotIn("cracha", log["depois"])
+        self.assertEqual(log["depois"]["nome"], "Fulano")
+
+        self.db.auditoria.clear()
+        self.db.salvar_calendario_produtivo = lambda codigo, nome, **kw: {
+            "codigo": codigo, "nome": nome, "timezone": kw["timezone"], "ativo": kw["ativo"]}
+        r = self.client.post(f"{M}/productive-calendars", json={"codigo": "CAL1", "nome": "Fábrica"})
+        self.assertEqual(r.status_code, 200, r.text)
+        log = self._unica()
+        self.assertEqual((log["entidade"], log["chave"], log["depois"]["nome"]), ("calendario", "CAL1", "Fábrica"))
+
+        self.db.auditoria.clear()
+        self.db.vincular_calendario_recurso = lambda rec, cal, **kw: {
+            "codigo": rec, "calendario_codigo": cal, "capacidade_valor": 2, "capacidade_unidade": "un"}
+        r = self.client.post(f"{M}/resource-calendars", json={"recurso_codigo": "LASER1", "calendario_codigo": "CAL1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        log = self._unica()
+        self.assertEqual((log["entidade"], log["chave"]), ("calendario_recurso", "LASER1"))
+
     def test_niveis_pausas_e_turnos(self):
         self.assertEqual(
             self.client.post(f"{M}/levels", json={"rotulo": "Líder Teste", "nivel_base": "lider"}).status_code, 200

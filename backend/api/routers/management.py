@@ -313,6 +313,7 @@ def save_productive_calendar(
         timezone=payload.timezone,
         ativo=payload.ativo,
     )
+    auditar(database, _user, "calendario", row.get("codigo"), depois=row, acao="alterar")
     request.app.state.realtime.publish("productive_calendars")
     return {"ok": True, "item": row}
 
@@ -341,6 +342,11 @@ def save_productive_shift(
         )
     except ValueError as exc:
         raise AppError("invalid_productive_shift", str(exc)) from exc
+    auditar(
+        database, _user, "calendario_turno",
+        f"{calendario_codigo}/{row.get('id') or payload.dia_semana}",
+        depois={**row, "calendario_codigo": calendario_codigo}, acao="alterar",
+    )
     request.app.state.realtime.publish("productive_calendars")
     return {"ok": True, "item": row}
 
@@ -360,6 +366,7 @@ def bind_productive_resource_calendar(
     )
     if row is None:
         raise AppError("resource_not_found", "Recurso não encontrado no catálogo.", status_code=404)
+    auditar(database, _user, "calendario_recurso", row.get("codigo"), depois=row, acao="alterar")
     request.app.state.realtime.publish("productive_calendars")
     return {"ok": True, "item": row}
 
@@ -415,6 +422,7 @@ def save_badge(
         )
     except ValueError as exc:
         raise AppError("invalid_badge", str(exc)) from exc
+    auditar(database, _user, "cracha", (row or {}).get("id"), depois=row, acao="alterar")
     request.app.state.realtime.publish("operator_badges")
     item = {key: value for key, value in (row or {}).items() if key != "telegram_chat_id"}
     item["telegram_vinculado"] = bool((row or {}).get("telegram_chat_id"))

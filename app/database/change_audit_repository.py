@@ -27,6 +27,15 @@ CAMPOS_AUDITAVEIS = {
     "rnc_decisao": ("rnc_id", "rnc_codigo", "decisao", "justificativa"),
     # Decisão do perfil de Manutenção sobre a sugestão de manutenção (sem R$, sem dado pessoal).
     "manutencao_sugestao": ("sugestao_id", "recurso", "parada_inicio", "status", "nota"),
+    # Calendário produtivo (gravação por upsert: só o valor novo é registrado).
+    "calendario": ("codigo", "nome", "timezone", "ativo"),
+    "calendario_turno": (
+        "calendario_codigo", "nome", "dia_semana", "hora_inicio", "hora_fim",
+        "cruza_meia_noite", "minutos_intervalo", "ativo",
+    ),
+    "calendario_recurso": ("codigo", "calendario_codigo", "capacidade_valor", "capacidade_unidade"),
+    # Crachá: sem o número do crachá nem o chat do Telegram.
+    "cracha": ("nome", "ativo", "autorizador_retrabalho"),
     # Etapa adicionada/desativada no roteiro de uma OP (chave = código da OP).
     "roteiro_etapa": (
         "codigo_op", "numero_operacao", "descricao_operacao", "setor", "recurso",
