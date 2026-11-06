@@ -73,7 +73,7 @@ class SystemLogRepositoryMixin:
             params.append(ate)
         limite = max(1, min(int(limite or LIMITE_PADRAO), LIMITE_MAXIMO))
         sql = (
-            "SELECT id, quando, area, nivel, evento, mensagem, usuario, request_id, metodo,"
+            "SELECT id, quando, area, nivel, evento, mensagem, usuario, request_id, metodo,"  # nosec B608 -- só fragmentos fixos do módulo; todo valor do usuário vai por %s
             " rota, status_http, duracao_ms::float AS duracao_ms, detalhe FROM log_sistema"
             + (" WHERE " + " AND ".join(where) if where else "")
             + " ORDER BY quando DESC, id DESC LIMIT %s"
