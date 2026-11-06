@@ -96,6 +96,18 @@ class ChangeAuditRepositoryMixin:
             logging.exception("Falha ao gravar auditoria de alteração (%s/%s)", entidade, chave)
             return False
 
+    def obter_auditoria(self, audit_id):
+        """Uma linha do log pelo id (``None`` se não existe)."""
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, quando, usuario_id, usuario_nome, entidade, chave, acao, antes, depois"
+                " FROM auditoria_alteracoes WHERE id = %s",
+                (int(audit_id),),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     def listar_auditoria(self, *, entidade=None, chave=None, usuario=None, desde=None, ate=None,
                          limite=LIMITE_PADRAO, entidades=None, excluir_entidades=None):
         """Mais recentes primeiro. ``usuario`` casa por id (número) ou parte do nome;

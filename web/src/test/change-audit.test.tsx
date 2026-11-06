@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { AuthProvider } from "../auth/AuthContext";
-import { changeLines, fieldValue } from "../pages/home/ChangeAuditPage";
+import { canUndo, changeLines, fieldValue } from "../pages/home/ChangeAuditPage";
 import type { ChangeAuditEntry } from "../types/changeAudit";
 
 function json(payload: unknown, status = 200) {
@@ -68,5 +68,14 @@ describe("Alterações — quem mudou o quê", () => {
     renderAt("/inicio/alteracoes");
     expect(await screen.findByText("Acesso restrito ao administrador")).toBeTruthy();
     expect(auditCalls(mock)).toHaveLength(0);
+  });
+});
+
+describe("canUndo", () => {
+  it("só oferece desfazer de alteração de usuário, turno ou pausa com o antes guardado", () => {
+    expect(canUndo({ entidade: "turno", acao: "alterar", antes: { ativo: true } })).toBe(true);
+    expect(canUndo({ entidade: "turno", acao: "criar", antes: null })).toBe(false);
+    expect(canUndo({ entidade: "calendario", acao: "alterar", antes: null })).toBe(false);
+    expect(canUndo({ entidade: "nivel", acao: "alterar", antes: { nome: "x" } })).toBe(false);
   });
 });

@@ -22,6 +22,7 @@ from backend.api.database import get_database
 from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.clock import request_now_func
 from backend.api.dependencies.auth import (
+    require_developer_user,
     require_admin_user,
     require_csrf,
     require_management_user,
@@ -759,6 +760,69 @@ def list_audit(
         desde=desde, ate=ate, limite=limite,
     )
     return {"items": items, "count": len(items)}
+
+
+def _confere_estado_atual(atual, depois, campos):
+    """O desfazer só vale se ninguém mexeu depois: o estado de hoje tem de ser o que o log gravou."""
+
+    def norm(valor):
+        return "" if valor is None else str(valor)
+
+    if any(norm(atual.get(c)) != norm(depois.get(c)) for c in campos):
+        raise AppError(
+            "undo_state_changed",
+            "Esse registro foi alterado de novo depois dessa mudança. Desfaça a mais recente primeiro.",
+            status_code=409,
+        )
+
+
+@router.post("/audit/{audit_id}/undo", dependencies=[Depends(require_csrf)])
+def undo_audit(
+    audit_id: int,
+    _user: SessionUser = Depends(require_developer_user),
+    database=Depends(get_database),
+):
+    """Desfaz uma alteração de usuário, turno ou pausa devolvendo o valor "antes" (só desenvolvedor)."""
+
+    log = database.obter_auditoria(audit_id)
+    if log is None:
+        raise AppError("audit_not_found", "Registro não encontrado.", status_code=404)
+    entidade, antes, depois = log["entidade"], log.get("antes"), log.get("depois")
+    if entidade not in ("usuario", "turno", "pausa") or log["acao"] != "alterar" or not antes or not depois:
+        raise AppError("undo_not_available", "Esta alteração não pode ser desfeita.", status_code=409)
+    chave = int(log["chave"])
+    if entidade == "usuario":
+        atual = ler_estado(database, "obter_usuario_por_id", chave)
+        if atual is None:
+            raise AppError("user_not_found", "Usuário não encontrado.", status_code=404)
+        _confere_estado_atual(atual, depois, ("nivel_atribuido", "unidade", "ativo"))
+        if chave == _user.id and (not antes["ativo"] or antes["nivel_atribuido"] != atual.get("nivel_atribuido")):
+            raise AppError("user_self_lockout", "Não desfaça a mudança de nível ou situação da própria conta.", status_code=409)
+        database.salvar_usuario(
+            chave, nivel=antes["nivel_atribuido"], ativo=antes["ativo"], unidade=antes.get("unidade") or None
+        )
+        novo = database.obter_usuario_por_id(chave)
+    elif entidade == "turno":
+        atual = encontrar(ler_estado(database, "listar_parametros_turno", somente_ativos=False), "id", chave)
+        if atual is None:
+            raise AppError("shift_not_found", "Turno não encontrado.", status_code=404)
+        _confere_estado_atual(atual, depois, tuple(depois))
+        novo = database.salvar_parametro_turno(
+            nome=antes["nome"], tipo=antes["tipo"], hora_inicio=antes["hora_inicio"],
+            hora_fim=antes["hora_fim"], ativo=antes["ativo"], ordem=antes["ordem"], parametro_id=chave,
+        )
+    else:
+        atual = encontrar(ler_estado(database, "listar_pausas_automaticas", somente_ativas=False), "id", chave)
+        if atual is None:
+            raise AppError("pause_not_found", "Pausa não encontrada.", status_code=404)
+        _confere_estado_atual(atual, depois, tuple(depois))
+        novo = database.salvar_pausa_automatica(
+            tipo_setor=antes["tipo_setor"], nome=antes["nome"], hora_inicio=antes["hora_inicio"],
+            hora_fim=antes["hora_fim"], ativo=antes["ativo"], ordem=antes["ordem"],
+            pausa_id=chave, operador=_user.name,
+        )
+    auditar(database, _user, entidade, chave, antes=atual, depois=novo)
+    return {"ok": True}
 
 
 @router.get("/system-log")

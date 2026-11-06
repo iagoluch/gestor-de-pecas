@@ -1,5 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { api, ApiError } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { DataTable } from "../../components/DataTable";
 import type { TableColumn } from "../../components/DataTable";
 import { LoadingState } from "../../components/DataState";
@@ -55,6 +58,13 @@ const FIELDS: Record<string, string> = {
   nota: "Nota",
 };
 
+/** Só o desenvolvedor desfaz, e só o que guarda o "antes" (espelha `undo_audit` do backend). */
+const UNDOABLE = ["usuario", "turno", "pausa"];
+
+export function canUndo(entry: Pick<ChangeAuditEntry, "entidade" | "acao" | "antes">) {
+  return UNDOABLE.includes(entry.entidade) && entry.acao === "alterar" && !!entry.antes;
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T/;
 
 export function entityLabel(entity: string) {
@@ -101,6 +111,27 @@ export function ChangeAuditPage() {
   const [applied, setApplied] = useState(EMPTY);
   const query = useApiQuery<ChangeAuditResponse>(`${API}?${toQuery(applied)}`, { ignoreLiveTick: true });
   const data = query.data;
+  const { user } = useAuth();
+  const [confirm, confirmDialog] = useConfirm();
+  const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const isDeveloper = user?.role === "desenvolvedor";
+
+  async function undo(row: ChangeAuditEntry) {
+    const ok = await confirm({
+      title: "Desfazer alteração",
+      message: `${entityLabel(row.entidade)} · ${row.chave} volta ao valor de antes. A reversão também fica registrada no log.`,
+      confirmLabel: "Desfazer",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.post(`${API}/${row.id}/undo`, {});
+      setFeedback({ tone: "success", text: "Alteração desfeita." });
+      query.reload();
+    } catch (reason) {
+      setFeedback({ tone: "error", text: reason instanceof ApiError ? reason.message : "Não foi possível desfazer." });
+    }
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -125,6 +156,14 @@ export function ChangeAuditPage() {
         return lines.length ? <ul className="change-audit__lines">{lines.map((line) => <li key={line}>{line}</li>)}</ul> : "Sem diferença nos campos registrados";
       },
     },
+    ...(isDeveloper
+      ? [{
+          key: "desfazer",
+          label: "",
+          render: (row: ChangeAuditEntry) =>
+            canUndo(row) ? <button type="button" className="button" onClick={() => void undo(row)}>Desfazer</button> : null,
+        }]
+      : []),
   ];
 
   return (
@@ -161,6 +200,7 @@ export function ChangeAuditPage() {
         </div>
       </form>
 
+      {feedback ? <Notice tone={feedback.tone === "error" ? "error" : "success"}>{feedback.text}</Notice> : null}
       {query.loading && !data ? <LoadingState /> : null}
       {query.error && !data ? (
         <div className="state-box state-box--error" role="alert">
@@ -176,6 +216,7 @@ export function ChangeAuditPage() {
           <DataTable columns={columns} rows={data.items} rowKey={(row) => row.id} emptyTitle="Nenhuma alteração registrada para este filtro." />
         </SectionCard>
       ) : null}
+      {confirmDialog}
     </PageFrame>
   );
 }

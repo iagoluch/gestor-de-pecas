@@ -75,6 +75,10 @@ class _AuditMemory:
         })
         return True
 
+    def obter_auditoria(self, audit_id):
+        itens = self.listar_auditoria()
+        return next((i for i in itens if i["id"] == audit_id), None)
+
     def listar_auditoria(self, **filtros):
         self.consultas.append(filtros)
         return [
@@ -134,6 +138,45 @@ class _ApiCase(unittest.TestCase):
     def _as(self, user):
         # Não substitui require_admin_user: a trava real é que deve negar.
         self.app.dependency_overrides[get_current_user] = lambda: user
+
+
+DEV = _user("desenvolvedor", 901, "Iago Dev")
+
+
+class DesfazerAlteracaoTests(_ApiCase):
+    TURNO = {"nome": "Turno 1", "tipo": "expediente", "hora_inicio": "07:00:00", "hora_fim": "17:00:00",
+             "ativo": True, "ordem": 1}
+
+    def setUp(self):
+        self._build(_ManagementDb())
+        self._as(ADMIN)
+        r = self.client.post(f"{M}/shift-parameters", json=self.TURNO)
+        self.tid = r.json()["item"]["id"]
+        self.client.post(f"{M}/shift-parameters", json={**self.TURNO, "id": self.tid, "hora_fim": "18:00:00"})
+        self.log_id = len(self.db.auditoria)  # a alteração é o último registro
+
+    def test_so_desenvolvedor_desfaz(self):
+        self.assertEqual(self.client.post(f"{M}/audit/{self.log_id}/undo").status_code, 403)
+
+    def test_desenvolvedor_desfaz_e_a_reversao_fica_no_log(self):
+        self._as(DEV)
+        r = self.client.post(f"{M}/audit/{self.log_id}/undo")
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(str(self.db.turnos[0]["hora_fim"]), "17:00:00")
+        ultimo = self.db.auditoria[-1]
+        self.assertEqual((ultimo["usuario_nome"], ultimo["acao"]), ("Iago Dev", "alterar"))
+
+    def test_conflito_se_mexeram_depois(self):
+        self.client.post(f"{M}/shift-parameters", json={**self.TURNO, "id": self.tid, "hora_fim": "19:00:00"})
+        self._as(DEV)
+        r = self.client.post(f"{M}/audit/{self.log_id}/undo")
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(str(self.db.turnos[0]["hora_fim"]), "19:00:00")
+
+    def test_criar_nao_desfaz_e_id_inexistente_da_404(self):
+        self._as(DEV)
+        self.assertEqual(self.client.post(f"{M}/audit/1/undo").status_code, 409)
+        self.assertEqual(self.client.post(f"{M}/audit/999/undo").status_code, 404)
 
 
 class RotasDeGestaoGravamAuditoriaTests(_ApiCase):
