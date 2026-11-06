@@ -1169,6 +1169,21 @@ describe("fluxo Web do operador", () => {
     expect(JSON.parse(String(fim?.[1]?.body))).toMatchObject({ action: "Fim", task_code: "T-100", plan_hash: "hash-a" });
   });
 
+  it("Destaque: fila que falha mostra o erro, não 'Nenhuma tarefa liberada'", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 9, name: "Destacador", role: "operador_destaque", management_access: false, operator_access: true, operator_sector: "Destaque" });
+      if (path.includes("/operator/context")) return json({ sector: "Destaque", route: "Destaque", resources: [], automatic_queue: false, workflow: "highlight" });
+      if (path.includes("/operator/stop-reasons")) return json({ items: [] });
+      if (path.includes("/highlight/queue")) return json({ code: "erro", message: "Fila indisponível agora." }, 500);
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    }));
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    expect(await screen.findByText("Fila indisponível agora.")).toBeInTheDocument();
+    expect(screen.queryByText("Nenhuma tarefa liberada pelo Corte")).not.toBeInTheDocument();
+  });
+
   it("Destaque: Parada segue disponível com a tarefa selecionada e clicar de novo desseleciona", async () => {
     const payloadDestaque = () => ({
       task: { id: 7, codigo_tarefa: "T-100", material: "A36", espessura: 6.35 },

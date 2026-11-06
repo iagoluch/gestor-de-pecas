@@ -80,6 +80,10 @@ export function formatHours(seconds: number | null | undefined) {
 
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
+  // Data pura (coluna DATE): `new Date("2026-11-05")` é meia-noite UTC, que no
+  // Brasil vira 04/11 21:00. Mostra só o dia, sem passar por fuso.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });

@@ -341,7 +341,7 @@ function QualityHistoryDialog({ sector, onClose }: { sector: string; onClose: ()
       {detail !== null ? (
         <div className="insp-history-detail">
           <strong>Cotas medidas na peça</strong>
-          {cotas.loading ? <LoadingState label="Carregando cotas…" /> : (
+          {cotas.loading ? <LoadingState label="Carregando cotas…" /> : cotas.error && !cotas.data ? <ErrorState error={cotas.error} onRetry={cotas.reload} /> : (
             <table className="insp-table">
               <thead><tr><th scope="col">Cota</th><th scope="col">Padrão</th><th scope="col">Medida</th><th scope="col">Status</th></tr></thead>
               <tbody>

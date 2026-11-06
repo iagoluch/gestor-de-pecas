@@ -21,6 +21,9 @@ export function apiErrorMessage(reason: unknown) {
   return reason instanceof ApiError ? reason.message : "Não foi possível concluir a operação.";
 }
 
+/** Disparado quando a API responde 401 fora do login (sessão expirada ou encerrada). */
+export const SESSION_EXPIRED_EVENT = "gestor:session-expired";
+
 function cookie(name: string): string | undefined {
   return document.cookie
     .split(";")
@@ -45,6 +48,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers,
     credentials: "include",
   });
+  if (response.status === 401 && !path.startsWith("/api/v1/auth/login") && !path.startsWith("/api/v1/dev-observatory")) {
+    // Sessão acabou no meio do uso: o AuthProvider volta para o login em vez de
+    // cada quadro da tela mostrar "Entre para continuar." sozinho.
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
   if (response.status === 204) return undefined as T;
   const contentType = response.headers.get("content-type") ?? "";
   const body = contentType.includes("application/json") ? await response.json() : null;

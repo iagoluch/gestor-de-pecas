@@ -157,7 +157,7 @@ export function AuditAlertsIssuesPage() {
         />
       </SectionCard>
       <SectionCard title="Alertas internos — notificação pendente" className="content-section section-card--table">
-        {(internos.data?.items ?? []).length ? (
+        {internos.loading && !internos.data ? <LoadingState /> : internos.error && !internos.data ? <ErrorState error={internos.error} onRetry={internos.reload} /> : (internos.data?.items ?? []).length ? (
           <DataTable
             rows={internos.data?.items ?? []}
             rowKey={(row) => row.id}

@@ -276,7 +276,8 @@ export function HighlightPage() {
         <button type="button" className="operator-action operator-action--finish" disabled={busy || (!activityInProgress && (!selectedPlan || !selectedRunning))} onClick={() => setDialog(activityInProgress ? "activityFinish" : "finish")}><OperatorActionIcon name="finish" /><span>{activityInProgress ? "Finalizar atividade" : "Finalizar"}</span></button>
       </div>
       <Notice>{message}</Notice>
-      {filteredQueueItems.length ? (
+      {queue.error && queue.data ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
+      {queue.loading && !queue.data ? <LoadingState label="Carregando tarefas liberadas…" /> : queue.error && !queue.data ? <ErrorState error={queue.error} onRetry={queue.reload} /> : filteredQueueItems.length ? (
         <div className="highlight-queue" aria-label="Tarefas liberadas pelo Corte">
           {filteredQueueItems.map((item) => (
             <button

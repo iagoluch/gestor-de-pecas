@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
-import { api, ApiError } from "../api/client";
+import { api, ApiError, SESSION_EXPIRED_EVENT } from "../api/client";
 import { clearLastSnapshots } from "../hooks/useApiQuery";
 import type { SessionUser } from "../types/api";
 
@@ -27,6 +27,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setUser(null);
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const expired = () => {
+      clearLastSnapshots();
+      setUser(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
