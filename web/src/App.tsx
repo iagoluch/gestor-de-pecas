@@ -16,6 +16,7 @@ import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
 import { DevChamadasContatosPage } from "./pages/home/ChamadasContatosPage";
 import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
 import { ChangeAuditPage } from "./pages/home/ChangeAuditPage";
+import { TotvsOutboxPage } from "./pages/home/TotvsOutboxPage";
 import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
 import { AIPage } from "./pages/AIPage";
@@ -184,6 +185,7 @@ export default function App() {
         <Route path="inicio/chamadas-dev" element={<RequireAdmin><DevChamadasContatosPage /></RequireAdmin>} />
         <Route path="inicio/turnos" element={<RequireAdmin><ManagementShiftsPage /></RequireAdmin>} />
         <Route path="inicio/alteracoes" element={<RequireAdmin><ChangeAuditPage /></RequireAdmin>} />
+        <Route path="inicio/envios-protheus" element={<RequireAdmin><TotvsOutboxPage /></RequireAdmin>} />
         <Route path="inicio/sistema" element={<RequireAdmin><ManagementSystemPage /></RequireAdmin>} />
         <Route path="inicio/cadastro" element={<RequireAdmin><ManagementUsersPage /></RequireAdmin>} />
         <Route path="inicio/ia" element={<AIPage />} />
