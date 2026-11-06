@@ -154,6 +154,40 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Iniciar" })).toBeDisabled();
   });
 
+  it("sai do Setup pelo Retomar quando a etapa não tem conferência de cotas pendente", async () => {
+    // Caso real (06/11/2026): OP em Setup sem portão pendente ficava presa —
+    // o Setup não fazia nada e o Retomar produção ficava desabilitado.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 2, name: "Operador", role: "operador_dobra", management_access: false, operator_access: true, operator_sector: "Dobra", operator_resources: ["1303"] });
+      if (path.includes("/operator/context")) return json({ sector: "Dobra", route: "Dobra", resources: ["1303"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators") || path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/stations")) return json({ sector: "Dobra", items: [{ resource: "1303", status: "Ocupada", operator: "Operador", ocupantes: [{ op: "OP-077", status: "Setup", operador: "Operador", numero_operacao: "10" }], ocupantes_total: 1, aceita_producao_simultanea: false }] });
+      if (path.includes("/operator/workbench")) return json({ queue: [], production: [{ id: 1, op: "OP-077", status: "Setup", operation: "10 - DOBRA", catalogo_operacao_id: 77, qty: 4, good: 0, scrap: 0 }] });
+      if (path.includes("/operator/operations/OP-077")) return json({ items: [{ id: 77, numero_operacao: "10", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true, actionable: true, selectable: true, pode_finalizar: true, exige_gate_primeira_peca: false, primeira_peca: { aplicavel: false, liberado: true, setup_obrigatorio: false, setup_registrado: false } }] });
+      if (path.includes("/operator/actions") && init?.method === "POST") return json({ ok: true, message: "Setup encerrado. Produção retomada." });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-077" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "10 - DOBRA — Atual" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    expect(await screen.findByText(/Setup em andamento/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
+
+    const retomar = await screen.findByRole("button", { name: "Retomar produção" });
+    await waitFor(() => expect(retomar).toBeEnabled());
+    fireEvent.click(retomar);
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([p, i]) => String(p).includes("/operator/actions") && i?.method === "POST");
+      expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ action: "Retornar", op: "OP-077" });
+    });
+  });
+
   it("explica o 409 de posto exclusivo e o de OP apontada em outra estação sem termos técnicos", async () => {
     let actionError: Record<string, unknown> = {};
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -790,7 +824,10 @@ describe("fluxo Web do operador", () => {
     expect(within(dialog).getByRole("button", { name: "Liberar lote" })).toBeDisabled();
     // OP-09: o bloqueio diz o que falta; medida não numérica avisa na linha.
     expect(within(dialog).getByText("Informe o crachá do responsável para registrar o refugo.")).toBeInTheDocument();
-    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "abc" } });
+    // Letras nem entram no campo de medida.
+    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "1a2b,5" } });
+    expect(within(dialog).getByLabelText("Medida da cota 1")).toHaveValue("12,5");
+    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "1,2,3" } });
     expect(within(dialog).getByText("Use só números, ex.: 125,4")).toBeInTheDocument();
   });
 

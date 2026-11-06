@@ -25,6 +25,7 @@ import {
   type DraftDimension,
   formatDraftStandard,
   isInvalidMeasure,
+  onlyNumber,
   MeasureError,
   TemplateEditor,
   previewStatus,
@@ -233,6 +234,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     if (data && !data.items?.length && !data.sync?.pending) setMessage(`OP ${loadedOp} não encontrada. Confira o código.`, "error");
   }, [loadedOp, operations.data, operations.error]);
 
+  const announcedOp = useRef<string | null>(null);
   useEffect(() => {
     const rows = operations.data?.items ?? [];
     if (!rows.length) return;
@@ -242,6 +244,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     // confirmada pertence ao operador e não pode ser sobrescrita pelo
     // `visual_current` devolvido no novo snapshot.
     if (selectedStillExists) return;
+    // Anuncia a etapa só ao carregar a OP. Repetir a cada atualização ao vivo
+    // apagava em segundos o aviso de qualquer botão (ex.: Setup em andamento).
+    if (announcedOp.current === loadedOp) return;
+    announcedOp.current = loadedOp;
     const current = rows.findIndex((item) => item.visual_current || item.visual_status === "current");
     const next = current >= 0 ? current : rows.findIndex((item) => item.visual_status !== "done");
     const currentOperation = rows[next];
@@ -373,7 +379,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const canStart = resumeWithoutOp
     || startsActivity
     || (canPoint
-      && !["Em processo", "Setup", "Retrabalho"].includes(currentStatus)
+      && !["Em processo", "Retrabalho"].includes(currentStatus)
+      // Em Setup, "Retomar produção" (Retornar) é a saída. Só a conferência
+      // pendente obriga a sair pelo popup; sem ela o posto ficava sem saída.
+      && !(currentStatus === "Setup" && gateRequired)
       && !firstPiece?.bloqueio_ativo
       && !occupiedBy);
   // Setup mede a preparação de uma OP já em execução. Sem Início ainda não há
@@ -569,6 +578,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     // "Setup" seria recusado pelo backend como ação já registrada.
     if (currentStatus === "Setup") {
       if (gateRequired) openGate();
+      else setMessage("Setup em andamento. Use \"Retomar produção\" para encerrar o Setup ou Finalizar para concluir a etapa.");
       return;
     }
     setDialog({ kind: "confirm", action: "Setup" });
@@ -1093,7 +1103,7 @@ function SetupQualityDialog({
                       value={atual.medida}
                       onChange={(event) => setMeasures((current) => ({
                         ...current,
-                        [cota.sequencia]: { ...atual, medida: event.target.value },
+                        [cota.sequencia]: { ...atual, medida: onlyNumber(event.target.value) },
                       }))}
                     />
                   </label>

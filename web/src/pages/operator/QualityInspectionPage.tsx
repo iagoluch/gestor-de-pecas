@@ -37,6 +37,11 @@ export function isInvalidMeasure(medida: string): boolean {
   return Boolean(texto) && !NUMERO.test(texto);
 }
 
+/** Campo de cota aceita só número: descarta letras e símbolos ao digitar. */
+export function onlyNumber(valor: string): string {
+  return valor.replace(/[^0-9.,-]/g, "");
+}
+
 export function rangeLabel(cota: QualityDimension): string {
   if (cota.limite_inferior === null || cota.limite_superior === null) return "";
   const minimo = formatMeasurement(String(cota.limite_inferior));
@@ -265,7 +270,7 @@ export function QualityInspectionPage({
                                 inputMode="decimal"
                                 aria-invalid={isInvalidMeasure(state.medida) || undefined}
                                 value={state.medida}
-                                onChange={(event) => setMeasures({ ...measures, [cota.sequencia]: { ...state, medida: event.target.value } })}
+                                onChange={(event) => setMeasures({ ...measures, [cota.sequencia]: { ...state, medida: onlyNumber(event.target.value) } })}
                               />
                               <MeasureError medida={state.medida} />
                             </td>
@@ -449,8 +454,8 @@ export function TemplateEditor({
             <label>Descrição (opcional)<input value={item.descricao} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, descricao: event.target.value } : row))} /></label>
             {/* OP-10: dois campos com label visível; o placeholder é exemplo, não valor. */}
             <span className="insp-tolerance-input">
-              <label>Padrão (mm)<input aria-label={`Padrão nominal da cota ${index + 1}`} inputMode="decimal" placeholder="ex.: 125,0" value={item.nominal} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, nominal: event.target.value } : row))} /></label>
-              <label>Tolerância (± mm)<input aria-label={`Tolerância da cota ${index + 1}`} inputMode="decimal" placeholder="ex.: 0,5" value={item.tolerancia} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, tolerancia: event.target.value } : row))} /></label>
+              <label>Padrão (mm)<input aria-label={`Padrão nominal da cota ${index + 1}`} inputMode="decimal" placeholder="ex.: 125,0" value={item.nominal} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, nominal: onlyNumber(event.target.value) } : row))} /></label>
+              <label>Tolerância (± mm)<input aria-label={`Tolerância da cota ${index + 1}`} inputMode="decimal" placeholder="ex.: 0,5" value={item.tolerancia} onChange={(event) => onChange(drafts.map((row, position) => position === index ? { ...row, tolerancia: onlyNumber(event.target.value) } : row))} /></label>
             </span>
             <div className="insp-fixed-unit"><span>Unidade</span><strong>mm</strong></div>
             {drafts.length > 1 ? <button type="button" className="insp-remove" onClick={() => onChange(drafts.filter((_row, position) => position !== index))}>Remover</button> : null}

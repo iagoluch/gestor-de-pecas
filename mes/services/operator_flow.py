@@ -385,7 +385,12 @@ class OperatorFlowService:
             # lê `pode_finalizar`, que o backend calcula com o mesmo domínio
             # usado para recusar a finalização prematura.
             registro_primeira_peca = first_piece_by_operation.get(row.get("id"))
-            aplicavel_primeira_peca = first_piece_applies(setor_efetivo, row)
+            # O portão é avaliado com o setor do posto, o mesmo que `executar`
+            # usa para recusar o Finalizar. Usar o setor da etapa do roteiro
+            # aqui escondia o popup de cotas (ex.: etapa de Corte apontada na
+            # Dobra) enquanto o Finalizar seguia exigindo a conferência.
+            setor_portao = setor_efetivo if inspecao_sem_qualidade else (setor or setor_efetivo)
+            aplicavel_primeira_peca = first_piece_applies(setor_portao, row)
             gate = evaluate_first_piece_gate(
                 aplicavel=aplicavel_primeira_peca,
                 status=(registro_primeira_peca or {}).get("status") or "PENDENTE",
@@ -406,7 +411,7 @@ class OperatorFlowService:
                 # Wave 6B — a tela usa este sinal para saber que o Finalizar
                 # desta etapa passa pelo popup Setup/Qualidade. Ele é derivado
                 # do setor, não é um estado novo e não é decidido no React.
-                gate_estruturado=first_piece_gate_is_structured(setor_efetivo, row),
+                gate_estruturado=first_piece_gate_is_structured(setor_portao, row),
             )
             row["primeira_peca"] = gate.como_dicionario()
             row["primeira_peca_id"] = (registro_primeira_peca or {}).get("id")

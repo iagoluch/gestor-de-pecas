@@ -185,6 +185,29 @@ class GateEstruturadoPorSetorTests(unittest.TestCase):
                 self.assertTrue(linha["exige_gate_primeira_peca"])
                 self.assertFalse(linha["pode_finalizar"])
 
+    def test_etapa_de_outro_setor_apontada_no_posto_usa_o_portao_do_posto(self):
+        """Regressão 06/11/2026: etapa de Corte apontada num posto da Dobra.
+
+        O Finalizar recusava pelo setor do posto (Dobra) enquanto a lista
+        avaliava o setor da etapa (Corte) e não abria o popup de cotas: loop.
+        """
+
+        _db, fluxo, contexto = cenario("Dobra")
+        contexto["operacao"]["tipo_setor"] = "Corte"
+
+        recusa = finalizar(fluxo, contexto)
+        self.assertEqual(recusa.code, FIRST_PIECE_GATE_REQUIRED)
+
+        linha = next(
+            row
+            for row in fluxo.listar_operacoes(
+                contexto["op"], "Dobra", contexto["recurso"]
+            )
+            if row.get("id") == contexto["operacao"]["id"]
+        )
+        self.assertTrue(linha["exige_gate_primeira_peca"])
+        self.assertFalse(linha["pode_finalizar"])
+
     def test_setor_fora_da_caldeiraria_nao_recebe_este_portao(self):
         db, fluxo, contexto = cenario("Solda Aço", com_checklist=False)
         self.assertFalse(
