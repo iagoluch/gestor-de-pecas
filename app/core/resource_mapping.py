@@ -249,6 +249,25 @@ def resolve_resource_identity(value):
     return canonical_resource_code(code) if code else text
 
 
+def resource_identity_names(value):
+    """Todos os textos gravados que representam o mesmo recurso de ``value``.
+
+    Apontamento antigo guarda o nome do posto ("1303") e o resto do sistema o
+    código ("DOBRA3"); filtrar só por um deles esconde a outra metade (A56).
+    Devolve em maiúsculas, para comparar com ``UPPER(coluna)``.
+    """
+
+    target = resolve_resource_identity(value)
+    if not target:
+        return []
+    candidates = {str(value).strip(), target, *RESOURCE_DISPLAY_NAMES, *RESOURCE_DISPLAY_NAMES.values(),
+                  *OFFICIAL_RESOURCE_ALIASES}
+    return sorted({
+        str(item).strip().upper() for item in candidates
+        if str(item).strip() and resolve_resource_identity(item) == target
+    })
+
+
 def station_resource_code(sector, station):
     """Retorna o código exato representado por uma tela/posto conhecido.
 

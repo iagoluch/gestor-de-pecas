@@ -57,6 +57,14 @@ class ManagementService:
         self._now = now_func or datetime.now
         self.simulation_mode = bool(simulation_mode)
         self._overview_cache = {}
+        self._catalogo_recursos = None
+
+    def catalogo_recursos(self):
+        """Catálogo de recursos lido uma vez por instância (mesma vida do cache da visão geral)."""
+        if self._catalogo_recursos is None:
+            loader = getattr(self.db, "listar_recursos_pcfactory", None)
+            self._catalogo_recursos = list((loader() if callable(loader) else None) or [])
+        return self._catalogo_recursos
 
     def get_overview(self, filters: AnalyticsFilter) -> dict:
         if filters in self._overview_cache:
@@ -114,7 +122,8 @@ class ManagementService:
         })
 
         def resource_bucket(resource, sector=None):
-            name = str(resource or "").strip()
+            # Nome do posto ("1303") e código ("DOBRA3") caem na mesma linha (A56).
+            name = str(resolve_resource_identity(resource) or "").strip()
             if not name:
                 return None
             bucket = resource_inputs[name.casefold()]
@@ -154,7 +163,7 @@ class ManagementService:
                     resource_input["scrap"] += int(row.get("quantidade_refugo") or 0)
                     resource_input["rework"] += int(row.get("quantidade_retrabalho") or 0)
             if resource:
-                resources.add(resource)
+                resources.add(resolve_resource_identity(resource) or resource)
                 resource_bucket(resource, sector)
             if op:
                 ops.add(op)
@@ -207,7 +216,7 @@ class ManagementService:
         use_canonical_resource_state = bool(state_source_available and state_rows)
         if use_canonical_resource_state:
             resources.update(
-                str(row.get("recurso") or "").strip()
+                resolve_resource_identity(row.get("recurso"))
                 for row in state_rows
                 if str(row.get("recurso") or "").strip()
             )
@@ -265,7 +274,7 @@ class ManagementService:
         )
         cutting_planned_seconds = sum(float(row.get("previsto_segundos") or 0) for row in nesting_rows)
         resources.update(
-            str(row.get("maquina") or "").strip()
+            resolve_resource_identity(row.get("maquina"))
             for row in nesting_rows
             if str(row.get("maquina") or "").strip()
         )
@@ -381,7 +390,8 @@ class ManagementService:
                 resource, 0.0
             )
         for resource_key, seconds in cutting_without_interval_by_resource.items():
-            resource_inputs[resource_key]["seconds"][EventCategory.PRODUCTION] += seconds
+            legacy_bucket = resource_bucket(cutting_without_interval_names[resource_key], "Corte")
+            legacy_bucket["seconds"][EventCategory.PRODUCTION] += seconds
 
         for sector, category_totals in physical["by_sector"].items():
             bucket = sectors[sector]
@@ -492,10 +502,9 @@ class ManagementService:
             "retrabalho_quantidade": rework_qty,
         }
         resource_kpis = []
-        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
         catalog_names = {
             str(row.get("codigo") or "").strip().casefold(): row.get("nome")
-            for row in (catalog_loader() if callable(catalog_loader) else None) or []
+            for row in self.catalogo_recursos()
         }
         no_demand_exception_resources = []
         for resource_input in sorted(
@@ -1525,10 +1534,9 @@ class ManagementService:
         loader = getattr(self.db, "listar_estados_recurso_atuais", None)
         if not callable(loader):
             return []
-        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
         catalog = {
             str(row.get("codigo") or "").strip().casefold(): row
-            for row in (catalog_loader() if callable(catalog_loader) else None) or []
+            for row in self.catalogo_recursos()
         }
         catalog_names = {key: row.get("nome") for key, row in catalog.items()}
         events = []
@@ -1698,12 +1706,9 @@ class ManagementService:
         O estado de fim de turno herda o setor da OP (ex.: "Solda" antigo) e
         prendia um recurso do Protótipo no setor errado nas telas gerenciais.
         """
-        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
-        if not callable(catalog_loader):
-            return rows
         sectors = {
             str(item.get("codigo") or "").strip().casefold(): str(item.get("tipo_setor") or "").strip()
-            for item in catalog_loader() or []
+            for item in self.catalogo_recursos()
         }
         return [
             {**row, "tipo_setor": sectors[code]}

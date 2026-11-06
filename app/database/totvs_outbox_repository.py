@@ -37,7 +37,8 @@ OUTBOX_COLUMNS = """
     payload_xml, payload_context, status, attempts, max_attempts,
     next_attempt_at, created_at, updated_at, sent_at, last_attempt_at,
     lease_owner, lease_expires_at, last_http_status, last_ack_status,
-    last_delivery_class, last_error_code, last_error_message, internal_id
+    last_delivery_class, last_error_code, last_error_message, internal_id,
+    discarded_at, discarded_by, discard_reason
 """
 
 # ``UPDATE ... FROM`` precisa do alias no RETURNING: sem ele, ``id`` existe nas
@@ -255,12 +256,13 @@ class TotvsOutboxRepositoryMixin:
                       -- O WSPCP recebe fatos de uma OP em ordem causal. Um
                       -- item em backoff, em envio ou bloqueado por erro
                       -- funcional precisa segurar os posteriores da mesma OP;
-                      -- só SENT libera a sequência.
+                      -- só SENT ou descarte humano registrado (DISCARDED, A58)
+                      -- libera a sequência.
                       AND NOT EXISTS (
                           SELECT 1 FROM totvs_outbox anterior
                           WHERE anterior.aggregate_id = o.aggregate_id
                             AND anterior.id < o.id
-                            AND anterior.status <> 'SENT'
+                            AND anterior.status NOT IN ('SENT', 'DISCARDED')
                       )
                     ORDER BY o.next_attempt_at, o.id
                     LIMIT %(batch)s
@@ -469,6 +471,38 @@ class TotvsOutboxRepositoryMixin:
                     "nota": _truncate(
                         f"Reprocessamento manual solicitado por {operador or 'ADMIN'}."
                     ),
+                },
+            )
+            return _outbox_row(cursor.fetchone())
+
+    def descartar_item_outbound_totvs(self, outbox_id: int, *, motivo: str, operador: str, now=None):
+        """Move um item ``ERROR`` para ``DISCARDED`` com quem, quando e motivo.
+
+        Só para recusa que nunca vai passar (ex.: OP totalizada no Protheus).
+        Nada é apagado: o item, o XML e as tentativas ficam como prova. Libera
+        os envios seguintes da mesma OP, que estavam presos por ele.
+        """
+
+        instante = (now or self._now()).replace(microsecond=0)
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE totvs_outbox
+                SET status = 'DISCARDED',
+                    discarded_at = %(now)s,
+                    discarded_by = %(operador)s,
+                    discard_reason = %(motivo)s,
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = %(now)s
+                WHERE id = %(id)s AND status = 'ERROR'
+                RETURNING {OUTBOX_COLUMNS}
+                """,  # nosec B608 -- OUTBOX_COLUMNS é constante do módulo, valores via %s
+                {
+                    "id": int(outbox_id),
+                    "now": instante,
+                    "operador": _truncate(operador, 120),
+                    "motivo": _truncate(motivo, 500),
                 },
             )
             return _outbox_row(cursor.fetchone())

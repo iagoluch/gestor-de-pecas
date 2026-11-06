@@ -17,7 +17,7 @@ from app.core.preferences import normalizar_dashboard_home
 
 from app.core.constants import FMT_DB
 from app.core.normalization import limpa_codigo, normalizar_data_db
-from app.core.resource_mapping import WELDING_SECTOR_KEYS, resolve_resource_identity
+from app.core.resource_mapping import WELDING_SECTOR_KEYS, resolve_resource_identity, resource_identity_names
 from app.core.operator_sectors import (
     CAPACITY_TAB_WHITELIST_CODES,
     participa_da_timeline,
@@ -172,6 +172,9 @@ def _corte_concluido_sql(operacao_alias):
              )
             WHERE sig_op.ativo = TRUE
               AND UPPER(sig_op.codigo_op) = UPPER({operacao_alias}.codigo_op)
+              -- Plano concluído no SigmaNEST sai da fila do Corte (listar_fila_corte):
+              -- ninguém vai apontá-lo, então não deixa o Corte pendente.
+              AND plano.sigmanest_comp_date IS NULL
               AND NOT EXISTS (
                   SELECT 1
                   FROM apontamentos_corte corte
@@ -3936,8 +3939,9 @@ class Database(
             query += " AND UPPER(a.tipo_setor) = UPPER(%s)"
             params.append(str(setor).strip())
         if recurso:
-            query += " AND UPPER(a.maquina) = UPPER(%s)"
-            params.append(str(recurso).strip())
+            # Nome do posto ("1303") e código ("DOBRA3") são o mesmo recurso (A56).
+            query += " AND UPPER(a.maquina) = ANY(%s)"
+            params.append(resource_identity_names(recurso) or [str(recurso).strip().upper()])
         if op:
             query += " AND UPPER(a.op) = UPPER(%s)"
             params.append(limpa_codigo(op))
@@ -4518,10 +4522,14 @@ class Database(
         )
 
     def _fora_do_turno(self, recurso, instante, *, cursor=None):
-        """O instante está fora da janela operacional (turno + hora extra planejada)?
+        """O instante está fora do turno oficial?
 
-        Mesma referência do fim de turno automático: calendário do recurso
-        quando cadastrado, senão os horários globais de ``parametros_turno``.
+        Hora extra planejada também conta como fora do turno aqui: a hora
+        extra só existe enquanto há apontamento. Sem OP aberta o recurso fica
+        em Fora de turno, igual ao fim de semana (regra do usuário, 30/10 e
+        06/11/2026). Mesma referência do fim de turno automático: calendário do
+        recurso quando cadastrado, senão os horários globais de
+        ``parametros_turno``.
         """
 
         from mes.services.calendar import CalendarService
@@ -4529,7 +4537,7 @@ class Database(
 
         with self._na_conexao_da_transacao(cursor):
             calendar = CalendarService(self, load_manufacturing_rules(self, vigente_em=instante))
-            return calendar.shift_window_kind(recurso, instante) == ShiftWindowKind.OUT_OF_SHIFT
+            return calendar.shift_window_kind(recurso, instante) != ShiftWindowKind.OFFICIAL_SHIFT
 
     def _intervalo_vigente(self, tipo_setor, instante, *, cursor=None):
         """``(início, nome)`` da pausa automática configurada para o setor, ou None."""
@@ -4604,8 +4612,8 @@ class Database(
         sem estado. Estados programados abertos são preservados — o fim do
         intervalo automático e o retorno do turno decidem o próximo estado.
         Execução apontada durante a pausa e encerrada ainda dentro dela volta
-        para a pausa até o horário cadastrado. Execução encerrada fora da
-        janela operacional (após a última hora extra) leva a Fora de turno,
+        para a pausa até o horário cadastrado. Execução encerrada fora do
+        turno oficial (inclusive na hora extra planejada) leva a Fora de turno,
         que o retorno do turno seguinte converte em sem demanda.
         """
 
@@ -5041,7 +5049,9 @@ class Database(
                     """,
                     (
                         kind, qty, limpa_codigo(op), numero_operacao, produto_codigo,
-                        recurso, tipo_setor, operador, lote, motivo, causa_raiz,
+                        # Código canônico (o mesmo do tempo/timeline), não o nome do posto.
+                        (resolve_resource_identity(recurso) or recurso) if recurso else recurso,
+                        tipo_setor, operador, lote, motivo, causa_raiz,
                         comentario, instante, str(origem or "gestor_pecas"),
                         referencia_origem, qty if recuperada else 0,
                     ),
@@ -5065,9 +5075,13 @@ class Database(
         if setor:
             query += " AND UPPER(COALESCE(tipo_setor, '')) = UPPER(%s)"
             params.append(str(setor).strip())
-        if recurso:
-            query += " AND UPPER(COALESCE(recurso, '')) = UPPER(%s)"
-            params.append(str(recurso).strip())
+        # Recurso é filtrado depois da leitura, pela identidade canônica: linhas
+        # antigas guardam o nome do posto ("1303") e as novas o código ("DOBRA3"),
+        # que é a identidade do tempo e da timeline.
+        recurso_alvo = (
+            str(resolve_resource_identity(recurso) or recurso).strip().upper()
+            if recurso else None
+        )
         if op:
             query += " AND UPPER(op) = UPPER(%s)"
             params.append(limpa_codigo(op))
@@ -5083,7 +5097,15 @@ class Database(
         query += " ORDER BY data_hora, id"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+            eventos = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                if item.get("recurso"):
+                    item["recurso"] = resolve_resource_identity(item["recurso"]) or item["recurso"]
+                if recurso_alvo and str(item.get("recurso") or "").upper() != recurso_alvo:
+                    continue
+                eventos.append(item)
+            return eventos
 
     def salvar_calendario_produtivo(self, codigo, nome, *, timezone="America/Sao_Paulo", ativo=True):
         with self.connection() as connection, connection.cursor() as cursor:

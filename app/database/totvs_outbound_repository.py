@@ -162,7 +162,7 @@ class TotvsOutboundRepositoryMixin:
                     ORDER BY ordem DESC, numero_operacao DESC
                     LIMIT 1
                 ),
-                apontaveis AS (
+                apontaveis_ativas AS (
                     SELECT id, numero_operacao, ordem, tipo_setor
                     FROM catalogo_operacoes_op
                     WHERE codigo_op = %(op)s
@@ -171,6 +171,25 @@ class TotvsOutboundRepositoryMixin:
                       -- Etapa adicionada no Gestor não existe no Protheus: não
                       -- conta como operação do marco terminal nem o trava.
                       AND etapa_gestor IS NOT TRUE
+                ),
+                -- OP cujo roteiro só tem etapa não apontável (ex.: só INSPEC,
+                -- executada pela Qualidade) também precisa encerrar no
+                -- Protheus (decisão do usuário, 06/11/2026). Sem nenhuma
+                -- operação ativa, valem as etapas que o Gestor de fato
+                -- executou. Com operação ativa, nada muda.
+                apontaveis AS (
+                    SELECT * FROM apontaveis_ativas
+                    UNION ALL
+                    SELECT c.id, c.numero_operacao, c.ordem, c.tipo_setor
+                    FROM catalogo_operacoes_op c
+                    WHERE c.codigo_op = %(op)s
+                      AND c.marco_terminal IS FALSE
+                      AND c.etapa_gestor IS NOT TRUE
+                      AND NOT EXISTS (SELECT 1 FROM apontaveis_ativas)
+                      AND EXISTS (
+                          SELECT 1 FROM apontamentos_operacionais a
+                          WHERE a.catalogo_operacao_id = c.id
+                      )
                 ),
                 ultimo_evento AS (
                     SELECT DISTINCT ON (a.numero_operacao)
@@ -187,7 +206,7 @@ class TotvsOutboundRepositoryMixin:
                 ),
                 -- OP que já existia no Protheus chega com o Corte apontado na
                 -- origem: só espera o Corte se ela ainda está na fila do Gestor
-                -- (plano SigmaNEST ativo sem apontamento Finalizado; mesma regra
+                -- (plano SigmaNEST ativo, não concluído no SigmaNEST e sem apontamento Finalizado; mesma regra
                 -- de _corte_concluido_sql em database.py, que não dá pra importar
                 -- daqui sem ciclo).
                 corte_origem AS (
@@ -214,6 +233,7 @@ class TotvsOutboundRepositoryMixin:
                            )
                           WHERE sig_op.ativo = TRUE
                             AND UPPER(sig_op.codigo_op) = UPPER(%(op)s)
+                            AND plano.sigmanest_comp_date IS NULL
                             AND NOT EXISTS (
                                 SELECT 1
                                 FROM apontamentos_corte corte

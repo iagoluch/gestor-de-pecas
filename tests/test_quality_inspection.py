@@ -841,6 +841,38 @@ class QualityRuleTests(unittest.TestCase):
         # A peça não foi gravada: a inspeção continua na unidade 3.
         self.assertEqual(self.service.obter_inspecao(estado["id"])["peca_atual"], 3)
 
+    def test_ultima_peca_gravada_com_finalizacao_recusada_nao_vira_erro(self):
+        # A57: a peça já gravada não pode voltar como erro; a tela precisa saber
+        # que só falta finalizar (rota /finish) e não travar.
+        from unittest import mock
+
+        from mes.services.quality import QualityResult
+
+        estado = self._abrir()
+        self._template("125,0 ± 0,5")
+        for numero in (1, 2):
+            self.service.registrar_peca(
+                estado["id"],
+                numero_peca=numero,
+                resultado="APROVADA",
+                medidas=_medidas(("124,9", "CONFORME")),
+            )
+        recusa = QualityResult(False, "Tempo mínimo não atingido.", "duracao_minima_nao_atingida")
+        with mock.patch.object(self.service, "_finalizar", return_value=recusa):
+            ultima = self.service.registrar_peca(
+                estado["id"],
+                numero_peca=3,
+                resultado="APROVADA",
+                medidas=_medidas(("124,9", "CONFORME")),
+                badges=["SIM06"],
+            )
+        self.assertTrue(ultima.ok)
+        self.assertEqual(ultima.code, "inspecao_finalizacao_pendente")
+        self.assertEqual(ultima.data["motivo_finalizacao"], "duracao_minima_nao_atingida")
+        inspecao = self.service.obter_inspecao(estado["id"])
+        self.assertIsNone(inspecao["peca_atual"])
+        self.assertEqual(inspecao["pecas_registradas"], 3)
+
     def test_inspecao_totalmente_em_retrabalho_sai_da_fila_e_retorna_ao_roteiro(self):
 
         estado = self._abrir()

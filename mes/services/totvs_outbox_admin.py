@@ -49,6 +49,29 @@ class TotvsOutboxAdminService:
         return self.database.listar_tentativas_outbound_totvs(outbox_id)
 
     # ------------------------------------------------------------------
+    def discard(self, outbox_id: int, *, motivo: str, operador: str) -> dict:
+        """Descarta um item ``ERROR`` que nunca vai passar, com motivo (A58)."""
+
+        texto = str(motivo or "").strip()
+        if len(texto) < 3:
+            return {"ok": False, "code": "motivo_obrigatorio", "id": int(outbox_id)}
+        item = self.database.buscar_item_outbound_totvs(int(outbox_id))
+        if item is None:
+            return {"ok": False, "code": "item_inexistente", "id": int(outbox_id)}
+        if str(item["status"]) != OutboxStatus.ERROR.value:
+            return {
+                "ok": False,
+                "code": "item_nao_esta_em_erro",
+                "id": item["id"],
+                "status": item["status"],
+            }
+        row = self.database.descartar_item_outbound_totvs(
+            item["id"], motivo=texto, operador=str(operador or "ADMIN").strip() or "ADMIN"
+        )
+        if row is None:
+            return {"ok": False, "code": "item_mudou_de_estado", "id": item["id"]}
+        return {"ok": True, "code": "descartado", "id": row["id"], "status": row["status"]}
+
     def reprocess(self, outbox_id: int, *, operador: str | None = None) -> dict:
         """Devolve um item ``ERROR`` à fila preservando a identidade lógica.
 

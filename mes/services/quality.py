@@ -824,7 +824,22 @@ class QualityInspectionService:
                 f"{confirmacao} Próxima: peça {esperada + 1} de {total}.",
                 data=self.obter_inspecao(sessao["id"]),
             )
-        return self._finalizar(sessao, badges=badges)
+        finalizacao = self._finalizar(sessao, badges=badges)
+        if finalizacao.ok:
+            return finalizacao
+        # A peça JÁ está gravada: devolver erro faria a tela achar que nada foi
+        # salvo e travar sem caminho. Responde sucesso da peça e avisa que a
+        # inspeção segue aberta para finalizar depois (rota /finish).
+        return QualityResult(
+            True,
+            f"Peça {esperada} de {total} registrada, mas a inspeção ainda não foi "
+            f"finalizada: {finalizacao.message} Corrija e use \"Finalizar inspeção\".",
+            "inspecao_finalizacao_pendente",
+            {
+                **(self.obter_inspecao(sessao["id"]) or {}),
+                "motivo_finalizacao": finalizacao.code,
+            },
+        )
 
     def _resolver_medidas(self, cotas_template, medidas):
         """Casa cada cota do template com a medida informada, sem curinga.

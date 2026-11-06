@@ -316,10 +316,15 @@ class WebSettings:
             )})
         environment = str(env.get("GESTOR_WEB_ENV") or "development").strip().casefold()
         secret = str(env.get("GESTOR_WEB_SESSION_SECRET") or "").strip()
+        # Mesma lista permitida das ferramentas de desenvolvimento: qualquer
+        # ambiente fora de test/development ("homologacao", "prd"...) é
+        # tratado como produção (exige segredo fixo e cookie seguro).
+        production_like = environment not in DEVELOPMENT_ENVIRONMENTS
         if not secret:
-            if environment in {"production", "producao", "produção"}:
+            if production_like:
                 raise RuntimeError(
-                    "GESTOR_WEB_SESSION_SECRET é obrigatória no ambiente de produção."
+                    "GESTOR_WEB_SESSION_SECRET é obrigatória fora dos ambientes "
+                    "test/development."
                 )
             secret = secrets.token_urlsafe(48)
             logging.warning(
@@ -453,7 +458,7 @@ class WebSettings:
             session_ttl_seconds=max(300, int(env.get("GESTOR_WEB_SESSION_TTL_SECONDS", "28800"))),
             cookie_secure=_as_bool(
                 env.get("GESTOR_WEB_COOKIE_SECURE"),
-                default=environment in {"production", "producao", "produção"},
+                default=production_like,
             ),
             allowed_origins=_csv(env.get("GESTOR_WEB_ALLOWED_ORIGINS"), cls.allowed_origins),
             allowed_hosts=_csv(env.get("GESTOR_WEB_ALLOWED_HOSTS"), cls.allowed_hosts),

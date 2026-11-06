@@ -124,6 +124,9 @@ export function QualityInspectionPage({
     return cota.conformidade_automatica ? Boolean(statusDaCota(cota)) : Boolean(state.status);
   });
   const isLast = piece !== null && piece >= data.quantidade_total;
+  // Todas as peças gravadas mas a inspeção não fechou (ex.: tempo mínimo ainda
+  // não atingido): o operador só precisa finalizar, sem reinspecionar nada.
+  const finalizacaoPendente = piece === null && data.pecas_registradas >= data.quantidade_total;
   const canSave = allFilled && result !== "" && (!hasNonConforming || Boolean(rnc)) && !saving;
 
   async function saveTemplate() {
@@ -144,6 +147,24 @@ export function QualityInspectionPage({
       setMessage("Cotas padrão salvas para este produto.");
       inspection.reload();
     } catch (reason) {
+      setMessage(apiErrorMessage(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function finishInspection(badges: string[]) {
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await api.post<{ message: string; code: string }>(
+        `/api/v1/quality/inspections/${inspectionId}/finish`,
+        { badges },
+      );
+      setBadgeDialog(false);
+      onFinished(response.message);
+    } catch (reason) {
+      setBadgeDialog(false);
       setMessage(apiErrorMessage(reason));
     } finally {
       setSaving(false);
@@ -172,6 +193,12 @@ export function QualityInspectionPage({
       setBadgeDialog(false);
       if (response.code === "inspecao_concluida") {
         onFinished(response.message);
+        return;
+      }
+      if (response.code === "inspecao_finalizacao_pendente") {
+        limparChecklist();
+        setMessage(response.message);
+        inspection.reload();
         return;
       }
       // A peça foi gravada: agora sim o checklist da PRÓXIMA unidade começa
@@ -306,6 +333,16 @@ export function QualityInspectionPage({
 
               {message ? <Notice>{message}</Notice> : null}
 
+              {finalizacaoPendente ? (
+                <button
+                  type="button"
+                  className="insp-primary"
+                  disabled={saving}
+                  onClick={() => setBadgeDialog(true)}
+                >
+                  Finalizar inspeção
+                </button>
+              ) : (
               <button
                 type="button"
                 className="insp-primary"
@@ -314,6 +351,7 @@ export function QualityInspectionPage({
               >
                 {isLast ? "Finalizar inspeção" : "Salvar e próxima peça"}
               </button>
+              )}
               <button type="button" className="insp-back" onClick={onBack}>← Voltar</button>
             </>
           )}
@@ -375,7 +413,7 @@ export function QualityInspectionPage({
           operators={operators.data?.items ?? []}
           saving={saving}
           onCancel={() => setBadgeDialog(false)}
-          onConfirm={(badges) => void savePiece(badges)}
+          onConfirm={(badges) => void (finalizacaoPendente ? finishInspection(badges) : savePiece(badges))}
         />
       ) : null}
     </section>

@@ -910,8 +910,7 @@ class FrontendBackendFacade:
         # Buscado uma única vez: consulta_operacional() e o AndonService usam
         # o mesmo catálogo para nomear recursos; sem isso o snapshot do Andon
         # duplicava a consulta ao PCFACTORY a cada atualização da TV.
-        catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
-        catalogo_recursos = list(catalog_loader() or []) if callable(catalog_loader) else []
+        catalogo_recursos = self.management.catalogo_recursos()
         operational = self.consulta_operacional(filters, catalogo_recursos=catalogo_recursos)
         # O Andon usa apenas o resumo consolidado. Não carregar o dashboard de
         # exceções aqui preserva a projeção única da TV e evita consultas extras.

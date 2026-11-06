@@ -444,12 +444,17 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
         self.assertEqual(returned["tipo_interrupcao"], "retorno_turno_sem_demanda")
         self.assertIsNone(returned["op"])
 
-    def test_op_encerrada_na_hora_extra_planejada_entra_em_sem_demanda(self):
-        # 18:00-19:00: dentro da hora extra H2 (17:30-21:30).
+    def test_op_encerrada_na_hora_extra_planejada_entra_em_fora_de_turno(self):
+        # 18:00-19:00: dentro da hora extra H2 (17:30-21:30). A hora extra só
+        # existe enquanto há apontamento: terminada a OP, o recurso volta a
+        # Fora de turno, como no fim de semana (decisão do usuário, 06/11/2026).
         item = self._started_op(minute=9 * 60)
         self._finish(item, 10 * 60)
 
-        self._assert_no_demand(self._timeline()[-1])
+        current = self._timeline()[-1]
+        self.assertEqual(current["categoria"], "fora_turno")
+        self.assertEqual(current["tipo_interrupcao"], "fim_turno")
+        self.assertIsNone(current["data_fim"])
 
     def _cut_plan(self):
         with self.db.connection() as connection, connection.cursor() as cursor:

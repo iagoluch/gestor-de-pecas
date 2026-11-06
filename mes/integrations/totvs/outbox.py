@@ -30,10 +30,12 @@ class OutboxStatus(str, Enum):
     RETRY = "RETRY"
     SENT = "SENT"
     ERROR = "ERROR"
+    # Descarte humano registrado de um ERROR que nunca vai passar (A58).
+    DISCARDED = "DISCARDED"
 
 
 ACTIVE_STATUSES = (OutboxStatus.PENDING, OutboxStatus.SENDING, OutboxStatus.RETRY)
-TERMINAL_STATUSES = (OutboxStatus.SENT, OutboxStatus.ERROR)
+TERMINAL_STATUSES = (OutboxStatus.SENT, OutboxStatus.ERROR, OutboxStatus.DISCARDED)
 
 
 class DeliveryClass(str, Enum):

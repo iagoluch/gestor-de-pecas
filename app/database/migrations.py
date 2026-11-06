@@ -2928,6 +2928,47 @@ ROTEIRO_ETAPA_GESTOR_STATEMENTS = (
     " ON catalogo_operacoes_op (codigo_op) WHERE etapa_gestor IS TRUE",
 )
 
+# Migration 73 — A58 (revisão 11/2026): item ERROR com recusa funcional do
+# Protheus (ex.: OP já totalizada, A680OPTOT) prendia para sempre os envios
+# seguintes da mesma OP. Novo estado terminal DISCARDED, só por decisão humana
+# registrada (quem, quando, motivo). O item continua na tabela com o histórico.
+# Aditiva. Rollback: UPDATE totvs_outbox SET status='ERROR' WHERE status='DISCARDED';
+# restaurar ck_totvs_outbox_status e idx_totvs_outbox_aggregate_pending antigos;
+# DROP das 3 colunas; DELETE FROM schema_migrations WHERE version = 73; SCHEMA_VERSION = 72.
+TOTVS_OUTBOX_DESCARTE_DESCRIPTION = "outbox TOTVS: descarte manual registrado de item ERROR (DISCARDED)"
+TOTVS_OUTBOX_DESCARTE_STATEMENTS = (
+    "ALTER TABLE totvs_outbox ADD COLUMN IF NOT EXISTS discarded_at TIMESTAMP WITHOUT TIME ZONE",
+    "ALTER TABLE totvs_outbox ADD COLUMN IF NOT EXISTS discarded_by TEXT",
+    "ALTER TABLE totvs_outbox ADD COLUMN IF NOT EXISTS discard_reason TEXT",
+    "ALTER TABLE totvs_outbox DROP CONSTRAINT IF EXISTS ck_totvs_outbox_status",
+    """
+    ALTER TABLE totvs_outbox ADD CONSTRAINT ck_totvs_outbox_status CHECK (
+        status IN ('PENDING', 'SENDING', 'RETRY', 'SENT', 'ERROR', 'DISCARDED')
+    )
+    """,
+    "ALTER TABLE totvs_outbox DROP CONSTRAINT IF EXISTS ck_totvs_outbox_payload",
+    """
+    ALTER TABLE totvs_outbox ADD CONSTRAINT ck_totvs_outbox_payload CHECK (
+        payload_xml IS NOT NULL OR status IN ('ERROR', 'DISCARDED')
+    )
+    """,
+    "ALTER TABLE totvs_outbox DROP CONSTRAINT IF EXISTS ck_totvs_outbox_discard",
+    """
+    ALTER TABLE totvs_outbox ADD CONSTRAINT ck_totvs_outbox_discard CHECK (
+        status <> 'DISCARDED'
+        OR (
+            discarded_at IS NOT NULL
+            AND discarded_by IS NOT NULL
+            AND char_length(btrim(COALESCE(discard_reason, ''))) >= 3
+        )
+    )
+    """,
+    "DROP INDEX IF EXISTS idx_totvs_outbox_aggregate_pending",
+    "CREATE INDEX idx_totvs_outbox_aggregate_pending ON totvs_outbox (aggregate_id, id)"
+    " WHERE status NOT IN ('SENT', 'DISCARDED')",
+)
+
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -3003,6 +3044,7 @@ MIGRATIONS = {
     70: (PARAMETROS_TURNO_VINCULO_DESCRIPTION, PARAMETROS_TURNO_VINCULO_STATEMENTS),
     71: (USER_PREFERENCES_DESCRIPTION, USER_PREFERENCES_STATEMENTS),
     72: (ROTEIRO_ETAPA_GESTOR_DESCRIPTION, ROTEIRO_ETAPA_GESTOR_STATEMENTS),
+    73: (TOTVS_OUTBOX_DESCARTE_DESCRIPTION, TOTVS_OUTBOX_DESCARTE_STATEMENTS),
 }
 
 

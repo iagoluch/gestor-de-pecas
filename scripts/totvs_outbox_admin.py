@@ -97,6 +97,14 @@ def _arguments() -> argparse.Namespace:
     reprocessar.add_argument("--id", type=int, required=True)
     reprocessar.add_argument("--operador", default="ADMIN")
 
+    descartar = sub.add_parser(
+        "descartar",
+        help="Descarta um item ERROR que nunca vai passar (ex.: OP totalizada), com motivo.",
+    )
+    descartar.add_argument("--id", type=int, required=True)
+    descartar.add_argument("--motivo", required=True)
+    descartar.add_argument("--operador", default="ADMIN")
+
     worker = sub.add_parser("worker", help="Executa a entrega fora do backend Web.")
     worker.add_argument("--once", action="store_true", help="Um único ciclo.")
     worker.add_argument("--interval", type=float, default=15.0)
@@ -141,6 +149,11 @@ def main() -> int:
         if args.command == "reprocessar":
             result = service.reprocess(args.id, operador=args.operador)
             result["item"] = _item(result.get("item"))
+            _print(result)
+            return 0 if result.get("ok") else 1
+
+        if args.command == "descartar":
+            result = service.discard(args.id, motivo=args.motivo, operador=args.operador)
             _print(result)
             return 0 if result.get("ok") else 1
 

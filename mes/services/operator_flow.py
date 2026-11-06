@@ -59,6 +59,10 @@ _MENSAGEM_POR_ACAO = {
 }
 # Estados em que uma linha de apontamento ainda ocupa a operação (a
 # finalização total é tratada à parte: a etapa vira "concluída").
+# StatusOrderType do ProductionOrder: no TEST, todas as OPs com "7" vieram com
+# ReportQuantity igual à quantidade da OP (totalizada). A59.
+PROTHEUS_STATUS_OP_TOTALIZADA = "7"
+
 _ESTADOS_ATIVOS = frozenset({"Aguardando", "Em processo", "Parada", "Setup", "Retrabalho"})
 _MENSAGEM_POR_ESTADO = {
     OperatorState.STOPPED: "Parada registrada.",
@@ -952,6 +956,28 @@ class OperatorFlowService:
             ],
         )
 
+    def _recusa_op_totalizada_no_protheus(self, codigo, action):
+        """A59: não abre apontamento novo em OP que o Protheus já totalizou.
+
+        O envio seria recusado depois (A680OPTOT) e travaria a fila da OP.
+        Só barra o que ABRE trabalho; quem já está aberto pode fechar.
+        """
+
+        if action not in (OperatorAction.START, OperatorAction.SETUP):
+            return None
+        finder = getattr(self.db, "buscar_op_catalogo", None)
+        if not callable(finder):
+            return None
+        ordem = finder(codigo) or {}
+        if str(ordem.get("status_pcp") or "").strip() != PROTHEUS_STATUS_OP_TOTALIZADA:
+            return None
+        return OperatorFlowResult(
+            False,
+            f"A OP {codigo} já está com toda a quantidade apontada no Protheus. "
+            "Não é possível iniciar um apontamento novo; fale com o PCP.",
+            "op_totalizada_no_protheus",
+        )
+
     def executar(
         self,
         action,
@@ -997,6 +1023,9 @@ class OperatorFlowService:
                 "Informe a OP e selecione uma operação antes de apontar.",
                 "dados_incompletos",
             )
+        recusa_totalizada = self._recusa_op_totalizada_no_protheus(codigo, requested_action)
+        if recusa_totalizada is not None:
+            return recusa_totalizada
         etapa_atual_nome = ""
         if str(setor or "").casefold() != "qualidade":
             route = self.listar_operacoes(codigo, setor, recurso)

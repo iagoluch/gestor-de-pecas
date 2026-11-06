@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -159,6 +160,12 @@ class _ApiCase(unittest.TestCase):
         self.app = create_app(settings=_settings(), database_factory=lambda: db)
         self.app.dependency_overrides[get_database] = lambda: db
         self.app.dependency_overrides[require_csrf] = lambda: None
+        # A rota usa o relógio real; os dados do teste são de 26/10 (janela de 7 dias).
+        relogio = patch(
+            "backend.api.routers.maintenance.request_now_func", lambda _request: lambda: AGORA
+        )
+        relogio.start()
+        self.addCleanup(relogio.stop)
         self.client = TestClient(self.app)
         self.addCleanup(self.client.close)
 
