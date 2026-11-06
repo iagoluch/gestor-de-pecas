@@ -174,10 +174,6 @@ export const managementSections: ManagementSection[] = [
     tabs: [
       { label: "Andon", path: "/inicio/andon", screen: "panels-andon" },
       { label: "Mapa da fábrica", path: "/inicio/mapa-fabrica", screen: "panels-factory-map" },
-      // Metas: aba oculta temporariamente a pedido do usuário (01/10/2026).
-      // Página e rota seguem existindo (`/inicio/metas`) — para voltar, basta
-      // descomentar a linha abaixo.
-      // { label: "Metas", path: "/inicio/metas", screen: "panels-goals" },
       { label: "Pausas", path: "/inicio/pausas", screen: "panels-pauses" },
     ],
   },
@@ -328,6 +324,7 @@ export const managementSections: ManagementSection[] = [
       { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos", adminOnly: true },
       { label: "Alterações", path: "/inicio/alteracoes", screen: "dev-alteracoes", adminOnly: true },
       { label: "Envios ao Protheus", path: "/inicio/envios-protheus", screen: "dev-envios-protheus", adminOnly: true },
+      { label: "Log do Sistema", path: "/inicio/log-sistema", screen: "dev-log-sistema", adminOnly: true },
       { label: "Sistema", path: "/inicio/sistema", screen: "dev-sistema", adminOnly: true },
     ],
   },

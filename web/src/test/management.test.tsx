@@ -93,16 +93,15 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(46);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(46);
+    expect(managementRoutes).toHaveLength(47);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(47);
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Andon", path: "/inicio/andon", sectionId: "panels" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Mapa da fábrica", path: "/inicio/mapa-fabrica", sectionId: "panels" }));
     expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Solda" }));
-    // Metas: aba oculta temporariamente (01/10/2026); a rota segue montada em
-    // App.tsx e a página existe, só saiu da navegação.
+    // Metas: tela removida do sistema em 06/11/2026 (decisão do usuário).
     expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Metas" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "panels" }));
     // Chamadas foi dividida (01/10/2026): o cadastro de contatos fica no
@@ -123,6 +122,7 @@ describe("contrato gerencial Web", () => {
     // inteira, não é preferência de gestão comum.
     // Envios ao Protheus (990eed2): reenviar ou descartar envios em erro, só admin.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Envios ao Protheus", path: "/inicio/envios-protheus", sectionId: "dev", adminOnly: true }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Log do Sistema", path: "/inicio/log-sistema", sectionId: "dev", adminOnly: true }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Turnos", path: "/inicio/turnos", sectionId: "dev" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Confiabilidade", path: "/analises/confiabilidade", sectionId: "analytics" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "IA", path: "/inicio/ia", sectionId: "home" }));

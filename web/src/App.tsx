@@ -9,7 +9,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { AndonPage } from "./pages/AndonPage";
 import { ManagementOverviewPage } from "./pages/ManagementOverviewPage";
-import { ManagementGoalsPage } from "./pages/home/GoalsPage";
 import { ManagementPausesPage } from "./pages/home/PausesPage";
 import { ManagementBadgesPage } from "./pages/home/BadgesPage";
 import { ManagementChamadasPage } from "./pages/home/ChamadasPage";
@@ -17,6 +16,7 @@ import { DevChamadasContatosPage } from "./pages/home/ChamadasContatosPage";
 import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
 import { ChangeAuditPage } from "./pages/home/ChangeAuditPage";
 import { TotvsOutboxPage } from "./pages/home/TotvsOutboxPage";
+import { SystemLogPage } from "./pages/home/SystemLogPage";
 import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
 import { AIPage } from "./pages/AIPage";
@@ -178,7 +178,6 @@ export default function App() {
         <Route path="inicio/alertas" element={<Navigate to="/auditoria/alertas-inconsistencias" replace />} />
         <Route path="inicio/andon" element={<Navigate to="/andon" replace />} />
         <Route path="inicio/mapa-fabrica" element={<Navigate to="/mapa-fabrica" replace />} />
-        <Route path="inicio/metas" element={<ManagementGoalsPage />} />
         <Route path="inicio/pausas" element={<ManagementPausesPage />} />
         <Route path="inicio/crachas" element={<RequireAdmin><ManagementBadgesPage /></RequireAdmin>} />
         <Route path="inicio/chamadas" element={<ManagementChamadasPage />} />
@@ -186,6 +185,7 @@ export default function App() {
         <Route path="inicio/turnos" element={<RequireAdmin><ManagementShiftsPage /></RequireAdmin>} />
         <Route path="inicio/alteracoes" element={<RequireAdmin><ChangeAuditPage /></RequireAdmin>} />
         <Route path="inicio/envios-protheus" element={<RequireAdmin><TotvsOutboxPage /></RequireAdmin>} />
+        <Route path="inicio/log-sistema" element={<RequireAdmin><SystemLogPage /></RequireAdmin>} />
         <Route path="inicio/sistema" element={<RequireAdmin><ManagementSystemPage /></RequireAdmin>} />
         <Route path="inicio/cadastro" element={<RequireAdmin><ManagementUsersPage /></RequireAdmin>} />
         <Route path="inicio/ia" element={<AIPage />} />

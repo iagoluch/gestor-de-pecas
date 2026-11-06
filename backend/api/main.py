@@ -63,7 +63,8 @@ from backend.api.routers import (
     traceability,
 )
 from backend.observability import DevObservatoryRecorder
-from backend.observability.capture import record_exception, record_response
+from backend.observability.capture import STATE_KEY as _OBSERVATORY_STATE_KEY, record_exception, record_response
+from backend.observability.system_log import SystemLog
 from backend.observability.metrics import collect_postgres_metrics
 from backend.observability.readonly_db import ReadOnlyDatabaseManager
 from backend.observability.shift_report import closed_windows, report_exists
@@ -740,6 +741,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
         outbox_task = None
         sigmanest_task = None
         observatory_task = None
+        _app.state.system_log.start()
         telegram_bot_task = None
         telegram_digest_task = None
         alert_dispatch_task = None
@@ -841,6 +843,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                     await observatory_task
                 with suppress(Exception):
                     _app.state.dev_observatory.flush_metrics(force=True)
+            _app.state.system_log.stop()
             real_observer = getattr(_app.state, "dev_observatory_real", None)
             if real_observer is not None:
                 real_observer.close()
@@ -863,6 +866,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.state.settings = resolved_settings
     application.state.clock = clock
     application.state.database_manager = manager
+    application.state.system_log = SystemLog(manager.get, now=clock.now)
     application.state.session_signer = SessionSigner(
         resolved_settings.session_secret,
         ttl_seconds=resolved_settings.session_ttl_seconds,
@@ -985,14 +989,22 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
             # O handler genérico de Exception vive acima deste middleware; sem
             # registrar aqui, o 500 não previsto não apareceria no observatório.
             # A exceção segue o caminho normal logo em seguida.
-            record_exception(request, exc, (time.perf_counter() - started) * 1000.0)
+            elapsed = (time.perf_counter() - started) * 1000.0
+            record_exception(request, exc, elapsed)
+            application.state.system_log.record_http(
+                request, 500, elapsed, {"error_message": str(exc), "exception": type(exc).__name__}
+            )
             raise
         finally:
             REQUEST_ID.reset(token)
         # A latência é medida aqui, no mesmo lugar onde o X-Request-ID nasce, e
         # não em uma camada ASGI extra: o funil de erros já anotou no request o
         # código de negócio, se houve recusa.
-        record_response(request, response, (time.perf_counter() - started) * 1000.0)
+        elapsed = (time.perf_counter() - started) * 1000.0
+        record_response(request, response, elapsed)
+        application.state.system_log.record_http(
+            request, response.status_code, elapsed, getattr(request.state, _OBSERVATORY_STATE_KEY, None)
+        )
         response.headers["X-Request-ID"] = request.state.request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"

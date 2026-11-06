@@ -1,8 +1,8 @@
 import logging
 import re
 import unicodedata
-from datetime import date
-from typing import Annotated
+from datetime import date, datetime, timedelta
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
@@ -24,6 +24,7 @@ from backend.api.dependencies.auth import (
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter, scoped_sector
 from backend.api.errors import AppError
+from backend.observability.system_log import AREAS
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.change_audit import AuditResponse
 from backend.api.schemas.common import (
@@ -726,6 +727,50 @@ def list_audit(
         desde=desde, ate=ate, limite=limite,
     )
     return {"items": items, "count": len(items)}
+
+
+@router.get("/system-log")
+def system_log(
+    area: str | None = Query(default=None, max_length=20),
+    nivel: Literal["info", "aviso", "erro"] | None = None,
+    busca: str | None = Query(default=None, max_length=120, description="Texto na mensagem, rota ou evento"),
+    usuario: str | None = Query(default=None, max_length=80),
+    desde: datetime | None = None,
+    ate: datetime | None = None,
+    limite: int = Query(default=200, ge=1, le=1000),
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    """Log do sistema (IagoDev), mais recente primeiro. Só leitura, só admin."""
+
+    if area is not None and area not in AREAS:
+        raise AppError("invalid_area", "Área de log desconhecida.", status_code=422)
+    items = database.listar_log(
+        area=area, nivel=nivel, busca=busca, usuario=usuario, desde=desde, ate=ate, limite=limite
+    )
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/system-log/summary")
+def system_log_summary(
+    request: Request,
+    horas: int = Query(default=24, ge=1, le=720),
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    """Quantos eventos por área (e quantos avisos/erros) nas últimas ``horas``."""
+
+    agora = (request_now_func(request) or datetime.now)()
+    desde = agora - timedelta(hours=horas)
+    por_area = {slug: {"area": slug, "rotulo": rotulo, "total": 0, "aviso": 0, "erro": 0} for slug, rotulo in AREAS.items()}
+    for row in database.resumo_log(desde=desde):
+        item = por_area.get(row["area"])
+        if item is None:
+            continue
+        item["total"] += int(row["total"])
+        if row["nivel"] in ("aviso", "erro"):
+            item[row["nivel"]] += int(row["total"])
+    return {"horas": horas, "areas": list(por_area.values())}
 
 
 @router.get("/first-pieces")
