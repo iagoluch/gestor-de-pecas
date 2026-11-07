@@ -1298,7 +1298,7 @@ class OperatorFlowService:
                     False,
                     (
                         f"O roteiro exige {route_code} ({route_name}), mas o posto aberto é "
-                        f"{recurso}. Confirme a exceção com um crachá autorizado."
+                        f"{recurso}. Confirme para apontar neste posto."
                     ),
                     "confirmacao_recurso_obrigatoria",
                     {
@@ -1310,14 +1310,10 @@ class OperatorFlowService:
                         "operacao": dict(operacao),
                     },
                 )
+            # Recurso diferente do roteiro só pede a confirmação do operador
+            # (sem crachá); o crachá segue obrigatório para etapa anterior pendente.
             requires_authorization = bool(
-                (
-                    divergent_resource
-                    and confirmar_recurso_divergente
-                    and not sector_exempt_from_resource_confirmation
-                    and not puxada_pelo_lider
-                )
-                or (etapa_pendente is not None and confirmar_etapa_anterior_pendente)
+                etapa_pendente is not None and confirmar_etapa_anterior_pendente
             )
             if requires_authorization:
                 if not crachas:

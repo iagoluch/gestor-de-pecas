@@ -112,9 +112,11 @@ class ProductionAppointmentMapperTests(unittest.TestCase):
         contract = map_production_appointment(event, allow_zero_quantity=True)
         self.assertEqual(contract.report_quantity, 0)
 
-    def test_divergent_resource_is_blocked(self):
-        with self.assertRaisesRegex(TotvsContractError, "divergência"):
-            map_production_appointment(canonical_event(resource_divergent=True))
+    def test_divergent_resource_is_sent_with_the_route_machine(self):
+        contract = map_production_appointment(canonical_event(resource_divergent=True))
+        self.assertEqual(
+            contract.machine_code, map_production_appointment(canonical_event()).machine_code
+        )
 
     def test_xml_contract_and_stable_idempotency_key(self):
         first = map_production_appointment(canonical_event())
@@ -496,11 +498,11 @@ class TerminalMilestoneMapperTests(unittest.TestCase):
         regular = map_production_appointment(canonical_event())
         self.assertNotEqual(first.idempotency_key, regular.idempotency_key)
 
-    def test_divergent_resource_blocks_the_terminal(self):
-        with self.assertRaisesRegex(TotvsContractError, "divergência de recurso"):
-            map_terminal_production_appointment(
-                terminal_milestone(resource_divergent=True)
-            )
+    def test_divergent_resource_does_not_block_the_terminal(self):
+        contract = map_terminal_production_appointment(
+            terminal_milestone(resource_divergent=True)
+        )
+        self.assertTrue(contract.machine_code)
 
     def test_service_builds_the_terminal_message_from_the_read_model(self):
         repository = _TerminalRepositoryStub(terminal_milestone())

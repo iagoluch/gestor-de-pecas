@@ -1,5 +1,12 @@
 # STATUS ATUAL — Gestor de Peças
 
+### Acesso para homologação e confirmação de recurso — 07/11/2026
+
+- Decisão do usuário: recurso diferente do roteiro pede aviso e confirmação simples, sem crachá. Etapa anterior pendente conserva autorização. Outbound aceita a divergência e preserva o recurso do roteiro no XML.
+- Validação: 73 testes de fluxo/outbound e 43 testes da tela do operador aprovados; build web aprovado.
+- Script de reset de teste acrescentado, restrito ao servidor local na porta 15432 e banco `gestor_pecas_test`; três destinos indevidos recusados sem conectar. O script não foi executado nesta entrega.
+- API única em desenvolvimento na porta 8001, com link HTTPS temporário para acesso externo. Telegram e IA desligados; SigmaNEST e consulta ao Protheus TEST ligados. Para o ensaio local autorizado em 06/11, envio/outbox continua desligado no ambiente; não reativar automaticamente sobre as OPs de ensaio.
+
 **Atualizado em:** 05/11/2026 (manual dentro do sistema; 04/11: consulta de OP com etapa extra, tempo padrão só Protheus, tela inicial personalizável, Corte só apontado, sem aba Manutenção; simulação TESTE de 09/10 e marcos do REAL preservados abaixo).
 **Propósito:** o `ROADMAP.md` é o documento canônico de direção, mas seu
 corpo principal (seção 5) parou de ser editado em 11/09/2026 (Wave 6E). Este

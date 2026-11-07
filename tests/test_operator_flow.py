@@ -595,19 +595,16 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertTrue(autorizado.ok, autorizado.message)
         self.assertEqual(autorizado.data["catalogo_operacao_id"], pintura["id"])
 
-    def test_excecao_de_roteiro_recusa_cracha_ativo_sem_autorizacao(self):
+    def test_recurso_divergente_nao_exige_cracha_apos_confirmacao(self):
         db, service, operation = self._service()
-        db.cadastrar_operador_apontamento("2", "Operador sem alçada")
-        pending = service.executar(
+        ok = service.executar(
             "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
             operacao={**operation, "codigo_recurso": "DOBRA1"},
             confirmar_recurso_divergente=True,
-            operadores_cracha=["2"],
         )
 
-        self.assertFalse(pending.ok)
-        self.assertEqual(pending.code, "cracha_autorizacao_nao_autorizado")
-        self.assertEqual(db.appointments, [])
+        self.assertTrue(ok.ok, ok.message)
+        self.assertTrue(db.operator_events[-1]["recurso_divergente"])
 
     def test_fluxos_especializados_mantem_a_eligibilidade_do_posto(self):
         db, service, dobra = self._service()
@@ -883,7 +880,7 @@ class OperatorFlowTests(unittest.TestCase):
             "Máquina Nova",
         )
 
-    def test_inicio_fora_do_recurso_exige_confirmacao_e_cracha_auditado(self):
+    def test_inicio_fora_do_recurso_exige_so_confirmacao(self):
         db, service, operation = self._service()
         operation = {**operation, "codigo_recurso": "DOBRA1", "recurso_nome": "GASPARINI"}
         pending = service.executar(
@@ -897,18 +894,6 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(pending.code, "confirmacao_recurso_obrigatoria")
         self.assertEqual(db.appointments, [])
 
-        invalid = service.executar(
-            "Início",
-            op="OP-OPERADOR",
-            setor="Dobra",
-            recurso="1303",
-            operacao=operation,
-            confirmar_recurso_divergente=True,
-            operadores_cracha=["999"],
-        )
-        self.assertEqual(invalid.code, "cracha_invalido")
-        self.assertEqual(db.appointments, [])
-
         accepted = service.executar(
             "Início",
             op="OP-OPERADOR",
@@ -916,14 +901,12 @@ class OperatorFlowTests(unittest.TestCase):
             recurso="1303",
             operacao=operation,
             confirmar_recurso_divergente=True,
-            operadores_cracha=["1"],
         )
         self.assertTrue(accepted.ok)
         event = db.operator_events[-1]
         self.assertTrue(event["recurso_divergente"])
         self.assertEqual(event["recurso_roteiro_codigo"], "DOBRA1")
         self.assertEqual(event["recurso_apontado"], "1303")
-        self.assertEqual([item["cracha"] for item in event["operadores"]], ["1"])
 
     def test_fila_automatica_avanca_pelo_roteiro_apos_finalizacao(self):
         db = FakeDatabase()

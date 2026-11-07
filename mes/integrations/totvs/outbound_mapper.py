@@ -63,15 +63,15 @@ def map_production_appointment(
 ) -> ProductionAppointmentContract:
     """Converte um fato produtivo sem alterar OP, operação ou recurso.
 
+    Apontamento em máquina diferente da do roteiro (``resource_divergent``) não
+    bloqueia o envio: o operador já confirmou a exceção na tela e o Protheus
+    recebe o ``MachineCode`` do roteiro.
+
     ``ReworkQuantity`` não é projetado: na implementação Protheus comprovada o
     campo não possui destino. Um valor canônico diferente de zero é bloqueado,
     evitando transformar retrabalho em peça boa ou refugo.
     """
 
-    if event.resource_divergent:
-        raise TotvsContractError(
-            "O evento possui divergência de recurso; o outbound não escolherá um vencedor."
-        )
     good = _non_negative(event.good_quantity, "good_quantity")
     scrap = _non_negative(event.scrap_quantity, "scrap_quantity")
     rework = _non_negative(event.rework_quantity, "rework_quantity")
@@ -168,10 +168,6 @@ def map_terminal_production_appointment(
     são exatamente os que o TOTVS enviou; nada é inventado aqui.
     """
 
-    if milestone.resource_divergent:
-        raise TotvsContractError(
-            "A execução possui divergência de recurso; o outbound não escolherá um vencedor."
-        )
     if not milestone.execution_completed:
         pendentes = ", ".join(milestone.open_operations) or "nenhuma operação apontável"
         raise TotvsContractError(
@@ -233,10 +229,6 @@ def map_stop_report(
     transmitida. O código SX5/44 é parâmetro explícito, nunca inferido do texto.
     """
 
-    if resume_event.resource_divergent:
-        raise TotvsContractError(
-            "O evento possui divergência de recurso; o outbound não escolherá um vencedor."
-        )
     if str(resume_event.previous_state or "").strip().casefold() != "parada":
         raise TotvsContractError(
             "StopReport exige uma retomada cujo evento imediatamente anterior seja parada."
