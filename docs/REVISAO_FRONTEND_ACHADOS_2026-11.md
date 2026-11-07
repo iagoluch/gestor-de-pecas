@@ -50,8 +50,9 @@ Como conferir: abrir o detalhe de uma inspeção com `cotas` bloqueado no DevToo
 **F8 — baixo — aberto**
 Consultas secundárias sem estado de erro (o quadro some ou fica vazio, sem dado falso de número): `DirectorSheet.tsx:28` (catálogo do filtro), `ChamadasContatosPage.tsx:41` (setores), `OperatorPortalPage.tsx:16` (postos), `ChamadaSino.tsx:11`, `WorkbenchPage.tsx:166,170` (postos e desenho). O `trendQuery` da Visão geral (`ManagementOverviewPage.tsx:216`) falha em silêncio de propósito (é opcional).
 
-**F9 — baixo — decisão do usuário**
-Tela Metas: a rota `inicio/metas` continua no `App.tsx`, mas o item do menu está comentado desde 01/10 (aba oculta). Ou volta ao menu, ou sai a rota e a página (`GoalsPage`).
+**F9 — baixo — resolvido**
+Tela Metas: a rota `inicio/metas` continuava no `App.tsx`, mas o item do menu estava comentado desde 01/10 (aba oculta). Decisão do usuário (06/11/2026): remover. Saíram a rota, a página `GoalsPage.tsx` e o item comentado do menu. A página não chamava nenhum endereço da API; o backend não foi alterado. O card "Metas e atingimento" da Visão geral é outra coisa e continua.
+Como conferir: `/inicio/metas` não abre mais a tela; `npx vitest run src/test/management.test.tsx src/test/andon.test.tsx` (95 testes verdes).
 
 **F10 — baixo — aberto**
 `OrderConsultationPage.tsx:233` usa `.at(-1)`, que o Chrome 79 não tem. Hoje só a gestão (navegador moderno) usa essa tela, então não quebra; se um dia abrir em navegador antigo, quebra.
@@ -83,6 +84,6 @@ Observação F3 no Andon TV: se a sessão da TV expirar, a TV agora vai para a t
 1. **Etapa A (feito):** F1 (teste), F2 (datas), F3 (sessão expirada).
 2. **Etapa B (feito):** F4–F7 (vazios falsos), seguindo o padrão do Corte: carregando → erro com "Tentar de novo".
 3. **Guardado (baixo):** F8, F10, F11, F12 — corrigir junto com a próxima mudança em cada tela.
-4. **Decisão do usuário:** F9 (tela Metas).
+4. **Feito (06/11):** F9 — tela Metas removida por decisão do usuário.
 
 Nenhum achado de segurança aberto: este documento pode ser commitado.
