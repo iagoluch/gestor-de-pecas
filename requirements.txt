@@ -1,6 +1,6 @@
 openpyxl>=3.1.5,<4
 # Driver PostgreSQL 3 com distribuição binária para o backend Web.
-psycopg[binary]>=3.3.6,<4
+psycopg[binary]>=3.3.8,<4
 # Pool síncrono thread-safe usado pela facade Database.
 psycopg_pool>=3.3.3,<4
 # Parser XML endurecido contra DTD, entidades e XXE.
@@ -14,7 +14,7 @@ uvicorn[standard]>=0.54.0,<1
 httpx>=0.28.1,<1
 # SDK OpenAI-compatível (NVIDIA NIM, Groq, OpenRouter via base_url), usado
 # somente quando a IA gerencial está habilitada.
-openai>=3.28.0,<4
+openai>=3.46.0,<4
 # Driver ODBC usado somente para LER o banco SigmaNEST (planejamento de Corte).
 # O produto importa pyodbc sob demanda: sem ele o Gestor sobe normalmente e
 # apenas a sincronização do Corte fica indisponível.
