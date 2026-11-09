@@ -6107,6 +6107,8 @@ class Database(
                 )::BIGINT AS elapsed_seconds
             FROM apontamentos_operacionais apontamento
             WHERE UPPER(apontamento.tipo_setor) = UPPER(%s)
+              -- Histórico só de OPs concluídas; parcial volta à fila (Aguardando).
+              AND apontamento.status = 'Finalizado'
         """
         params = [self._now(), str(tipo_setor or "").strip()]
         if maquina:

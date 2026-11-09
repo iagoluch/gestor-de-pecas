@@ -35,9 +35,12 @@ class OperatorAction(str, Enum):
 
 
 ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
+    # Setup direto da fila: a OP que volta para a fila (finalização parcial)
+    # costuma precisar de nova preparação da máquina antes de produzir.
     OperatorState.QUEUED: (
         OperatorState.PRODUCTION,
         OperatorState.STOPPED,
+        OperatorState.SETUP,
         OperatorState.REWORK,
     ),
     OperatorState.PRODUCTION: (
@@ -46,13 +49,18 @@ ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
         OperatorState.REWORK,
         OperatorState.FINISHED,
     ),
+    # Parada e Setup se alternam: a máquina pode parar no meio do setup e o
+    # setup pode começar com a máquina parada. O retorno do Setup continua
+    # sendo a atividade de antes (`return_state_for_transition`).
     OperatorState.STOPPED: (
         OperatorState.PRODUCTION,
+        OperatorState.SETUP,
         OperatorState.REWORK,
         OperatorState.FINISHED,
     ),
     OperatorState.SETUP: (
         OperatorState.PRODUCTION,
+        OperatorState.STOPPED,
         OperatorState.REWORK,
         OperatorState.FINISHED,
     ),
@@ -237,13 +245,6 @@ def explain_invalid_transition(
         return InvalidTransition(
             "retorno_incompativel",
             f"Só é possível retornar de um setup; o apontamento está {label}.",
-            source,
-            requested,
-        )
-    if source == OperatorState.QUEUED and parsed_action == OperatorAction.SETUP:
-        return InvalidTransition(
-            "setup_exige_inicio",
-            "Inicie a OP antes de apontar o Setup.",
             source,
             requested,
         )

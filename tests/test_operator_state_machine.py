@@ -59,11 +59,14 @@ class OperatorStateMachineTests(unittest.TestCase):
             **extra,
         )
 
-    def test_op_aberta_exige_inicio_antes_do_setup(self):
+    def test_op_aberta_pode_ir_direto_para_qualquer_atividade(self):
+        # Patch da manufatura (09/11/2026): a OP que volta para a fila costuma
+        # precisar de nova preparação, então o Setup vale direto da fila.
         cases = (
             ("Início", "Em processo", {}),
             ("Parada", "Parada", {"motivo_codigo": "0029"}),
             ("Retrabalho", "Retrabalho", {}),
+            ("Setup", "Setup", {}),
         )
         for action, expected, extra in cases:
             with self.subTest(action=action):
@@ -72,10 +75,33 @@ class OperatorStateMachineTests(unittest.TestCase):
                 self.assertTrue(result.ok, result.message)
                 self.assertEqual(result.data["status"], expected)
 
+    def test_parada_no_meio_do_setup_e_setup_de_novo_volta_a_producao(self):
         _database, service, operation = self._service()
+        self.assertTrue(self._execute(service, operation, "Início").ok)
+        self.assertTrue(self._execute(service, operation, "Setup").ok)
+
+        stopped = self._execute(service, operation, "Parada", motivo_codigo="0029")
+        self.assertTrue(stopped.ok, stopped.message)
+        self.assertEqual(stopped.data["status"], "Parada")
+
         setup = self._execute(service, operation, "Setup")
-        self.assertFalse(setup.ok)
-        self.assertEqual(setup.code, "setup_exige_inicio")
+        self.assertTrue(setup.ok, setup.message)
+        self.assertEqual(setup.data["status"], "Setup")
+        self.assertEqual(setup.data["estado_retorno"], "producao")
+
+        returned = self._execute(service, operation, "Retornar")
+        self.assertTrue(returned.ok, returned.message)
+        self.assertEqual(returned.data["status"], "Em processo")
+
+    def test_setup_pode_ser_apontado_de_novo(self):
+        _database, service, operation = self._service()
+        self.assertTrue(self._execute(service, operation, "Setup").ok)
+        self.assertTrue(self._execute(service, operation, "Retornar").ok)
+
+        again = self._execute(service, operation, "Setup")
+
+        self.assertTrue(again.ok, again.message)
+        self.assertEqual(again.data["status"], "Setup")
 
     def test_retrabalho_parada_retomar_retorna_ao_retrabalho(self):
         database, service, operation = self._service()
@@ -132,11 +158,12 @@ class OperatorStateMachineTests(unittest.TestCase):
 
     def test_transicoes_sao_uma_definicao_de_dominio(self):
         self.assertTrue(can_transition(OperatorState.QUEUED, OperatorState.STOPPED))
-        self.assertFalse(can_transition(OperatorState.QUEUED, OperatorState.SETUP))
+        self.assertTrue(can_transition(OperatorState.QUEUED, OperatorState.SETUP))
         self.assertTrue(can_transition(OperatorState.REWORK, OperatorState.STOPPED))
         self.assertTrue(can_transition(OperatorState.REWORK, OperatorState.SETUP))
         self.assertFalse(can_transition(OperatorState.REWORK, OperatorState.PRODUCTION))
-        self.assertFalse(can_transition(OperatorState.STOPPED, OperatorState.SETUP))
+        self.assertTrue(can_transition(OperatorState.STOPPED, OperatorState.SETUP))
+        self.assertTrue(can_transition(OperatorState.SETUP, OperatorState.STOPPED))
         self.assertEqual(
             resolve_operator_action("Retomar", OperatorState.STOPPED, OperatorState.REWORK),
             OperatorState.REWORK,

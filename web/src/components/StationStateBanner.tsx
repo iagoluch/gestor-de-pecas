@@ -44,7 +44,7 @@ function ElapsedTimer({ since: start }: { since: string }) {
  * se a máquina está produzindo, parada ou em setup, sem depender da última
  * mensagem de ação.
  */
-export function StationStateBanner({ state, semOp = false, timer = false }: { state?: StationState | null; semOp?: boolean; timer?: boolean }) {
+export function StationStateBanner({ state, semOp = false, timer = false, opCount = 0 }: { state?: StationState | null; semOp?: boolean; timer?: boolean; opCount?: number }) {
   const category = String(state?.categoria ?? "");
   // Corte e Destaque trabalham com tarefas e planos, não com OP: fila ali é
   // só "Sem apontamento".
@@ -52,7 +52,11 @@ export function StationStateBanner({ state, semOp = false, timer = false }: { st
     ? { label: "Sem apontamento", tone: "waiting" }
     : STATES[category] ?? { label: "Sem apontamento", tone: "neutral" };
   const op = String(state?.op ?? "").trim();
-  const details = [op ? `OP ${op}` : "", state?.motivo ?? "", since(state?.data_inicio)].filter(Boolean).join(" · ");
+  // Com várias OPs no posto, citar só uma fazia parecer que todas começaram no
+  // mesmo horário; o "desde" e o cronômetro são do posto, o início de cada OP
+  // fica no card dela.
+  const opText = opCount > 1 ? `${opCount} OPs no posto` : op ? `OP ${op}` : "";
+  const details = [opText, state?.motivo ?? "", since(state?.data_inicio)].filter(Boolean).join(" · ");
   return (
     <div className={`station-state station-state--${known.tone}`} role="status" aria-label="Estado do posto">
       <strong>{known.label}</strong>

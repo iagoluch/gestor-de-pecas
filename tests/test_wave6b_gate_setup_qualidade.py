@@ -98,9 +98,9 @@ def cenario(
     )
     fluxo = OperatorFlowService(db, "OPERADOR 6B")
     if setup_apontado and sector_has_setup(setor):
-        # Setup exige a OP já iniciada (`setup_exige_inicio`); os testes que
-        # chamam "Início" de novo depois disso contam com a idempotência já
-        # coberta por IdempotenciaEConcorrenciaTests.
+        # Fluxo típico: Início e depois Setup. Os testes que chamam "Início" de
+        # novo depois disso contam com a idempotência já coberta por
+        # IdempotenciaEConcorrenciaTests.
         assert fluxo.executar("Início", **contexto).ok
         apontar_setup(fluxo, contexto)
     return db, fluxo, contexto

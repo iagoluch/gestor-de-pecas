@@ -195,6 +195,8 @@ Em Dobra, Usinagem e Serra o fluxo do operador é
 recusado e manda apontar o Setup → botão Setup abre o popup com o checklist →
 medidas conferidas → primeira peça aprovada → lote liberado e a OP volta
 sozinha para a produção → o operador produz o resto do lote e finaliza`.
+O Setup também vale direto da fila e pode se repetir (09/11/2026); Parada e
+Setup se alternam, e a primeira peça guarda só o primeiro Setup.
 **Iniciar nunca é bloqueado pelo portão** e o popup **não** abre no Finalizar:
 quem o abre é o botão Setup. O card separado de "Primeira
 peça" e a aba "Qualidade" do posto **saíram da tela**. O botão **Setup

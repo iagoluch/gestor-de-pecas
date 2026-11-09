@@ -1054,8 +1054,8 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         cards = service.listar_cartoes("Dobra", "1303")
         self.assertEqual(len(cards["production"]), 1)
         self.assertTrue(cards["production"][0]["elapsed"].startswith("0min "))
-        history = self.db.listar_historico_operador("Dobra", "1303")
-        self.assertTrue(history[0]["elapsed"].startswith("0min "))
+        # OP em andamento não vai ao histórico (só concluídas).
+        self.assertEqual(self.db.listar_historico_operador("Dobra", "1303"), [])
 
         partial = service.executar(
             "Finalizado",

@@ -672,9 +672,10 @@ próximas ondas estão em `docs/REFACTORACAO_ESTRUTURAL_2026-09-17.md`.
   transação estreita. Catálogo, sincronização inbound e os 16 apontamentos de
   Corte finalizados vinculados às duas OPs foram preservados; `CORTE` continua
   concluído e Dobra volta a ser a próxima etapa elegível.
-- Setup passou a exigir o `Início` prévio da mesma OP. O bloqueio é canônico
-  (`setup_exige_inicio`, HTTP 409), e o botão do posto permanece desabilitado
-  enquanto não houver apontamento ativo; não é apenas uma restrição visual.
+- ~~Setup passou a exigir o `Início` prévio da mesma OP (`setup_exige_inicio`).~~
+  Revogado em 09/11/2026 (patch da manufatura): Setup vale direto da fila,
+  Parada↔Setup se alternam e o Setup pode ser apontado de novo quando a OP
+  volta ao posto. O retorno do Setup continua sendo a atividade de antes.
 
 ### 2.18 Hooks locais do Codex alinhados ao Claude (22/09/2026)
 

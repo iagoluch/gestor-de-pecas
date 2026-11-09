@@ -11,7 +11,11 @@ O botão **Setup** só existe nos setores que têm setup.
 
 ## Registrar o Setup
 
-O botão **Setup** fica ativo quando: a etapa está selecionável, a OP está em Em processo, Parada, Retrabalho ou Setup, e o Setup ainda não foi registrado (ou a conferência da primeira peça está pendente).
+O botão **Setup** fica ativo quando a etapa está selecionável e a OP está na fila (Aguardando), Em processo, Parada ou Retrabalho. Não precisa clicar em **Iniciar** antes.
+
+O Setup pode ser apontado de novo: por exemplo, quando a OP foi finalizada em parte, voltou para a fila e a máquina precisa ser preparada outra vez.
+
+Se a máquina parar no meio do setup, clique em **Parada**. Para continuar o setup depois, clique em **Setup** de novo.
 
 1. Selecione a etapa.
 2. Clique em **Setup**.
@@ -23,7 +27,7 @@ Com o Setup em curso, clicar de novo em **Setup** reabre a conferência, se ela 
 
 ## Aviso do portão
 
-Quando o sistema exige a primeira peça, aparece: "Aponte o Setup / Inicie a produção e depois aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."
+Quando o sistema exige a primeira peça, aparece: "Aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada."
 
 Em resumo: o **Iniciar** é livre. Sem aprovar a primeira peça, não dá para **Finalizar**: o botão continua clicável, mas o clique só mostra o aviso do sistema. Ele só fica apagado se o Setup obrigatório ainda não foi registrado.
 

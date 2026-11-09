@@ -553,15 +553,15 @@ class WebApiTests(unittest.TestCase):
         )
         self.assertEqual(excedente.status_code, 409)
 
-    def test_setup_exige_inicio_e_parada_pode_ser_sem_op(self):
+    def test_setup_direto_da_fila_e_parada_pode_ser_sem_op(self):
         self.login_operator()
         setup = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
             json={"action": "Setup", "resource": "1303", "op": "OP-WEB", "operation_id": 101},
         )
-        self.assertEqual(setup.status_code, 409, setup.text)
-        self.assertEqual(setup.json()["code"], "setup_exige_inicio")
+        self.assertEqual(setup.status_code, 200, setup.text)
+        self.assertEqual(setup.json()["data"]["status"], "Setup")
 
         stopped = self.client.post(
             "/api/v1/operator/actions",
@@ -612,17 +612,18 @@ class WebApiTests(unittest.TestCase):
             json={**base, "action": "Início"},
         )
         self.assertEqual(started.status_code, 200, started.text)
-        stopped = self.client.post(
+        rework = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
-            json={**base, "action": "Parada", "stop_reason_code": "0029"},
+            json={**base, "action": "Retrabalho"},
         )
-        self.assertEqual(stopped.status_code, 200, stopped.text)
+        self.assertEqual(rework.status_code, 200, rework.text)
 
+        # Retrabalho não volta direto à produção (precisa Finalizar Retrabalho).
         invalid = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
-            json={**base, "action": "Setup"},
+            json={**base, "action": "Início"},
         )
         self.assertEqual(invalid.status_code, 409, invalid.text)
         self.assertEqual(invalid.json()["code"], "transicao_invalida")

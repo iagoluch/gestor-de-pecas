@@ -11,7 +11,7 @@ Abaixo dos botões há três seções de cards.
 |---|---|
 | **Produção** | OPs ativas no posto: Em processo, Parada, Setup ou Retrabalho. |
 | **Fila de Ordem** | OPs esperando a vez neste posto. |
-| **Histórico** | Os apontamentos mais recentes (até 100 de cada vez). |
+| **Histórico** | Só as OPs **concluídas** (Finalizado), as mais recentes primeiro (até 100 de cada vez). OP finalizada em parte volta para a Fila. |
 
 Cada seção mostra **2 cards**, um contador e o botão **Ver mais**.
 
@@ -34,6 +34,8 @@ Abre um popup com a lista completa da seção. No Histórico, quando existem mai
 |---|---|
 | **OP: x** | Código da OP. Uma marca de visto indica a OP selecionada. |
 | Etiqueta de status | Ex.: Em processo, Parada, Aguardando (padrão quando não há status). Veja [Estados e cores](topico:90-estados-e-cores). |
+| Etiqueta **Parcial X/Y** (amarela) | A OP já teve X peças apontadas de Y e ainda tem saldo. |
+| Início | Hora em que **esta** OP começou. Com várias OPs no posto, cada uma tem a sua; a faixa do topo mostra desde quando o posto está nesse estado. |
 | Operação | A etapa. |
 | Produto e Descrição | A peça. |
 | Quantidade | O que a OP pede. |

@@ -63,7 +63,21 @@ export function LoginPage() {
         <form noValidate onSubmit={submit} onInput={limparCampoInvalido}>
           <label>
             Usuário
-            <input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required />
+            {/* Cursor já no Usuário; Enter aqui leva à Senha (como o TAB) em vez
+                de tentar entrar com a senha vazia. */}
+            <input
+              autoFocus
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !password) {
+                  event.preventDefault();
+                  passwordRef.current?.focus();
+                }
+              }}
+              required
+            />
           </label>
           <label>
             Senha

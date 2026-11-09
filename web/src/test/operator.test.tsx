@@ -280,7 +280,7 @@ describe("fluxo Web do operador", () => {
     expect(container.querySelectorAll(".operator-route__item--done")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Iniciar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Parada do posto" })).not.toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "20 - DOBRA — Próxima" }));
@@ -588,7 +588,7 @@ describe("fluxo Web do operador", () => {
   // ------------------------------------------------------------------
   // Wave 6B — o portão Setup/Qualidade é a entrada do botão Iniciar.
   // ------------------------------------------------------------------
-  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean } = {}) {
+  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean } = {}) {
     const calls: { path: string; method: string; body: unknown }[] = [];
     const gate = {
       aplicavel: true,
@@ -611,6 +611,11 @@ describe("fluxo Web do operador", () => {
       const method = (init?.method ?? "GET").toUpperCase();
       const corpo = init?.body ? JSON.parse(String(init.body)) : null;
       calls.push({ path, method, body: corpo });
+      // Posto diferente do roteiro: o servidor pede confirmação antes de gravar.
+      const pedeConfirmacao = Boolean(options.recursoDivergente) && corpo?.action === "Setup" && !corpo?.confirm_resource_divergence;
+      if (pedeConfirmacao) {
+        return json({ code: "confirmacao_recurso_obrigatoria", message: "Confirme o posto.", details: { recurso_roteiro_codigo: "DOBRA3", recurso_roteiro_nome: "1303", recurso_apontado: "2204" } }, 409);
+      }
       if (path.includes("/operator/actions") && method === "POST" && corpo?.action === "Setup") {
         setupApontado = true;
       }
@@ -759,14 +764,38 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
 
     // O aviso do posto já orienta antes mesmo de tentar.
-    expect(screen.getByText(/Inicie a produção e depois aponte o Setup para conferir a primeira peça/)).toBeInTheDocument();
+    expect(screen.getByText(/Aponte o Setup para conferir a primeira peça/)).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeDisabled();
 
-    // Sem início não existe apontamento que possa receber o Setup.
-    expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled();
+    // Patch da manufatura (09/11/2026): o Setup vale direto da fila, sem
+    // Iniciar antes — a OP que volta ao posto costuma precisar de nova preparação.
+    expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Finalizar produção" })).not.toBeInTheDocument();
+  });
+
+  it("Setup da fila em posto diferente pergunta o posto antes de abrir o checklist", async () => {
+    // Caso real (09/11/2026): o checklist abria por cima da pergunta do posto
+    // e o Setup não era gravado.
+    const { calls } = gateBackend({ recursoDivergente: true });
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    await screen.findByRole("heading", { name: "Confirmar Setup" });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar" }));
+
+    await screen.findByRole("heading", { name: "OP no recurso errado" });
+    expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar e apontar" }));
+    await screen.findByRole("heading", { name: "Setup e Qualidade" });
+    const setups = calls.filter((call) => call.method === "POST" && (call.body as { action?: string } | null)?.action === "Setup");
+    expect(setups.at(-1)?.body).toMatchObject({ action: "Setup", confirm_resource_divergence: true });
   });
 
   it("cancelar o popup não aprova a primeira peça nem finaliza a OP", async () => {
@@ -798,7 +827,9 @@ describe("fluxo Web do operador", () => {
       await expectActionPosted("/operator/actions", "Retorno registrado com sucesso.");
     }
     await waitFor(() => expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled());
-    await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeDisabled());
+    // O Setup pode ser apontado de novo (09/11/2026): a máquina é preparada
+    // outra vez quando a OP volta ao posto.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
   });
 
   it("não pede confirmação de Setup dentro do popup", async () => {
@@ -968,6 +999,35 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByText("OP: A9716901001"));
     await screen.findByRole("button", { name: "20 - USINAGEM — Atual" });
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/operator/operations/A9716901001"))).toBe(true);
+  });
+
+  it("destaca OP parcial, mostra o início de cada OP e não cita uma só OP com duas no posto", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes("/auth/session")) return json({ id: 7, name: "Operador Usinagem", role: "operador_usinagem", management_access: false, operator_access: true, operator_sector: "Usinagem" });
+      if (path.includes("/operator/context")) return json({ sector: "Usinagem", route: "Usinagem", resources: ["Romi D 1000"], automatic_queue: false, workflow: "workbench" });
+      if (path.includes("/operator/stop-reasons") || path.includes("/operator/operators")) return json({ items: [] });
+      if (path.includes("/operator/history")) return json({ items: [], has_more: false });
+      if (path.includes("/operator/workbench")) return json({
+        sector: "Usinagem",
+        resource: "Romi D 1000",
+        resource_state: { categoria: "producao", op: "OP-A", data_inicio: "2026-11-09T10:54:28" },
+        production: [
+          { id: 1, op: "OP-A", status: "Em processo", product: "P1", qty: 10, good: 3, scrap: 0, attended: 3, balance: 7, finished: false, data_inicio: "2026-11-09T10:54:28" },
+          { id: 2, op: "OP-B", status: "Em processo", product: "P2", qty: 2, good: 0, scrap: 0, attended: 0, balance: 2, finished: false, data_inicio: "2026-11-09T11:12:27" },
+        ],
+        queue: [],
+      });
+      return json({ code: "not_found", message: "Não encontrado" }, 404);
+    }));
+
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("Romi D 1000");
+    expect(await screen.findByText("Parcial 3/10")).toBeInTheDocument();
+    expect(screen.getAllByText(/^Parcial /)).toHaveLength(1);
+    expect(screen.getByText(/Início: 09\/11\/2026,? 10:54/)).toBeInTheDocument();
+    expect(screen.getByText(/Início: 09\/11\/2026,? 11:12/)).toBeInTheDocument();
+    expect(within(screen.getByRole("status", { name: "Estado do posto" })).getByText(/2 OPs no posto/)).toBeInTheDocument();
   });
 
   it("busca a OP ausente e carrega o roteiro sem o operador abrir o ERP", async () => {

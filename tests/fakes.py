@@ -2245,6 +2245,7 @@ class FakeDatabase:
         rows = [
             item for item in self.appointments
             if item["tipo_setor"].casefold() == str(tipo_setor).casefold()
+            and item.get("status") == "Finalizado"
         ]
         if maquina:
             rows = [

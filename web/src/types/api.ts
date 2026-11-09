@@ -202,7 +202,9 @@ export interface OperatorCard extends Record<string, unknown> {
   scrap?: number;
   attended?: number;
   balance?: number;
+  finished?: boolean;
   status?: string;
+  data_inicio?: string | null;
   elapsed?: string;
   motivo_parada?: string;
   status_elapsed?: string;

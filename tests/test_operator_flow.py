@@ -269,7 +269,7 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(rework.data["codigo_status_recurso"], "0040")
         self.assertEqual(db.operator_events[-1]["codigo_status_recurso"], "0040")
 
-    def test_setup_exige_inicio_da_op(self):
+    def test_fila_pode_ir_diretamente_para_setup(self):
         _db, service, operation = self._service()
 
         result = service.executar(
@@ -280,9 +280,8 @@ class OperatorFlowTests(unittest.TestCase):
             operacao=operation,
         )
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.code, "setup_exige_inicio")
-        self.assertEqual(result.data["estado_atual"], "fila")
+        self.assertTrue(result.ok, result.message)
+        self.assertEqual(result.data["status"], "Setup")
 
     def test_fila_pode_ir_diretamente_para_retrabalho(self):
         _db, service, operation = self._service()

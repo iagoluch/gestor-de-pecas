@@ -108,17 +108,23 @@ function cardKey(item: OperatorCard) {
 }
 
 function OperatorCardView({ item, onSelect, selected = false }: { item: OperatorCard; onSelect: (item: OperatorCard) => void; selected?: boolean }) {
+  // Parcial = já apontou parte e ainda tem saldo; o backend decide os dois números.
+  const attended = Number(item.attended ?? 0);
+  const partial = !item.finished && attended > 0 && Number(item.balance ?? 0) > 0;
   return (
-    <button type="button" className={`operator-production-card ${selected ? "operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
-      <div><strong>{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replace(/ /g, "-")}`}>{displayName(item.status, "Aguardando")}</span></div>
-      <dl>
+    <button type="button" className={`operator-production-card ${partial ? "operator-production-card--partial" : ""} ${selected ? "operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
+      <div><strong className="operator-card-op">{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className="operator-card-badges">{partial ? <span className="operator-card-partial" title="OP parcialmente produzida: ainda tem saldo a apontar">Parcial {attended}/{String(item.qty ?? 0)}</span> : null}<span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replace(/ /g, "-")}`}>{displayName(item.status, "Aguardando")}</span></span></div>
+      <dl className="operator-card-key">
         <div><dt>Operação</dt><dd>{String(item.operation ?? item.numero_operacao ?? "—")}</dd></div>
         <div><dt>Produto</dt><dd>{String(item.product ?? "—")}</dd></div>
-        <div><dt>Descrição</dt><dd>{String(item.description ?? "—")}</dd></div>
+      </dl>
+      <p className="operator-card-description" title={String(item.description ?? "")}>{String(item.description ?? "—")}</p>
+      <dl className="operator-card-qty">
         <div><dt>Quantidade</dt><dd>{String(item.qty ?? 0)}</dd></div>
         <div><dt>Boas</dt><dd>{String(item.good ?? 0)}</dd></div>
         <div><dt>Refugo</dt><dd>{String(item.scrap ?? 0)}</dd></div>
       </dl>
+      {item.data_inicio && item.status !== "Aguardando" ? <small>Início: {formatDateTime(String(item.data_inicio))}</small> : null}
       {item.elapsed ? <small>Tempo: {item.elapsed}</small> : null}
       {item.last_updated_at ? <small>Última atualização: {formatDateTime(item.last_updated_at)}</small> : null}
       {item.motivo_parada ? <small className="operator-card-alert">Motivo: {displayText(item.motivo_parada)}</small> : null}
@@ -385,16 +391,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       && !(currentStatus === "Setup" && gateRequired)
       && !firstPiece?.bloqueio_ativo
       && !occupiedBy);
-  // Setup mede a preparação de uma OP já em execução. Sem Início ainda não há
-  // apontamento operacional a que esse tempo possa pertencer.
-  // Setup já registrado normalmente desliga o botão — mas com o portão ainda
-  // pendente (`gateRequired`) o Setup continua sendo a única porta de volta
-  // para o checklist. Chão de fábrica é imprevisível: se o operador sair do
-  // popup sem querer, esse clique reabre o mesmo checklist sem duplicar o
-  // registro de Setup (a chamada ao backend é idempotente).
+  // Setup vale da fila (OP nova ou que voltou da finalização parcial), da
+  // produção, da parada e do retrabalho — e pode se repetir: a máquina é
+  // preparada de novo toda vez que a OP volta ao posto. A primeira peça só
+  // guarda o primeiro Setup (o backend não sobrescreve).
+  // Com o Setup em curso o clique reabre o checklist pendente (se o operador
+  // saiu do popup sem querer) ou orienta a sair pelo Retomar.
   const canSetup = canPoint
-    && ["Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus)
-    && (!firstPiece?.setup_registrado || gateRequired);
+    && ["", "Aguardando", "Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus);
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
     operation: String(activeCard.operation ?? activeCard.numero_operacao ?? ""),
@@ -584,6 +588,13 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setDialog({ kind: "confirm", action: "Setup" });
   }
 
+  // O checklist só abre depois que o Setup foi gravado: abrir antes tapava a
+  // pergunta do servidor (ex.: "apontar neste posto?") e o Setup não ficava
+  // registrado.
+  function afterSetup(action: string) {
+    if (action === "Setup" && gateRequired) openGate();
+  }
+
   /**
    * Portão da primeira peça: checklist medido, liberação por crachá e a
    * declaração da peça produzida. A decisão é toda do backend.
@@ -753,7 +764,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     <section className="operator-workbench">
       <div className="operator-workbench__top">
         <div className="operator-workbench__main">
-      <StationStateBanner state={resourceState} timer />
+      <StationStateBanner state={resourceState} timer opCount={new Set((cards.data?.production ?? []).map((item) => String(item.op ?? ""))).size} />
       <form className="operator-op-form" onSubmit={loadOperations}>
         <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
         <button type="submit">Carregar roteiro</button>
@@ -813,7 +824,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <p className="operator-help operator-gate-notice">
           {firstPiece?.bloqueio_ativo
             ? firstPiece.message
-            : `${canSetup ? "Aponte o Setup" : "Inicie a produção e depois aponte o Setup"} para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada.`}
+            : `Aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada.`}
         </p>
       ) : null}
       {feedback.text ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
@@ -853,9 +864,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => confirmFirstPiece(result, note)} /> : null}
       {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} sector={sector} error={dialogError} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizar Retrabalho", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} error={dialogError} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
-      {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then(() => { if (action === "Setup" && gateRequired) openGate(); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
+      {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then((ok) => { if (ok) afterSetup(action); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "activity" ? <OperatorDialog title="Atividade sem OP" size="compact" onCancel={() => setDialog(null)}><p>{dialog.action === "Início" ? "Iniciar uma atividade sem OP neste posto?" : "Finalizar a atividade sem OP em andamento?"}</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={submitting} onClick={() => execute(dialog.action)}>Sim</AsyncButton></div></OperatorDialog> : null}
-      {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} code={dialog.code} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => execute(dialog.action, { badges: badge ? [badge] : [], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" })} /> : null}
+      {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} code={dialog.code} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => { const action = dialog.action; return execute(action, { badges: badge ? [badge] : [], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
       {dialog?.kind === "list" ? <CardListDialog title={{ production: "Produção", queue: "Fila de Ordem", history: "Histórico" }[dialog.source]} items={dialog.source === "history" ? historyQuery.data?.items ?? [] : cards.data?.[dialog.source] ?? []} hasMore={dialog.source === "history" && Boolean(historyQuery.data?.has_more)} onCancel={() => setDialog(null)} onSelect={(item) => { selectCard(item); setDialog(null); }} /> : null}
       {dialog?.kind === "gate" ? (
         <SetupQualityDialog
