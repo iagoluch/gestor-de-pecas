@@ -69,6 +69,8 @@ interface OperationContext {
   registeredScrap: number;
   attended: number;
   balance: number;
+  /** Peças boas já medidas na inspeção progressiva: entram no total sozinhas. */
+  inspectionGood: number;
 }
 
 function operationLabel(item: OperatorOperation | undefined) {
@@ -297,6 +299,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     registeredScrap: Number(selected?.quantidade_refugo_registrada ?? selectedCard?.scrap ?? 0),
     attended: Number(selected?.quantidade_atendida ?? selectedCard?.attended ?? 0),
     balance: Number(selected?.saldo_quantidade ?? selected?.saldo_quantidade_boa ?? selectedCard?.balance ?? 0),
+    inspectionGood: Number(selected?.pecas_boas_inspecao ?? 0),
   }), [loadedOp, selected, selectedCard, resource]);
   // Setup é apontamento de estado do posto (tempo de preparação da máquina).
   // Quais setores possuem Setup é decisão do domínio (`SECTORS_WITHOUT_SETUP`):
@@ -410,6 +413,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     registeredScrap: Number(activeCard.scrap ?? 0),
     attended: Number(activeCard.attended ?? 0),
     balance: Number(activeCard.balance ?? 0),
+    inspectionGood: 0,
   } : context;
 
   // OP digitada que não existe (nem local, nem no TOTVS). A busca remota já
@@ -614,7 +618,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     }
     setSubmitting(true);
     try {
-      const response = await api.post<{ message: string; data?: { liberado?: boolean } }>(
+      const response = await api.post<{ message: string; data?: { liberado?: boolean; conforme?: boolean } }>(
         "/api/v1/operator/first-piece",
         {
           action,
@@ -625,7 +629,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           ...extra,
         },
       );
-      setMessage(response.message);
+      // Peça não conforme na inspeção progressiva abre RNC: é aviso, não sucesso.
+      setMessage(response.message, response.data?.conforme === false ? "stale" : "success");
       // A etapa que passou pelo portão é a escolha do operador: fixá-la evita
       // que o próximo snapshot do roteiro apague o retorno do lote liberado.
       const operationKey = routeStepKey(gateOperation);
@@ -878,7 +883,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           loading={gate.loading && !gate.data}
           busy={submitting}
           onCancel={closeGate}
-          onSubmit={(payload) => void executeFirstPiece("checklist", payload)}
+          onSubmit={(payload) =>
+            // Contagem vista pela tela: o servidor recusa o envio repetido da mesma peça.
+            void executeFirstPiece("checklist", { ...payload, inspection_recorded: gate.data?.pecas_registradas ?? 0 })
+          }
           onRelease={(badge, note) => executeFirstPiece("autorizar", { badge, note })}
           onSaveTemplate={(produto, cotas) => void saveChecklistTemplate(produto, cotas)}
         />
@@ -921,7 +929,7 @@ function FirstPieceDialog({
         Resultado da primeira peça
         <select value={result} onChange={(event) => setResult(event.target.value)}>
           <option value="CONFORME">Conforme — libera o lote</option>
-          <option value="RETRABALHO">Retrabalho — bloqueia a OP até o responsável</option>
+          <option value="RETRABALHO">Retrabalho — retrabalhe e confira de novo</option>
           <option value="REFUGO">Refugo — produzir outra primeira peça</option>
         </select>
       </label>
@@ -991,9 +999,12 @@ function SetupQualityDialog({
   // e reenviar sem perceber bloqueava a OP de novo com os mesmos dados.
   // O reset é feito durante a renderização, não em useEffect: um efeito passivo
   // atrasado rodava depois da primeira digitação e apagava a medida já informada.
-  const [resetBloqueio, setResetBloqueio] = useState(state?.bloqueio_ativo);
-  if (resetBloqueio !== state?.bloqueio_ativo) {
-    setResetBloqueio(state?.bloqueio_ativo);
+  // Patch 09/11/2026: o mesmo reset vale entre as peças da inspeção
+  // progressiva — cada peça começa com o formulário limpo.
+  const resetKey = `${state?.bloqueio_ativo}|${state?.status}|${state?.pecas_medidas ?? 0}`;
+  const [resetBloqueio, setResetBloqueio] = useState(resetKey);
+  if (resetBloqueio !== resetKey) {
+    setResetBloqueio(resetKey);
     setMeasures({});
     setDestination("RETRABALHO");
     setBadge("");
@@ -1002,6 +1013,12 @@ function SetupQualityDialog({
 
   const cotas: QualityDimension[] = state?.checklist?.template?.cotas ?? [];
   const setupPendente = Boolean(state?.setup_obrigatorio && !state?.setup_registrado);
+  // 2º estágio: a 1ª peça já foi aprovada e faltam peças da inspeção
+  // progressiva. Peça fora da tolerância não pede destino nem crachá: vira RNC.
+  const exigidas = state?.pecas_exigidas ?? 0;
+  const medidas = state?.pecas_medidas ?? 0;
+  const progressiva = state?.status === "CONFORME" && exigidas > medidas;
+  const pecaAtual = medidas + 1;
   const statusDaCota = (cota: QualityDimension) => {
     const atual = measures[cota.sequencia];
     if (!atual?.medida.trim()) return "";
@@ -1010,7 +1027,7 @@ function SetupQualityDialog({
   const preenchidas = cotas.length > 0 && cotas.every((cota) => Boolean(statusDaCota(cota)));
   const reprovada = cotas.some((cota) => statusDaCota(cota) === "NAO_CONFORME");
   const algumaManual = cotas.some((cota) => !cota.conformidade_automatica);
-  const faltaCracha = reprovada && destination === "REFUGO" && !badge.trim();
+  const faltaCracha = !progressiva && reprovada && destination === "REFUGO" && !badge.trim();
   // OP-09: o botão travado diz o que falta (Setup pendente já tem aviso próprio).
   const motivoBloqueio = setupPendente ? "" : !preenchidas ? "Informe a medida de todas as cotas para liberar o lote." : faltaCracha ? "Informe o crachá do responsável para registrar o refugo." : "";
 
@@ -1027,8 +1044,8 @@ function SetupQualityDialog({
   function submit() {
     onSubmit({
       note: note.trim() || null,
-      destination: reprovada ? destination : null,
-      badge: reprovada && destination === "REFUGO" ? badge.trim() : null,
+      destination: reprovada && !progressiva ? destination : null,
+      badge: reprovada && !progressiva && destination === "REFUGO" ? badge.trim() : null,
       measures: cotas.map((cota) => ({
         sequencia: cota.sequencia,
         medida: measures[cota.sequencia]?.medida.trim() ?? "",
@@ -1083,9 +1100,14 @@ function SetupQualityDialog({
       ) : null}
       {!loading && !state?.bloqueio_ativo && !state?.checklist?.configuravel && cotas.length ? (
         <>
-          <h3 className="operator-step-title" data-step-title tabIndex={-1}>Medição da primeira peça</h3>
+          <h3 className="operator-step-title" data-step-title tabIndex={-1}>
+            {progressiva ? `Medição da peça ${pecaAtual} de ${exigidas}` : "Medição da primeira peça"}
+          </h3>
           <p className="operator-help">
-            O lote só é liberado depois que a primeira peça for aprovada. Informe a medida de cada cota: {algumaManual
+            {progressiva
+              ? `A primeira peça foi aprovada. Meça as cotas de cada peça até completar ${exigidas}; peça fora da tolerância abre uma RNC para a Qualidade decidir. `
+              : "O lote só é liberado depois que a primeira peça for aprovada. "}
+            Informe a medida de cada cota: {algumaManual
               ? "nas cotas com faixa aceita o sistema decide a conformidade; nas demais, escolha a situação."
               : "o sistema compara com a faixa do padrão cadastrado e decide a conformidade."}
           </p>
@@ -1140,16 +1162,19 @@ function SetupQualityDialog({
               );
             })}
           </div>
-          {reprovada ? (
+          {reprovada && progressiva ? (
+            <p className="operator-help" role="status">Peça fora da tolerância: ao registrar, uma RNC é aberta para a Qualidade decidir o nível da inspeção.</p>
+          ) : null}
+          {reprovada && !progressiva ? (
             <label>
               Destino da peça reprovada
               <select value={destination} onChange={(event) => setDestination(event.target.value)}>
-                <option value="RETRABALHO">Retrabalho — bloqueia a OP até o responsável</option>
+                <option value="RETRABALHO">Retrabalho — retrabalhe a peça e meça de novo</option>
                 <option value="REFUGO">Refugo — consome o saldo e exige outra peça</option>
               </select>
             </label>
           ) : null}
-          {reprovada && destination === "REFUGO" ? (
+          {reprovada && !progressiva && destination === "REFUGO" ? (
             <>
               <label>
                 Crachá do responsável que autoriza o refugo
@@ -1175,7 +1200,7 @@ function SetupQualityDialog({
               disabled={busy || !preenchidas || setupPendente || faltaCracha}
               onClick={submit}
             >
-              Liberar lote
+              {progressiva ? `Registrar peça ${pecaAtual}` : "Liberar lote"}
             </button>
           </div>
         </>
@@ -1286,7 +1311,7 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
   // mesma regra do retrabalho da primeira peça. Quem valida é o backend.
   const [scrapBadge, setScrapBadge] = useState("");
   const scrapRequiresApproval = Number(scrap || 0) > 0;
-  const total = Number(good || 0) + Number(scrap || 0);
+  const total = Number(good || 0) + Number(scrap || 0) + context.inspectionGood;
   // OP-11: aviso (não bloqueia) — o backend segue dono do limite de quantidade.
   const aboveBalance = context.planned > 0 && total > context.balance;
   // Saldo já zerado (ex.: retrabalho recuperou tudo): 0/0 só encerra a etapa; o backend aceita.
@@ -1318,6 +1343,7 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
       <div><small>Saldo</small><strong>{context.balance}</strong></div>
     </div>
     <div className="operator-quantity-grid"><label>Peças boas<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
+    {context.inspectionGood > 0 ? <p className="operator-help" role="status"><strong>{context.inspectionGood} peça(s) boa(s) da inspeção já entram no total.</strong> Informe só as demais.</p> : null}
     <p className="operator-help">O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado.</p>
     {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s). Confira antes de confirmar.</p> : null}
     {scrapRequiresApproval ? <>

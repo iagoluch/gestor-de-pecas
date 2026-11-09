@@ -113,6 +113,8 @@ export interface OperatorOperation extends Record<string, unknown> {
   /** Wave 6B: a primeira peça desta etapa ainda não foi aprovada — o Setup
    *  abre o checklist e o Finalizar é recusado até a aprovação. */
   exige_gate_primeira_peca?: boolean;
+  /** Peças boas da inspeção progressiva que o Finalizar soma sozinho (patch 09/11/2026). */
+  pecas_boas_inspecao?: number;
 }
 
 /**
@@ -131,6 +133,11 @@ export interface FirstPieceGate {
   /** Wave 6B: setor com checklist estruturado (Dobra, Usinagem e Serra). O
    *  backend decide; a tela apenas abre o popup Setup/Qualidade no Iniciar. */
   gate_estruturado: boolean;
+  /** Patch 09/11/2026 — inspeção progressiva: N peças a medir (a 1ª conta) e
+   *  quantas já foram medidas. 0/0 enquanto a 1ª peça não foi aprovada. */
+  pecas_exigidas?: number;
+  pecas_medidas?: number;
+  pecas_registradas?: number;
   code: string;
   message: string;
   pendencias: string[];

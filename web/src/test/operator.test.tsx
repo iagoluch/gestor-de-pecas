@@ -588,7 +588,7 @@ describe("fluxo Web do operador", () => {
   // ------------------------------------------------------------------
   // Wave 6B — o portão Setup/Qualidade é a entrada do botão Iniciar.
   // ------------------------------------------------------------------
-  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean } = {}) {
+  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean; progressiva?: boolean; ncNaPeca2?: boolean } = {}) {
     const calls: { path: string; method: string; body: unknown }[] = [];
     const gate = {
       aplicavel: true,
@@ -603,6 +603,9 @@ describe("fluxo Web do operador", () => {
       code: "primeira_peca_gate_obrigatorio",
       message: "Aponte o Setup desta operação para conferir a primeira peça antes de finalizar.",
       pendencias: ["setup"],
+      // Inspeção progressiva (patch 09/11/2026): 1ª peça aprovada, faltam 2 de 3.
+      // 2 medições gravadas: uma 1ª peça reprovada (não conta) + a aprovada.
+      ...(options.progressiva ? { status: "CONFORME", pecas_exigidas: 3, pecas_medidas: 1, pecas_registradas: 2 } : {}),
     };
     let setupApontado = false;
     let iniciou = false;
@@ -643,7 +646,16 @@ describe("fluxo Web do operador", () => {
         // deste endpoint e no roteiro de operations), senão o botão Setup
         // nunca "vê" que o portão foi liberado e fica preso habilitado.
         gate.setup_registrado = true;
-        gate.liberado = true;
+        if (options.progressiva) {
+          gate.pecas_medidas = (gate.pecas_medidas ?? 0) + 1;
+          gate.pecas_registradas = (gate.pecas_registradas ?? 0) + 1;
+          gate.liberado = gate.pecas_medidas >= 3;
+          if (options.ncNaPeca2 && gate.pecas_medidas === 2) {
+            return json({ ok: true, message: "Peça 2 de 3 não conforme. A RNC RNC-T-0001 foi aberta para a Qualidade decidir.", code: "primeira_peca_conforme", data: { ...gate, conforme: false } });
+          }
+        } else {
+          gate.liberado = true;
+        }
         return json({ ok: true, message: "Primeira peça aprovada. Lote liberado para produção.", code: "primeira_peca_conforme", data: { ...gate } });
       }
       if (path.includes("/operator/first-piece")) {
@@ -692,6 +704,7 @@ describe("fluxo Web do operador", () => {
           pode_finalizar: gate.liberado,
           exige_gate_primeira_peca: !gate.liberado,
           primeira_peca: gate,
+          pecas_boas_inspecao: options.progressiva ? gate.pecas_medidas : 0,
         }] });
       }
       return json({ code: "not_found", message: "Não encontrado" }, 404);
@@ -700,7 +713,7 @@ describe("fluxo Web do operador", () => {
     return { calls };
   }
 
-  async function abrirPortao(options: { configuravel?: boolean; setupRegistrado?: boolean } = {}) {
+  async function abrirPortao(options: { configuravel?: boolean; setupRegistrado?: boolean; progressiva?: boolean; ncNaPeca2?: boolean } = {}) {
     const context = gateBackend(options);
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("1303");
@@ -830,6 +843,56 @@ describe("fluxo Web do operador", () => {
     // O Setup pode ser apontado de novo (09/11/2026): a máquina é preparada
     // outra vez quando a OP volta ao posto.
     await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
+  });
+
+  it("mede a peça k de N da inspeção progressiva e avisa no Finalizar que as boas já contam", async () => {
+    await abrirPortao({ progressiva: true });
+
+    const dialog = screen.getByRole("dialog");
+    for (const peca of [2, 3]) {
+      await within(dialog).findByRole("heading", { name: `Medição da peça ${peca} de 3` });
+      fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "12.1" } });
+      fireEvent.change(within(dialog).getByLabelText("Situação da cota 1"), { target: { value: "CONFORME" } });
+      // Sem crachá e sem destino: a peça só é medida.
+      expect(within(dialog).queryByLabelText(/Crachá/)).not.toBeInTheDocument();
+      const registrar = within(dialog).getByRole("button", { name: `Registrar peça ${peca}` });
+      await waitFor(() => expect(registrar).toBeEnabled());
+      fireEvent.click(registrar);
+      if (peca === 2) await within(dialog).findByRole("heading", { name: "Medição da peça 3 de 3" });
+    }
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const retornar = screen.queryByRole("button", { name: "Retomar produção" });
+    if (retornar) {
+      fireEvent.click(retornar);
+      await expectActionPosted("/operator/actions", "Retorno registrado com sucesso.");
+    }
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Finalizar" }));
+    await screen.findByRole("heading", { name: "Finalizar produção" });
+    expect(screen.getByText(/3 peça\(s\) boa\(s\) da inspeção já entram no total/)).toBeInTheDocument();
+  });
+
+  it("mostra a peça não conforme da inspeção como aviso, não como sucesso", async () => {
+    await abrirPortao({ progressiva: true, ncNaPeca2: true });
+
+    const dialog = screen.getByRole("dialog");
+    await within(dialog).findByRole("heading", { name: "Medição da peça 2 de 3" });
+    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "12.1" } });
+    fireEvent.change(within(dialog).getByLabelText("Situação da cota 1"), { target: { value: "CONFORME" } });
+    const registrar = within(dialog).getByRole("button", { name: "Registrar peça 2" });
+    await waitFor(() => expect(registrar).toBeEnabled());
+    fireEvent.click(registrar);
+
+    const avisos = await screen.findAllByText(/RNC-T-0001 foi aberta/);
+    for (const aviso of avisos) {
+      expect(aviso).toHaveClass("operator-notice--stale");
+      expect(aviso).not.toHaveClass("operator-notice--success");
+    }
+    // O envio leva quantas medições a tela viu gravadas (2, inclusive a 1ª
+    // peça reprovada): é com ela que o servidor recusa o reenvio da mesma peça.
+    const envio = vi.mocked(fetch).mock.calls.find(([path, init]) => String(path).includes("/operator/first-piece") && init?.method === "POST");
+    expect(JSON.parse(String(envio?.[1]?.body))).toMatchObject({ action: "checklist", inspection_recorded: 2 });
   });
 
   it("não pede confirmação de Setup dentro do popup", async () => {

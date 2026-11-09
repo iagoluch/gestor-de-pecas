@@ -1,6 +1,15 @@
 /** Contratos de `GET /api/v1/quality/rnc`, `POST/GET /quality/rnc/{id}/decisions` (`backend/api/routers/quality.py`). */
 
-export type RncDecision = "usar_como_esta" | "retrabalhar" | "sucatear" | "quarentena";
+export type RncDecision =
+  | "usar_como_esta"
+  | "retrabalhar"
+  | "sucatear"
+  | "quarentena"
+  | "volta_para_5"
+  | "fica_onde_esta";
+
+/** `inspecao_progressiva`: RNC aberta no 2º estágio do setup; decide o nível da inspeção. */
+export type RncOrigin = "inspecao" | "inspecao_progressiva";
 
 export interface RncCurrentDecision {
   decisao: RncDecision;
@@ -14,6 +23,7 @@ export interface RncListItem {
   codigo: string;
   motivo: string | null;
   resultado_peca: string | null;
+  origem?: RncOrigin;
   numero_peca: number | null;
   op: string | null;
   produto: string | null;

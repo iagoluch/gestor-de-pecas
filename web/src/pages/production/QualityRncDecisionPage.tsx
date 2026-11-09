@@ -15,6 +15,7 @@ import type {
   RncHistoryResponse,
   RncListItem,
   RncListResponse,
+  RncOrigin,
 } from "../../types/qualityRnc";
 import { formatDateTime, formatNumber } from "../../utils/format";
 
@@ -34,8 +35,23 @@ export const DECISIONS: { value: RncDecision; label: string }[] = [
   { value: "quarentena", label: "Quarentena" },
 ];
 
+/** RNC da inspeção progressiva: a Qualidade decide o nível da inspeção daquele produto + operação. */
+export const PROGRESSIVE_DECISIONS: { value: RncDecision; label: string }[] = [
+  { value: "volta_para_5", label: "Volta para 5 peças" },
+  { value: "fica_onde_esta", label: "Fica onde está" },
+];
+
+export function decisionsFor(origin?: RncOrigin) {
+  return origin === "inspecao_progressiva" ? PROGRESSIVE_DECISIONS : DECISIONS;
+}
+
 export function decisionLabel(value: string) {
-  return DECISIONS.find((item) => item.value === value)?.label ?? value;
+  return [...DECISIONS, ...PROGRESSIVE_DECISIONS].find((item) => item.value === value)?.label ?? value;
+}
+
+function pieceResult(row: RncListItem) {
+  if (row.origem === "inspecao_progressiva") return "Inspeção do setup";
+  return row.resultado_peca ? <StatusBadge value={row.resultado_peca} /> : "Peça não encontrada";
 }
 
 /** Mensagem humana da falha ao decidir; nunca o código técnico. */
@@ -114,7 +130,7 @@ export function QualityRncDecisionPage() {
     { key: "codigo", label: "RNC", render: (row) => row.codigo, sortValue: (row) => row.codigo, sticky: true },
     { key: "criada", label: "Aberta em", render: (row) => formatDateTime(row.criada_em), sortValue: (row) => row.criada_em },
     { key: "produto", label: "Produto / OP", render: (row) => [row.produto, row.op].filter(Boolean).join(" · ") || "Não informado" },
-    { key: "resultado", label: "Resultado da peça", render: (row) => (row.resultado_peca ? <StatusBadge value={row.resultado_peca} /> : "Peça não encontrada") },
+    { key: "resultado", label: "Resultado da peça", render: pieceResult },
     {
       key: "vigente",
       label: "Decisão vigente",
@@ -172,6 +188,9 @@ export function QualityRncDecisionPage() {
           <p>
             {selected.motivo ?? "Sem motivo informado"}
             {selected.resultado_peca ? ` · Peça registrada como ${selected.resultado_peca}.` : ""}
+            {selected.origem === "inspecao_progressiva"
+              ? ` · Peça ${selected.numero_peca ?? "?"} da inspeção do setup. "Volta para 5" faz a próxima OP deste produto e operação medir 5 peças; "Fica onde está" mantém o nível atual.`
+              : ""}
           </p>
           <form className="filter-bar" onSubmit={submit} aria-label="Registrar decisão da RNC">
             <div className="filter-bar__row">
@@ -179,7 +198,7 @@ export function QualityRncDecisionPage() {
                 Decisão
                 <select value={decision} disabled={busy} onChange={(event) => setDecision(event.target.value as RncDecision | "")}>
                   <option value="">Escolha…</option>
-                  {DECISIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  {decisionsFor(selected.origem).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </label>
               <label>

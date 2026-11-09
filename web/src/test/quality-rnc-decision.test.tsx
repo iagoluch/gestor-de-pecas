@@ -76,6 +76,37 @@ describe("Qualidade — decisão de RNC", () => {
     expect(JSON.parse(String(post[1]?.body))).toEqual({ decisao: "usar_como_esta", justificativa: "cliente aceitou" });
   });
 
+  it("RNC da inspeção do setup oferece só Volta para 5 e Fica onde está", async () => {
+    const mock = stub(session("qualidade"), [rnc(1, { origem: "inspecao_progressiva", resultado_peca: null, numero_peca: 3 })]);
+    renderAt("/qualidade/rnc");
+    expect(await screen.findByText("RNC-12-0001")).toBeTruthy();
+    expect(screen.getByText("Inspeção do setup")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Decidir RNC-12-0001" }));
+    const select = (await screen.findByLabelText("Decisão")) as HTMLSelectElement;
+    const opcoes = Array.from(select.options).map((option) => option.value).filter(Boolean);
+    expect(opcoes).toEqual(["volta_para_5", "fica_onde_esta"]);
+    expect(screen.getByText(/Peça 3 da inspeção do setup/)).toBeTruthy();
+
+    fireEvent.change(select, { target: { value: "volta_para_5" } });
+    fireEvent.change(screen.getByLabelText("Justificativa"), { target: { value: "processo instável" } });
+    fireEvent.click(screen.getByRole("button", { name: "Registrar decisão" }));
+    await waitFor(() => expect(mock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    const post = mock.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(JSON.parse(String(post[1]?.body))).toEqual({ decisao: "volta_para_5", justificativa: "processo instável" });
+    expect(decisionLabel("fica_onde_esta")).toBe("Fica onde está");
+  });
+
+  it("RNC da inspeção comum não oferece as opções de nível", async () => {
+    stub(session("qualidade"), [rnc(1)]);
+    renderAt("/qualidade/rnc");
+    fireEvent.click(await screen.findByRole("button", { name: "Decidir RNC-12-0001" }));
+    const select = (await screen.findByLabelText("Decisão")) as HTMLSelectElement;
+    const opcoes = Array.from(select.options).map((option) => option.value);
+    expect(opcoes).not.toContain("volta_para_5");
+    expect(opcoes).toContain("sucatear");
+  });
+
   it("aba Todas pede a lista completa", async () => {
     const mock = stub(session("admin"), [rnc(1)]);
     renderAt("/qualidade/rnc");
