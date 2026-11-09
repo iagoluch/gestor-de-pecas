@@ -37,7 +37,9 @@ from app.database.config import load_postgres_config
 from app.database.database import Database
 from mes.analytics.oee import calculate_oee, oee_seconds_by_category
 from mes.analytics.resource_state import summarize_physical_states
-from mes.domain import EventCategory, ManufacturingRules, StopClassification
+from mes.domain import EventCategory, ManufacturingRules, ShiftWindowKind, StopClassification
+from mes.services.calendar import CalendarService
+from mes.services.shift_parameters import load_manufacturing_rules
 
 RESOURCE = "1303"
 # Almoço semeado pela migration 23 (12:10-12:52), em minutos a partir de t0 = 09:00.
@@ -120,6 +122,13 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
                 (resolve_resource_identity(resource),),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def _window_kind(self, minutes):
+        # Hora extra também é "fora do turno" para _fora_do_turno (A61), então
+        # a vigência da H2 é conferida pela natureza da janela no calendário.
+        instant = self._at(minutes)
+        rules = load_manufacturing_rules(self.db, vigente_em=instant)
+        return CalendarService(self.db, rules).shift_window_kind(RESOURCE, instant)
 
     def _assert_no_demand(self, state):
         self.assertTrue(ManufacturingRules.state_is_no_demand(
@@ -413,18 +422,21 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
             item["id"], "producao", "IAGO", data_hora=self._at(540)
         )
         self.assertEqual(self._timeline()[-1]["categoria"], "producao")
+        # A61 (06/11/2026): fim de OP na hora extra volta para fora de turno.
         self._finish(item, 600)
-        self._assert_no_demand(self._timeline()[-1])
+        self.assertEqual(self._timeline()[-1]["categoria"], "fora_turno")
         self.db.interromper_recursos_ociosos_fim_turno(self._at(750))
         self.assertEqual(self._timeline()[-1]["categoria"], "fora_turno")
 
-        # H1 do dia seguinte (06:30-07:00): OP finalizada -> sem demanda, que
-        # atravessa o início do expediente (08:00) sem virar outro estado.
+        # H1 do dia seguinte (06:30-07:00): OP finalizada na hora extra volta a
+        # fora de turno (A61); o início do expediente (08:00) vira sem demanda.
         early = self._started_op("OP-H1", minute=1290)
         self._finish(early, 1320)
-        self._assert_no_demand(self._timeline()[-1])
+        self.assertEqual(self._timeline()[-1]["categoria"], "fora_turno")
         self.db.finalizar_fora_turno_automatico(self._at(1380))
-        self._assert_no_demand(self._timeline()[-1])
+        returned = self._timeline()[-1]
+        self.assertEqual(returned["categoria"], "fila")
+        self.assertEqual(returned["tipo_interrupcao"], "retorno_turno_sem_demanda")
         self._assert_continuous(self._timeline())
 
     def test_op_encerrada_apos_a_jornada_entra_em_fora_de_turno(self):
@@ -605,7 +617,7 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
         self.db.interromper_recursos_ociosos_fim_turno(self._at(750))
         timeline = self._timeline()
         totals, stops, calc = self._oee_bases(0, 780)
-        self.assertFalse(self.db._fora_do_turno(RESOURCE, self._at(12 * 60)))  # 21:00
+        self.assertEqual(self._window_kind(12 * 60), ShiftWindowKind.PLANNED_OVERTIME)  # 21:00
 
         # H2 encurtada para 20:30 à meia-noite do dia seguinte (vigência).
         h2 = next(row for row in self.db.listar_parametros_turno() if row["nome"] == "H2")
@@ -616,8 +628,8 @@ class ResourceStateNoDemandAndBreakTests(unittest.TestCase):
             )
 
         # O dia já vivido continua com a H2 que valia nele; o seguinte usa a nova.
-        self.assertFalse(self.db._fora_do_turno(RESOURCE, self._at(12 * 60)))
-        self.assertTrue(self.db._fora_do_turno(RESOURCE, self._at(36 * 60)))
+        self.assertEqual(self._window_kind(12 * 60), ShiftWindowKind.PLANNED_OVERTIME)
+        self.assertEqual(self._window_kind(36 * 60), ShiftWindowKind.OUT_OF_SHIFT)
         self.assertEqual(self._timeline(), timeline)
         after_totals, after_stops, after_calc = self._oee_bases(0, 780)
         self.assertEqual(after_totals, totals)
