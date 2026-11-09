@@ -1,5 +1,14 @@
 # STATUS ATUAL — Gestor de Peças
 
+### Patch da manufatura parte 1 — inspeção progressiva e 1ª peça sem crachá — 09/11/2026
+
+- 2º estágio do setup mede N peças com o template de cotas da 1ª peça; a 1ª conta como 1 das N. Nível 5→1 por produto + operação (começa em 5, migration 75); OP sem NC faz a próxima medir 1 a menos (mínimo 1); N limitado à quantidade da OP; a OP só finaliza com as N medidas.
+- Peça não conforme abre RNC na tela Decisão de RNC com "volta para 5" ou "fica onde está" (vale para a próxima OP); o nível não desce enquanto espera.
+- Peças boas da inspeção somam no total; o Finalizar lança só a diferença, sem contar em dobro em finalização parcial.
+- Crachá saiu da 1ª peça (e do retrabalho dela); continua no fim, no refugo e na etapa pendente.
+- Envio duplo (duas abas/tablets/reenvio): senha = medições já gravadas, checada dentro de trava por OP + operação (`Database.trava_primeira_peca`) numa transação só; 409 `primeira_peca_ja_registrada`/`primeira_peca_tela_desatualizada`. Provado no Postgres TEST.
+- Validação: 519 testes em 15 arquivos de fluxo/qualidade, 53 testes de tela, build web ok; revisão técnica + 3 rodadas do Codex corrigidas. Relatados sem mudar: "volta para 5" não se desfaz; cotas das peças 2..N vêm do cadastro atual.
+
 ### Acesso para homologação e confirmação de recurso — 07/11/2026
 
 - Ensaio de rateio finalizado a pedido do usuário: apontamentos de Dobra 15/16/17/18 (`00601315015`, `00601315030`, `00610901002`, `PCLN5301021`) encerrados normalmente em 07/11/2026 às 13:46:43, conservando os inícios originais, com boas 1/2/1/1 e refugo zero. Setup/checklist das três pendentes foram feitos pelos serviços canônicos. Como não havia cotas, foram criados templates explicitamente identificados como **SIMULAÇÃO TESTE RATEIO**, com cota fictícia 1 +/- 0 e observação de ausência de medição física; não são padrões dimensionais de produção. A aprovação anterior da primeira OP foi preservada. Crachá utilizado: Iago, já cadastrado. Sem exclusão/reset/reenvio ao Protheus; evidências antes/depois e ações em `dev_reports/finalizacao_rateio_2026-11-07/`.
