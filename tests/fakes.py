@@ -76,6 +76,10 @@ class FakeDatabase:
         self.quality_pieces = []
         self.quality_measures = []
         self.quality_rnc = []
+        # Patch 09/11/2026 — inspeção progressiva do setup (migration 75).
+        self.progressive_levels = {}
+        self.nivel_inspecao_padrao = 5
+        self.progressive_pieces = []
         self.quality_drawings = []
         self.resource_states = {}
         # Pausas automáticas configuráveis (Wave 3): a semente reproduz o que a
@@ -1321,7 +1325,10 @@ class FakeDatabase:
 
     def buscar_primeira_peca(self, codigo_op, catalogo_operacao_id=None):
         linha = self._primeira_peca(codigo_op, catalogo_operacao_id)
-        return dict(linha) if linha else None
+        if not linha:
+            return None
+        registradas = sum(1 for p in self.progressive_pieces if p["primeira_peca_id"] == linha["id"])
+        return {**linha, "inspecao_pecas_registradas": registradas}
 
     def buscar_primeira_peca_por_id(self, primeira_peca_id):
         linha = next(
@@ -1332,9 +1339,113 @@ class FakeDatabase:
     def listar_primeiras_pecas_da_op(self, codigo_op):
         codigo = limpa_codigo(codigo_op)
         return [
-            dict(row) for row in self.first_pieces
+            {**row, "inspecao_pecas_boas_pendentes": self.contar_boas_inspecao_progressiva_pendentes(row["id"])}
+            for row in self.first_pieces
             if limpa_codigo(row["codigo_op"]) == codigo
         ]
+
+    def _pecas_exigidas_fake(self, linha):
+        exigidas = linha.get("inspecao_pecas_exigidas")
+        if exigidas is not None:
+            return int(exigidas)
+        produto = str(linha.get("produto_codigo") or "").strip()
+        operacao = str(linha.get("numero_operacao") or "").strip()
+        nivel = self.progressive_levels.setdefault((produto, operacao), self.nivel_inspecao_padrao) if produto else 1
+        return max(1, min(nivel, int(linha.get("quantidade_planejada") or 1)))
+
+    def fixar_pecas_exigidas_inspecao(self, primeira_peca_id):
+        linha = next(
+            (row for row in self.first_pieces if row["id"] == int(primeira_peca_id)), None
+        )
+        if linha is None:
+            return None
+        linha["inspecao_pecas_exigidas"] = self._pecas_exigidas_fake(linha)
+        return dict(linha)
+
+    def registrar_peca_inspecao_progressiva(
+        self,
+        primeira_peca_id,
+        *,
+        conforme,
+        medidas,
+        operador,
+        motivo=None,
+        instante=None,
+        pecas_registradas_esperadas=None,
+    ):
+        linha = next(
+            (row for row in self.first_pieces if row["id"] == int(primeira_peca_id)), None
+        )
+        if linha is None:
+            return None
+        momento = instante or datetime.now().replace(microsecond=0)
+        produto = str(linha.get("produto_codigo") or "").strip()
+        operacao = str(linha.get("numero_operacao") or "").strip()
+        exigidas = self._pecas_exigidas_fake(linha)
+        medidas_ate_agora = int(linha.get("inspecao_pecas_medidas") or 0)
+        registradas = sum(1 for p in self.progressive_pieces if p["primeira_peca_id"] == linha["id"])
+        if pecas_registradas_esperadas is not None and int(pecas_registradas_esperadas) != registradas:
+            return {"repetida": True, "primeira_peca": dict(linha)}
+        if medidas_ate_agora >= exigidas:
+            return None
+        conta = bool(conforme) or medidas_ate_agora > 0
+        numero = registradas + 1
+        rnc = None
+        if not conforme:
+            rnc = {
+                "id": self._id("quality_rnc"),
+                "codigo": f"RNC-PP{linha['id']}-{numero:04d}",
+                "inspecao_id": None,
+                "primeira_peca_id": linha["id"],
+                "numero_peca": numero,
+                "codigo_op": linha["codigo_op"],
+                "produto_codigo": produto,
+                "tipo_setor": linha.get("tipo_setor") or "",
+                "operador": operador,
+                "motivo": (str(motivo or "").strip() or "Cota fora da tolerância")[:500],
+                "registrada_em": momento,
+            }
+            self.quality_rnc.append(rnc)
+        peca = {
+            "id": self._id("progressive_pieces"),
+            "primeira_peca_id": linha["id"],
+            "numero_peca": numero,
+            "conforme": bool(conforme),
+            "medidas": list(medidas or []),
+            "rnc_id": rnc["id"] if rnc else None,
+            "apontamento_lancado_id": None,
+            "operador": operador,
+            "registrada_em": momento,
+        }
+        self.progressive_pieces.append(peca)
+        medidas_agora = medidas_ate_agora + (1 if conta else 0)
+        com_nc = bool(linha.get("inspecao_com_nc")) or not conforme
+        linha.update(
+            inspecao_pecas_exigidas=exigidas,
+            inspecao_pecas_medidas=medidas_agora,
+            inspecao_com_nc=com_nc,
+            atualizada_em=momento,
+        )
+        completa = medidas_agora >= exigidas
+        nivel_desceu = False
+        if completa and not com_nc and produto:
+            chave = (produto, operacao)
+            self.progressive_levels[chave] = max(1, self.progressive_levels.get(chave, 5) - 1)
+            nivel_desceu = True
+        return {
+            "primeira_peca": dict(linha),
+            "peca": dict(peca),
+            "rnc": dict(rnc) if rnc else None,
+            "completa": completa,
+            "nivel_desceu": nivel_desceu,
+        }
+
+    def contar_boas_inspecao_progressiva_pendentes(self, primeira_peca_id):
+        return sum(
+            1 for p in self.progressive_pieces
+            if p["primeira_peca_id"] == int(primeira_peca_id)
+            and p["conforme"] and p["apontamento_lancado_id"] is None
+        )
 
     def registrar_primeira_peca_produzida(
         self, primeira_peca_id, *, operador, apontamento_id=None, instante=None
@@ -1342,7 +1453,11 @@ class FakeDatabase:
         linha = next(
             (row for row in self.first_pieces if row["id"] == int(primeira_peca_id)), None
         )
-        if linha is None or linha["status"] not in {"PENDENTE", "PRODUZIDA", "REFUGO"}:
+        if (
+            linha is None
+            or linha.get("bloqueio_ativo")
+            or linha["status"] not in {"PENDENTE", "PRODUZIDA", "REFUGO", "RETRABALHO"}
+        ):
             return None
         momento = instante or datetime.now().replace(microsecond=0)
         linha["status"] = "PRODUZIDA"
@@ -1981,6 +2096,7 @@ class FakeDatabase:
         setor_roteiro=None, setor_divergente=False,
         recurso_exclusivo=False,
         setor_destino="Almoxarifado", data_hora=None, encerrar_retrabalho=False,
+        lancar_inspecao_progressiva=None,
     ):
         row = next((item for item in self.appointments if item["id"] == apontamento_id), None)
         if not row:
@@ -2043,6 +2159,19 @@ class FakeDatabase:
             if attended > int(row["quantidade"]):
                 raise ValueError("A soma de peças boas e refugo excede a quantidade prevista restante.")
             partial = attended < int(row["quantidade"])
+            if lancar_inspecao_progressiva:
+                primeira_peca_id, esperadas = lancar_inspecao_progressiva
+                pendentes = [
+                    p for p in self.progressive_pieces
+                    if p["primeira_peca_id"] == int(primeira_peca_id)
+                    and p["conforme"] and p["apontamento_lancado_id"] is None
+                ]
+                if len(pendentes) != int(esperadas):
+                    raise ValueError(
+                        "As peças da inspeção mudaram durante a finalização. Atualize e tente de novo."
+                    )
+                for peca in pendentes:
+                    peca["apontamento_lancado_id"] = apontamento_id
         if encerrar_retrabalho:
             next_good += int(quantidade_boa or 0)
             next_scrap += int(quantidade_refugo or 0)

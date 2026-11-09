@@ -108,7 +108,7 @@ class ExecutionToManagementTests(unittest.TestCase):
         """Wave 5: o lote só fecha depois da primeira peça aprovada."""
 
         resultado = liberar_primeira_peca(
-            self.db, "OPERADOR 4A", **self._contexto()
+            self.db, "OPERADOR 4A", **self._contexto(), nivel_inspecao=1
         )
         self.assertTrue(resultado.ok, resultado.message)
         return resultado
@@ -140,12 +140,14 @@ class ExecutionToManagementTests(unittest.TestCase):
         # atendem 8 de 10 e a OP permanece aberta; a parcial devolve a OP à
         # fila, então o operador precisa reabrir antes de encerrar as 2
         # restantes. Boa e refugo continuam grandezas separadas.
+        # Patch 09/11/2026: a 1ª peça conforme (nível 1) já é 1 boa, então
+        # o fim lança só a diferença: 1 + 6 + 1 = 8 boas.
         parcial = self._executar(
             "Finalizado", pecas_boas=6, refugo=2, operadores_cracha=["7001"]
         )
         self.assertEqual(parcial.code, "finalizacao_parcial")
         self._executar("Início")
-        self._executar("Finalizado", pecas_boas=2, operadores_cracha=["7001"])
+        self._executar("Finalizado", pecas_boas=1, operadores_cracha=["7001"])
 
         apontamento = self._rows("SELECT * FROM apontamentos_operacionais WHERE op = 'OP-4A'")[0]
         self.assertEqual(apontamento["status"], "Finalizado")

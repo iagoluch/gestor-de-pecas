@@ -89,7 +89,15 @@ class QualityRncDecisionRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    decisao: Literal["usar_como_esta", "retrabalhar", "sucatear", "quarentena"]
+    decisao: Literal[
+        "usar_como_esta",
+        "retrabalhar",
+        "sucatear",
+        "quarentena",
+        # RNC da inspeção progressiva (patch 09/11/2026); o serviço valida a origem.
+        "volta_para_5",
+        "fica_onde_esta",
+    ]
     justificativa: str = Field(min_length=3, max_length=500)
 
     @field_validator("justificativa")

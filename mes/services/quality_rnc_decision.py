@@ -1,6 +1,8 @@
 """Decisão sobre uma RNC já existente (disposição da peça não conforme).
 
-Esta camada é um REGISTRO: grava quem decidiu o quê e por quê. Ela nunca cria
+Esta camada é um REGISTRO: grava quem decidiu o quê e por quê. A única
+consequência fora do registro é o nível da inspeção progressiva ("volta para 5").
+Ela nunca cria
 evento de quantidade (FTT/OEE derivam deles), nunca altera o resultado da peça
 nem a RNC e não fala com TOTVS. Contradição com o resultado registrado da peça
 NÃO bloqueia: devolve apenas um ``aviso`` para a tela mostrar.
@@ -22,6 +24,21 @@ DECISOES = (
     DECISAO_SUCATEAR,
     DECISAO_QUARENTENA,
 )
+
+# Patch 09/11/2026: a RNC aberta pela inspeção progressiva (2º estágio do setup)
+# decide o NÍVEL da inspeção daquele produto + operação, não o destino da peça.
+ORIGEM_INSPECAO_PROGRESSIVA = "inspecao_progressiva"
+DECISAO_VOLTA_PARA_5 = "volta_para_5"
+DECISAO_FICA_ONDE_ESTA = "fica_onde_esta"
+DECISOES_INSPECAO_PROGRESSIVA = (DECISAO_VOLTA_PARA_5, DECISAO_FICA_ONDE_ESTA)
+
+
+def decisoes_da_origem(origem):
+    """Decisões válidas para a origem da RNC (única fonte da regra)."""
+
+    if origem == ORIGEM_INSPECAO_PROGRESSIVA:
+        return DECISOES_INSPECAO_PROGRESSIVA
+    return DECISOES
 
 JUSTIFICATIVA_MIN = 3
 JUSTIFICATIVA_MAX = 500
@@ -88,10 +105,11 @@ class QualityRncDecisionService:
             return None
         decisao = str(decisao or "").strip()
         justificativa = str(justificativa or "").strip()
-        if decisao not in DECISOES:
+        validas = decisoes_da_origem(rnc.get("origem"))
+        if decisao not in validas:
             return QualityResult(
                 False,
-                "Decisão inválida. Use: " + ", ".join(DECISOES) + ".",
+                "Decisão inválida. Use: " + ", ".join(validas) + ".",
                 "qualidade_rnc_decisao_invalida",
             )
         if not JUSTIFICATIVA_MIN <= len(justificativa) <= JUSTIFICATIVA_MAX:
@@ -107,6 +125,11 @@ class QualityRncDecisionService:
             usuario_id=self.usuario_id,
             usuario_nome=self.usuario_nome,
             quando=self._now(),
+            **(
+                {"reiniciar_nivel": (rnc.get("produto_codigo"), rnc.get("numero_operacao"))}
+                if decisao == DECISAO_VOLTA_PARA_5 and rnc.get("produto_codigo")
+                else {}
+            ),
         )
         item = decisao_publica(linha, resultado_peca=rnc.get("resultado_peca"), vigente=True)
         return QualityResult(

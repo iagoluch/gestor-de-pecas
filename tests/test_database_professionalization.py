@@ -24,7 +24,7 @@ from mes.services.frontend_facade import FrontendBackendFacade
 from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.production import ProductionService
-from tests.helpers import liberar_primeira_peca
+from tests.helpers import liberar_primeira_peca, medir_pecas_restantes
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "TEST_DATABASE_URL não configurada")
@@ -565,7 +565,9 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         )
 
         self.assertTrue(first_piece.registrar_producao(**context).ok)
-        self.assertTrue(first_piece.inspecionar(**context, resultado="CONFORME").ok)
+        aprovada = first_piece.inspecionar(**context, resultado="CONFORME")
+        self.assertTrue(aprovada.ok, aprovada.message)
+        medir_pecas_restantes(self.db, aprovada.data["registro"])
         finished = flow.executar("Finalizado", **context, operadores_cracha=["1"])
         self.assertTrue(finished.ok, finished.message)
         self.assertEqual(finished.data["status"], "Finalizado")
@@ -850,6 +852,7 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
             setor="Dobra",
             recurso="1303",
             operacao=operation,
+            nivel_inspecao=1,
         )
         start = service.executar(
             "Início", op="OP-BOTOES", setor="Dobra", recurso="1303", operacao=operation
@@ -900,7 +903,8 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
             setor="Dobra",
             recurso="1303",
             operacao=operation,
-            pecas_boas=1,
+            # Patch 09/11/2026: a 1ª peça (nível 1) já é 1 boa; 1 + 0 + 1 = 2.
+            pecas_boas=0,
             refugo=1,
             operadores_cracha=["1"],
         )
@@ -1041,6 +1045,7 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
             setor="Dobra",
             recurso="1303",
             operacao=operation,
+            nivel_inspecao=1,
         )
         started = service.executar(
             "Início", op="OP-PARCIAL", setor="Dobra", recurso="1303", operacao=operation
@@ -1070,7 +1075,7 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
         self.assertTrue(partial.ok)
         # A finalização parcial devolve a OP à fila com as quantidades já
         # acumuladas; ela não permanece em execução por conta própria.
-        self.assertEqual((partial.data["status"], partial.data["saldo_restante"]), ("Aguardando", 2))
+        self.assertEqual((partial.data["status"], partial.data["saldo_restante"]), ("Aguardando", 1))  # 3 - (1 da 1ª peça + 1)
         partial_event = self.db.listar_eventos_apontamento_operador(started.data["id"])[-1]
         self.assertEqual(partial_event["estado"], "parcial")
         self.assertEqual(
@@ -1089,7 +1094,7 @@ class DatabaseProfessionalizationTests(unittest.TestCase):
             setor="Dobra",
             recurso="1303",
             operacao=operation,
-            pecas_boas=2,
+            pecas_boas=1,
             refugo=0,
             operadores_cracha=["1"],
         )

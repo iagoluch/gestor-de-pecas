@@ -64,10 +64,17 @@ def cenario(
     com_checklist=True,
     cotas=COTAS_PADRAO,
     setup_apontado=True,
+    nivel_inspecao=1,
 ):
-    """OP de uma etapa no setor pedido, com o crachá e o checklist do produto."""
+    """OP de uma etapa no setor pedido, com o crachá e o checklist do produto.
+
+    ``nivel_inspecao`` = peças medidas no setup (patch 09/11/2026). Estes testes
+    cobrem o portão da 1ª peça, então partem do nível 1 (só a 1ª peça); a
+    inspeção progressiva tem os testes dela.
+    """
 
     db = FakeDatabase()
+    db.nivel_inspecao_padrao = nivel_inspecao
     codigo_op = f"OP-6B-{setor.upper()}"
     produto = f"PECA-6B-{setor.upper()}"
     tarefa = db.inserir_tarefa(f"T-6B-{setor.upper()}")
@@ -355,7 +362,8 @@ class ConformidadeAutomaticaTests(unittest.TestCase):
         self.assertEqual(resultado.data["cotas"][0]["status"], "NAO_CONFORME")
         self.assertFalse(servico.estado(**contexto)["liberado"])
         self.assertEqual(db.first_pieces[0]["status"], "RETRABALHO")
-        self.assertTrue(db.first_pieces[0]["bloqueio_ativo"])
+        # Patch 09/11/2026: o retrabalho não trava mais a OP por crachá.
+        self.assertFalse(db.first_pieces[0]["bloqueio_ativo"])
 
     def test_medicao_invalida_e_recusada_sem_gravar_resultado(self):
         for valores, codigo in (
@@ -517,68 +525,45 @@ class LiberacaoDoLoteTests(unittest.TestCase):
 
 
 class RetrabalhoDaPrimeiraPecaTests(unittest.TestCase):
-    """Bloqueio, crachá do responsável designado e reinspeção."""
+    """Retrabalho sem crachá (patch 09/11/2026): retrabalha, mede de novo."""
 
-    def _bloquear(self, setor="Dobra"):
+    def _retrabalhar(self, setor="Dobra"):
         db, fluxo, contexto = cenario(setor)
         servico = FirstPieceService(db, "OPERADOR 6B")
-        servico.registrar_checklist(
+        resultado = servico.registrar_checklist(
             **contexto, medidas=medidas("12,9", "40,0")
         )
+        assert resultado.ok, resultado.message
         return db, fluxo, contexto, servico
 
-    def test_retrabalho_da_primeira_peca_bloqueia_a_op(self):
-        db, fluxo, contexto, _servico = self._bloquear()
+    def test_retrabalho_nao_trava_a_op_nem_pede_cracha_mas_nao_libera(self):
+        db, fluxo, contexto, servico = self._retrabalhar()
 
-        recusa = fluxo.executar("Início", **contexto)
-
-        self.assertFalse(recusa.ok)
-        self.assertEqual(recusa.code, "primeira_peca_bloqueada")
-        self.assertEqual(finalizar(fluxo, contexto).code, "primeira_peca_bloqueada")
-        self.assertTrue(db.first_pieces[0]["bloqueio_ativo"])
-        self.assertIn(
-            "PRIMEIRA_PECA_RETRABALHO",
-            [row["tipo"] for row in db.internal_alerts],
-        )
-
-    def test_cracha_nao_autorizado_e_recusado_e_o_autorizado_libera_o_fluxo(self):
-        db, fluxo, contexto, servico = self._bloquear()
-
-        recusado = servico.autorizar(**contexto, cracha="2")
-        self.assertFalse(recusado.ok)
-        self.assertEqual(recusado.code, "primeira_peca_cracha_nao_autorizado")
-        self.assertTrue(db.first_pieces[0]["bloqueio_ativo"])
-
-        liberado = servico.autorizar(**contexto, cracha="SIM99")
-        self.assertTrue(liberado.ok, liberado.message)
+        self.assertEqual(db.first_pieces[0]["status"], "RETRABALHO")
         self.assertFalse(db.first_pieces[0]["bloqueio_ativo"])
-        # A autorização libera o fluxo, não a qualidade.
+        self.assertEqual(
+            servico.autorizar(**contexto, cracha="SIM99").code,
+            "primeira_peca_sem_bloqueio",
+        )
         self.assertFalse(servico.estado(**contexto)["liberado"])
-        self.assertTrue(fluxo.executar("Início", **contexto).ok)
         self.assertEqual(finalizar(fluxo, contexto).code, FIRST_PIECE_GATE_REQUIRED)
 
-    def test_reinspecao_conforme_apos_a_autorizacao_libera_o_lote(self):
-        db, fluxo, contexto, servico = self._bloquear()
-        servico.autorizar(**contexto, cracha="SIM99")
+    def test_nao_conformidade_da_primeira_peca_vai_para_a_decisao_de_rnc(self):
+        db, _fluxo, _contexto, _servico = self._retrabalhar()
 
-        # Retrabalho limpa o Setup: a peça saiu de uma máquina que precisa ser
-        # reconferida, então o portão volta a exigir Setup de novo, mesmo
-        # fluxo da primeira peça — reinspecionar sem apontar Setup é recusado.
-        self.assertIsNone(db.first_pieces[0]["setup_registrado_em"])
-        self.assertTrue(fluxo.executar("Início", **contexto).ok)
-        sem_setup = servico.registrar_checklist(
-            **contexto, medidas=medidas("12,0", "40,0")
-        )
-        self.assertFalse(sem_setup.ok)
-        self.assertEqual(sem_setup.code, "primeira_peca_setup_pendente")
+        self.assertEqual(len(db.quality_rnc), 1)
+        self.assertEqual(db.quality_rnc[0]["primeira_peca_id"], db.first_pieces[0]["id"])
+        self.assertIn("Cota 1", db.quality_rnc[0]["motivo"])
 
-        apontar_setup(fluxo, contexto)
-        reinspecao = servico.registrar_checklist(
+    def test_remedicao_conforme_apos_o_retrabalho_libera_o_lote(self):
+        db, fluxo, contexto, servico = self._retrabalhar()
+
+        remedicao = servico.registrar_checklist(
             **contexto, medidas=medidas("12,0", "40,0")
         )
 
-        self.assertTrue(reinspecao.ok, reinspecao.message)
-        self.assertTrue(reinspecao.data["conforme"])
+        self.assertTrue(remedicao.ok, remedicao.message)
+        self.assertTrue(remedicao.data["conforme"])
         self.assertEqual(db.first_pieces[0]["status"], "CONFORME")
         self.assertTrue(finalizar(fluxo, contexto).ok)
 
@@ -754,9 +739,10 @@ class QuantidadesDoLoteTests(unittest.TestCase):
             db.operator_events[-1]["estado"], "primeira_peca_refugo"
         )
 
-        self.assertTrue(servico.registrar_producao(**contexto).ok)
-        conforme = servico.inspecionar(**contexto, resultado="CONFORME")
+        conforme = servico.registrar_checklist(**contexto, medidas=medidas("12,0", "40,0"))
         self.assertTrue(conforme.ok, conforme.message)
+        # A peça boa da inspeção não passa do previsto: com o saldo esgotado
+        # pelo refugo, ela só libera o portão.
         final = fluxo.executar("Finalizado", **contexto, operadores_cracha=["1"])
 
         self.assertTrue(final.ok, final.message)
@@ -784,7 +770,7 @@ class QuantidadesDoLoteTests(unittest.TestCase):
 
         self.assertTrue(parcial.ok, parcial.message)
         self.assertEqual(parcial.code, "finalizacao_parcial")
-        self.assertEqual(int(parcial.data["saldo_restante"]), 4)
+        self.assertEqual(int(parcial.data["saldo_restante"]),3)  # 6 + a 1ª peça da inspeção
 
 
 class RestanteDoLoteTests(unittest.TestCase):
@@ -808,7 +794,8 @@ class RestanteDoLoteTests(unittest.TestCase):
         parcial = finalizar(fluxo, contexto, pecas_boas=6)
         self.assertTrue(parcial.ok, parcial.message)
         self.assertEqual(parcial.code, "finalizacao_parcial")
-        self.assertEqual(int(parcial.data["saldo_restante"]), 4)
+        # A 1ª peça conforme já entra no total (patch 09/11/2026): 6 + 1 = 7.
+        self.assertEqual(int(parcial.data["saldo_restante"]), 3)
 
         linha = next(
             row
@@ -822,7 +809,7 @@ class RestanteDoLoteTests(unittest.TestCase):
 
         # Ciclo seguinte do mesmo lote: Início e Finalizar sem portão algum.
         self.assertTrue(fluxo.executar("Início", **contexto).ok)
-        final = finalizar(fluxo, contexto, pecas_boas=4)
+        final = finalizar(fluxo, contexto, pecas_boas=3)  # a 1ª peça não soma de novo
         self.assertTrue(final.ok, final.message)
         self.assertEqual(db.appointments[0]["status"], "Finalizado")
         self.assertEqual(int(db.appointments[0]["quantidade_boa"]), 10)
@@ -943,13 +930,12 @@ class IdempotenciaEConcorrenciaTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:
             resultados = [item.result() for item in [pool.submit(submeter) for _ in range(2)]]
 
-        # A primeira submissão bloqueia a OP; a segunda não pode inspecionar de
-        # novo a mesma peça nem reabrir o bloqueio.
+        # Sem bloqueio desde 09/11/2026: as duas submissões viram tentativas
+        # da mesma peça, nenhuma libera o lote e nenhuma trava a OP.
         self.assertEqual(len(db.first_pieces), 1)
-        self.assertTrue(db.first_pieces[0]["bloqueio_ativo"])
-        self.assertEqual(
-            sum(1 for item in resultados if item.ok and item.data.get("cotas")), 1
-        )
+        self.assertFalse(db.first_pieces[0]["bloqueio_ativo"])
+        self.assertTrue(all(item.ok for item in resultados))
+        self.assertEqual(db.first_pieces[0]["status"], "RETRABALHO")
 
     def test_duas_finalizacoes_simultaneas_fecham_a_operacao_uma_vez_so(self):
         """Concorrência no Finalizar: uma transição e um desconto de saldo."""

@@ -1,0 +1,235 @@
+"""Inspeção progressiva do setup (patch da manufatura, 09/11/2026).
+
+Regras em uma frase cada:
+
+* O nível vai de 5 a 1, é guardado por produto + operação e começa em 5.
+  A 1ª peça conta como 1 das N (nível 5 = 1ª peça + 4; nível 1 = só ela).
+* N nunca passa da quantidade da OP.
+* A OP só finaliza depois das N peças medidas.
+* OP com as N peças conformes faz a próxima medir 1 a menos (mínimo 1).
+* NC numa peça abre RNC (vai para a Decisão de RNC) e o nível não desce.
+* As boas da inspeção entram no total; o Finalizar lança só a diferença
+  (2 + 8 = 10) e uma segunda finalização não soma de novo.
+"""
+
+import unittest
+
+from mes.domain.first_piece import FIRST_PIECE_GATE_REQUIRED
+from mes.services.first_piece import FirstPieceService
+from tests.test_wave6b_gate_setup_qualidade import cenario, finalizar, medidas
+
+
+BOA = ("12,0", "40,0")
+RUIM = ("12,9", "40,0")
+
+
+def medir(servico, contexto, valores=BOA):
+    resultado = servico.registrar_checklist(**contexto, medidas=medidas(*valores))
+    assert resultado.ok, resultado.message
+    return resultado
+
+
+def preparar(**kwargs):
+    db, fluxo, contexto = cenario("Dobra", **kwargs)
+    servico = FirstPieceService(db, "OPERADOR 6B")
+    chave = (contexto["operacao"]["produto_codigo"], contexto["operacao"]["numero_operacao"])
+    return db, fluxo, contexto, servico, chave
+
+
+class InspecaoProgressivaTests(unittest.TestCase):
+    def test_nivel_5_mede_a_primeira_e_mais_quatro_antes_de_finalizar(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+
+        medir(servico, contexto)
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (1, 5))
+        self.assertFalse(estado["liberado"])
+        recusa = finalizar(fluxo, contexto, pecas_boas=9)
+        self.assertEqual(recusa.code, FIRST_PIECE_GATE_REQUIRED)
+        self.assertIn("peça 2 de 5", recusa.message)
+
+        for _ in range(4):
+            medir(servico, contexto)
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (5, 5))
+        self.assertTrue(estado["liberado"])
+
+    def test_n_nunca_passa_da_quantidade_da_op(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5, quantidade=3)
+
+        medir(servico, contexto)
+
+        self.assertEqual(servico.estado(**contexto)["pecas_exigidas"], 3)
+
+    def test_nivel_e_lido_por_produto_e_operacao(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=5)
+        db.progressive_levels[chave] = 2  # OPs anteriores já desceram o nível
+
+        medir(servico, contexto)
+
+        self.assertEqual(servico.estado(**contexto)["pecas_exigidas"], 2)
+
+    def test_op_sem_nc_faz_a_proxima_medir_uma_a_menos_ate_o_minimo_1(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=5)
+        for _ in range(5):
+            medir(servico, contexto)
+        self.assertEqual(db.progressive_levels[chave], 4)
+
+        db2, _f, contexto2, servico2, chave2 = preparar(nivel_inspecao=1)
+        db2.progressive_levels[chave2] = 1
+        medir(servico2, contexto2)
+        self.assertEqual(db2.progressive_levels[chave2], 1)
+
+    def test_nc_abre_rnc_para_a_decisao_e_o_nivel_nao_desce(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=3)
+
+        medir(servico, contexto)
+        nc = medir(servico, contexto, RUIM)
+        medir(servico, contexto)
+
+        self.assertFalse(nc.data["conforme"])
+        self.assertEqual(len(db.quality_rnc), 1)
+        rnc = db.quality_rnc[0]
+        self.assertEqual(rnc["primeira_peca_id"], db.first_pieces[0]["id"])
+        self.assertEqual(rnc["numero_peca"], 2)
+        self.assertIn("Cota 1", rnc["motivo"])
+        self.assertTrue(db.first_pieces[0]["inspecao_com_nc"])
+        # Fica em 3 até a Qualidade decidir (volta para 5 / fica onde está).
+        self.assertEqual(db.progressive_levels[chave], 3)
+
+    def test_boas_da_inspecao_somam_no_total_sem_contar_em_dobro(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=2, quantidade=10)
+        medir(servico, contexto)
+        medir(servico, contexto)
+
+        final = finalizar(fluxo, contexto, pecas_boas=8)
+
+        self.assertTrue(final.ok, final.message)
+        self.assertEqual(int(final.data["quantidade_boa"]), 10)  # 2 + 8
+        self.assertEqual(int(final.data["saldo_restante"] or 0), 0)
+        self.assertEqual(db.contar_boas_inspecao_progressiva_pendentes(db.first_pieces[0]["id"]), 0)
+        self.assertTrue(all(p["apontamento_lancado_id"] for p in db.progressive_pieces))
+
+    def test_finalizacao_parcial_lanca_as_boas_uma_vez_so(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=2, quantidade=10)
+        medir(servico, contexto)
+        medir(servico, contexto)
+
+        parcial = finalizar(fluxo, contexto, pecas_boas=3)
+        self.assertTrue(parcial.ok, parcial.message)
+        self.assertEqual(int(parcial.data["saldo_restante"]), 5)  # 10 - (2 + 3)
+
+        self.assertTrue(fluxo.executar("Início", **contexto).ok)
+        final = finalizar(fluxo, contexto, pecas_boas=5)
+        self.assertTrue(final.ok, final.message)
+        self.assertEqual(int(final.data["saldo_restante"] or 0), 0)
+
+    # --- Achados do Codex (09/11/2026): envio duplo e janela entre transações ---
+
+    def enviar(self, servico, contexto, vista, valores=BOA):
+        return servico.registrar_checklist(**contexto, medidas=medidas(*valores), pecas_registradas=vista)
+
+    def test_envio_duplo_de_peca_nc_abre_uma_rnc_e_conta_uma_vez(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        self.assertTrue(self.enviar(servico, contexto, 0).ok)
+
+        # Clique duplo / 2 abas: os dois envios viram "1 peça medida".
+        primeiro = self.enviar(servico, contexto, 1, RUIM)
+        segundo = self.enviar(servico, contexto, 1, RUIM)
+
+        self.assertTrue(primeiro.ok, primeiro.message)
+        self.assertFalse(segundo.ok)
+        self.assertEqual(segundo.code, "primeira_peca_ja_registrada")
+        self.assertEqual(len(db.quality_rnc), 1)
+        self.assertEqual(db.first_pieces[0]["inspecao_pecas_medidas"], 2)
+        self.assertEqual(len(db.progressive_pieces), 2)
+
+    def test_envio_duplo_de_peca_conforme_conta_uma_vez(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        # Duplo na 1ª peça: o segundo não pode virar a peça 2.
+        self.assertTrue(self.enviar(servico, contexto, 0).ok)
+        repetido = self.enviar(servico, contexto, 0)
+        self.assertEqual(repetido.code, "primeira_peca_ja_registrada")
+        # Duplo numa peça do meio.
+        self.assertTrue(self.enviar(servico, contexto, 1).ok)
+        self.assertEqual(self.enviar(servico, contexto, 1).code, "primeira_peca_ja_registrada")
+
+        self.assertEqual(db.first_pieces[0]["inspecao_pecas_medidas"], 2)
+        self.assertEqual(len(db.progressive_pieces), 2)
+
+    def test_envio_duplo_da_primeira_peca_nao_conforme_abre_uma_rnc(self):
+        # Antes da aprovação a peça reprovada não conta em "medidas"; a senha
+        # é o total de medições gravadas, então o 2º envio é recusado.
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        self.assertTrue(self.enviar(servico, contexto, 0, RUIM).ok)
+        repetido = self.enviar(servico, contexto, 0, RUIM)
+        self.assertEqual(repetido.code, "primeira_peca_ja_registrada")
+        self.assertEqual(len(db.quality_rnc), 1)
+
+        # Remedição legítima depois do retrabalho: a tela já viu 1 gravada.
+        self.assertTrue(self.enviar(servico, contexto, 1, RUIM).ok)
+        self.assertEqual(len(db.quality_rnc), 2)
+        self.assertTrue(self.enviar(servico, contexto, 2).ok)
+        self.assertEqual(db.first_pieces[0]["inspecao_pecas_medidas"], 1)
+        self.assertEqual(servico.estado(**contexto)["pecas_registradas"], 3)
+
+    def test_tela_atrasada_nao_regrava_a_decisao_da_primeira_peca(self):
+        # Codex rodada 3: a aba A mede a 1ª peça fora da faixa; a aba B, que
+        # ainda via 0 medições, manda cotas boas. B é recusada ANTES de gravar:
+        # a peça não vira conforme e o lote continua travado.
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        self.assertTrue(self.enviar(servico, contexto, 0, RUIM).ok)
+        antes = dict(db.first_pieces[0])
+
+        atrasada = self.enviar(servico, contexto, 0, BOA)
+
+        self.assertEqual(atrasada.code, "primeira_peca_ja_registrada")
+        linha = db.first_pieces[0]
+        self.assertNotEqual(linha["status"], "CONFORME")
+        self.assertEqual((linha["status"], linha["tentativas"]), (antes["status"], antes["tentativas"]))
+        self.assertEqual(linha["inspecao_pecas_exigidas"], antes["inspecao_pecas_exigidas"])
+        self.assertFalse(servico.estado(**contexto)["liberado"])
+        self.assertEqual(len(db.progressive_pieces), 1)
+
+    def test_aprovar_pela_acao_inspecionar_tambem_exige_as_n_pecas(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        self.assertTrue(servico.registrar_producao(**contexto).ok)
+
+        aprovada = servico.inspecionar(**contexto, resultado="CONFORME")
+
+        self.assertTrue(aprovada.ok, aprovada.message)
+        self.assertEqual(db.first_pieces[0]["inspecao_pecas_exigidas"], 5)
+        recusa = finalizar(fluxo, contexto, pecas_boas=9)
+        self.assertEqual(recusa.code, FIRST_PIECE_GATE_REQUIRED)
+
+    def test_finalizar_no_meio_da_aprovacao_da_primeira_peca_e_recusado(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        gravar = servico._gravar_peca_progressiva
+        recusas = []
+
+        def finalizar_concorrente(*args, **kwargs):
+            # Outro tablet clica Finalizar depois da aprovação da 1ª peça e
+            # antes de a peça 1 ser gravada.
+            recusas.append(finalizar(fluxo, contexto, pecas_boas=9))
+            return gravar(*args, **kwargs)
+
+        servico._gravar_peca_progressiva = finalizar_concorrente
+        self.assertTrue(self.enviar(servico, contexto, 0).ok)
+
+        self.assertEqual(len(recusas), 1)
+        self.assertFalse(recusas[0].ok)
+        self.assertEqual(recusas[0].code, FIRST_PIECE_GATE_REQUIRED)
+        self.assertEqual(db.first_pieces[0]["inspecao_pecas_exigidas"], 5)
+
+    def test_primeira_peca_nao_pede_cracha(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=1)
+
+        resultado = servico.registrar_checklist(**contexto, medidas=medidas(*BOA))
+
+        self.assertTrue(resultado.ok, resultado.message)
+        self.assertTrue(servico.estado(**contexto)["liberado"])
+        self.assertEqual(db.listar_autorizacoes_primeira_peca(codigo_op=contexto["op"]), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

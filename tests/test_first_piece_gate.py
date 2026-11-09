@@ -35,6 +35,13 @@ from mes.services.drawings import (
 from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from tests.fakes import FakeDatabase
+from tests.helpers import medir_pecas_restantes as _medir
+
+
+def medir_pecas_restantes(db):
+    """Lote liberado: grava as peças 2..N que a Dobra passou a exigir."""
+
+    _medir(db, db.first_pieces[-1], "OPERADOR PP")
 
 
 class FirstPieceDomainTests(unittest.TestCase):
@@ -148,6 +155,7 @@ class FirstPieceServiceTests(unittest.TestCase):
             resultado="CONFORME",
         )
         self.assertTrue(aprovada.ok)
+        medir_pecas_restantes(db)
         gate = servico.avaliar_finalizacao(op="OP-PP", setor="Dobra", operacao=self.OPERACAO)
         self.assertTrue(gate.liberado)
         # Uma única linha para a operação inteira: a regra antiga criava uma
@@ -156,7 +164,7 @@ class FirstPieceServiceTests(unittest.TestCase):
         self.assertEqual(db.first_pieces[0]["quantidade_planejada"], 10)
 
     def test_op_unitaria_segue_a_mesma_regra(self):
-        _db, servico = self._servico()
+        db, servico = self._servico()
         operacao = {**self.OPERACAO, "id": 78, "quantidade": 1}
         servico.garantir(op="OP-1", setor="Dobra", recurso="Gasparini", operacao=operacao)
         gate = servico.avaliar_finalizacao(op="OP-1", setor="Dobra", operacao=operacao)
@@ -172,6 +180,7 @@ class FirstPieceServiceTests(unittest.TestCase):
             operacao=operacao,
             resultado="CONFORME",
         )
+        medir_pecas_restantes(db)
         self.assertTrue(
             servico.avaliar_finalizacao(op="OP-1", setor="Dobra", operacao=operacao).liberado
         )
@@ -202,8 +211,13 @@ class FirstPieceServiceTests(unittest.TestCase):
         )
         self.assertTrue(retrabalho.ok)
         self.assertEqual(retrabalho.code, "primeira_peca_retrabalho")
-        bloqueio = servico.bloqueio_ativo(op="OP-PP", setor="Dobra", operacao=self.OPERACAO)
-        self.assertIsNotNone(bloqueio)
+        # Patch 09/11/2026: o retrabalho novo não trava a OP.
+        self.assertIsNone(
+            servico.bloqueio_ativo(op="OP-PP", setor="Dobra", operacao=self.OPERACAO)
+        )
+        # Linha travada antes do patch (trava + Setup apagado): o crachá do
+        # responsável continua sendo a única saída dela.
+        db.first_pieces[-1].update(bloqueio_ativo=True, setup_registrado_em=None)
 
         # O alerta nasce com destinatário e notificação pendente; nada é enviado.
         alerta = db.internal_alerts[-1]
@@ -283,6 +297,7 @@ class FirstPieceServiceTests(unittest.TestCase):
             operacao=self.OPERACAO,
             resultado="CONFORME",
         )
+        medir_pecas_restantes(db)
         self.assertTrue(
             servico.avaliar_finalizacao(op="OP-PP", setor="Dobra", operacao=self.OPERACAO).liberado
         )
@@ -301,6 +316,7 @@ class FirstPieceServiceTests(unittest.TestCase):
             operacao=self.OPERACAO,
             resultado="RETRABALHO",
         )
+        db.first_pieces[-1]["bloqueio_ativo"] = True  # linha travada antes do patch
         recusa = servico.autorizar(
             op="OP-PP",
             setor="Dobra",
@@ -494,13 +510,15 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
         )
         if com_setup:
             primeira.marcar_setup(op="OP-FLUXO", operacao=operacao)
-        return primeira.inspecionar(
+        aprovada = primeira.inspecionar(
             op="OP-FLUXO",
             setor="Dobra",
             recurso="Gasparini",
             operacao=operacao,
             resultado="CONFORME",
         )
+        medir_pecas_restantes(db)
+        return aprovada
 
     def test_finalizar_e_recusado_enquanto_a_primeira_peca_nao_for_validada(self):
         db, servico, operacao = self._cenario()
@@ -589,6 +607,7 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
             operacao=operacao,
             resultado="CONFORME",
         )
+        medir_pecas_restantes(db)
         final = servico.executar(
             "Finalizado",
             op="OP-FLUXO",
@@ -617,6 +636,9 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
             operacao=operacao,
             resultado="RETRABALHO",
         )
+        # Linha travada antes do patch de 09/11/2026 (o retrabalho novo não
+        # trava): a OP segue presa até o crachá do responsável.
+        db.first_pieces[-1]["bloqueio_ativo"] = True
 
         # Retrabalho e Parada continuam liberados: é com eles que a peça é
         # corrigida enquanto o responsável não chega.
@@ -658,6 +680,7 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
             operacao=operacao,
             resultado="CONFORME",
         )
+        medir_pecas_restantes(db)
         liberado = servico.executar(
             "Finalizado",
             op="OP-FLUXO",

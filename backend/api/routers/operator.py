@@ -452,6 +452,14 @@ def first_piece_action(
     elif payload.action == "checklist":
         # Wave 6B — o popup Setup/Qualidade do Iniciar. A regra continua no
         # serviço: aqui só o transporte do formulário.
+        if payload.inspection_recorded is None:
+            # Tela antiga (sem a contagem) não tem como provar que a peça não
+            # foi gravada por outro envio: recusa e pede para atualizar.
+            raise AppError(
+                "primeira_peca_tela_desatualizada",
+                "A tela do posto está desatualizada. Atualize a página e meça de novo.",
+                status_code=409,
+            )
         result = service.registrar_checklist(
             op=payload.op,
             setor=sector.name,
@@ -461,6 +469,7 @@ def first_piece_action(
             destino=payload.destination,
             cracha_responsavel=payload.badge,
             observacao=payload.note,
+            pecas_registradas=payload.inspection_recorded,
         )
     elif payload.action == "inspecionar":
         if not payload.result:

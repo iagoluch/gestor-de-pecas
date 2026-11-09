@@ -27,7 +27,11 @@ from backend.api.dependencies.auth import get_current_user, require_csrf
 from backend.api.main import create_app
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.quality import QualityRncDecisionRequest
-from mes.services.quality_rnc_decision import DECISOES, aviso_de_contradicao
+from mes.services.quality_rnc_decision import (
+    DECISOES,
+    DECISOES_INSPECAO_PROGRESSIVA,
+    aviso_de_contradicao,
+)
 from tests.fakes import FakeDatabase
 
 Q = "/api/v1/quality"
@@ -85,8 +89,10 @@ class _BancoEmMemoria(FakeDatabase):
         return self.rncs.get(rnc_id)
 
     def registrar_decisao_rnc(self, rnc_id, *, decisao, justificativa, usuario_id, usuario_nome,
-                              quando=None):
+                              quando=None, reiniciar_nivel=None):
         self.chamadas.append(("registrar", rnc_id))
+        if reiniciar_nivel is not None:
+            self.chamadas.append(("reiniciar_nivel", reiniciar_nivel))
         linha = {"id": len(self.decisoes) + 1, "rnc_id": rnc_id, "decisao": decisao,
                  "justificativa": justificativa, "decidido_por_id": usuario_id,
                  "decidido_por_nome": usuario_nome, "quando": quando or AGORA}
@@ -156,7 +162,48 @@ class PermissaoValidacaoE404Tests(_ApiCase):
 
     def test_lista_fechada_do_schema_espelha_a_do_servico(self):
         literal = QualityRncDecisionRequest.model_fields["decisao"].annotation.__args__
-        self.assertEqual(set(literal), set(DECISOES))
+        self.assertEqual(set(literal), set(DECISOES) | set(DECISOES_INSPECAO_PROGRESSIVA))
+
+    def _rnc_progressiva(self):
+        # Patch 09/11/2026: RNC aberta pela inspeção progressiva do setup.
+        self.db.rncs[8] = {"id": 8, "codigo": "RNC-PP3-0002", "codigo_op": "OP1",
+                           "produto_codigo": "P", "numero_peca": 2, "motivo": "Cota 1 fora",
+                           "resultado_peca": None, "origem": "inspecao_progressiva",
+                           "numero_operacao": "010"}
+
+    def test_rnc_da_inspecao_progressiva_so_aceita_as_opcoes_de_nivel(self):
+        self._rnc_progressiva()
+        self._as(QUALIDADE)
+        recusa = self.client.post(
+            f"{Q}/rnc/8/decisions", json={"decisao": "sucatear", "justificativa": "motivo válido"}
+        )
+        self.assertEqual(recusa.status_code, 409)
+        self.assertEqual(recusa.json()["code"], "qualidade_rnc_decisao_invalida")
+        self.assertEqual(self.db.decisoes, [])
+
+        fica = self.client.post(
+            f"{Q}/rnc/8/decisions",
+            json={"decisao": "fica_onde_esta", "justificativa": "desvio pontual"},
+        )
+        self.assertEqual(fica.status_code, 200, fica.text)
+        self.assertNotIn("reiniciar_nivel", [c[0] for c in self.db.chamadas])
+
+        volta = self.client.post(
+            f"{Q}/rnc/8/decisions",
+            json={"decisao": "volta_para_5", "justificativa": "processo instável"},
+        )
+        self.assertEqual(volta.status_code, 200, volta.text)
+        self.assertIn(("reiniciar_nivel", ("P", "010")), self.db.chamadas)
+        self.assertEqual([d["decisao"] for d in self.db.decisoes], ["fica_onde_esta", "volta_para_5"])
+
+    def test_rnc_da_inspecao_comum_recusa_as_opcoes_de_nivel(self):
+        self._as(QUALIDADE)
+        for decisao in DECISOES_INSPECAO_PROGRESSIVA:
+            resposta = self.client.post(
+                f"{Q}/rnc/7/decisions", json={"decisao": decisao, "justificativa": "motivo válido"}
+            )
+            self.assertEqual(resposta.status_code, 409, decisao)
+        self.assertEqual(self.db.decisoes, [])
 
     def test_rnc_inexistente_da_404_na_escrita_e_na_leitura(self):
         self._as(QUALIDADE)

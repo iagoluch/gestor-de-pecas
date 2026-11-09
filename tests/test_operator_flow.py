@@ -8,7 +8,7 @@ from tests.helpers import liberar_primeira_peca
 
 
 class OperatorFlowTests(unittest.TestCase):
-    def _service(self, *, primeira_peca_liberada=True):
+    def _service(self, *, primeira_peca_liberada=True, quantidade=2, nivel_inspecao=None):
         """Posto de Dobra pronto para apontar.
 
         Wave 6B: em Dobra, Usinagem e Serra o Iniciar passa pelo portão
@@ -20,7 +20,7 @@ class OperatorFlowTests(unittest.TestCase):
 
         db = FakeDatabase()
         task_id = db.inserir_tarefa("T-OPERADOR")
-        db.inserir_op_na_tarefa(task_id, "OP-OPERADOR", "PECA", "Dobra", 2)
+        db.inserir_op_na_tarefa(task_id, "OP-OPERADOR", "PECA", "Dobra", quantidade)
         operation = {
             "id": 10,
             "codigo_op": "OP-OPERADOR",
@@ -30,7 +30,7 @@ class OperatorFlowTests(unittest.TestCase):
             "tipo_setor": "Dobra",
             "produto_codigo": "PECA",
             "produto_descricao": "PECA TESTE",
-            "quantidade": 2,
+            "quantidade": quantidade,
         }
         db.catalog_operations.append(operation)
         if primeira_peca_liberada:
@@ -41,6 +41,7 @@ class OperatorFlowTests(unittest.TestCase):
                 setor="Dobra",
                 recurso="1303",
                 operacao=operation,
+                nivel_inspecao=nivel_inspecao,
             )
         return db, OperatorFlowService(db, "OPERADOR TESTE"), operation
 
@@ -769,7 +770,9 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(retry.code, "operacao_finalizada")
 
     def test_finalizacao_parcial_mantem_op_aberta_e_acumula_ate_o_total(self):
-        db, service, operation = self._service()
+        # Patch 09/11/2026: a 1ª peça conforme da inspeção já é 1 boa (nível 1
+        # = só ela). OP de 3: 1 (inspeção) + 1 parcial + 1 final.
+        db, service, operation = self._service(quantidade=3, nivel_inspecao=1)
         started = service.executar(
             "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=operation
         )
@@ -790,7 +793,7 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertEqual(partial.data["status"], "Aguardando")
         self.assertEqual(partial.data["saldo_restante"], 1)
         cards = service.listar_cartoes("Dobra", "1303")
-        self.assertEqual(cards["queue"][0]["good"], 1)
+        self.assertEqual(cards["queue"][0]["good"], 2)
 
         resumed = service.executar(
             "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=operation
@@ -809,7 +812,7 @@ class OperatorFlowTests(unittest.TestCase):
         )
         self.assertTrue(completed.ok)
         self.assertEqual(completed.data["status"], "Finalizado")
-        self.assertEqual(completed.data["quantidade_boa"], 2)
+        self.assertEqual(completed.data["quantidade_boa"], 3)
         self.assertEqual(
             [event["estado"] for event in db.operator_events],
             ["fila", "producao", "parcial", "producao", "finalizado"],

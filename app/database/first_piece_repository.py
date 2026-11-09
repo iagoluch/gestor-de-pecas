@@ -23,6 +23,7 @@ from app.core.normalization import limpa_codigo
 from mes.domain.first_piece import (
     FIRST_PIECE_PENDING,
     FIRST_PIECE_PRODUCED,
+    FIRST_PIECE_REWORK,
     FIRST_PIECE_SCRAP,
 )
 from mes.domain.internal_alerts import (
@@ -130,15 +131,21 @@ class FirstPieceRepositoryMixin:
     def buscar_primeira_peca(self, codigo_op, catalogo_operacao_id=None):
         """Primeira peça da operação; sem ``catalogo_operacao_id`` traz a mais recente."""
 
+        # ``inspecao_pecas_registradas`` (toda medição gravada, conforme ou NC)
+        # é a contagem que a tela devolve ao medir, para o banco recusar o
+        # segundo envio da mesma peça.
         query = """
-            SELECT * FROM qualidade_primeira_peca
-            WHERE UPPER(codigo_op) = UPPER(%s)
+            SELECT q.*,
+                   (SELECT COUNT(*) FROM qualidade_inspecao_progressiva_pecas p
+                     WHERE p.primeira_peca_id = q.id) AS inspecao_pecas_registradas
+              FROM qualidade_primeira_peca q
+            WHERE UPPER(q.codigo_op) = UPPER(%s)
         """
         params = [limpa_codigo(codigo_op)]
         if catalogo_operacao_id is not None:
-            query += " AND catalogo_operacao_id = %s"
+            query += " AND q.catalogo_operacao_id = %s"
             params.append(int(catalogo_operacao_id))
-        query += " ORDER BY atualizada_em DESC, id DESC LIMIT 1"
+        query += " ORDER BY q.atualizada_em DESC, q.id DESC LIMIT 1"
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             return _as_dict(cursor.fetchone())
@@ -148,14 +155,21 @@ class FirstPieceRepositoryMixin:
 
         O roteiro do posto projeta o portão em cada etapa; consultar linha a
         linha transformaria a abertura de uma OP em N consultas.
+        ``inspecao_pecas_boas_pendentes`` (patch 09/11/2026) são as peças
+        conformes da inspeção progressiva que o Finalizar ainda vai somar.
         """
 
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT * FROM qualidade_primeira_peca
-                WHERE UPPER(codigo_op) = UPPER(%s)
-                ORDER BY id
+                SELECT pp.*,
+                       (SELECT COUNT(*) FROM qualidade_inspecao_progressiva_pecas ip
+                         WHERE ip.primeira_peca_id = pp.id AND ip.conforme
+                           AND ip.apontamento_lancado_id IS NULL
+                       ) AS inspecao_pecas_boas_pendentes
+                FROM qualidade_primeira_peca pp
+                WHERE UPPER(pp.codigo_op) = UPPER(%s)
+                ORDER BY pp.id
                 """,
                 (limpa_codigo(codigo_op),),
             )
@@ -186,7 +200,8 @@ class FirstPieceRepositoryMixin:
                        tentativas = tentativas + 1,
                        atualizada_em = %s
                  WHERE id = %s
-                   AND status IN (%s, %s, %s)
+                   AND bloqueio_ativo IS FALSE
+                   AND status IN (%s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -199,6 +214,9 @@ class FirstPieceRepositoryMixin:
                     FIRST_PIECE_PENDING,
                     FIRST_PIECE_PRODUCED,
                     FIRST_PIECE_SCRAP,
+                    # Retrabalho não trava mais (patch 09/11/2026): o operador
+                    # retrabalha e mede de novo, sem crachá.
+                    FIRST_PIECE_REWORK,
                 ),
             )
             return _as_dict(cursor.fetchone())
@@ -315,6 +333,203 @@ class FirstPieceRepositoryMixin:
                 cursor, evento_id=evento_id, codigo_op=apontamento.get("op"), execucao_concluida=False,
             )
             return primeira_peca
+
+    # ------------------------------------------------------------------
+    # Inspeção progressiva do setup (migration 75)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _pecas_exigidas_tx(cursor, linha):
+        """N da inspeção: o já fixado na linha ou o nível do produto + operação
+        (começa em 5), limitado à quantidade da OP. Roda com a linha travada."""
+
+        exigidas = linha.get("inspecao_pecas_exigidas")
+        if exigidas is not None:
+            return int(exigidas)
+        produto = str(linha.get("produto_codigo") or "").strip()
+        operacao = str(linha.get("numero_operacao") or "").strip()
+        nivel = 1
+        if produto:
+            cursor.execute(
+                """
+                INSERT INTO qualidade_inspecao_progressiva_nivel (produto_codigo, numero_operacao)
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
+                """,
+                (produto, operacao),
+            )
+            cursor.execute(
+                """
+                SELECT nivel FROM qualidade_inspecao_progressiva_nivel
+                 WHERE produto_codigo = %s AND numero_operacao = %s
+                """,
+                (produto, operacao),
+            )
+            nivel = int(cursor.fetchone()["nivel"])
+        return max(1, min(nivel, int(linha.get("quantidade_planejada") or 1)))
+
+    def fixar_pecas_exigidas_inspecao(self, primeira_peca_id):
+        """Fixa N **antes** de a 1ª peça ser aprovada.
+
+        Sem isso, entre a aprovação (status CONFORME) e a gravação da peça 1
+        havia um instante com N vazio, que o Finalizar lia como "inspeção
+        completa". Com N fixado antes, o Finalizar recusa até as N peças.
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM qualidade_primeira_peca WHERE id = %s FOR UPDATE",
+                (int(primeira_peca_id),),
+            )
+            linha = _as_dict(cursor.fetchone())
+            if linha is None or linha.get("inspecao_pecas_exigidas") is not None:
+                return linha
+            cursor.execute(
+                """
+                UPDATE qualidade_primeira_peca SET inspecao_pecas_exigidas = %s
+                 WHERE id = %s RETURNING *
+                """,
+                (self._pecas_exigidas_tx(cursor, linha), linha["id"]),
+            )
+            return dict(cursor.fetchone())
+
+    def registrar_peca_inspecao_progressiva(
+        self,
+        primeira_peca_id,
+        *,
+        conforme,
+        medidas,
+        operador,
+        motivo=None,
+        instante=None,
+        pecas_registradas_esperadas=None,
+    ):
+        """Grava uma peça medida no 2º estágio do setup, numa transação só.
+
+        * N (``inspecao_pecas_exigidas``) é fixado na primeira medição: o nível
+          do produto + operação (começa em 5), limitado à quantidade da OP.
+        * A contagem começa na 1ª peça conforme (ela é a peça 1 de N); as
+          tentativas não conformes da 1ª peça ficam registradas, mas não contam.
+        * Peça não conforme abre RNC (tela Decisão de RNC) e marca a OP como
+          "com NC": o nível não desce.
+        * Ao completar as N peças sem NC, o nível desce 1 (mínimo 1) para a
+          próxima OP.
+
+        Devolve ``None`` quando as N peças já foram medidas.
+
+        ``pecas_registradas_esperadas`` é quantas medições (conformes ou não)
+        a tela viu gravadas ao enviar. Se outro envio (clique duplo, reenvio da
+        rede, outra aba) já gravou a peça, a contagem mudou e devolve
+        ``{"repetida": True}`` sem gravar. Conta também as tentativas não
+        conformes da 1ª peça, que não mudam ``inspecao_pecas_medidas``.
+        """
+
+        momento = instante or datetime.now().replace(microsecond=0)
+        nome = str(operador or "Operador").strip()
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM qualidade_primeira_peca WHERE id = %s FOR UPDATE",
+                (int(primeira_peca_id),),
+            )
+            linha = _as_dict(cursor.fetchone())
+            if linha is None:
+                return None
+            produto = str(linha.get("produto_codigo") or "").strip()
+            operacao = str(linha.get("numero_operacao") or "").strip()
+            exigidas = self._pecas_exigidas_tx(cursor, linha)
+            medidas_ate_agora = int(linha.get("inspecao_pecas_medidas") or 0)
+            cursor.execute(
+                "SELECT COUNT(*) AS total FROM qualidade_inspecao_progressiva_pecas WHERE primeira_peca_id = %s",
+                (linha["id"],),
+            )
+            registradas = int(cursor.fetchone()["total"])
+            if pecas_registradas_esperadas is not None and int(pecas_registradas_esperadas) != registradas:
+                return {"repetida": True, "primeira_peca": linha}
+            if medidas_ate_agora >= exigidas:
+                return None
+            conta = bool(conforme) or medidas_ate_agora > 0
+            numero = registradas + 1
+            rnc = None
+            if not conforme:
+                cursor.execute(
+                    """
+                    INSERT INTO qualidade_rnc (
+                        codigo, primeira_peca_id, numero_peca, codigo_op, produto_codigo,
+                        tipo_setor, codigo_recurso, operador, motivo, registrada_em
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING *
+                    """,
+                    (
+                        f"RNC-PP{linha['id']}-{numero:04d}",
+                        linha["id"],
+                        numero,
+                        linha["codigo_op"],
+                        produto,
+                        linha.get("tipo_setor") or "",
+                        linha.get("codigo_recurso") or linha.get("recurso_apontado") or "",
+                        nome,
+                        (str(motivo or "").strip() or "Cota fora da tolerância")[:500],
+                        momento,
+                    ),
+                )
+                rnc = dict(cursor.fetchone())
+            cursor.execute(
+                """
+                INSERT INTO qualidade_inspecao_progressiva_pecas (
+                    primeira_peca_id, numero_peca, conforme, medidas, rnc_id, operador, registrada_em
+                ) VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    linha["id"], numero, bool(conforme),
+                    json.dumps(medidas or [], ensure_ascii=False, default=str),
+                    rnc["id"] if rnc else None, nome, momento,
+                ),
+            )
+            peca = dict(cursor.fetchone())
+            medidas_agora = medidas_ate_agora + (1 if conta else 0)
+            com_nc = bool(linha.get("inspecao_com_nc")) or not conforme
+            cursor.execute(
+                """
+                UPDATE qualidade_primeira_peca
+                   SET inspecao_pecas_exigidas = %s, inspecao_pecas_medidas = %s,
+                       inspecao_com_nc = %s, atualizada_em = %s
+                 WHERE id = %s
+                RETURNING *
+                """,
+                (exigidas, medidas_agora, com_nc, momento, linha["id"]),
+            )
+            atualizada = dict(cursor.fetchone())
+            completa = medidas_agora >= exigidas
+            nivel_desceu = False
+            if completa and not com_nc and produto:
+                cursor.execute(
+                    """
+                    UPDATE qualidade_inspecao_progressiva_nivel
+                       SET nivel = GREATEST(1, nivel - 1), atualizado_em = %s
+                     WHERE produto_codigo = %s AND numero_operacao = %s
+                    """,
+                    (momento, produto, operacao),
+                )
+                nivel_desceu = True
+            return {
+                "primeira_peca": atualizada,
+                "peca": peca,
+                "rnc": rnc,
+                "completa": completa,
+                "nivel_desceu": nivel_desceu,
+            }
+
+    def contar_boas_inspecao_progressiva_pendentes(self, primeira_peca_id):
+        """Peças conformes da inspeção ainda não lançadas em um apontamento."""
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total FROM qualidade_inspecao_progressiva_pecas
+                 WHERE primeira_peca_id = %s AND conforme AND apontamento_lancado_id IS NULL
+                """,
+                (int(primeira_peca_id),),
+            )
+            return int(cursor.fetchone()["total"])
 
     def liberar_primeira_peca_bloqueada(
         self, primeira_peca_id, *, cracha, nome, instante=None

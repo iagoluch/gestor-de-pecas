@@ -21,6 +21,7 @@ Três fronteiras importam:
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 import logging
@@ -169,6 +170,9 @@ class FirstPieceService:
         gate = self._avaliar(linha, setor, operacao)
         return {
             **gate.como_dicionario(),
+            # Toda medição gravada (conforme ou NC). A tela devolve este número
+            # ao medir e o banco recusa o 2º envio da mesma peça.
+            "pecas_registradas": int((linha or {}).get("inspecao_pecas_registradas") or 0),
             "registro": self._publico(linha),
             "checklist": self.checklist(setor=setor, operacao=operacao, registro=linha),
         }
@@ -325,16 +329,25 @@ class FirstPieceService:
                 self._publico(linha),
             )
 
+        if decisao == FIRST_PIECE_CONFORMING and first_piece_gate_is_structured(setor, operacao):
+            # N fica fixado ANTES da aprovação, em qualquer caminho (checklist
+            # ou ação "inspecionar"): não existe o instante "1ª peça aprovada
+            # com N vazio", em que o Finalizar entenderia a inspeção como
+            # completa e fecharia a OP sem as N peças.
+            fixar = getattr(self.db, "fixar_pecas_exigidas_inspecao", None)
+            if callable(fixar):
+                fixar(linha["id"])
+
         atualizada = self.db.registrar_inspecao_primeira_peca(
             linha["id"],
             resultado=decisao,
             operador=self.operador,
             observacao=observacao,
             instante=self._now(),
-            bloquear=decisao == FIRST_PIECE_REWORK,
-            ocorrencia=FIRST_PIECE_BLOCK_OCCURRENCE
-            if decisao == FIRST_PIECE_REWORK
-            else None,
+            # Patch 09/11/2026: o retrabalho não trava mais por crachá. O
+            # operador retrabalha e mede de novo; o lote só libera com a medida
+            # conforme e a não conformidade vai para a Decisão de RNC.
+            bloquear=False,
         )
         if atualizada is None:
             return _fail(
@@ -345,8 +358,8 @@ class FirstPieceService:
         if decisao == FIRST_PIECE_REWORK:
             self._alertas.primeira_peca_em_retrabalho(contexto)
             mensagem = (
-                "Primeira peça em retrabalho. A OP está bloqueada até o responsável "
-                "liberar com o crachá dele."
+                "Primeira peça em retrabalho. Retrabalhe a peça e meça de novo; "
+                "o lote só libera com a medida conforme."
             )
             codigo = "primeira_peca_retrabalho"
         elif decisao == FIRST_PIECE_SCRAP:
@@ -356,10 +369,15 @@ class FirstPieceService:
                 "o refugo consome o saldo planejado."
             )
             codigo = "primeira_peca_refugo"
-        else:
-            mensagem = "Primeira peça conforme. O lote está liberado."
-            codigo = "primeira_peca_conforme"
         gate = self._avaliar(atualizada, setor, operacao)
+        if decisao not in (FIRST_PIECE_REWORK, FIRST_PIECE_SCRAP):
+            codigo = "primeira_peca_conforme"
+            # Na Caldeiraria ainda faltam as N peças da inspeção progressiva.
+            mensagem = (
+                "Primeira peça conforme. O lote está liberado."
+                if gate.liberado
+                else f"Primeira peça conforme. {gate.message}"
+            )
         return FirstPieceResult(
             True,
             mensagem,
@@ -379,6 +397,7 @@ class FirstPieceService:
         cracha_responsavel=None,
         observacao=None,
         apontamento_id=None,
+        pecas_registradas=None,
     ):
         """Portão Setup/Qualidade do botão Iniciar (Wave 6B).
 
@@ -393,11 +412,17 @@ class FirstPieceService:
           apontamento não existir;
         * a conformidade sai de ``mes/domain/quality_measures.py`` (Wave 5.1) e
           o operador informa apenas a medida;
-        * o efeito de cada resultado continua sendo o da Wave 5 — ``CONFORME``
-          libera o lote e ``RETRABALHO`` bloqueia a OP até o crachá do
-          responsável. Desde o ajuste da Wave 6B, ``REFUGO`` da primeira peça
-          também exige o crachá do mesmo responsável designado, autorizado
-          **antes** de a peça ser descartada.
+        * ``CONFORME`` libera o lote; ``RETRABALHO`` não trava mais (patch
+          09/11/2026): o operador retrabalha e mede de novo. ``REFUGO`` da
+          primeira peça continua exigindo o crachá do responsável designado,
+          autorizado **antes** de a peça ser descartada;
+        * inspeção progressiva: cada medição vira uma peça numerada; a 1ª peça
+          conforme é a peça 1 de N e as próximas são medidas aqui mesmo até N.
+          Toda não conformidade abre RNC para a tela Decisão de RNC.
+        * ``pecas_registradas`` é quantas medições a tela viu gravadas ao
+          enviar. O banco a confere com a linha travada: um segundo envio da
+          mesma peça (clique duplo, reenvio da rede, outra aba ou outro tablet)
+          é recusado, inclusive a 1ª peça não conforme antes da aprovação.
         """
 
         if not first_piece_gate_is_structured(setor, operacao):
@@ -405,7 +430,28 @@ class FirstPieceService:
                 "primeira_peca_checklist_nao_aplicavel",
                 "Esta operação não usa o checklist de Setup/Qualidade.",
             )
+        trava = getattr(self.db, "trava_primeira_peca", None)
+        if not callable(trava):
+            trava = lambda *_: nullcontext()  # noqa: E731 - fakes de teste
+        with trava(limpa_codigo(op), _operation_id(operacao)):
+            return self._registrar_checklist(
+                op=op, setor=setor, recurso=recurso, operacao=operacao, medidas=medidas,
+                destino=destino, cracha_responsavel=cracha_responsavel, observacao=observacao,
+                apontamento_id=apontamento_id, pecas_registradas=pecas_registradas,
+            )
+
+    def _registrar_checklist(
+        self, *, op, setor, recurso, operacao, medidas, destino, cracha_responsavel,
+        observacao, apontamento_id, pecas_registradas,
+    ):
         linha = self._linha(op, operacao)
+        # Senha conferida antes de qualquer escrita (Codex, rodada 3): uma tela
+        # atrasada não pode regravar a decisão da 1ª peça para depois ser
+        # recusada só na hora de gravar a medição.
+        if pecas_registradas is not None and int(pecas_registradas) != int(
+            (linha or {}).get("inspecao_pecas_registradas") or 0
+        ):
+            return self._peca_ja_registrada(linha)
         if linha and linha.get("bloqueio_ativo"):
             return _fail(
                 "primeira_peca_bloqueada",
@@ -435,6 +481,13 @@ class FirstPieceService:
         # vale quando o novo envio também dá conforme — uma correção com cota
         # fora da faixa (refugo/retrabalho) precisa ser processada de verdade,
         # nunca silenciada pelo resultado antigo.
+        if linha and linha.get("status") == FIRST_PIECE_CONFORMING and self._faltam_pecas(linha):
+            # 2º estágio do setup: a 1ª peça já liberou e as próximas são
+            # medidas uma a uma. Sem destino e sem crachá: a não conformidade
+            # vira RNC para a Decisão de RNC.
+            return self._registrar_peca_progressiva(
+                linha, cotas, conforme_atual, checklist, setor, operacao, pecas_registradas
+            )
         if linha and linha.get("status") == FIRST_PIECE_CONFORMING and conforme_atual:
             gate = self._avaliar(linha, setor, operacao)
             return FirstPieceResult(
@@ -527,20 +580,124 @@ class FirstPieceService:
                 inspecao.code,
                 {**(inspecao.data or {}), "checklist": checklist, "cotas": cotas},
             )
-        mensagem = (
-            "Primeira peça aprovada. Lote liberado para produção."
-            if conforme
-            else inspecao.message
+        progressiva = self._gravar_peca_progressiva(
+            ((inspecao.data or {}).get("registro") or {}).get("id") or linha["id"],
+            cotas,
+            conforme,
+            pecas_registradas,
         )
+        if progressiva and progressiva.get("repetida"):
+            return self._peca_ja_registrada(progressiva["primeira_peca"])
+        dados = dict(inspecao.data or {})
+        if progressiva and progressiva.get("primeira_peca"):
+            registro = progressiva["primeira_peca"]
+            dados.update(self._avaliar(registro, setor, operacao).como_dicionario())
+            dados["registro"] = self._publico(registro)
+        mensagem = inspecao.message
+        if conforme:
+            mensagem = self._mensagem_progressiva(dados) or (
+                "Primeira peça aprovada. Lote liberado para produção."
+            )
         return FirstPieceResult(
             True,
             mensagem,
             inspecao.code,
             {
-                **(inspecao.data or {}),
+                **dados,
                 "checklist": checklist,
                 "cotas": cotas,
                 "conforme": conforme,
+                "rnc": (progressiva or {}).get("rnc"),
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Inspeção progressiva (patch 09/11/2026)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _faltam_pecas(linha):
+        exigidas = linha.get("inspecao_pecas_exigidas")
+        return exigidas is not None and int(linha.get("inspecao_pecas_medidas") or 0) < int(exigidas)
+
+    @staticmethod
+    def _motivo_nc(cotas):
+        fora = [
+            f"Cota {cota['sequencia']}: {cota['medida']} {cota['unidade']}"
+            + (f" (padrão {cota['padrao']})" if cota.get("padrao") else "")
+            for cota in cotas or ()
+            if cota["status"] == QUALITY_MEASURE_NON_CONFORMING
+        ]
+        return ("Fora da tolerância · " + "; ".join(fora))[:500]
+
+    def _gravar_peca_progressiva(self, primeira_peca_id, cotas, conforme, pecas_registradas=None):
+        return self.db.registrar_peca_inspecao_progressiva(
+            primeira_peca_id,
+            conforme=bool(conforme),
+            medidas=[
+                {chave: cota.get(chave) for chave in ("sequencia", "padrao", "medida", "unidade", "status")}
+                for cota in cotas or ()
+            ],
+            operador=self.operador,
+            motivo=None if conforme else self._motivo_nc(cotas),
+            instante=self._now(),
+            pecas_registradas_esperadas=pecas_registradas,
+        )
+
+    def _peca_ja_registrada(self, linha):
+        return _fail(
+            "primeira_peca_ja_registrada",
+            "Esta peça já foi registrada (envio repetido). Atualize o posto.",
+            self._publico(linha),
+        )
+
+    @staticmethod
+    def _mensagem_progressiva(gate):
+        exigidas = int(gate.get("pecas_exigidas") or 0)
+        medidas = int(gate.get("pecas_medidas") or 0)
+        if medidas < exigidas:
+            return f"Peça {medidas} de {exigidas} conforme. Meça as cotas da peça {medidas + 1}."
+        return None
+
+    def _registrar_peca_progressiva(
+        self, linha, cotas, conforme, checklist, setor, operacao, pecas_registradas=None
+    ):
+        progressiva = self._gravar_peca_progressiva(linha["id"], cotas, conforme, pecas_registradas)
+        if progressiva and progressiva.get("repetida"):
+            return self._peca_ja_registrada(progressiva["primeira_peca"])
+        if not progressiva:
+            return _fail(
+                "primeira_peca_estado_alterado",
+                "A situação da inspeção mudou. Atualize o posto e tente novamente.",
+                self._publico(linha),
+            )
+        registro = progressiva["primeira_peca"]
+        gate = self._avaliar(registro, setor, operacao).como_dicionario()
+        numero = int(registro.get("inspecao_pecas_medidas") or 0)
+        exigidas = int(registro.get("inspecao_pecas_exigidas") or 0)
+        if conforme:
+            mensagem = self._mensagem_progressiva(gate) or (
+                f"Peça {numero} de {exigidas} conforme. Inspeção concluída; o lote está liberado."
+            )
+            codigo = "inspecao_progressiva_conforme"
+        else:
+            mensagem = (
+                f"Peça {numero} de {exigidas} não conforme. A RNC "
+                f"{progressiva['rnc']['codigo']} foi aberta para a Qualidade decidir."
+            )
+            codigo = "inspecao_progressiva_nao_conforme"
+            if numero < exigidas:
+                mensagem += f" Meça as cotas da peça {numero + 1}."
+        return FirstPieceResult(
+            True,
+            mensagem,
+            codigo,
+            {
+                **gate,
+                "registro": self._publico(registro),
+                "checklist": checklist,
+                "cotas": cotas,
+                "conforme": bool(conforme),
+                "rnc": progressiva.get("rnc"),
             },
         )
 
@@ -743,6 +900,20 @@ class FirstPieceService:
             )
         return operador, None
 
+    def boas_da_inspecao_pendentes(self, op, operacao):
+        """``(primeira_peca_id, n)`` das peças boas da inspeção ainda não lançadas.
+
+        Patch 09/11/2026: as peças conformes medidas no 2º estágio entram no
+        total da OP; o Finalizar lança só a diferença e marca essas peças na
+        mesma transação, para não contar em dobro.
+        """
+
+        contar = getattr(self.db, "contar_boas_inspecao_progressiva_pendentes", None)
+        linha = self._linha(op, operacao) if callable(contar) else None
+        if not linha:
+            return None, 0
+        return linha["id"], int(contar(linha["id"]) or 0)
+
     def _linha(self, op, operacao):
         finder = getattr(self.db, "buscar_primeira_peca", None)
         if not callable(finder):
@@ -774,6 +945,8 @@ class FirstPieceService:
             setup_registrado=bool(dados.get("setup_registrado_em")),
             bloqueio_ativo=bool(dados.get("bloqueio_ativo")),
             gate_estruturado=estruturado,
+            pecas_exigidas=dados.get("inspecao_pecas_exigidas"),
+            pecas_medidas=int(dados.get("inspecao_pecas_medidas") or 0),
         )
 
     @staticmethod
@@ -815,6 +988,9 @@ class FirstPieceService:
             "liberada_por_cracha": dados.get("liberada_por_cracha"),
             "liberada_por_nome": dados.get("liberada_por_nome"),
             "tentativas": dados.get("tentativas"),
+            "inspecao_pecas_exigidas": dados.get("inspecao_pecas_exigidas"),
+            "inspecao_pecas_medidas": int(dados.get("inspecao_pecas_medidas") or 0),
+            "inspecao_com_nc": bool(dados.get("inspecao_com_nc")),
         }
 
     @staticmethod

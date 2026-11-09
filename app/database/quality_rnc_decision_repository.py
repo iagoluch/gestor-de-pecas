@@ -1,7 +1,9 @@
 """Persistência da decisão sobre uma RNC (migration 67). SOMENTE INSERÇÃO.
 
 Não existe segundo domínio de RNC: esta tabela é filha de ``qualidade_rnc`` e só
-guarda quem decidiu o quê e por quê. Este repositório propositalmente não tem
+guarda quem decidiu o quê e por quê. Única exceção (patch 09/11/2026): a decisão
+"volta para 5" de uma RNC da inspeção progressiva reinicia o nível daquele
+produto + operação na mesma transação. Este repositório propositalmente não tem
 UPDATE nem DELETE, não cria evento de quantidade e não toca em
 ``qualidade_pecas_inspecionadas`` nem em ``qualidade_rnc`` (o trigger do banco
 também recusa UPDATE). A decisão vigente é a de maior ``id``.
@@ -26,9 +28,13 @@ class QualityRncDecisionRepositoryMixin:
                 """
                 SELECT rnc.id, rnc.codigo, rnc.codigo_op, rnc.produto_codigo,
                        rnc.numero_peca, rnc.motivo,
-                       peca.resultado AS resultado_peca
+                       peca.resultado AS resultado_peca,
+                       CASE WHEN rnc.primeira_peca_id IS NULL THEN 'inspecao'
+                            ELSE 'inspecao_progressiva' END AS origem,
+                       pp.numero_operacao
                 FROM qualidade_rnc rnc
                 LEFT JOIN qualidade_pecas_inspecionadas peca ON peca.rnc_id = rnc.id
+                LEFT JOIN qualidade_primeira_peca pp ON pp.id = rnc.primeira_peca_id
                 WHERE rnc.id = %s
                 """,
                 (int(rnc_id),),
@@ -37,11 +43,36 @@ class QualityRncDecisionRepositoryMixin:
             return dict(row) if row else None
 
     def registrar_decisao_rnc(
-        self, rnc_id, *, decisao, justificativa, usuario_id, usuario_nome, quando=None
+        self,
+        rnc_id,
+        *,
+        decisao,
+        justificativa,
+        usuario_id,
+        usuario_nome,
+        quando=None,
+        reiniciar_nivel=None,
     ):
-        """Acrescenta uma linha de decisão (nunca altera as anteriores)."""
+        """Acrescenta uma linha de decisão (nunca altera as anteriores).
+
+        ``reiniciar_nivel=(produto, operacao)`` põe o nível da inspeção
+        progressiva desse produto + operação de volta em 5 na MESMA transação
+        (decisão "volta para 5"; vale a partir da próxima OP).
+        """
 
         with self.connection() as connection, connection.cursor() as cursor:
+            if reiniciar_nivel:
+                produto, operacao = reiniciar_nivel
+                cursor.execute(
+                    """
+                    INSERT INTO qualidade_inspecao_progressiva_nivel
+                        (produto_codigo, numero_operacao, nivel, atualizado_em)
+                    VALUES (%s, %s, 5, %s)
+                    ON CONFLICT (produto_codigo, numero_operacao)
+                    DO UPDATE SET nivel = 5, atualizado_em = EXCLUDED.atualizado_em
+                    """,
+                    (produto, operacao, quando or self._now()),
+                )
             cursor.execute(
                 f"""
                 INSERT INTO qualidade_rnc_decisoes
@@ -92,6 +123,8 @@ class QualityRncDecisionRepositoryMixin:
                        rnc.codigo_op AS op, rnc.produto_codigo AS produto,
                        rnc.codigo_recurso AS recurso, rnc.registrada_em AS criada_em,
                        peca.resultado AS resultado_peca,
+                       CASE WHEN rnc.primeira_peca_id IS NULL THEN 'inspecao'
+                            ELSE 'inspecao_progressiva' END AS origem,
                        dec.id AS dec_id, dec.decisao AS dec_decisao,
                        dec.justificativa AS dec_justificativa,
                        dec.decidido_por_nome AS dec_decidido_por_nome,

@@ -25,6 +25,7 @@ def liberar_primeira_peca(
     operacao,
     now_func=None,
     resultado="CONFORME",
+    nivel_inspecao=None,
 ):
     """Produz, aponta o Setup quando aplicável e inspeciona a primeira peça.
 
@@ -44,13 +45,63 @@ def liberar_primeira_peca(
         return producao
     if linha.get("setup_obrigatorio"):
         servico.marcar_setup(op=op, operacao=operacao)
-    return servico.inspecionar(
+    if nivel_inspecao is not None:
+        definir_nivel_inspecao(
+            db, linha.get("produto_codigo"), linha.get("numero_operacao"), nivel_inspecao
+        )
+    inspecao = servico.inspecionar(
         op=op,
         setor=setor,
         recurso=recurso,
         operacao=operacao,
         resultado=resultado,
     )
+    if inspecao.ok:
+        medir_pecas_restantes(db, (inspecao.data or {}).get("registro"), operador)
+    return inspecao
 
 
-__all__ = ["liberar_primeira_peca"]
+def definir_nivel_inspecao(db, produto, operacao, nivel):
+    """Nível da inspeção progressiva do produto + operação (começa em 5).
+
+    Nível 1 = só a 1ª peça: os testes de quantidade usam para que a inspeção
+    some exatamente 1 peça boa ao total.
+    """
+
+    chave = (str(produto or "").strip(), str(operacao or "").strip())
+    if hasattr(db, "progressive_levels"):
+        db.progressive_levels[chave] = int(nivel)
+        return
+    with db.connection() as conexao, conexao.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO qualidade_inspecao_progressiva_nivel (produto_codigo, numero_operacao, nivel)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (produto_codigo, numero_operacao) DO UPDATE SET nivel = EXCLUDED.nivel
+            """,
+            (*chave, int(nivel)),
+        )
+
+
+def medir_pecas_restantes(db, primeira_peca, operador="OPERADOR"):
+    """Grava as peças conformes que faltam da inspeção progressiva.
+
+    Patch 09/11/2026: na Caldeiraria (Dobra/Usinagem/Serra) a aprovação da
+    1ª peça fixa N e o lote só libera com as N medições, que o checklist grava
+    peça a peça (regras em ``tests/test_inspecao_progressiva.py``). Os testes
+    que só precisam do lote liberado gravam aqui as que faltam. Setor sem
+    inspeção progressiva (N vazio) não grava nada.
+    """
+
+    dados = dict(primeira_peca or {})
+    if dados.get("inspecao_pecas_exigidas") is None:
+        return
+    for _ in range(int(dados["inspecao_pecas_exigidas"])):
+        gravada = db.registrar_peca_inspecao_progressiva(
+            dados["id"], conforme=True, medidas=[], operador=operador
+        )
+        if gravada is None:
+            return
+
+
+__all__ = ["definir_nivel_inspecao", "liberar_primeira_peca", "medir_pecas_restantes"]

@@ -168,6 +168,10 @@ class FirstPieceGate:
     # Wave 6B — sinal derivado (não persistido) que diz à tela que a entrada
     # deste portão é o popup Setup/Qualidade do botão Iniciar.
     gate_estruturado: bool = False
+    # Inspeção progressiva (patch 09/11/2026): N peças a medir no 2º estágio do
+    # setup e quantas já foram medidas. 0/0 = não se aplica (ou linha legada).
+    pecas_exigidas: int = 0
+    pecas_medidas: int = 0
     code: str = ""
     message: str = ""
     pendencias: tuple[str, ...] = field(default_factory=tuple)
@@ -183,6 +187,8 @@ class FirstPieceGate:
             "inspecao_concluida": self.inspecao_concluida,
             "bloqueio_ativo": self.bloqueio_ativo,
             "gate_estruturado": self.gate_estruturado,
+            "pecas_exigidas": self.pecas_exigidas,
+            "pecas_medidas": self.pecas_medidas,
             "code": self.code,
             "message": self.message,
             "pendencias": list(self.pendencias),
@@ -215,8 +221,14 @@ def evaluate_first_piece_gate(
     setup_registrado: bool = False,
     bloqueio_ativo: bool = False,
     gate_estruturado: bool = False,
+    pecas_exigidas: int | None = None,
+    pecas_medidas: int = 0,
 ) -> FirstPieceGate:
-    """Avalia o portão da primeira peça a partir dos fatos já persistidos."""
+    """Avalia o portão da primeira peça a partir dos fatos já persistidos.
+
+    ``pecas_exigidas`` é o N da inspeção progressiva (``None`` = ainda não
+    fixado ou linha anterior à migration 75, tratada como completa).
+    """
 
     if not aplicavel:
         return NAO_APLICAVEL
@@ -230,6 +242,9 @@ def evaluate_first_piece_gate(
         FIRST_PIECE_SCRAP,
     }
 
+    exigidas = int(pecas_exigidas or 0) if gate_estruturado else 0
+    medidas = int(pecas_medidas or 0) if gate_estruturado else 0
+
     def recusa(code: str, message: str, pendencia: str) -> FirstPieceGate:
         return FirstPieceGate(
             aplicavel=True,
@@ -241,6 +256,8 @@ def evaluate_first_piece_gate(
             inspecao_concluida=inspecao_concluida,
             bloqueio_ativo=bool(bloqueio_ativo),
             gate_estruturado=bool(gate_estruturado),
+            pecas_exigidas=exigidas,
+            pecas_medidas=medidas,
             code=code,
             message=message,
             pendencias=(pendencia,),
@@ -263,6 +280,12 @@ def evaluate_first_piece_gate(
             FIRST_PIECE_GATE_REQUIRED,
             FIRST_PIECE_GATE_REQUIRED_MESSAGE,
             "setup",
+        )
+    if gate_estruturado and medidas < exigidas:
+        return recusa(
+            FIRST_PIECE_GATE_REQUIRED,
+            f"Meça as cotas da peça {medidas + 1} de {exigidas} no Setup antes de finalizar.",
+            "inspecao_progressiva",
         )
     if not peca_produzida:
         return recusa(
@@ -304,6 +327,8 @@ def evaluate_first_piece_gate(
         inspecao_concluida=True,
         bloqueio_ativo=False,
         gate_estruturado=bool(gate_estruturado),
+        pecas_exigidas=exigidas,
+        pecas_medidas=medidas,
         message="Primeira peça aprovada. O lote está liberado.",
     )
 

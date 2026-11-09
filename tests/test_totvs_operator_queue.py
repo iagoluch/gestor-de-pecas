@@ -999,7 +999,8 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
 
         # Wave 5/6B: a primeira peça é o portão do lote. Em Usinagem ela é
         # liberada antes de produzir, e sem ela não há finalização.
-        liberar_primeira_peca(self.db, "OPERADOR TOTVS", **contexto)
+        # Patch 09/11/2026: nível 1 = a 1ª peça conforme já é 1 boa da OP.
+        liberar_primeira_peca(self.db, "OPERADOR TOTVS", **contexto, nivel_inspecao=1)
 
         self.assertTrue(executar("Início").ok)
         self.assertEqual(self._estado_atual(), "Em processo")
@@ -1026,7 +1027,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         self.assertFalse(excedente.ok)
         self.assertEqual(excedente.code, "quantidade_inconsistente")
         # Finalização exige crachá.
-        sem_cracha = executar("Finalizado", pecas_boas=10)
+        sem_cracha = executar("Finalizado", pecas_boas=9)
         self.assertFalse(sem_cracha.ok)
         self.assertEqual(sem_cracha.code, "cracha_obrigatorio")
 
@@ -1038,11 +1039,11 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         )
         self.assertTrue(parcial.ok)
         self.assertEqual(parcial.code, "finalizacao_parcial")
-        self.assertEqual(int(parcial.data["saldo_restante"]), 2)
+        self.assertEqual(int(parcial.data["saldo_restante"]), 1)  # 10 - (1 + 6 + 2)
         self.assertEqual(self._estado_atual(), "Aguardando")
 
         self.assertTrue(executar("Início").ok)
-        final = executar("Finalizado", pecas_boas=2, operadores_cracha=["9001"])
+        final = executar("Finalizado", pecas_boas=1, operadores_cracha=["9001"])
         self.assertTrue(final.ok)
         self.assertEqual(self._estado_atual(), "Finalizado")
 

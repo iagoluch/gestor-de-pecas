@@ -413,9 +413,18 @@ class OperatorFlowService:
                 # desta etapa passa pelo popup Setup/Qualidade. Ele é derivado
                 # do setor, não é um estado novo e não é decidido no React.
                 gate_estruturado=first_piece_gate_is_structured(setor_portao, row),
+                pecas_exigidas=(registro_primeira_peca or {}).get("inspecao_pecas_exigidas"),
+                pecas_medidas=int(
+                    (registro_primeira_peca or {}).get("inspecao_pecas_medidas") or 0
+                ),
             )
             row["primeira_peca"] = gate.como_dicionario()
             row["primeira_peca_id"] = (registro_primeira_peca or {}).get("id")
+            # Patch 09/11/2026: o Finalizar soma estas peças sozinho; a tela só
+            # avisa o operador para informar a diferença.
+            row["pecas_boas_inspecao"] = int(
+                (registro_primeira_peca or {}).get("inspecao_pecas_boas_pendentes") or 0
+            )
             row["pode_finalizar"] = bool(row["selectable"] and gate.liberado)
             # O Finalizar desta etapa ainda passa pela conferência da primeira
             # peça: o posto sabe de antemão que o botão abrirá o popup (ou
@@ -1467,6 +1476,14 @@ class OperatorFlowService:
         if inspecao_marcador:
             boas = 0
             refugos = 0
+        primeira_peca_id, boas_inspecao = None, 0
+        if target == OperatorState.FINISHED and not ending_rework and not inspecao_marcador:
+            # Patch 09/11/2026: as peças boas medidas na inspeção progressiva
+            # já entram no total; o operador informa só a diferença (2 + 8 = 10).
+            primeira_peca_id, boas_inspecao = self._first_piece.boas_da_inspecao_pendentes(
+                codigo, operacao
+            )
+            boas += boas_inspecao
         if target == OperatorState.FINISHED or ending_rework:
             if not crachas:
                 return OperatorFlowResult(
@@ -1521,6 +1538,14 @@ class OperatorFlowService:
                     "Informe ao menos uma peça boa ou um refugo.",
                     "quantidade_invalida",
                 )
+            if boas_inspecao:
+                # As peças da inspeção nunca empurram a OP além do previsto
+                # (ex.: OP de 1 peça com a 1ª refugada): o que passar do saldo
+                # só liberou o portão, como antes do patch de 09/11/2026.
+                excesso = ManufacturingRules.attended_quantity(
+                    boas_anteriores + boas, refugos_anteriores + refugos
+                ) - previsto
+                boas -= min(max(0, excesso), boas_inspecao)
             quantidade_atendida = ManufacturingRules.attended_quantity(
                 boas_anteriores + boas,
                 refugos_anteriores + refugos,
@@ -1600,6 +1625,11 @@ class OperatorFlowService:
                 recurso_exclusivo=bool(recurso_exclusivo),
                 data_hora=self._now(),
                 **({"encerrar_retrabalho": True} if ending_rework else {}),
+                **(
+                    {"lancar_inspecao_progressiva": (primeira_peca_id, boas_inspecao)}
+                    if boas_inspecao
+                    else {}
+                ),
             )
         except ValueError as exc:
             return OperatorFlowResult(False, str(exc), "quantidade_invalida")

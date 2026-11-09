@@ -69,6 +69,11 @@ class FirstPieceRequest(BaseModel):
     # peça fora da faixa vai para retrabalho (padrão) ou para refugo. Refugo
     # exige o crachá do responsável designado em `badge`.
     destination: Literal["RETRABALHO", "REFUGO"] | None = None
+    # Inspeção progressiva: quantas peças a tela viu medidas ao enviar. O
+    # banco recusa o envio se outro já gravou a peça (clique duplo, 2 abas).
+    # Quantas medições a tela viu gravadas: o banco recusa o 2º envio da mesma
+    # peça (clique duplo, reenvio da rede, outra aba). Obrigatório no checklist.
+    inspection_recorded: int | None = Field(default=None, ge=0, le=100_000)
 
 
 class CuttingActionRequest(BaseModel):

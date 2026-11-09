@@ -438,6 +438,9 @@ class WebApiTests(unittest.TestCase):
         self.db.salvar_template_qualidade(
             "PECA-WEB", [{"sequencia": 1, "descricao": "Altura", "padrao": "12,0 +/- 0,2"}]
         )
+        # Este teste é do fluxo web/CSRF: nível 1 da inspeção progressiva
+        # (só a 1ª peça). As N peças têm teste próprio em test_inspecao_progressiva.
+        self.db.progressive_levels[("PECA-WEB", "20")] = 1
         started = self.client.post(
             "/api/v1/operator/actions", headers=self.csrf(), json=payload
         )
@@ -464,6 +467,20 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(cotas[0]["limite_inferior"], 11.8)
         self.assertEqual(cotas[0]["limite_superior"], 12.2)
 
+        # Tela antiga, sem a contagem de medições: não prova que a peça ainda
+        # não foi gravada por outro envio, então é recusada.
+        sem_contagem = self.client.post(
+            "/api/v1/operator/first-piece",
+            headers=self.csrf(),
+            json={
+                **primeira_peca,
+                "action": "checklist",
+                "measures": [{"sequencia": 1, "medida": "12,1"}],
+            },
+        )
+        self.assertEqual(sem_contagem.status_code, 409, sem_contagem.text)
+        self.assertEqual(sem_contagem.json()["code"], "primeira_peca_tela_desatualizada")
+
         # O popup não confirma Setup: quem grava esse fato é o botão Setup.
         sem_setup = self.client.post(
             "/api/v1/operator/first-piece",
@@ -472,6 +489,7 @@ class WebApiTests(unittest.TestCase):
                 **primeira_peca,
                 "action": "checklist",
                 "measures": [{"sequencia": 1, "medida": "12,1"}],
+                "inspection_recorded": 0,
             },
         )
         self.assertEqual(sem_setup.status_code, 409, sem_setup.text)
@@ -498,6 +516,7 @@ class WebApiTests(unittest.TestCase):
                 **primeira_peca,
                 "action": "checklist",
                 "measures": [{"sequencia": 1, "medida": "12,1"}],
+                "inspection_recorded": 0,
             },
         )
         self.assertEqual(checklist.status_code, 200, checklist.text)
@@ -521,21 +540,9 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(stopped.status_code, 200, stopped.text)
         resumed = self.client.post("/api/v1/operator/actions", headers=self.csrf(), json=payload)
         self.assertEqual(resumed.status_code, 200, resumed.text)
-        # Wave 4: OP-WEB prevê 2 peças e boas + refugo têm esse teto. Uma peça
-        # boa é parcial e devolve a OP à fila com o saldo acumulado.
-        partial = self.client.post(
-            "/api/v1/operator/actions",
-            headers=self.csrf(),
-            json={**payload, "action": "Finalizado", "good": 1, "scrap": 0, "badges": ["1"]},
-        )
-        self.assertEqual(partial.status_code, 200, partial.text)
-        self.assertEqual(partial.json()["code"], "finalizacao_parcial")
-        self.assertEqual(self.db.appointments[0]["quantidade_boa"], 1)
-        self.assertEqual(self.db.appointments[0]["status"], "Aguardando")
-
-        reopened = self.client.post("/api/v1/operator/actions", headers=self.csrf(), json=payload)
-        self.assertEqual(reopened.status_code, 200, reopened.text)
-        # O refugo fecha o saldo sem virar peça boa em nenhum ponto do caminho.
+        # Wave 4: OP-WEB prevê 2 peças e boas + refugo têm esse teto. A 1ª peça
+        # conforme da inspeção já conta como boa (patch 09/11/2026), então um
+        # refugo fecha o saldo: 1 boa (inspeção) + 1 refugo, sem contar em dobro.
         finished = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
