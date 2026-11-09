@@ -21,6 +21,17 @@ São curtas e específicas do Gestor; carregue a que casar com a tarefa, junto c
 
 Escolha do modelo por tipo de tarefa em `.ai/NEMO_MODELOS.md`; `scripts/nemo.sh <slug> <prompt> [ultra|super|kimi]`. Tarefa que escreve testes: `super`, e mutação no patch antes de aceitar.
 
+## Revisão obrigatória pelo Codex (regra do usuário, 09/11/2026)
+
+Toda tarefa que **criar ou alterar código** termina com revisão do Codex, depois que os testes relacionados passam e antes de entregar/commitar:
+
+1. Rode `powershell -File scripts\codex_revisor.ps1 -Tarefa "<o que mudou e o risco>"` (uma chamada por tarefa, com todo o diff; use `-Arquivos` se houver ruído).
+2. Confira cada achado antes de agir; corrija os confirmados e diga no fim o que o Codex achou e o que foi descartado (e por quê).
+3. **Tarefa pequena não entra** (regra do usuário): pule e diga "Codex: não aplicável (pequena)". É pequena quando TODAS valem: até ~30 linhas alteradas, até 2 arquivos, sem regra de negócio/MES, contrato de API, schema, auth, integração (TOTVS/SigmaNEST/OT) nem concorrência. Texto de UI, estilo, typo, renomeação mecânica e ajuste de teste simples são pequenos. Na dúvida, revise. Também pule se for só docs ou não houver diff.
+4. R3: `-Esforco high`. Falha do script não bloqueia a entrega: avise o usuário.
+
+Detalhes e custo (~15 mil tokens fixos por chamada): `.ai/CODEX_REVISOR.md`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
