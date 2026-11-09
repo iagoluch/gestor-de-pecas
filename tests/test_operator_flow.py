@@ -1022,5 +1022,52 @@ class EstacaoCanonicaDaSoldaTests(unittest.TestCase):
         self.assertFalse(com_setup["aceita_producao_simultanea"])
 
 
+class OperatorResourceQueueTests(unittest.TestCase):
+    def service(self, sector, codes):
+        db = FakeDatabase()
+        rows = [
+            {"id": index, "codigo_op": f"OP-{code}", "numero_operacao": "10",
+             "codigo_recurso": code, "tipo_setor": sector, "recurso_tipo_setor": sector,
+             "quantidade": 5, "ordem": 1}
+            for index, code in enumerate(codes, 1)
+        ]
+        db.listar_proximas_operacoes_roteiro = lambda *args, **kwargs: rows
+        db.listar_codigos_recursos_totvs = lambda: codes
+        return db, OperatorFlowService(db, "TESTE")
+
+    def test_fila_pintura_separa_os_cinco_recursos(self):
+        codes = ("JATO", "PREP", "PINT.L", "ESTUFA", "INSPE2")
+        _, service = self.service("Pintura", codes)
+        for station, code in zip(
+            ("Jato", "Preparação", "Pintura", "Secagem", "Inspeção Final"), codes
+        ):
+            with self.subTest(station=station):
+                rows = service.listar_cartoes("Pintura", station)["queue"]
+                self.assertEqual([row["op"] for row in rows], [f"OP-{code}"])
+
+    def test_fila_codigo_direto_nao_mistura_postos_prototipo(self):
+        _, service = self.service("Protótipo", ("PREMTG", "SOLDA4"))
+        for station in ("PREMTG", "SOLDA4"):
+            self.assertEqual(
+                [row["op"] for row in service.listar_cartoes("Protótipo", station)["queue"]],
+                [f"OP-{station}"],
+            )
+
+    def test_fila_robo_compartilhado_preserva_os_dois_codigos(self):
+        _, service = self.service("Solda Robô", ("ROBO P", "ROBO S"))
+        self.assertEqual(len(service.listar_cartoes("Solda Robô", "Robô 1")["queue"]), 2)
+
+    def test_transferencia_explicita_do_lider_preserva_excecao(self):
+        db, service = self.service("Pintura", ("JATO",))
+        db.listar_fila_manual_ativa = lambda: [
+            {"id": 1, "catalogo_operacao_id": 1, "recurso": "Preparação",
+             "posicao": 1, "puxada": True}
+        ]
+        queue = service.listar_cartoes("Pintura", "Preparação")["queue"]
+        self.assertEqual([row["op"] for row in queue], ["OP-JATO"])
+        self.assertTrue(queue[0]["fixada"])
+        self.assertTrue(queue[0]["origem_recurso"])
+
+
 if __name__ == "__main__":
     unittest.main()

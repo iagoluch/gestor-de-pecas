@@ -684,14 +684,18 @@ class TotvsParserContractTests(unittest.TestCase):
                     TotvsActivityClassification.PENDING_DECISION,
                 )
 
-        # Recurso cadastrado em outro setor nunca é promovido para Montagem.
+        # A descrição MONTAGEM não promove o recurso de outro setor para
+        # Montagem: o posto apontável conserva seu pertencimento cadastral.
         outro_setor = TotvsProductionOrderMapper(
             TotvsResourceResolver(known_resource_sectors={"SOLDA4": "Solda Aço"})
         ).map(self._montagem_message("SOLDA4"))
-        self.assertEqual(outro_setor.operations, ())
+        self.assertEqual(
+            [(item.codigo_recurso, item.tipo_setor) for item in outro_setor.operations],
+            [("SOLDA4", "Solda Aço")],
+        )
         self.assertEqual(
             outro_setor.activity_treatments[0].classification,
-            TotvsActivityClassification.PENDING_DECISION,
+            TotvsActivityClassification.POINTABLE_CONFIRMED,
         )
 
     def test_recurso_desconhecido_nao_sofre_prefixo_ou_fuzzy_matching(self):

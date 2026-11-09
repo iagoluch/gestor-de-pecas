@@ -14,6 +14,7 @@ from app.core.resource_mapping import (
     WELDING_SECTOR_KEYS,
     resolve_resource_identity,
     resource_display_name,
+    station_resource_code,
     station_matches_route,
 )
 from app.core.normalization import limpa_codigo
@@ -1899,6 +1900,15 @@ class OperatorFlowService:
         rows = self.db.listar_apontamentos_operacionais(
             setor, maquina=recurso, somente_ativos=True
         )
+        # A fila segue o recurso pedido; poder executar uma exceção em outro
+        # posto não distribui automaticamente a OP por todo o setor.
+        queue_resource = station_resource_code(setor, recurso)
+        if not queue_resource:
+            codes_loader = getattr(self.db, "listar_codigos_recursos_totvs", None)
+            known_codes = set(codes_loader() or ()) if callable(codes_loader) else set()
+            identity = resolve_resource_identity(recurso)
+            if identity in known_codes:
+                queue_resource = identity
         # Fila manual do líder (migration 62): as fixadas neste recurso ganham a
         # posição dele; as fixadas em OUTRO recurso somem desta fila. Sem
         # entradas (ou com um db sem o loader) o fluxo é exatamente o antigo.
@@ -1930,7 +1940,8 @@ class OperatorFlowService:
             card = self._card(row)
             if row_operation_id in aqui:
                 self._marcar_fixada(
-                    card, aqui[row_operation_id], setor, recurso, row.get("codigo_recurso")
+                    card, aqui[row_operation_id], setor, recurso, row.get("codigo_recurso"),
+                    station_code=queue_resource,
                 )
             queue.append(card)
         production = [self._card(row) for row in rows if row.get("status") != "Aguardando"]
@@ -1961,12 +1972,14 @@ class OperatorFlowService:
                     continue
                 route_code = operation.get("codigo_recurso") or operation.get("recurso")
                 fixada = aqui.get(operation_id)
-                if fixada is None and not station_matches_route(
-                    setor,
-                    recurso,
-                    route_code,
-                    resource_sector=operation.get("recurso_tipo_setor"),
-                ):
+                queue_matches = (
+                    resolve_resource_identity(queue_resource) == resolve_resource_identity(route_code)
+                    if queue_resource else station_matches_route(
+                        setor, recurso, route_code,
+                        resource_sector=operation.get("recurso_tipo_setor"),
+                    )
+                )
+                if fixada is None and not queue_matches:
                     continue
                 virtual = {
                     **dict(operation),
@@ -1989,6 +2002,7 @@ class OperatorFlowService:
                         route_code,
                         operation.get("recurso_tipo_setor"),
                         operation.get("recurso_nome"),
+                        station_code=queue_resource,
                     )
                 queue.append(card)
         queue.sort(
@@ -2002,13 +2016,18 @@ class OperatorFlowService:
 
     @staticmethod
     def _marcar_fixada(
-        card, entrada, setor, recurso, route_code, resource_sector=None, nome=None
+        card, entrada, setor, recurso, route_code, resource_sector=None, nome=None,
+        *, station_code=None,
     ):
         """Sinaliza no card que o líder fixou a operação neste recurso."""
 
-        puxada = bool(route_code) and not station_matches_route(
-            setor, recurso, route_code, resource_sector=resource_sector
+        compatible = (
+            resolve_resource_identity(station_code) == resolve_resource_identity(route_code)
+            if station_code else station_matches_route(
+                setor, recurso, route_code, resource_sector=resource_sector
+            )
         )
+        puxada = bool(route_code) and not compatible
         card.update(
             fixada=True,
             posicao_manual=entrada["posicao"],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from app.core.operator_sectors import OPERATOR_SECTORS
+from app.core.operator_sectors import OPERATOR_SECTORS, is_apontavel_resource
 from app.core.resource_mapping import (
     OFFICIAL_RESOURCE_ALIASES as _CORE_RESOURCE_ALIASES,
     OFFICIAL_RESOURCE_SECTORS,
@@ -146,6 +146,18 @@ class TotvsResourceResolver:
         return None
 
     def resolve_sector(self, activity: TotvsActivityOrder) -> str | None:
+        # O posto apontável e seu setor cadastrado têm precedência sobre
+        # descrições genéricas do roteiro (ex.: CORTE executado em SERRA3).
+        # Sem pertencimento confirmado ou fora do inventário de postos,
+        # preserva-se a resolução conservadora existente.
+        for candidate in self._resource_candidates(activity):
+            code = normalize_resource_code(
+                self.resource_aliases.get(candidate.casefold(), candidate)
+            )
+            catalog_sector = self.known_resource_sectors.get(code)
+            if catalog_sector and is_apontavel_resource(code):
+                return catalog_sector
+
         candidates = (
             activity.activity_description,
             activity.work_center_code,
