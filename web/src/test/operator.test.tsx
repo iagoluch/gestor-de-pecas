@@ -283,6 +283,9 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Parada do posto" })).not.toBeDisabled();
+    // Ordem pedida pela manufatura (09/11/2026).
+    expect(Array.from(screen.getByLabelText("Ações operacionais").querySelectorAll("button"), (b) => b.textContent))
+      .toEqual(["Iniciar", "Setup", "Parada do posto", "Retrabalho", "Finalizar"]);
     fireEvent.click(screen.getByRole("button", { name: "20 - DOBRA — Próxima" }));
     await screen.findByRole("heading", { name: "Confirmar operação" });
     const confirmation = screen.getByRole("dialog");
@@ -955,6 +958,9 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByLabelText("Ações operacionais")).toHaveClass("operator-actions");
     expect(screen.queryByRole("button", { name: "Setup" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
+    // Setor sem Setup: só some o botão; a ordem dos outros continua.
+    expect(Array.from(screen.getByLabelText("Ações operacionais").querySelectorAll("button"), (b) => b.textContent))
+      .toEqual(["Iniciar", "Parada do posto", "Retrabalho", "Finalizar"]);
   });
 
   it("finaliza na Solda direto, sem portão de primeira peça e sem selecionar o marco terminal", async () => {

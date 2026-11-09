@@ -268,7 +268,7 @@ export function HighlightPage() {
           }}
         >
           <OperatorActionIcon name="start" />
-          <span>{stoppedWithoutTask || selectedPaused ? "Retomar produção" : startsActivity ? "Iniciar atividade" : "Iniciar"}</span>
+          <span>{stoppedWithoutTask || selectedPaused ? "Retomar produção" : "Iniciar"}</span>
         </button>
         {/* Parada é do posto: segue disponível com a tarefa selecionada e o plano
             ainda não iniciado (o backend a registra como parada do recurso). */}

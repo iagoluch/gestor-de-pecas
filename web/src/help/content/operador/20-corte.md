@@ -62,7 +62,7 @@ Mensagens: "Nenhuma OP vinculada a este plano.", "Nenhum plano publicado para es
 | **Finalizar só este plano** | Aparece se há nestings aguardando. Encerra só o atual e deixa o recurso livre. |
 | **Registrar parada** | Se o posto não está parado. |
 | **Retomar corte** | Se o posto está parado. |
-| **Iniciar atividade** / **Finalizar atividade** | Atividade sem plano. "Iniciar atividade" aparece sem plano em processo e sem parada. |
+| **Iniciar** / **Finalizar atividade** | Atividade sem plano. "Iniciar" aparece sem plano em processo e sem parada. |
 
 ## Passos: cortar um plano
 

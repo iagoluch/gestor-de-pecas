@@ -9,16 +9,18 @@ Os botões ficam na barra "Ações operacionais". Botão apagado significa que, 
 
 ## Os botões
 
+Na tela, a ordem é: Iniciar, Setup, Parada, Retrabalho e Finalizar. Em setor sem Setup, esse botão não aparece e os outros mantêm a ordem.
+
 | Botão | Para que serve | Quando fica ativo |
 |---|---|---|
 | **Iniciar** | Começa a produção da etapa selecionada. | Etapa selecionável; OP fora de Em processo, Setup e Retrabalho; sem outra OP em Setup/Retrabalho no posto; sem primeira peça reprovada esperando o responsável. |
 | **Retomar produção** | É o mesmo botão Iniciar, com outro nome, quando a OP está em Parada. | OP parada. |
 | **Iniciar retrabalho** | Aparece no lugar de Iniciar quando a OP voltou para retrabalho. | OP em retorno de retrabalho. |
-| **Iniciar atividade** | Aparece quando não há OP carregada. Inicia atividade sem OP. | Sem OP. |
-| **Parada** (ou **Parada do posto**, se não há OP ativa) | Registra uma parada. | Veja [Parada e motivos](topico:06-parada-e-motivos). |
-| **Finalizar** | Encerra a produção e informa as quantidades. | Veja abaixo. |
+| **Iniciar** (sem OP) | Aparece quando não há OP carregada. Inicia atividade sem OP. | Sem OP. |
 | **Setup** | Registra a preparação da máquina. Só existe em setores com setup. | Veja [Setup e primeira peça](topico:07-setup-e-primeira-peca). |
+| **Parada** (ou **Parada do posto**, se não há OP ativa) | Registra uma parada. | Veja [Parada e motivos](topico:06-parada-e-motivos). |
 | **Retrabalho** / **Finalizar Ret.** | Começa ou encerra retrabalho. | Veja [Retrabalho](topico:08-retrabalho). |
+| **Finalizar** | Encerra a produção e informa as quantidades. | Veja abaixo. |
 
 ## Iniciar uma operação
 
@@ -60,7 +62,7 @@ Passos:
 
 ## Atividade sem OP
 
-1. Clique em **Iniciar atividade**.
+1. Sem OP carregada, clique em **Iniciar**.
 2. Abre "Atividade sem OP": "Iniciar uma atividade sem OP neste posto?" Responda **Sim** ou **Não**.
 3. Para encerrar, clique em **Finalizar** (o nome do botão continua "Finalizar") e responda "Finalizar a atividade sem OP em andamento?"
 

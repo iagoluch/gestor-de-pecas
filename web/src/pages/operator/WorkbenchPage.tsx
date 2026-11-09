@@ -336,7 +336,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const startLabel = selectedCard?.rework_return
     ? "Iniciar retrabalho"
     : startsActivity
-      ? "Iniciar atividade"
+      ? "Iniciar"
       : startAction === "Início" ? "Iniciar"
         : startAction === "Retomar" || startAction === "Retornar" ? "Retomar produção"
           : startAction;
@@ -814,11 +814,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
           Iniciar. O Setup continua sendo botão: ele aponta o tempo de
           preparação da máquina, que é quando a primeira peça é fabricada. */}
       <div className="operator-actions" aria-label="Ações operacionais">
+        {/* Ordem pedida pela manufatura (09/11/2026): Início, Setup, Parada, Retrabalho, Finalizar. */}
         <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
-        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
-        <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : inRework ? "Encerre o retrabalho primeiro (Finalizar Ret.)." : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
+        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
         <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
+        <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : inRework ? "Encerre o retrabalho primeiro (Finalizar Ret.)." : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
       </div>
       {canPoint && occupiedBy ? (
         <Notice>

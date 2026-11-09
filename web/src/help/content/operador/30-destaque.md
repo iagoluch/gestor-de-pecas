@@ -34,7 +34,7 @@ O botão **i** do plano abre "OPs do plano": OP, produto e setor destino ("Desti
 
 | Botão | Quando |
 |---|---|
-| **Iniciar** (ou **Retomar produção**, **Iniciar atividade**) | Há plano aguardando ou parado; ou posto parado sem tarefa; ou atividade. |
+| **Iniciar** (ou **Retomar produção**) | Há plano aguardando ou parado; ou posto parado sem tarefa; ou atividade. |
 | **Parada** | Parar o posto. Fica apagado se o posto já está parado ou se o plano selecionado já está parado. |
 | **Finalizar** (ou **Finalizar atividade**) | Só com plano em execução. |
 
