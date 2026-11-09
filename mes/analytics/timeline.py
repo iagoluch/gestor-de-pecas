@@ -101,6 +101,7 @@ def build_operator_timeline(
         elif state_text == "finalizado":
             current_start = start
 
+    finished = False
     for timestamp, _order, raw in normalized:
         if timestamp <= start:
             continue
@@ -111,7 +112,7 @@ def build_operator_timeline(
             if state_text == "finalizado":
                 if timestamp > current_start:
                     segments.append(_segment(current, current_start, timestamp, current_event))
-                current_start = timestamp
+                finished = True
                 break
             continue
         mapped = _state(state_text)
@@ -123,11 +124,12 @@ def build_operator_timeline(
         current = mapped
         current_start = timestamp
         current_event = raw
-    else:
-        if current_start < end:
-            segments.append(_segment(current, current_start, end, current_event))
 
-    # Se o loop terminou por finalização, não estende depois do evento terminal.
+    # Fecha o último trecho no fim do recorte, inclusive quando há evento
+    # depois dele (A19); só a finalização não estende além do evento terminal.
+    if not finished and current_start < end:
+        segments.append(_segment(current, current_start, end, current_event))
+
     totals = {category: 0.0 for category in EventCategory}
     for segment in segments:
         totals[segment.category] = totals.get(segment.category, 0.0) + segment.seconds

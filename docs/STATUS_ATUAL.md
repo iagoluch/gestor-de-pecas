@@ -33,6 +33,7 @@ commit `4a60564`.
 - Plano em `docs/PLANO_REVISAO_BACKEND_2026-11-05.md`; achados A1–A71 em `docs/REVISAO_BACKEND_ACHADOS_2026-11.md` (Etapas 0–12).
 - Teste ponta a ponta no TEST (Corte → Dobra → Qualidade → Protheus) com ids em `dev_reports/revisao/ponta-a-ponta.md` (fora do Git).
 - 06/11/2026: corrigidos A50, A55, A56, A57, A58 (migration 73, descarte de envio ao Protheus), A59, A60, A61 e A68 — detalhes no fim do arquivo de achados. Pendente: tela de admin dos envios ao Protheus; item 12 da outbox recusado por falta de saldo no Protheus TEST.
+- 09/11/2026: corrigido A19 (horas somiam quando o filtro cortava um trecho). CI de master voltou a ter só testes velhos quebrados: Diretoria agora inclui o nível Desenvolvedor, `log_sistema` entrou em `EXPECTED_TABLES`, a fila da Pintura não é mais compartilhada (regra de 3410fa4) e a fila do operador lê o catálogo por `listar_recursos_pcfactory` (sem citar o ERP na camada de execução). FastAPI 0.141 → 0.162 com `requirements.lock` regenerado (substitui o PR 46 do Dependabot).
 
 ### Manual dentro do sistema — 05/11/2026 (commitado e enviado)
 

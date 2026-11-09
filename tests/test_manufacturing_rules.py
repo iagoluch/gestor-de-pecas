@@ -209,6 +209,18 @@ class ShiftBoundaryTests(unittest.TestCase):
         # O corte temporal não apaga a causa da parada manual vigente.
         self.assertEqual(row["motivo_parada"], "Aguardando material")
 
+    def test_recorte_fecha_o_trecho_mesmo_com_evento_depois_do_fim(self):
+        # A19: produz 08h-14h e o filtro é 08h-12h; antes davam 0 h, são 4 h.
+        events = [
+            {"id": 1, "estado": "producao", "data_hora": datetime(2026, 8, 19, 8, 0)},
+            {"id": 2, "estado": "parada", "data_hora": datetime(2026, 8, 19, 14, 0)},
+        ]
+        timeline = build_operator_timeline(
+            events, start=datetime(2026, 8, 19, 8, 0), end=datetime(2026, 8, 19, 12, 0)
+        )
+        self.assertEqual(timeline.seconds(EventCategory.PRODUCTION), 4 * 3600)
+        self.assertEqual(timeline.physical_seconds, 4 * 3600)
+
 
 if __name__ == "__main__":
     unittest.main()

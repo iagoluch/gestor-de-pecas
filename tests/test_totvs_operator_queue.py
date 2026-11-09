@@ -783,12 +783,12 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         self.assertEqual(fila[0]["codigo_recurso"], "PINT.L")
         self.assertEqual(fila[0]["maquina"], "Pintura")
 
-        # Cada etapa seguinte de Pintura chega ao mesmo posto com seu próprio
-        # recurso canônico, incluindo JATO e INSPE2.
-        esperado = [("50", "JATO"), ("60", "PINT.L"), ("70", "INSPE2")]
-        for numero, codigo_recurso in esperado:
+        # 09/11/2026 (3410fa4): cada etapa seguinte chega ao posto do seu
+        # próprio recurso canônico (JATO no Jato, INSPE2 na Inspeção Final).
+        esperado = [("50", "JATO", "Jato"), ("60", "PINT.L", "Pintura"), ("70", "INSPE2", "Inspeção Final")]
+        for numero, codigo_recurso, posto in esperado:
             self._finalizar_etapa_de_pintura("10796502001")
-            fila = self.flow.listar_cartoes("Pintura", "Pintura")["queue"]
+            fila = self.flow.listar_cartoes("Pintura", posto)["queue"]
             with self.subTest(operacao=numero):
                 self.assertEqual(len(fila), 1)
                 self.assertEqual(fila[0]["numero_operacao"], numero)

@@ -103,7 +103,7 @@ Relatório completo: `dev_reports/revisao/ETAPA4_CALCULOS.md`. Itens OK:
 - Tela e exportação usam a mesma função.
 - Período vazio, recurso novo e tempo zero não quebram nada.
 
-**A19 — alto — aberto (conferido no código)**
+**A19 — alto — corrigido em 09/11/2026** (trecho fechado no fim do recorte; teste `test_recorte_fecha_o_trecho_mesmo_com_evento_depois_do_fim`)
 `mes/analytics/timeline.py:107-108`: quando há um evento depois do fim do recorte, o `break` pula o `else` do laço (`:126-128`). O último trecho não é fechado até o fim do recorte, e essas horas somem da conta.
 Exemplo: a máquina produz das 08h às 14h e o gestor filtra 08h–12h. Aparece 0 h de produção, quando deveriam ser 4 h.
 Em 2.000 casos sintéticos, 678 ficaram abaixo do período.

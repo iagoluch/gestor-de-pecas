@@ -1032,7 +1032,7 @@ class OperatorResourceQueueTests(unittest.TestCase):
             for index, code in enumerate(codes, 1)
         ]
         db.listar_proximas_operacoes_roteiro = lambda *args, **kwargs: rows
-        db.listar_codigos_recursos_totvs = lambda: codes
+        db.listar_recursos_pcfactory = lambda: [{"codigo": code} for code in codes]
         return db, OperatorFlowService(db, "TESTE")
 
     def test_fila_pintura_separa_os_cinco_recursos(self):

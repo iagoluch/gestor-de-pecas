@@ -281,7 +281,7 @@ class DirectorExplanationApiAdversarialTests(_ApiCase):
             self.assertTrue(any("valor da hora" in n.lower() for n in body["notes"]), body["notes"])
 
     def test_todo_nivel_sem_diretoria_recebe_403_em_qualquer_metrica_e_sem_valor(self):
-        others = [level for level in USER_LEVELS if level not in ("admin", "diretoria")]
+        others = [level for level in USER_LEVELS if level not in ("desenvolvedor", "admin", "diretoria")]
         for level in others:
             self._as(level)
             for params in (
@@ -319,7 +319,7 @@ class DirectorExplanationApiAdversarialTests(_ApiCase):
                     "/api/v1/management/explicacao", params={"metric": metric, "periodo": "semana"}
                 )
                 self.assertIn(response.status_code, (403, 422), (level, metric, response.status_code))
-                if response.status_code == 422 and level in ("admin", "diretoria"):
+                if response.status_code == 422 and level in ("desenvolvedor", "admin", "diretoria"):
                     self.assertEqual(response.json().get("code"), "unknown_metric", (level, metric, response.text))
                 for leaked in ("2460", "8110", '"value"', "R$"):
                     self.assertNotIn(leaked, response.text.split('"request_id"')[0], (level, metric))

@@ -345,7 +345,7 @@ class ExecucaoDoOperadorTests(_PostgresCase):
 
 
 class FilaCompartilhadaTests(_PostgresCase):
-    """Solda/Pintura: todas as estações veem a mesma fila; o PUT não esconde nada."""
+    """Solda: todas as estações veem a mesma fila; Pintura: cada posto só o seu recurso."""
 
     def _checar(self, area, setor_rota, codigo_recurso, codigos_op):
         for indice, codigo in enumerate(codigos_op):
@@ -378,8 +378,17 @@ class FilaCompartilhadaTests(_PostgresCase):
     def test_solda_put_em_uma_estacao_nao_some_das_outras(self):
         self._checar("solda", "Solda Aço", "MT NT", ("S000000001", "S000000002"))
 
-    def test_pintura_put_em_um_recurso_nao_some_dos_outros(self):
-        self._checar("pintura", "Pintura", "PINT.L", ("P000000001", "P000000002"))
+    def test_pintura_cada_posto_ve_so_a_fila_do_seu_recurso(self):
+        # 09/11/2026 (3410fa4): os cinco postos da Pintura têm máquina própria;
+        # a OP do PINT.L fica só no posto Pintura, sem cruzar para Jato/Secagem.
+        codigos = {"P000000001", "P000000002"}
+        for codigo in codigos:
+            self._seed_op(codigo, [("10", "PINT.L", "Pintura")])
+        visiveis = {
+            r["resource"]: set(self._ops(r)) & codigos for r in recursos_da_area("pintura")
+        }
+        self.assertEqual({nome for nome, ops in visiveis.items() if ops}, {"PINT.L"})
+        self.assertEqual(visiveis["PINT.L"], codigos)
 
     def test_put_nao_vira_puxada_e_nao_dispensa_cracha(self):
         # OP do CNC-02 ordenada (PUT) no CNC-02: continua só lá e sem bypass no CNC-01.

@@ -120,6 +120,7 @@ EXPECTED_TABLES = (
     "qualidade_rnc_decisoes",
     "manutencao_sugestoes",
     "user_preferences",
+    "log_sistema",
 )
 
 BASELINE_STATEMENTS = (

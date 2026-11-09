@@ -103,7 +103,7 @@ class QualityCapabilityTests(unittest.TestCase):
         self.assertIsNone(quality_sector_for_user_level("estacao1aco"))
 
     def test_somente_supervisor_lider_qualidade_e_admin_editam_template(self):
-        editores = {"admin", "supervisor", "lider", "qualidade"}
+        editores = {"desenvolvedor", "admin", "supervisor", "lider", "qualidade"}
         for level in editores:
             with self.subTest(level=level):
                 self.assertTrue(can_manage_quality_template(level))

@@ -133,7 +133,7 @@ class DirectorExplanationApiTests(_ApiCase):
         self.assertEqual(missing.status_code, 422)
 
     def test_todo_outro_nivel_recebe_403_sem_r(self):
-        others = [level for level in USER_LEVELS if level not in ("admin", "diretoria")]
+        others = [level for level in USER_LEVELS if level not in ("desenvolvedor", "admin", "diretoria")]
         self.assertGreater(len(others), 10)
         for level in others:
             self._as(level)

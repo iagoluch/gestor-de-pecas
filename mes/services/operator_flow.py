@@ -1904,8 +1904,10 @@ class OperatorFlowService:
         # posto não distribui automaticamente a OP por todo o setor.
         queue_resource = station_resource_code(setor, recurso)
         if not queue_resource:
-            codes_loader = getattr(self.db, "listar_codigos_recursos_totvs", None)
-            known_codes = set(codes_loader() or ()) if callable(codes_loader) else set()
+            catalog_loader = getattr(self.db, "listar_recursos_pcfactory", None)
+            known_codes = {
+                str(row.get("codigo") or "").strip() for row in (catalog_loader() or ())
+            } if callable(catalog_loader) else set()
             identity = resolve_resource_identity(recurso)
             if identity in known_codes:
                 queue_resource = identity
