@@ -25,7 +25,7 @@ Fica apagado se não há operação selecionada que possa ser apontada (etapa n�
 3. Abre **Confirmar Retrabalho**. Confirme.
 4. A barra de estado passa para **Retrabalho**.
 
-Se a OP está bloqueada por primeira peça reprovada, clicar em **Retrabalho** abre o popup de bloqueio. Veja [Setup e primeira peça](topico:07-setup-e-primeira-peca).
+Se a OP ainda estiver bloqueada por um retrabalho antigo (feito antes de 09/11/2026), clicar em **Retrabalho** abre o popup de bloqueio. Retrabalho novo não bloqueia a OP. Veja [Setup e primeira peça](topico:07-setup-e-primeira-peca).
 
 ## Finalizar o retrabalho
 

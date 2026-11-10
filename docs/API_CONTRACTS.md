@@ -23,6 +23,15 @@ Base local: `/api/v1`. Especificação navegável: `/api/docs`. OpenAPI: `/api/o
 | `GET` | `/system/health` | saúde, schema e conectividade sem expor DSN |
 | `GET` | `/system/capabilities` | capacidades e limites da migração atual |
 
+`POST /auth/login` recebe `username`, `password` e `remember_me` opcional
+(booleano, padrão `false`). Com `true`, os cookies de sessão e CSRF recebem
+`Max-Age` igual ao prazo de sessão configurado; com `false` ou campo omitido,
+são cookies de sessão do navegador, sem `Max-Age` nem `Expires`. O vencimento
+assinado no servidor é o mesmo nas duas opções. A escolha é preservada na troca
+obrigatória de senha; cookies antigos sem a escolha assinada continuam
+compatíveis e mantêm a persistência anterior. Restauração de sessão pelo
+navegador pode conservar cookies após o fechamento da janela.
+
 ## Management View
 
 | Método | Rota | Uso |

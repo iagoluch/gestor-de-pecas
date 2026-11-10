@@ -7,6 +7,7 @@ class LoginRequest(BaseModel):
 
     username: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=1, max_length=256)
+    remember_me: bool = False
 
 
 class PasswordChangeRequest(BaseModel):

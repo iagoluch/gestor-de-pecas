@@ -9,6 +9,7 @@ export function LoginPage() {
   const { user, login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -31,7 +32,7 @@ export function LoginPage() {
     if (invalido) return;
     setSubmitting(true);
     try {
-      const authenticated = await login(username, password);
+      const authenticated = await login(username, password, rememberMe);
       const requested = (location.state as { from?: string } | null)?.from;
       navigate(requested ?? homeFor(authenticated), { replace: true });
     } catch (reason) {
@@ -82,6 +83,10 @@ export function LoginPage() {
           <label>
             Senha
             <input ref={passwordRef} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          </label>
+          <label className="login-card__remember">
+            <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
+            Lembrar de mim
           </label>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button type="submit" disabled={submitting}>{submitting ? "Entrando…" : "Entrar"}</button>

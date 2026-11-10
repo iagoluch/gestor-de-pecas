@@ -1,5 +1,20 @@
 # STATUS ATUAL — Gestor de Peças
 
+### Login com “Lembrar de mim” — 09/11/2026
+
+- Adicionada opção desmarcada por padrão na tela de login. Marcada, os cookies de sessão e CSRF persistem até o prazo de sessão já configurado; desmarcada, são cookies de sessão do navegador. O prazo do servidor não foi ampliado (ambiente local: 8 horas), e senha/token não são gravados no armazenamento da página.
+- `POST /auth/login` aceita `remember_me` opcional, padrão `false`. A escolha fica assinada na sessão e é preservada na troca obrigatória de senha; sessões anteriores sem esse campo mantêm o comportamento persistente anterior. Saída, revogação e proteção CSRF permanecem no fluxo canônico. A restauração de sessões pelo navegador pode conservar cookies mesmo após fechar a janela.
+- Validação: 22 testes de autenticação/senha no backend e 7 de login/troca/expiração na tela aprovados; import principal e build web aprovados; QA e revisão técnica independentes sem bloqueios. QA adicional verificou login inválido sem cookies e substituição de cookies persistentes por cookies de sessão ao desmarcar.
+- Reiniciada a API 8001 a pedido do usuário, parando a anterior antes: uma única escuta, saúde `ok`, `gestor_pecas_test` disponível e schema 75. Docker Desktop foi reaberto porque o banco estava desligado. Processo em `development`, Protheus TEST (incluindo outbox/worker) e SigmaNEST sync ligados; IA e Telegram desligados, por variáveis do processo, sem alterar `.env`. Esta configuração atualiza a nota histórica de outbox desligada no ensaio de 06/11. Login servido com `index-0dULestb.js`, opção nova confirmada no arquivo servido e no contrato da API. Fechamento/reabertura real de navegador não exercitado.
+
+### Reabertura das cotas pelo Setup — 09/11/2026
+
+- Causa confirmada após esclarecimento do usuário: o botão Setup reabria as cotas apenas enquanto havia medição pendente. Com a conferência concluída, exibia orientação para retomar/finalizar em vez de abrir o popup. O usuário quer consultar as cotas novamente, sem finalizar a OP.
+- Corrigida a entrada do botão Setup para abrir também a conferência concluída nos setores com cotas. O popup concluído mostra o estado, a contagem de peças medidas e os padrões/faixas cadastrados, somente para consulta; medições pendentes conservam o formulário. Reabrir um Setup em curso não envia apontamento nem altera a OP. Um novo Setup continua exigindo a confirmação normal antes de abrir as cotas.
+- Na consulta somente leitura ao TEST, a OP `PCMCY901001`, máquina `1303`, operação `217`, estava em Setup com as 2 medições registradas, `liberado=true` e `pode_finalizar=true`. Nenhum apontamento foi alterado por esta investigação.
+- Regressão reproduzida antes da correção com Setup em curso e conferência liberada (2 de 2 peças medidas). Testes também cobrem Fechar/Cancelar/Esc e retomada de medição parcial. Confirmação visual na aba do usuário após Ctrl+F5 permanece pendente.
+- Validação final: 61 testes de operador/finalização de retrabalho aprovados e build web aprovado. API 8001 servindo o novo arquivo `index-B5oUQNpV.js` com a apresentação de conferência concluída; nenhuma reinicialização ou alteração de integrações foi necessária.
+
 ### Patch da manufatura parte 1 — inspeção progressiva e 1ª peça sem crachá — 09/11/2026
 
 - 2º estágio do setup mede N peças com o template de cotas da 1ª peça; a 1ª conta como 1 das N. Nível 5→1 por produto + operação (começa em 5, migration 75); OP sem NC faz a próxima medir 1 a menos (mínimo 1); N limitado à quantidade da OP; a OP só finaliza com as N medidas.

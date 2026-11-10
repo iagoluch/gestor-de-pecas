@@ -141,13 +141,13 @@ async def _cleanup_stale_throttle_rows(request: Request, database) -> None:
     )
 
 
-def _cookie_options(request: Request):
+def _cookie_options(request: Request, *, remember_me: bool):
     settings = request.app.state.settings
     return {
         "secure": settings.cookie_secure,
         "samesite": "strict",
         "path": "/",
-        "max_age": settings.session_ttl_seconds,
+        "max_age": settings.session_ttl_seconds if remember_me else None,
     }
 
 
@@ -237,18 +237,24 @@ async def login(payload: LoginRequest, request: Request, database=Depends(get_da
             and password_change_required(role, payload.password)
         ),
     )
-    return _session_response(request, session_user, int(user.get("session_version") or 0))
+    return _session_response(
+        request, session_user, int(user.get("session_version") or 0),
+        remember_me=payload.remember_me,
+    )
 
 
-def _session_response(request: Request, session_user: SessionUser, session_version: int):
+def _session_response(
+    request: Request, session_user: SessionUser, session_version: int, *, remember_me: bool,
+):
     token, claims = request.app.state.session_signer.issue(
         user_id=session_user.id,
         username=session_user.name,
         role=session_user.role,
         session_version=session_version,
         password_change_required=session_user.password_change_required,
+        remember_me=remember_me,
     )
-    options = _cookie_options(request)
+    options = _cookie_options(request, remember_me=remember_me)
     response = JSONResponse(content=session_user.model_dump())
     response.set_cookie(
         request.app.state.settings.session_cookie_name,
@@ -341,7 +347,10 @@ async def change_required_password(
             status_code=401,
         )
     released = user.model_copy(update={"password_change_required": False})
-    return _session_response(request, released, int(row.get("session_version") or 0))
+    return _session_response(
+        request, released, int(row.get("session_version") or 0),
+        remember_me=request.state.session_claims.remember_me,
+    )
 
 
 @router.post(

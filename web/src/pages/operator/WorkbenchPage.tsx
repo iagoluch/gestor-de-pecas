@@ -369,6 +369,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     selected?.exige_gate_primeira_peca
       ?? (firstPiece?.gate_estruturado && !firstPiece?.liberado),
   );
+  const hasStructuredChecklist = Boolean(firstPiece?.aplicavel && firstPiece.gate_estruturado);
   // Setores sem checklist de cotas — Solda e Pintura — conferem a primeira peça
   // no próprio posto: peça produzida + resultado, sem Setup e sem cotas. É a
   // mesma regra que o backend já aplica (`first_piece_applies` sem
@@ -398,8 +399,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // produção, da parada e do retrabalho — e pode se repetir: a máquina é
   // preparada de novo toda vez que a OP volta ao posto. A primeira peça só
   // guarda o primeiro Setup (o backend não sobrescreve).
-  // Com o Setup em curso o clique reabre o checklist pendente (se o operador
-  // saiu do popup sem querer) ou orienta a sair pelo Retomar.
+  // Com o Setup em curso o clique reabre as cotas, inclusive após a conferência.
+  // Setores sem checklist continuam recebendo a orientação para Retomar.
   const canSetup = canPoint
     && ["", "Aguardando", "Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus);
   const stopContext = activeCard ? {
@@ -489,7 +490,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setMessage(`OP ${cardOp} selecionada no card.`);
   }
 
-  /** Abre o portão Setup/Qualidade: o popup é a entrada do botão Iniciar. */
+  /** Abre as cotas da operação selecionada pelo botão Setup. */
   function openGate() {
     if (!loadedOp || !selected) {
       setMessage("Carregue e selecione uma operação antes de iniciar.");
@@ -578,14 +579,14 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
 
   /**
    * Setup do posto. Ele continua sendo o apontamento de estado do tempo de
-   * preparação da máquina; quando a primeira peça ainda não foi aprovada, é
-   * esse mesmo clique que abre o checklist para o operador conferi-la.
+   * preparação da máquina; esse mesmo clique abre as cotas para medição ou
+   * consulta quando a conferência já foi concluída.
    */
   async function setupAppointment() {
     // OP-07: com o Setup já em curso o clique só reabre o checklist — reenviar
     // "Setup" seria recusado pelo backend como ação já registrada.
     if (currentStatus === "Setup") {
-      if (gateRequired) openGate();
+      if (gateRequired || hasStructuredChecklist) openGate();
       else setMessage("Setup em andamento. Use \"Retomar produção\" para encerrar o Setup ou Finalizar para concluir a etapa.");
       return;
     }
@@ -596,7 +597,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // pergunta do servidor (ex.: "apontar neste posto?") e o Setup não ficava
   // registrado.
   function afterSetup(action: string) {
-    if (action === "Setup" && gateRequired) openGate();
+    if (action === "Setup" && (gateRequired || hasStructuredChecklist)) openGate();
   }
 
   /**
@@ -1034,7 +1035,7 @@ function SetupQualityDialog({
 
   // OP-09: quando o popup troca de passo (bloqueio, cadastro, medição), o foco
   // vai para o título do passo novo — senão fica no botão que desmontou (body).
-  const passo = loading ? "" : state?.bloqueio_ativo ? "bloqueio" : state?.checklist?.configuravel ? "cotas" : cotas.length ? "medicao" : state ? "sem" : "";
+  const passo = loading ? "" : state?.liberado ? "concluida" : state?.bloqueio_ativo ? "bloqueio" : state?.checklist?.configuravel ? "cotas" : cotas.length ? "medicao" : state ? "sem" : "";
   const stepRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const box = stepRef.current;
@@ -1065,7 +1066,28 @@ function SetupQualityDialog({
           isso o operador não via o retorno de "Autorizar e liberar". */}
       {!loading && message ? <Notice tone={messageTone}>{message}</Notice> : null}
       <div ref={stepRef} className="operator-dialog__step">
-      {!loading && state?.bloqueio_ativo ? (
+      {!loading && state?.liberado ? (
+        <>
+          <h3 className="operator-step-title" data-step-title tabIndex={-1}>Conferência concluída</h3>
+          <p className="operator-help">{displayText(state.message)}</p>
+          {exigidas > 0 ? <p className="operator-help">{medidas} de {exigidas} peças medidas.</p> : null}
+          {cotas.length ? (
+            <div className="operator-gate-checklist">
+              {cotas.map((cota) => (
+                <fieldset key={cota.sequencia}>
+                  <legend>Cota {cota.sequencia}{cota.descricao ? ` — ${cota.descricao}` : ""}</legend>
+                  <div className="operator-gate-checklist__standard">
+                    <span><small>Padrão</small><strong>{cota.padrao}</strong></span>
+                    {rangeLabel(cota) ? <span><small>Faixa aceita</small><strong>{rangeLabel(cota)}</strong></span> : null}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          ) : null}
+          <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Fechar</button></div>
+        </>
+      ) : null}
+      {!loading && !state?.liberado && state?.bloqueio_ativo ? (
         <>
           <h3 className="operator-step-title" data-step-title tabIndex={-1}>Primeira peça bloqueada</h3>
           <p className="operator-help">{displayText(state.message)}</p>
@@ -1086,7 +1108,7 @@ function SetupQualityDialog({
           </div>
         </>
       ) : null}
-      {!loading && !state?.bloqueio_ativo && state?.checklist?.configuravel ? (
+      {!loading && !state?.liberado && !state?.bloqueio_ativo && state?.checklist?.configuravel ? (
         <>
           <TemplateEditor
             drafts={drafts}
@@ -1099,7 +1121,7 @@ function SetupQualityDialog({
           </div>
         </>
       ) : null}
-      {!loading && !state?.bloqueio_ativo && !state?.checklist?.configuravel && cotas.length ? (
+      {!loading && !state?.liberado && !state?.bloqueio_ativo && !state?.checklist?.configuravel && cotas.length ? (
         <>
           <h3 className="operator-step-title" data-step-title tabIndex={-1}>
             {progressiva ? `Medição da peça ${pecaAtual} de ${exigidas}` : "Medição da primeira peça"}
@@ -1206,7 +1228,7 @@ function SetupQualityDialog({
           </div>
         </>
       ) : null}
-      {!loading && !state?.bloqueio_ativo && !state?.checklist ? (
+      {!loading && !state?.liberado && !state?.bloqueio_ativo && !state?.checklist ? (
         <>
           <p className="operator-help" data-step-title tabIndex={-1}>Esta operação não possui o Setup/Qualidade estruturado.</p>
           <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Fechar</button></div>

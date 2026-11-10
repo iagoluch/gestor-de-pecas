@@ -7,7 +7,7 @@ import type { SessionUser } from "../types/api";
 interface AuthValue {
   user: SessionUser | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<SessionUser>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<SessionUser>;
   changePassword: (newPassword: string) => Promise<SessionUser>;
   logout: () => Promise<void>;
   /** Entra no modo "apontar como setor" (nível do setor) e recarrega a sessão. A saída é `leaveActingSector`. */
@@ -40,9 +40,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string, rememberMe = false) => {
     setActingSector(null);
-    const authenticated = await api.post<SessionUser>("/api/v1/auth/login", { username, password });
+    const authenticated = await api.post<SessionUser>("/api/v1/auth/login", { username, password, remember_me: rememberMe });
     setUser(authenticated);
     return authenticated;
   }, []);

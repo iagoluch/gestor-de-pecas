@@ -37,7 +37,7 @@ Ele tem três modos, conforme a situação.
 
 ### Modo 1 — Primeira peça bloqueada
 
-Aparece quando a primeira peça foi reprovada para retrabalho e a OP está bloqueada. O popup mostra o texto do sistema e: "O responsável precisa estar no posto e informar o próprio crachá. Não existe login para ele: a autorização fica registrada com OP, recurso, operador, horário e decisão."
+Aparece só em OPs que ficaram bloqueadas por um retrabalho feito antes de 09/11/2026. Hoje o retrabalho não bloqueia mais a OP. O popup mostra o texto do sistema e: "O responsável precisa estar no posto e informar o próprio crachá. Não existe login para ele: a autorização fica registrada com OP, recurso, operador, horário e decisão."
 
 | Campo ou botão | O que faz |
 |---|---|
@@ -47,7 +47,7 @@ Aparece quando a primeira peça foi reprovada para retrabalho e a OP está bloqu
 | **Cancelar** | Fecha sem liberar nada. |
 | **Autorizar e liberar** | Libera a OP. Depois a OP entra em Retrabalho sozinha. |
 
-O título do popup é "Primeira peça bloqueada". Enquanto a OP está bloqueada, o botão **Iniciar** fica apagado. Para abrir este popup, clique em **Retrabalho** (ou em **Setup**).
+O título do popup é "Primeira peça bloqueada". Enquanto uma OP antiga estiver bloqueada, o botão **Iniciar** fica apagado. Para abrir este popup, clique em **Retrabalho** (ou em **Setup**).
 
 ### Modo 2 — Produto sem cotas cadastradas
 
@@ -67,7 +67,7 @@ O título é "Medição da primeira peça". Para cada cota aparece:
 
 Se a peça for reprovada, aparece **Destino da peça reprovada**:
 
-- **Retrabalho — bloqueia a OP até o responsável** (é a opção que já vem marcada): a OP fica bloqueada até o responsável autorizar.
+- **Retrabalho** (é a opção que já vem marcada): você retrabalha a peça e mede de novo. A OP não fica bloqueada e não precisa de crachá.
 - **Refugo — consome o saldo e exige outra peça**: exige **Crachá do responsável que autoriza o refugo** (com o botão **Chamar responsável**) e uma nova primeira peça.
 
 Há também o campo **Observação** ("O que foi verificado no posto") e o botão **Cancelar**. O botão principal é **Liberar lote**. Fica apagado, com o motivo escrito, enquanto faltar algo:
@@ -91,7 +91,7 @@ Quando o lote é liberado, o popup fecha e a OP volta à produção sozinha (voc
 
 | Campo | Opções |
 |---|---|
-| **Resultado da primeira peça** | "Conforme — libera o lote"; "Retrabalho — bloqueia a OP até o responsável"; "Refugo — produzir outra primeira peça" |
+| **Resultado da primeira peça** | "Conforme — libera o lote"; "Retrabalho — você retrabalha e mede de novo"; "Refugo — produzir outra primeira peça" |
 | **Observação** | Texto livre. |
 
 Clique em **Registrar primeira peça**. Se o resultado for Conforme, o lote é liberado e você segue para **Finalizar**.
@@ -102,6 +102,5 @@ Clique em **Registrar primeira peça**. Se o resultado for Conforme, o lote é l
 |---|---|---|
 | **Finalizar** apagado | Setup obrigatório ainda não registrado. | Clique em **Setup**. |
 | **Finalizar** mostra só um aviso | Primeira peça ainda não aprovada. | Clique em **Setup** e conclua a conferência. |
-| **Iniciar** apagado com OP bloqueada | Primeira peça reprovada para retrabalho. | O responsável autoriza no popup. |
+| **Iniciar** apagado com OP bloqueada | OP antiga, bloqueada por retrabalho feito antes de 09/11/2026. | O responsável vem ao posto e usa o próprio crachá em **Autorizar e liberar**. |
 | **Liberar lote** apagado | Falta medida ou crachá. | Leia o motivo escrito embaixo do botão. |
-| OP bloqueada | Primeira peça foi para retrabalho. | O responsável vem ao posto e usa o próprio crachá em **Autorizar e liberar**. |

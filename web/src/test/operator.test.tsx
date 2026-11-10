@@ -591,7 +591,7 @@ describe("fluxo Web do operador", () => {
   // ------------------------------------------------------------------
   // Wave 6B — o portão Setup/Qualidade é a entrada do botão Iniciar.
   // ------------------------------------------------------------------
-  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean; progressiva?: boolean; ncNaPeca2?: boolean } = {}) {
+  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean; progressiva?: boolean; ncNaPeca2?: boolean; emSetup?: boolean } = {}) {
     const calls: { path: string; method: string; body: unknown }[] = [];
     const gate = {
       aplicavel: true,
@@ -608,9 +608,9 @@ describe("fluxo Web do operador", () => {
       pendencias: ["setup"],
       // Inspeção progressiva (patch 09/11/2026): 1ª peça aprovada, faltam 2 de 3.
       // 2 medições gravadas: uma 1ª peça reprovada (não conta) + a aprovada.
-      ...(options.progressiva ? { status: "CONFORME", pecas_exigidas: 3, pecas_medidas: 1, pecas_registradas: 2 } : {}),
+      ...(options.progressiva ? { status: "CONFORME", pecas_exigidas: options.liberado ? 2 : 3, pecas_medidas: options.liberado ? 2 : 1, pecas_registradas: 2 } : {}),
     };
-    let setupApontado = false;
+    let setupApontado = options.emSetup ?? false;
     let iniciou = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -755,6 +755,34 @@ describe("fluxo Web do operador", () => {
     expect(setup?.body).toMatchObject({ action: "Setup", op: "OP-GATE" });
   });
 
+  it.each([true, false])("reabre as cotas já conferidas sem registrar novas medições nem finalizar (Setup em curso: %s)", async (emSetup) => {
+    const { calls } = gateBackend({ liberado: true, progressiva: true, setupRegistrado: true, emSetup });
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    if (!emSetup) {
+      await screen.findByRole("heading", { name: "Confirmar Setup" });
+      fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    }
+
+    await screen.findByRole("heading", { name: "Setup e Qualidade" });
+    await screen.findByRole("heading", { name: "Conferência concluída" });
+    expect(screen.getByText("2 de 2 peças medidas.")).toBeInTheDocument();
+    expect(screen.getByText("12,0 +/- 0,2")).toBeInTheDocument();
+    expect(screen.getByText("11.8 a 12.2 mm")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Medida da cota 1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Liberar lote" })).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog")).getByText("Fechar", { selector: "button" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Setup" })).toHaveAttribute("aria-pressed", "true");
+    const posts = calls.filter((call) => call.method === "POST");
+    expect(posts).toHaveLength(emSetup ? 0 : 1);
+    if (!emSetup) expect(posts[0]).toMatchObject({ body: { action: "Setup" } });
+  });
+
   it("não bloqueia o Iniciar na Caldeiraria: o portão é do Finalizar", async () => {
     const { calls } = gateBackend();
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
@@ -825,6 +853,42 @@ describe("fluxo Web do operador", () => {
     const posts = calls.filter((call) => call.method === "POST");
     expect(posts.filter((call) => call.path.includes("/operator/actions")).every((call) => ["Início", "Setup"].includes(String((call.body as { action?: string } | null)?.action)))).toBe(true);
     expect(calls.some((call) => call.method === "POST" && call.path.includes("/first-piece"))).toBe(false);
+  });
+
+  it.each([
+    [false, "Fechar"], [false, "Cancelar"], [false, "Escape"],
+    [true, "Fechar"], [true, "Cancelar"], [true, "Escape"],
+  ] as const)("reabre pelo Setup o checklist sem novo apontamento (progressiva: %s, saída: %s)", async (progressiva, saida) => {
+    const { calls } = await abrirPortao({ progressiva });
+
+    if (saida === "Escape") fireEvent.keyDown(document, { key: "Escape" });
+    else fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: saida }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+
+    await screen.findByRole("heading", { name: "Setup e Qualidade" });
+    await screen.findByLabelText("Medida da cota 1");
+    const setups = calls.filter((call) => call.method === "POST" && call.path.includes("/operator/actions") && (call.body as { action?: string } | null)?.action === "Setup");
+    expect(setups).toHaveLength(1);
+    expect(calls.some((call) => call.method === "POST" && call.path.includes("/first-piece"))).toBe(false);
+  });
+
+  it("reabre na próxima peça depois de fechar a inspeção progressiva parcialmente medida", async () => {
+    const { calls } = await abrirPortao({ progressiva: true });
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Medida da cota 1"), { target: { value: "12.1" } });
+    fireEvent.change(within(dialog).getByLabelText("Situação da cota 1"), { target: { value: "CONFORME" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Registrar peça 2" }));
+    await within(dialog).findByRole("heading", { name: "Medição da peça 3 de 3" });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+
+    await screen.findByRole("heading", { name: "Medição da peça 3 de 3" });
+    expect(screen.getByLabelText("Medida da cota 1")).toHaveValue("");
+    expect(calls.filter((call) => call.method === "POST" && call.path.includes("/operator/actions") && (call.body as { action?: string } | null)?.action === "Setup")).toHaveLength(1);
+    expect(calls.filter((call) => call.method === "POST" && call.path.includes("/first-piece"))).toHaveLength(1);
   });
 
   it("mede a cota, libera o lote e habilita Finalizar", async () => {

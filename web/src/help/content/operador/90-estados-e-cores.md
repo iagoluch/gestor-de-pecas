@@ -57,7 +57,7 @@ Corte concluído, Corte parcial (tarefa). Aguardando destaque, Destaque em execu
 |---|---|
 | Cota | Conforme, Não conforme, Informe a medida |
 | Peça | Aprovada, Retrabalho, Refugo |
-| Primeira peça | Conforme (libera o lote), Retrabalho (bloqueia), Refugo (nova primeira peça) |
+| Primeira peça | Conforme (libera o lote), Retrabalho (retrabalha e mede de novo), Refugo (nova primeira peça) |
 
 Veja [Qualidade e inspeção](topico:40-qualidade-e-inspecao).
 

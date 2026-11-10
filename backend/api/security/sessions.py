@@ -38,6 +38,8 @@ class SessionClaims:
     #: Versão do formato do cookie. Cookie sem o campo é anterior ao aviso
     #: ``password_change_required`` (formato 0); ver ``SESSION_FORMAT``.
     session_format: int = 0
+    #: Cookies anteriores à opção eram persistentes; preservar ao renovar.
+    remember_me: bool = True
 
 
 #: Formato atual. Formato 1 = cookie já carrega ``password_change_required``.
@@ -59,6 +61,7 @@ class SessionSigner:
         role: str,
         session_version: int = 0,
         password_change_required: bool = False,
+        remember_me: bool = True,
         now: int | None = None,
     ):
         issued_at = int(time.time() if now is None else now)
@@ -73,6 +76,7 @@ class SessionSigner:
             session_version=int(session_version),
             password_change_required=bool(password_change_required),
             session_format=SESSION_FORMAT,
+            remember_me=bool(remember_me),
         )
         payload = json.dumps(
             asdict(claims), ensure_ascii=False, separators=(",", ":"), sort_keys=True
