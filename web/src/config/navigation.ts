@@ -226,6 +226,7 @@ export const managementSections: ManagementSection[] = [
     icon: assets.navigation.audit,
     defaultPath: "/auditoria/eventos-status",
     tabs: [
+      { label: "Auditoria analítica", path: "/auditoria/analitica", screen: "audit-analytics" },
       { label: "Eventos de Status", path: "/auditoria/eventos-status", screen: "audit-status-events" },
       { label: "Eventos de Produção", path: "/auditoria/eventos-producao", screen: "audit-production-events" },
       { label: "Alertas e inconsistências", path: "/auditoria/alertas-inconsistencias", screen: "audit-alerts-issues" },

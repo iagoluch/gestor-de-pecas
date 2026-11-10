@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { DataTable } from "../../components/DataTable";
+import type { TableColumn } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
@@ -65,13 +66,13 @@ function LoadingPage({ title, subtitle }: { title: string; subtitle: string }) {
   return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><LoadingState /></PageFrame>;
 }
 
-interface EventsPage<T, S> {
+export interface EventsPage<T, S> {
   items: T[];
   summary: S;
   page: { page: number; page_size: number; total: number };
 }
 
-interface StatusEvent {
+export interface StatusEvent {
   id: number;
   recurso?: string | null;
   /** Nome líquido do recurso (catálogo); `recurso` é o código. */
@@ -92,7 +93,7 @@ interface StatusEvent {
   operacao?: string | null;
 }
 
-interface ProductionEvent {
+export interface ProductionEvent {
   apontamento_id?: number | null;
   op?: string | null;
   tarefa?: string | null;
@@ -113,8 +114,8 @@ interface ProductionEvent {
   inconsistencia?: string | null;
 }
 
-const opLink = (op?: string | null) => (op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(op)}`}>{op}</Link> : "—");
-const qty = (value?: number | null) => (value == null ? "—" : formatNumber(value));
+export const opLink = (op?: string | null) => (op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(op)}`}>{op}</Link> : "—");
+export const qty = (value?: number | null) => (value == null ? "—" : formatNumber(value));
 
 /** Parada recebe a classificação central (planejada / não planejada); o resto mostra a categoria física. */
 export function statusClassLabel(row: Pick<StatusEvent, "categoria" | "classificacao">) {
@@ -125,7 +126,7 @@ export function statusClassLabel(row: Pick<StatusEvent, "categoria" | "classific
 }
 
 /** Chave da classificação, igual à do filtro; dá a cor da linha (ver .status-row no CSS). */
-function statusClassKey(row: Pick<StatusEvent, "categoria" | "classificacao">) {
+export function statusClassKey(row: Pick<StatusEvent, "categoria" | "classificacao">) {
   return row.categoria === "parada" && row.classificacao ? `parada_${row.classificacao}` : row.categoria;
 }
 
@@ -136,16 +137,54 @@ export function statusClassName(classe: string) {
   return humanize(classe);
 }
 
-const STATUS_PAGE_SIZE = 100;
+
+// Colunas das telas de eventos: a Auditoria analítica (tipos 01 e 02) usa as mesmas,
+// então nenhuma coluna diverge entre a tela antiga e a nova.
+export const STATUS_COLUMNS: TableColumn<StatusEvent>[] = [
+  { key: "op", label: "OP", render: (row) => opLink(row.op) },
+  { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_nome ?? row.recurso) },
+  { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
+  { key: "code", label: "Código", render: (row) => row.codigo_status ?? "—" },
+  { key: "status", label: "Status", render: (row) => displayText(row.descricao, humanize(row.categoria)) },
+  { key: "class", label: "Classificação", render: (row) => statusClassLabel(row) },
+  { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
+  { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.em_aberto ? "Em aberto" : formatDateTime(row.fim)) },
+  { key: "duration", label: "Duração no período", sortValue: (row) => row.duracao_segundos, render: (row) => formatHours(row.duracao_segundos) },
+  { key: "operator", label: "Colaborador", render: (row) => displayName(row.operador) },
+  { key: "reason", label: "Motivo / observação", render: (row) => displayText([row.motivo, row.comentario].filter(Boolean).join(" — ") || null) },
+];
+
+export const statusRowClass = (row: StatusEvent) => `status-row status-row--${statusClassKey(row)}`;
+
+export const PRODUCTION_COLUMNS: TableColumn<ProductionEvent>[] = [
+  { key: "op", label: "OP", render: (row) => (row.tarefa ? `Tarefa ${row.tarefa}${row.plano ? ` · Plano ${row.plano}` : ""}` : opLink(row.op)) },
+  { key: "product", label: "Produto", render: (row) => displayText(row.produto, "—") },
+  { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
+  { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
+  { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
+  { key: "operator", label: "Colaborador", render: (row) => displayName(row.colaborador) },
+  { key: "activity", label: "Atividade", render: (row) => (row.inconsistencia === "quantidade_sem_evento" ? <span className="status-badge status-badge--warning">Quantidade sem evento</span> : humanize(row.atividade)) },
+  { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
+  { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.inicio && !row.fim ? "Em andamento" : formatDateTime(row.fim)) },
+  { key: "real", label: "Tempo real", sortValue: (row) => row.tempo_real_segundos, render: (row) => formatHours(row.tempo_real_segundos) },
+  { key: "standard", label: "Tempo padrão", sortValue: (row) => row.tempo_padrao_segundos, render: (row) => (row.tempo_padrao_segundos == null ? "—" : `${formatHours(row.tempo_padrao_segundos)} ${row.tarefa ? "por plano" : "por peça"}`) },
+  { key: "good", label: "Boas", render: (row) => qty(row.quantidade_boa) },
+  { key: "scrap", label: "Refugo", render: (row) => qty(row.quantidade_refugo) },
+  { key: "rework", label: "Retrabalho", render: (row) => qty(row.quantidade_retrabalho) },
+];
+
+export const productionRowKey = (row: ProductionEvent, index: number) => `${row.apontamento_id ?? row.tarefa ?? "q"}-${row.atividade ?? ""}-${row.inicio ?? ""}-${index}`;
+
+export const STATUS_PAGE_SIZE = 100;
 const EMPTY_STATUS_FILTERS = { recurso: "", status: "", classe: "", op: "", aberto: "" };
 
 interface StatusEventsResponse extends EventsPage<StatusEvent, { eventos: number; recursos: number; paradas_nao_planejadas: number; em_aberto: number }> {
   opcoes?: { recursos: Array<{ codigo: string; nome: string }>; status: string[]; classes: string[] };
 }
 
-type PickOption = { value: string; label: string };
+export type PickOption = { value: string; label: string };
 
-function toOptions(values: string[] = [], name: (value: string) => string = (value) => value): PickOption[] {
+export function toOptions(values: string[] = [], name: (value: string) => string = (value) => value): PickOption[] {
   return values.map((value) => ({ value, label: name(value) }));
 }
 
@@ -154,7 +193,7 @@ function toOptions(values: string[] = [], name: (value: string) => string = (val
  * digita. Vale a opção igual ao texto ou, senão, a primeira que contém o texto;
  * texto vazio volta para "Todos"; texto sem nenhuma opção volta ao valor atual.
  */
-function SearchPick({ label, value, options, onPick }: {
+export function SearchPick({ label, value, options, onPick }: {
   label: string;
   value: string;
   options: PickOption[];
@@ -271,20 +310,8 @@ export function AuditStatusEventsPage() {
         <DataTable
           rows={data?.items ?? []}
           rowKey={(row) => row.id}
-          rowClassName={(row) => `status-row status-row--${statusClassKey(row)}`}
-          columns={[
-            { key: "op", label: "OP", render: (row) => opLink(row.op) },
-            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_nome ?? row.recurso) },
-            { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
-            { key: "code", label: "Código", render: (row) => row.codigo_status ?? "—" },
-            { key: "status", label: "Status", render: (row) => displayText(row.descricao, humanize(row.categoria)) },
-            { key: "class", label: "Classificação", render: (row) => statusClassLabel(row) },
-            { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
-            { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.em_aberto ? "Em aberto" : formatDateTime(row.fim)) },
-            { key: "duration", label: "Duração no período", sortValue: (row) => row.duracao_segundos, render: (row) => formatHours(row.duracao_segundos) },
-            { key: "operator", label: "Colaborador", render: (row) => displayName(row.operador) },
-            { key: "reason", label: "Motivo / observação", render: (row) => displayText([row.motivo, row.comentario].filter(Boolean).join(" — ") || null) },
-          ]}
+          rowClassName={statusRowClass}
+          columns={STATUS_COLUMNS}
         />
         {total > STATUS_PAGE_SIZE ? (
           <div className="filter-bar__row" role="navigation" aria-label="Páginas dos eventos">
@@ -320,23 +347,8 @@ export function AuditProductionEventsPage() {
       <SectionCard title="Eventos de produção do período" className="content-section section-card--table">
         <DataTable
           rows={query.data?.items ?? []}
-          rowKey={(row, index) => `${row.apontamento_id ?? row.tarefa ?? "q"}-${row.atividade ?? ""}-${row.inicio ?? ""}-${index}`}
-          columns={[
-            { key: "op", label: "OP", render: (row) => (row.tarefa ? `Tarefa ${row.tarefa}${row.plano ? ` · Plano ${row.plano}` : ""}` : opLink(row.op)) },
-            { key: "product", label: "Produto", render: (row) => displayText(row.produto, "—") },
-            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
-            { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
-            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
-            { key: "operator", label: "Colaborador", render: (row) => displayName(row.colaborador) },
-            { key: "activity", label: "Atividade", render: (row) => (row.inconsistencia === "quantidade_sem_evento" ? <span className="status-badge status-badge--warning">Quantidade sem evento</span> : humanize(row.atividade)) },
-            { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
-            { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.inicio && !row.fim ? "Em andamento" : formatDateTime(row.fim)) },
-            { key: "real", label: "Tempo real", sortValue: (row) => row.tempo_real_segundos, render: (row) => formatHours(row.tempo_real_segundos) },
-            { key: "standard", label: "Tempo padrão", sortValue: (row) => row.tempo_padrao_segundos, render: (row) => (row.tempo_padrao_segundos == null ? "—" : `${formatHours(row.tempo_padrao_segundos)} ${row.tarefa ? "por plano" : "por peça"}`) },
-            { key: "good", label: "Boas", render: (row) => qty(row.quantidade_boa) },
-            { key: "scrap", label: "Refugo", render: (row) => qty(row.quantidade_refugo) },
-            { key: "rework", label: "Retrabalho", render: (row) => qty(row.quantidade_retrabalho) },
-          ]}
+          rowKey={productionRowKey}
+          columns={PRODUCTION_COLUMNS}
         />
       </SectionCard>
     </PageFrame>
