@@ -170,8 +170,8 @@ class ChamadaRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     contato_id: int
-    motivo: str = Field(min_length=1, max_length=60)
-    comentario: str = Field(min_length=1, max_length=500)
+    motivo: str | None = Field(default=None, max_length=60)
+    comentario: str = Field(default="", max_length=500)  # opcional (usuário, 10/11/2026)
     #: Lista fechada validada no endpoint; o posto do operador não envia e fica "Média".
     prioridade: str = Field(default="Média", max_length=20)
     #: Posto de onde a chamada partiu. A OP/peça em andamento não vem da tela:

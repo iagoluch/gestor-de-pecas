@@ -26,9 +26,13 @@ describe("chamada recebida na tela de quem foi chamado", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [CHAMADA] })));
     render(<ChamadaRecebida />);
     await screen.findByText("Carlos Operador está chamando");
+    expect(screen.getByText("Qualidade")).toBeInTheDocument();
+    expect(screen.getByText("Urgente")).toBeInTheDocument();
     expect(screen.getByText("Dobra · DOBRA 1")).toBeInTheDocument();
-    expect(screen.getByText("OP 12345 / op. 20 · Suporte lateral")).toBeInTheDocument();
+    expect(screen.getByText("12345 / Op. 20")).toBeInTheDocument();
+    expect(screen.getByText("Suporte lateral")).toBeInTheDocument();
     expect(screen.getByText("Dobra fora de medida")).toBeInTheDocument();
+    expect(screen.getByText("Ao vivo")).toBeInTheDocument();
   });
 
   it("sem chamadas pendentes não mostra nada", async () => {
@@ -39,7 +43,7 @@ describe("chamada recebida na tela de quem foi chamado", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("'Atendi' marca a chamada como atendida e o cartão some", async () => {
+  it("'Atender' marca a chamada como atendida e o cartão some", async () => {
     let pendente = true;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -51,7 +55,7 @@ describe("chamada recebida na tela de quem foi chamado", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<ChamadaRecebida />);
-    fireEvent.click(await screen.findByRole("button", { name: "Atendi" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Atender" }));
     await waitFor(() => expect(screen.queryByText("Carlos Operador está chamando")).toBeNull());
     expect(fetchMock.mock.calls.some(
       ([path, init]) => String(path).includes("/chamadas/5/atender") && (init as RequestInit | undefined)?.method === "POST",

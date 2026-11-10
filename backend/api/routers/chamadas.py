@@ -59,6 +59,7 @@ MOTIVOS_GESTAO = (
 )
 
 PRIORIDADES = ("Baixa", "Média", "Alta", "Urgente")
+MOTIVO_NAO_INFORMADO = "Não informado"
 
 
 def _motivos_para(user: SessionUser) -> tuple[str, ...]:
@@ -180,7 +181,10 @@ def criar_chamada(
             status_code=403,
         )
     _limitar_frequencia(request, user)
-    if payload.motivo not in _motivos_para(user):
+    # Motivo é opcional (operador com pressa, decisão do usuário 10/11/2026);
+    # quando vier, tem de ser um da lista.
+    motivo = str(payload.motivo or "").strip() or MOTIVO_NAO_INFORMADO
+    if motivo != MOTIVO_NAO_INFORMADO and motivo not in _motivos_para(user):
         raise AppError(
             "chamada_motivo_invalido",
             "Selecione um motivo da lista.",
@@ -210,14 +214,10 @@ def criar_chamada(
             )
         solicitante_nome = nome_manual
         solicitante_email = email
-    else:
-        cracha = str(payload.solicitante_cracha or "").strip()
-        if not cracha:
-            raise AppError(
-                "chamada_identificacao_obrigatoria",
-                "Informe seu crachá para registrar a chamada.",
-                status_code=422,
-            )
+    elif str(payload.solicitante_cracha or "").strip():
+        # Crachá é opcional (decisão do usuário 10/11/2026): sem ele, fica o
+        # nome do login do posto. Quando digitado, tem de ser um crachá ativo.
+        cracha = str(payload.solicitante_cracha).strip()
         # O login do posto identifica a estação, não a pessoa. Resolva o
         # crachá no cadastro canônico antes de gravar ou enviar para que o
         # histórico e o Telegram não exibam apenas o código digitado.
@@ -246,7 +246,7 @@ def criar_chamada(
     try:
         chamada = database.registrar_chamada(
             contato_id=payload.contato_id,
-            motivo=payload.motivo,
+            motivo=motivo,
             prioridade=payload.prioridade,
             comentario=payload.comentario,
             solicitante_nome=solicitante_nome,

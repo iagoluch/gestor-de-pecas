@@ -77,6 +77,26 @@ class ChamadaRepositoryMixin:
                 cursor.execute("SELECT 1 FROM usuarios WHERE id = %s AND ativo = TRUE", (usuario_id,))
                 if cursor.fetchone() is None:
                     raise ValueError("A conta escolhida não existe ou está inativa.")
+                # Uma conta, um contato: senão a mesma pessoa aparece duas vezes
+                # na busca do operador. Para mais setores, edite o contato existente.
+                # A trava (até o fim da transação) impede duas gravações
+                # simultâneas da mesma conta de passarem juntas pela checagem.
+                cursor.execute("SELECT pg_advisory_xact_lock(hashtext('chamada_contato_usuario'), %s)", (usuario_id,))
+                cursor.execute(
+                    """
+                    SELECT nome, funcao FROM chamada_contatos
+                    WHERE usuario_id = %s AND id IS DISTINCT FROM %s
+                      AND NOT (LOWER(nome) = LOWER(%s) AND LOWER(funcao) = LOWER(%s))
+                    LIMIT 1
+                    """,
+                    (usuario_id, contato_id, nome, funcao),
+                )
+                outro = cursor.fetchone()
+                if outro is not None:
+                    raise ValueError(
+                        f"Esta conta já está ligada ao contato {outro['nome']} ({outro['funcao']}). "
+                        "Edite esse contato e acrescente os setores."
+                    )
             if padrao_gestao:
                 cursor.execute("UPDATE chamada_contatos SET padrao_gestao = FALSE")
             if contato_id is None:
@@ -161,8 +181,8 @@ class ChamadaRepositoryMixin:
 
         motivo = str(motivo or "").strip()
         comentario = str(comentario or "").strip()
-        if not motivo or not comentario:
-            raise ValueError("Motivo e comentário da chamada são obrigatórios.")
+        if not motivo:
+            raise ValueError("Motivo da chamada é obrigatório.")
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 "SELECT c.nome, c.funcao, c.telegram_chat_id, u.id AS usuario_id "

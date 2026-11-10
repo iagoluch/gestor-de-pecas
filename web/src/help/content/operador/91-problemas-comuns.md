@@ -60,7 +60,6 @@ Detalhes: [Finalizar e informar quantidades](topico:09-finalizar-quantidades-e-c
 | Mensagem | O que fazer |
 |---|---|
 | "Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados." | Aguarde. Não confie nos números até voltar. |
-| "O aviso pelo Telegram NÃO foi enviado..." | Avise a pessoa pessoalmente. |
 | "Não foi possível registrar a chamada." | Tente de novo. |
 | "Muitas chamadas em pouco tempo neste posto. Aguarde um minuto e tente de novo." | Espere 1 minuto. |
 | "Crachá não cadastrado ou inativo. Informe um crachá ativo." | Confira o crachá. |

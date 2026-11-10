@@ -104,7 +104,8 @@ export function OperatorShell({
         <div className="operator-content">{children}</div>
       </main>
       {calls && !acting ? <ChamadaButton sector={sector} resource={resource} /> : null}
-      {calls && !acting ? <ChamadaRecebida /> : null}
+      {/* No "Apontamento por setor" do IagoDev quem está logado é a gestão: ela também recebe os chamados. */}
+      {calls ? <ChamadaRecebida /> : null}
     </div>
   );
 }

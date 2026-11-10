@@ -89,6 +89,8 @@ export function ChamadaButton({
   const [aviso, setAviso] = useState<Aviso>("enviando");
   const [avisoErro, setAvisoErro] = useState("");
   const [erro, setErro] = useState("");
+  /** Crachás cadastrados, para mostrar o nome de quem chama. `null` = não carregou. */
+  const [crachas, setCrachas] = useState<Map<string, string> | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -97,6 +99,19 @@ export function ChamadaButton({
       .then((response) => setMotivos(response.items))
       .catch(() => setMotivos([]));
   }, [aberto]);
+
+  useEffect(() => {
+    if (!aberto || gestao) return;
+    api.get<{ items: { cracha: string; nome: string; ativo?: boolean }[] }>("/api/v1/operator/operators")
+      .then((response) =>
+        setCrachas(new Map(
+          response.items
+            .filter((item) => item.ativo !== false)
+            .map((item) => [String(item.cracha).trim(), item.nome]),
+        )),
+      )
+      .catch(() => setCrachas(null));
+  }, [aberto, gestao]);
 
   useEffect(() => {
     if (!aberto || !gestao) return;
@@ -160,7 +175,7 @@ export function ChamadaButton({
       const resultado = await api.post<ChamadaResult>("/api/v1/chamadas", {
         contato_id: contato.id,
         motivo,
-        ...(gestao ? { prioridade } : {}),
+        prioridade,
         comentario: comentario.trim(),
         ...(resource ? { recurso: resource } : {}),
         ...(gestao
@@ -176,10 +191,14 @@ export function ChamadaButton({
     }
   }
 
+  const crachaDigitado = cracha.trim();
+  // Sem a lista (falha ao carregar), quem confere o crachá é o backend.
+  const nomeDoCracha = crachaDigitado && crachas ? crachas.get(crachaDigitado) ?? null : null;
+  const crachaDesconhecido = Boolean(crachaDigitado && crachas && !nomeDoCracha);
   const identificacaoOk = gestao
     ? Boolean(nomeSolicitante.trim() && emailSolicitante.trim())
-    : Boolean(cracha.trim());
-  const podeEnviar = Boolean(contato && motivo && comentario.trim() && identificacaoOk);
+    : !crachaDesconhecido; // crachá é opcional; se digitado, tem de existir
+  const podeEnviar = Boolean(contato && identificacaoOk);
 
   return (
     <>
@@ -200,7 +219,10 @@ export function ChamadaButton({
           {passo === "sucesso" ? (
             <div className="chamada-feedback chamada-feedback--ok">
               <strong>Chamada registrada.</strong>
-              {aviso === "falhou" ? (
+              {/* O operador não precisa saber por qual canal o aviso saiu. */}
+              {!gestao ? (
+                <p>{contato ? `${contato.nome} foi chamado(a).` : "A pessoa foi chamada."}</p>
+              ) : aviso === "falhou" ? (
                 <Notice tone="error">
                   O aviso pelo Telegram NÃO foi enviado{avisoErro ? `: ${avisoErro}` : ""}. A chamada ficou
                   registrada — avise a pessoa pessoalmente se for urgente.
@@ -265,17 +287,16 @@ export function ChamadaButton({
               </div>
 
               <label>
-                Motivo
-                <select value={motivo} onChange={(event) => setMotivo(event.target.value)} required>
-                  <option value="" disabled>Selecione um motivo</option>
+                Motivo (opcional)
+                <select value={motivo} onChange={(event) => setMotivo(event.target.value)}>
+                  <option value="">Sem motivo</option>
                   {motivos.map((item) => (
                     <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
               </label>
 
-              {gestao ? (
-                <fieldset className="chamada-prioridade">
+              <fieldset className="chamada-prioridade">
                   <legend>Prioridade</legend>
                   <div className="chamada-prioridade__opcoes">
                     {PRIORIDADES.map((item) => (
@@ -292,15 +313,13 @@ export function ChamadaButton({
                     ))}
                   </div>
                 </fieldset>
-              ) : null}
 
               <label>
-                Comentário
+                Comentário (opcional)
                 <textarea
                   value={comentario}
                   onChange={(event) => setComentario(event.target.value)}
                   placeholder="Descreva rapidamente o que está acontecendo…"
-                  required
                 />
               </label>
 
@@ -328,13 +347,16 @@ export function ChamadaButton({
                 </div>
               ) : (
                 <label>
-                  Seu crachá
+                  Seu crachá (opcional)
                   <input
                     value={cracha}
                     onChange={(event) => setCracha(event.target.value)}
                     placeholder="Número do crachá"
-                    required
                   />
+                  {nomeDoCracha ? <span className="chamada-cracha chamada-cracha--ok">{nomeDoCracha}</span> : null}
+                  {crachaDesconhecido ? (
+                    <span className="chamada-cracha chamada-cracha--erro">Crachá não encontrado</span>
+                  ) : null}
                 </label>
               )}
 

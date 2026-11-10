@@ -127,6 +127,15 @@ class ChamadaRepositoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.db.salvar_chamada_contato(nome="X", funcao="Y", usuario_id=999999)
 
+    def test_uma_conta_so_pode_estar_ligada_a_um_contato(self):
+        conta = self.db.criar_usuario("gabriel.fogaca", "senha-1234", nivel="supervisor")
+        contato = self.db.salvar_chamada_contato(nome="Gabriel", funcao="Manufatura", usuario_id=conta)
+        with self.assertRaisesRegex(ValueError, "Gabriel \\(Manufatura\\)"):
+            self.db.salvar_chamada_contato(nome="Gabriel", funcao="Dobra", usuario_id=conta)
+        # Editar o próprio contato (ou regravar pelo mesmo nome/função) continua valendo.
+        self.db.salvar_chamada_contato(contato_id=contato["id"], nome="Gabriel", funcao="Manufatura", usuario_id=conta, setores=["Dobra"])
+        self.db.salvar_chamada_contato(nome="gabriel", funcao="manufatura", usuario_id=conta)
+
     def test_para_mim_so_traz_as_chamadas_da_conta_e_atender_tira_da_lista(self):
         fogaca = self.db.criar_usuario("gabriel.fogaca", "senha-1234", nivel="supervisor")
         outra = self.db.criar_usuario("outra.pessoa", "senha-1234", nivel="supervisor")
@@ -166,7 +175,7 @@ class ChamadaRepositoryTests(unittest.TestCase):
         self.assertEqual(historico[0]["contato_nome"], "Fulano")
         self.assertIsNone(historico[0]["contato_id"])
 
-    def test_motivo_e_comentario_sao_obrigatorios(self):
+    def test_motivo_obrigatorio_comentario_opcional(self):
         contato = self.db.salvar_chamada_contato(nome="Fulano", funcao="Líder")
         with self.assertRaises(ValueError):
             self.db.registrar_chamada(
@@ -176,14 +185,15 @@ class ChamadaRepositoryTests(unittest.TestCase):
                 solicitante_nome="x",
                 solicitante_nivel="y",
             )
-        with self.assertRaises(ValueError):
-            self.db.registrar_chamada(
-                contato_id=contato["id"],
-                motivo="Manutenção",
-                comentario="   ",
-                solicitante_nome="x",
-                solicitante_nivel="y",
-            )
+        # Comentário é opcional (usuário, 10/11/2026).
+        chamada = self.db.registrar_chamada(
+            contato_id=contato["id"],
+            motivo="Manutenção",
+            comentario="   ",
+            solicitante_nome="x",
+            solicitante_nivel="y",
+        )
+        self.assertIsNotNone(chamada)
 
     def test_chamada_recusa_contato_inativo_ou_inexistente(self):
         contato = self.db.salvar_chamada_contato(nome="Fulano", funcao="Líder", ativo=False)
@@ -347,8 +357,8 @@ class _FakeChamadaDatabase:
         contato = self.contatos.get(contato_id)
         if contato is None or not contato["ativo"]:
             raise ValueError("Contato selecionado não existe ou não está mais ativo.")
-        if not str(motivo or "").strip() or not str(comentario or "").strip():
-            raise ValueError("Motivo e comentário da chamada são obrigatórios.")
+        if not str(motivo or "").strip():
+            raise ValueError("Motivo da chamada é obrigatório.")
         conta = self.contas.get(contato.get("usuario_id"))
         usuario_id = conta["id"] if conta and conta["ativo"] else None
         sem_telegram_proprio = not str(contato.get("telegram_chat_id") or "").strip()
@@ -588,14 +598,19 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertEqual(resposta.json()["code"], "chamada_motivo_invalido")
         self.assertEqual(self.db.chamadas, [])
 
-    def test_operador_sem_cracha_e_recusado(self):
+    def test_operador_sem_cracha_e_sem_motivo_registra_com_nome_do_posto(self):
+        # Motivo e crachá opcionais (decisão do usuário 10/11/2026).
         self._as(_operator_user())
         resposta = self.client.post(
             "/api/v1/chamadas",
-            json={"contato_id": 1, "motivo": "Manutenção", "comentario": "Máquina parada"},
+            json={"contato_id": 1, "motivo": "", "solicitante_cracha": "", "comentario": ""},
         )
-        self.assertEqual(resposta.status_code, 422)
-        self.assertEqual(resposta.json()["code"], "chamada_identificacao_obrigatoria")
+        self.assertEqual(resposta.status_code, 200)
+        chamada = self.db.chamadas[-1]
+        self.assertEqual(chamada["comentario"], "")
+        self.assertEqual(chamada["motivo"], "Não informado")
+        self.assertEqual(chamada["solicitante_nome"], _operator_user().name)
+        self.assertIsNone(chamada["solicitante_cracha"])
 
     def test_operador_com_cracha_inexistente_e_recusado_sem_registrar(self):
         self._as(_operator_user())
@@ -964,11 +979,11 @@ class ChamadaApiTests(unittest.TestCase):
         )
         self.assertEqual(resposta.status_code, 422)
 
-    def test_comentario_vazio_e_recusado_pelo_schema(self):
+    def test_comentario_longo_demais_e_recusado_pelo_schema(self):
         self._as(_operator_user())
         resposta = self.client.post(
             "/api/v1/chamadas",
-            json={"contato_id": 1, "motivo": "Manutenção", "comentario": ""},
+            json={"contato_id": 1, "motivo": "Manutenção", "comentario": "x" * 501},
         )
         self.assertEqual(resposta.status_code, 422)
 

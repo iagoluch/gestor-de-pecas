@@ -24,6 +24,7 @@ function stubFetch(overrides: Record<string, unknown> = {}) {
       return json({ item: overrides.contatoPadrao ?? null });
     }
     if (path.includes("/chamadas/contatos")) return json({ items: CONTATOS });
+    if (path.includes("/operator/operators") && overrides.crachas) return json({ items: overrides.crachas });
     if (path.includes("/chamadas") && !path.includes("admin")) {
       return json(overrides.callResponse ?? { ok: true, telegram_agendado: true, item: {} });
     }
@@ -63,45 +64,64 @@ describe("botão de chamada — variante operador (padrão)", () => {
     });
   });
 
-  it("exige contato, motivo, comentário e crachá antes de permitir o envio", async () => {
-    stubFetch();
+  it("exige só o contato; motivo, comentário e crachá são opcionais", async () => {
+    const fetchMock = stubFetch();
     render(<ChamadaButton />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await screen.findByText("Fulano", { exact: false });
     expect(screen.getByRole("button", { name: "Chamar" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("option", { name: /Fulano/ }));
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Manutenção" } });
-    fireEvent.change(screen.getByPlaceholderText("Descreva rapidamente o que está acontecendo…"), {
-      target: { value: "Máquina parada" },
-    });
-    expect(screen.getByRole("button", { name: "Chamar" })).toBeDisabled();
-
-    fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
     expect(screen.getByRole("button", { name: "Chamar" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
+    await screen.findByText("Chamada registrada.");
+    const [, init] = fetchMock.mock.calls.find(([path]) => String(path).endsWith("/api/v1/chamadas"))!;
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      motivo: "", comentario: "", solicitante_cracha: "",
+    });
   });
 
-  it("envia o crachá junto da chamada e mostra que o aviso está a caminho", async () => {
-    const fetchMock = stubFetch({ callResponse: { ok: true, telegram_agendado: true, item: {} } });
+  it("envia crachá e prioridade escolhida e confirma sem falar de Telegram", async () => {
+    const fetchMock = stubFetch({ callResponse: { ok: true, telegram_agendado: false, telegram_status: "falhou", item: {} } });
     render(<ChamadaButton />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await selecionarFulanoEMotivo("Manutenção");
+    fireEvent.click(screen.getByRole("radio", { name: "Urgente" }));
     fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
     fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
     await screen.findByText("Chamada registrada.");
-    expect(screen.getByText("Enviando aviso…")).toBeInTheDocument();
+    expect(screen.getByText("Fulano foi chamado(a).")).toBeInTheDocument();
+    expect(screen.queryByText(/Telegram/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
 
     const chamada = fetchMock.mock.calls.find(([path]) => String(path).endsWith("/chamadas"));
     const body = JSON.parse(String(chamada?.[1]?.body));
-    expect(body.solicitante_cracha).toBe("0042");
+    expect(body).toMatchObject({ solicitante_cracha: "0042", prioridade: "Urgente" });
+  });
+
+  it("mostra o nome do dono do crachá e trava o envio se o crachá não existe", async () => {
+    stubFetch({ crachas: [{ cracha: "0042", nome: "Carlos Operador", ativo: true }] });
+    render(<ChamadaButton />);
+    fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
+    await selecionarFulanoEMotivo("Manutenção");
+    const campo = screen.getByPlaceholderText("Número do crachá");
+
+    fireEvent.change(campo, { target: { value: "9999" } });
+    expect(await screen.findByText("Crachá não encontrado")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chamar" })).toBeDisabled();
+
+    fireEvent.change(campo, { target: { value: "0042" } });
+    expect(screen.getByText("Carlos Operador")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chamar" })).toBeEnabled();
   });
 
   async function chamarCom(callResponse: Record<string, unknown>) {
     stubFetch({ callResponse });
-    render(<ChamadaButton />);
+    render(<ChamadaButton variant="gestao" />);
     fireEvent.click(screen.getByRole("button", { name: "Chamar alguém" }));
     await selecionarFulanoEMotivo("Qualidade");
-    fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
+    fireEvent.change(screen.getByPlaceholderText("Nome de quem está chamando"), { target: { value: "Gestor" } });
+    fireEvent.change(screen.getByPlaceholderText("seu.email@empresa.com"), { target: { value: "g@empresa.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
     await screen.findByText("Chamada registrada.");
   }
@@ -128,7 +148,7 @@ describe("botão de chamada — variante operador (padrão)", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("permite uma chamada contextual ao responsável, filtrada pelo setor e sem dispensar o crachá", async () => {
+  it("permite uma chamada contextual ao responsável, filtrada pelo setor e com o crachá digitado", async () => {
     const fetchMock = stubFetch();
     render(
       <ChamadaButton
@@ -149,7 +169,6 @@ describe("botão de chamada — variante operador (padrão)", () => {
     expect(screen.getByPlaceholderText("Descreva rapidamente o que está acontecendo…")).toHaveValue("OP OP-101, operação 20, recurso 1303.");
 
     fireEvent.click(screen.getByRole("option", { name: /Fulano/ }));
-    expect(screen.getByRole("button", { name: "Chamar" })).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText("Número do crachá"), { target: { value: "0042" } });
     fireEvent.click(screen.getByRole("button", { name: "Chamar" }));
     await screen.findByText("Chamada registrada.");
