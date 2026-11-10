@@ -127,7 +127,9 @@ class OperatorFlowTests(unittest.TestCase):
             [("OP-OPERADOR", "Em processo"), ("OP-OPERADOR-2", "Em processo")],
         )
 
-    def test_setup_continua_exclusivo_com_outra_op_ativa_no_recurso(self):
+    def test_setup_aceito_com_outra_op_ativa_no_recurso(self):
+        # Decisão do usuário (10/11/2026): várias OPs no recurso independente
+        # do apontamento atual; Setup deixou de ser exclusivo.
         db, service, first_operation = self._service()
         second_task = db.inserir_tarefa("T-OPERADOR-SETUP")
         db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-SETUP", "PECA-2", "Dobra", 1)
@@ -155,10 +157,16 @@ class OperatorFlowTests(unittest.TestCase):
 
         self.assertTrue(first.ok)
         self.assertTrue(second.ok, second.message)
-        self.assertFalse(setup.ok)
-        self.assertEqual(setup.code, "operator_resource_occupied")
+        self.assertTrue(setup.ok, setup.message)
+        ativos = db.listar_apontamentos_operacionais("Dobra", maquina="1303")
+        self.assertEqual(
+            sorted((row["op"], row["status"]) for row in ativos),
+            [("OP-OPERADOR", "Em processo"), ("OP-OPERADOR-SETUP", "Setup")],
+        )
+        # Estados mistos: o recurso físico segue em produção, não "desconhecido".
+        self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "producao")
 
-    def test_recurso_exclusivo_nao_permite_contornar_por_parada_e_retomada(self):
+    def test_parada_direto_da_fila_aceita_com_outra_op_ativa(self):
         db, service, first_operation = self._service()
         second_task = db.inserir_tarefa("T-OPERADOR-PARADA")
         db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-PARADA", "PECA-2", "Dobra", 1)
@@ -187,13 +195,13 @@ class OperatorFlowTests(unittest.TestCase):
 
         self.assertTrue(first.ok)
         self.assertEqual(queued["status"], "Aguardando")
-        self.assertFalse(stopped.ok)
-        self.assertEqual(stopped.code, "operator_resource_occupied")
-        self.assertEqual(db.buscar_apontamento_operacional(queued["id"])["status"], "Aguardando")
+        self.assertTrue(stopped.ok, stopped.message)
+        self.assertEqual(db.buscar_apontamento_operacional(queued["id"])["status"], "Parada")
 
-    def test_inicio_que_perde_a_disputa_nao_deixa_fila_para_tras(self):
-        # BK-03: a leitura prévia do recurso ficou velha (outro Início passou
-        # junto). A transição recusa, e a linha criada por este Início some.
+    def test_inicio_aceito_com_outra_op_em_setup_no_recurso(self):
+        # Antes (BK-03) o Início com outra OP em Setup era recusado; desde
+        # 10/11/2026 o recurso aceita as duas, mesmo com a leitura prévia
+        # desligada (a checagem na transação segue a mesma regra).
         db, service, first_operation = self._service()
         second_task = db.inserir_tarefa("T-OPERADOR-DISPUTA")
         db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-DISPUTA", "PECA-2", "Dobra", 1)
@@ -226,9 +234,12 @@ class OperatorFlowTests(unittest.TestCase):
 
         self.assertTrue(first.ok)
         self.assertTrue(setup.ok, setup.message)
-        self.assertEqual(second.code, "operator_resource_occupied")
+        self.assertTrue(second.ok, second.message)
         ativos = db.listar_apontamentos_operacionais("Dobra", maquina="1303")
-        self.assertEqual([row["op"] for row in ativos], ["OP-OPERADOR"])
+        self.assertEqual(
+            sorted((row["op"], row["status"]) for row in ativos),
+            [("OP-OPERADOR", "Setup"), ("OP-OPERADOR-DISPUTA", "Em processo")],
+        )
 
     def test_parada_exige_motivo_e_finalizacao_exige_quantidades_e_operador(self):
         self.assertEqual(
@@ -528,7 +539,9 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(posterior.ok)
         self.assertIn(
             posterior.code,
-            {"operator_resource_occupied"},
+            # A trava do recurso saiu (10/11/2026); a regra de uma operação
+            # ativa por OP continua valendo.
+            {"operacao_ativa_diferente"},
         )
         self.assertFalse(
             service.executar(
@@ -1011,7 +1024,7 @@ class EstacaoCanonicaDaSoldaTests(unittest.TestCase):
             linhas[0],
         )
 
-    def test_resumo_de_ocupacao_so_produzindo_aceita_mais_producao(self):
+    def test_resumo_de_ocupacao_aceita_mais_producao_em_qualquer_estado(self):
         so_producao = OperatorFlowService._resumo_ocupacao(
             [{"op": "A", "status": "Em processo"}, {"op": "B", "status": "Parada"}]
         )
@@ -1021,7 +1034,8 @@ class EstacaoCanonicaDaSoldaTests(unittest.TestCase):
 
         self.assertEqual(so_producao["ocupantes_total"], 2)
         self.assertTrue(so_producao["aceita_producao_simultanea"])
-        self.assertFalse(com_setup["aceita_producao_simultanea"])
+        # Desde 10/11/2026 o recurso aceita outra OP mesmo com uma em Setup.
+        self.assertTrue(com_setup["aceita_producao_simultanea"])
 
 
 class OperatorResourceQueueTests(unittest.TestCase):

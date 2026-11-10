@@ -359,6 +359,32 @@ class FirstPieceRepositoryMixin:
             nivel = int(cursor.fetchone()["nivel"])
         return max(1, min(nivel, int(linha.get("quantidade_planejada") or 1)))
 
+    def prever_pecas_exigidas_inspecao(self, linha):
+        """N que a inspeção vai pedir, só para mostrar na tela (sem gravar).
+
+        Mesma regra de ``_pecas_exigidas_tx``: o fixado na linha ou o nível do
+        produto + operação (sem linha = 5), limitado à quantidade da OP.
+        """
+
+        exigidas = linha.get("inspecao_pecas_exigidas")
+        if exigidas is not None:
+            return int(exigidas)
+        produto = str(linha.get("produto_codigo") or "").strip()
+        operacao = str(linha.get("numero_operacao") or "").strip()
+        nivel = 1
+        if produto:
+            with self.connection() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT nivel FROM qualidade_inspecao_progressiva_nivel
+                     WHERE produto_codigo = %s AND numero_operacao = %s
+                    """,
+                    (produto, operacao),
+                )
+                row = cursor.fetchone()
+            nivel = int(row["nivel"]) if row else 5
+        return max(1, min(nivel, int(linha.get("quantidade_planejada") or 1)))
+
     def fixar_pecas_exigidas_inspecao(self, primeira_peca_id):
         """Fixa N **antes** de a 1ª peça ser aprovada.
 
@@ -399,8 +425,9 @@ class FirstPieceRepositoryMixin:
 
         * N (``inspecao_pecas_exigidas``) é fixado na primeira medição: o nível
           do produto + operação (começa em 5), limitado à quantidade da OP.
-        * A contagem começa na 1ª peça conforme (ela é a peça 1 de N); as
-          tentativas não conformes da 1ª peça ficam registradas, mas não contam.
+        * Só peça conforme conta (a 1ª conforme é a peça 1 de N). Peça não
+          conforme fica registrada, mas não avança: a mesma peça (ex. 2/5) é
+          refeita (decisão do usuário, 10/11/2026).
         * Peça não conforme abre RNC (tela Decisão de RNC) e marca a OP como
           "com NC": o nível não desce.
         * Ao completar as N peças sem NC, o nível desce 1 (mínimo 1) para a
@@ -438,7 +465,7 @@ class FirstPieceRepositoryMixin:
                 return {"repetida": True, "primeira_peca": linha}
             if medidas_ate_agora >= exigidas:
                 return None
-            conta = bool(conforme) or medidas_ate_agora > 0
+            conta = bool(conforme)
             numero = registradas + 1
             rnc = None
             if not conforme:

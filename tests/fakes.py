@@ -1195,8 +1195,13 @@ class FakeDatabase:
         ]
         sector = next((item.get("tipo_setor") for item in active), None)
         categories = {categories_by_status[item["status"]] for item in active}
-        if categories == {"producao", "parada"}:
-            categories = {"producao"}
+        if len(categories) > 1:
+            # Estados mistos (10/11/2026): produção > retrabalho > setup > parada.
+            vencedora = next(
+                c for c in ("producao", "retrabalho", "setup", "parada") if c in categories
+            )
+            categories = {vencedora}
+            active = [item for item in active if categories_by_status[item["status"]] == vencedora]
         if not active:
             category, reason = "fila", NO_DEMAND_REASON
         elif len(categories) == 1:
@@ -1353,6 +1358,15 @@ class FakeDatabase:
         nivel = self.progressive_levels.setdefault((produto, operacao), self.nivel_inspecao_padrao) if produto else 1
         return max(1, min(nivel, int(linha.get("quantidade_planejada") or 1)))
 
+    def prever_pecas_exigidas_inspecao(self, linha):
+        exigidas = linha.get("inspecao_pecas_exigidas")
+        if exigidas is not None:
+            return int(exigidas)
+        produto = str(linha.get("produto_codigo") or "").strip()
+        operacao = str(linha.get("numero_operacao") or "").strip()
+        nivel = self.progressive_levels.get((produto, operacao), self.nivel_inspecao_padrao) if produto else 1
+        return max(1, min(nivel, int(linha.get("quantidade_planejada") or 1)))
+
     def fixar_pecas_exigidas_inspecao(self, primeira_peca_id):
         linha = next(
             (row for row in self.first_pieces if row["id"] == int(primeira_peca_id)), None
@@ -1388,7 +1402,7 @@ class FakeDatabase:
             return {"repetida": True, "primeira_peca": dict(linha)}
         if medidas_ate_agora >= exigidas:
             return None
-        conta = bool(conforme) or medidas_ate_agora > 0
+        conta = bool(conforme)
         numero = registradas + 1
         rnc = None
         if not conforme:
@@ -2159,9 +2173,11 @@ class FakeDatabase:
             row.update(quantidade_boa=next_good, quantidade_refugo=next_scrap)
         row.update(
             status="Aguardando" if partial else target,
-            motivo_parada=motivo if target != "Em processo" else None,
+            motivo_parada=motivo if target not in {"Em processo", "Aguardando"} else None,
             comentario=comentario or row.get("comentario"),
-            codigo_status_recurso=(codigo_status_recurso if target != "Em processo" else None),
+            codigo_status_recurso=(
+                codigo_status_recurso if target not in {"Em processo", "Aguardando"} else None
+            ),
             lote=lote or row.get("lote"),
             motivo_refugo=motivo_refugo or row.get("motivo_refugo"),
             causa_raiz=causa_raiz or row.get("causa_raiz"),
@@ -2961,8 +2977,24 @@ class FakeDatabase:
                 "atualizado_por": row.get("atualizado_por_nome"),
                 "atualizado_em": row["atualizado_em"],
                 "ativo": row["ativo"],
+                "niveis_inspecao": [
+                    {"numero_operacao": operacao, "nivel": nivel}
+                    for (produto, operacao), nivel in sorted(self.progressive_levels.items())
+                    if produto == row["produto_codigo"]
+                ],
             })
         return {"items": itens, "total": len(linhas)}
+
+    def reiniciar_nivel_inspecao_produto(self, produto_codigo, *, instante=None):
+        produto = str(produto_codigo or "").strip()
+        antes = [
+            {"produto_codigo": p, "numero_operacao": o, "nivel": n}
+            for (p, o), n in sorted(self.progressive_levels.items())
+            if p == produto
+        ]
+        for item in antes:
+            self.progressive_levels[(produto, item["numero_operacao"])] = 5
+        return antes
 
     def salvar_template_qualidade(
         self, produto_codigo, cotas, *, produto_descricao=None, usuario_id=None,

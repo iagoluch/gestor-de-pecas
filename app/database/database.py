@@ -2474,8 +2474,8 @@ class Database(
             destino = OperatorState(destino_estado)
         except ValueError:
             raise ValueError(f"Estado de apontamento inválido: {estado}")
-        if destino == OperatorState.QUEUED:
-            raise ValueError(f"Estado de apontamento inválido: {estado}")
+        # Voltar para a fila só acontece por "Interromper OP": can_transition
+        # abaixo limita a origem a Setup, Em processo e Parada.
         instante = _period_value(data_hora) or self._now()
         boas = max(0, int(quantidade_boa or 0))
         refugos = max(0, int(quantidade_refugo or 0))
@@ -2660,6 +2660,25 @@ class Database(
                         lote, motivo_refugo, causa_raiz, comentario, apontamento_id,
                     ),
                 )
+            elif destino == OperatorState.QUEUED:
+                # Interromper OP: volta para a fila sem quantidade e sem
+                # movimentar estoque. O evento 'fila' fecha o trecho de tempo
+                # (a linha do tempo soma os trechos) e não gera apontamento de
+                # produção no Protheus.
+                cursor.execute(
+                    """
+                    UPDATE apontamentos_operacionais
+                    SET status = 'Aguardando',
+                        data_entrada = %s,
+                        codigo_status_recurso = NULL,
+                        motivo_parada = NULL,
+                        estado_retorno = NULL,
+                        comentario = COALESCE(%s, comentario)
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (instante, comentario, apontamento_id),
+                )
             elif destino == OperatorState.FINISHED:
                 cursor.execute(
                     """
@@ -2841,6 +2860,8 @@ class Database(
                     motivo or (
                         "Finalização parcial; OP permanece aberta"
                         if finalizacao_parcial
+                        else "OP interrompida; voltou para a fila"
+                        if destino == OperatorState.QUEUED
                         else f"Estado: {operator_status_for_state(destino)}"
                     ),
                     boas if destino == OperatorState.FINISHED else row["quantidade"],
@@ -4758,12 +4779,30 @@ class Database(
 
         # Produção prevalece sobre parada (decisão do usuário, 01/10/2026): se
         # ao menos uma OP segue produzindo, o recurso está produzindo. Ele só
-        # entra em parada quando TODAS as OPs ativas estão paradas. Setup e
-        # Retrabalho são exclusivos e não chegam a coexistir com produção.
-        if categories == {"producao", "parada"}:
-            categories = {"producao"}
-            reason_values = set()
-            status_codes = set()
+        # entra em parada quando TODAS as OPs ativas estão paradas. Desde
+        # 10/11/2026 o recurso aceita OPs em qualquer estado ao mesmo tempo
+        # (Setup e Retrabalho deixaram de ser exclusivos); com estados mistos
+        # o estado físico segue a ordem produção > retrabalho > setup > parada,
+        # e motivo/código vêm só das OPs do estado vencedor.
+        if len(categories) > 1:
+            vencedora = next(
+                c for c in ("producao", "retrabalho", "setup", "parada")
+                if c in categories
+            )
+            categories = {vencedora}
+            linhas_vencedoras = [
+                row for row in active
+                if self._categoria_estado_apontamento(row.get("status")) == vencedora
+            ]
+            reason_values = {
+                str(row.get("motivo_parada") or "").strip()
+                for row in linhas_vencedoras if str(row.get("motivo_parada") or "").strip()
+            } if vencedora == "parada" else set()
+            status_codes = {
+                str(row.get("codigo_status_recurso") or "").strip()
+                for row in linhas_vencedoras
+                if str(row.get("codigo_status_recurso") or "").strip()
+            }
 
         conflict = len(categories) != 1
         if categories == {"parada"} and (len(reason_values) > 1 or len(status_codes) > 1):

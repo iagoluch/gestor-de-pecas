@@ -32,6 +32,10 @@ class OperatorAction(str, Enum):
     # "Finalizar Ret." no posto: encerra o retrabalho e volta a Em processo,
     # sem finalizar a OP. Única porta de Retrabalho para Produção.
     END_REWORK = "Finalizar Retrabalho"
+    # "Interromper OP" (10/11/2026): devolve a OP à fila sem lançar quantidade
+    # nem movimentar estoque. O tempo até aqui fica registrado; a próxima
+    # retomada conta do zero e os trechos somam no total da OP.
+    INTERRUPT = "Interromper"
 
 
 ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
@@ -48,6 +52,7 @@ ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
         OperatorState.SETUP,
         OperatorState.REWORK,
         OperatorState.FINISHED,
+        OperatorState.QUEUED,
     ),
     # Parada e Setup se alternam: a máquina pode parar no meio do setup e o
     # setup pode começar com a máquina parada. O retorno do Setup continua
@@ -57,12 +62,14 @@ ALLOWED_TRANSITIONS: Mapping[OperatorState, tuple[OperatorState, ...]] = {
         OperatorState.SETUP,
         OperatorState.REWORK,
         OperatorState.FINISHED,
+        OperatorState.QUEUED,
     ),
     OperatorState.SETUP: (
         OperatorState.PRODUCTION,
         OperatorState.STOPPED,
         OperatorState.REWORK,
         OperatorState.FINISHED,
+        OperatorState.QUEUED,
     ),
     OperatorState.REWORK: (
         OperatorState.STOPPED,
@@ -92,6 +99,7 @@ _DIRECT_ACTION_TARGETS: Mapping[OperatorAction, OperatorState] = {
     OperatorAction.SETUP: OperatorState.SETUP,
     OperatorAction.REWORK: OperatorState.REWORK,
     OperatorAction.FINISH: OperatorState.FINISHED,
+    OperatorAction.INTERRUPT: OperatorState.QUEUED,
 }
 _RETURNABLE_STATES = frozenset({OperatorState.PRODUCTION, OperatorState.REWORK})
 _TEMPORARY_STATES = frozenset({OperatorState.STOPPED, OperatorState.SETUP})
@@ -329,43 +337,23 @@ def resource_concurrency_conflict(origem, destino, outros_status):
     """Decide se um apontamento pode ocupar um recurso que já tem outros ativos.
 
     Decisão do usuário (01/10/2026): o operador pode apontar 2 ou mais OPs ao
-    mesmo tempo no mesmo recurso. A simultaneidade vale para PRODUÇÃO: cada
-    OP continua sendo um apontamento próprio, e o tempo físico do recurso é
-    uma união (``mes.analytics.physical_time``), então não dobra.
+    mesmo tempo no mesmo recurso; cada OP continua sendo um apontamento
+    próprio, e o tempo físico do recurso é uma união
+    (``mes.analytics.physical_time``), então não dobra.
 
-    Continuam exclusivos, por serem uma ocupação que muda o recurso inteiro:
-
-    * Setup e Retrabalho, de qualquer lado — entrar neles com outra OP ativa
-      no recurso, ou entrar em produção/parada com outra OP em Setup ou
-      Retrabalho;
-    * Parada direto da fila: a OP nunca produziu, então não "ocupa" o recurso
-      para parar, e isso permitiria contornar a trava.
-
-    Parada de OP que já produz e retomada são permitidas: sem isso, uma
-    quebra de máquina com 2 OPs deixaria o operador sem como registrá-la.
-    No estado físico do recurso (``_reconciliar_estado_recurso_apontamentos_tx``)
-    produção prevalece sobre parada: com ao menos uma OP produzindo o recurso
-    está em produção, e só vira parada quando TODAS as OPs ativas estão
-    paradas. ``desconhecido`` fica para combinações realmente incompatíveis
-    (por exemplo, paradas com motivos distintos).
+    Decisão do usuário (10/11/2026): o recurso aceita apontamento de várias
+    OPs INDEPENDENTE do apontamento atual — Setup, Retrabalho e Parada também
+    deixaram de ser exclusivos. Esta função segue como ponto único da regra
+    (a leitura prévia do fluxo e a checagem na transação a chamam) e hoje
+    nunca acusa conflito. O estado físico com estados mistos é decidido em
+    ``_reconciliar_estado_recurso_apontamentos_tx`` (produção > retrabalho >
+    setup > parada).
 
     ``outros_status`` são os status persistidos dos demais apontamentos ativos
     do recurso (``Em processo``, ``Parada``, ``Setup``, ``Retrabalho``).
     Devolve ``True`` quando há conflito.
     """
 
-    outros = [
-        operator_state_from_status(status) for status in (outros_status or ())
-    ]
-    outros = [estado for estado in outros if estado is not None]
-    if not outros:
-        return False
-    if destino in {OperatorState.SETUP, OperatorState.REWORK}:
-        return True
-    if any(estado in {OperatorState.SETUP, OperatorState.REWORK} for estado in outros):
-        return True
-    if origem == OperatorState.QUEUED and destino != OperatorState.PRODUCTION:
-        return True
     return False
 
 

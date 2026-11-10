@@ -203,6 +203,29 @@ describe("Qualidade (cotas padrão) — edição", () => {
     await waitFor(() => expect(listCalls(mock).length).toBeGreaterThan(antes));
   });
 
+  it("mostra o lote da inspeção e a Qualidade volta para 5", async () => {
+    const comLote = { ...PROD_1, niveis_inspecao: [{ numero_operacao: "010", nivel: 2 }, { numero_operacao: "020", nivel: 5 }] };
+    const mock = stubFetch("qualidade", (path, init) => {
+      if (path.includes("/management/quality-templates?")) return json(listResponse([comLote, PROD_2]));
+      if (path.endsWith("/management/quality-templates/PROD-1/inspection-level/reset") && init?.method === "POST") return json({ ok: true, produto: "PROD-1", nivel: 5, operacoes: 2 });
+      return undefined;
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderAt("/qualidade/cotas");
+    expect(await screen.findByText("Op 010: 2 · Op 020: 5")).toBeInTheDocument();
+    expect(screen.getByText("5 (padrão)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Voltar lote da inspeção de PROD-2 para 5" })).not.toBeInTheDocument();
+    const antes = listCalls(mock).length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Voltar lote da inspeção de PROD-1 para 5" }));
+
+    await screen.findByText("Lote da inspeção do produto PROD-1 voltou para 5.");
+    const post = postCall(mock);
+    expect(String(post[0])).toBe("/api/v1/management/quality-templates/PROD-1/inspection-level/reset");
+    expect(new Headers(post[1]?.headers).get("X-CSRF-Token")).toBe("csrf-teste");
+    await waitFor(() => expect(listCalls(mock).length).toBeGreaterThan(antes));
+  });
+
   it("erro do servidor aparece em português dentro do editor, que continua aberto", async () => {
     stubFetch("qualidade", (path, init) => {
       if (path.endsWith("/api/v1/quality/templates") && init?.method === "POST") {

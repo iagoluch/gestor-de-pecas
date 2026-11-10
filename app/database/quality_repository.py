@@ -370,12 +370,51 @@ class QualityRepositoryMixin:
                 descricoes = {
                     row["produto_codigo"]: row["produto_descricao"] for row in cursor.fetchall()
                 }
+            niveis = {}
+            if itens:
+                cursor.execute(
+                    "SELECT produto_codigo, numero_operacao, nivel"
+                    " FROM qualidade_inspecao_progressiva_nivel"
+                    " WHERE produto_codigo = ANY(%s)"
+                    " ORDER BY produto_codigo, numero_operacao",
+                    ([i["produto_codigo"] for i in itens],),
+                )
+                for row in cursor.fetchall():
+                    niveis.setdefault(row["produto_codigo"], []).append(
+                        {"numero_operacao": row["numero_operacao"], "nivel": int(row["nivel"])}
+                    )
         for item in itens:
             item["produto_descricao"] = (
                 item["produto_descricao"] or descricoes.get(item["produto_codigo"]) or None
             )
             item["quantidade_cotas"] = int(item["quantidade_cotas"])
+            # Lote da inspeção do setup por operação; sem linha = nunca
+            # inspecionado (começa em 5).
+            item["niveis_inspecao"] = niveis.get(item["produto_codigo"], [])
         return {"items": itens, "total": total}
+
+    def reiniciar_nivel_inspecao_produto(self, produto_codigo, *, instante=None):
+        """Qualidade zera o lote (volta para 5) de todas as operações do produto.
+
+        Vale a partir da próxima OP: a inspeção em andamento já fixou o N dela.
+        Devolve as linhas como estavam antes (para a auditoria).
+        """
+
+        produto = str(produto_codigo or "").strip()
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT produto_codigo, numero_operacao, nivel"
+                " FROM qualidade_inspecao_progressiva_nivel"
+                " WHERE produto_codigo = %s ORDER BY numero_operacao FOR UPDATE",
+                (produto,),
+            )
+            antes = _rows(cursor)
+            cursor.execute(
+                "UPDATE qualidade_inspecao_progressiva_nivel"
+                " SET nivel = 5, atualizado_em = %s WHERE produto_codigo = %s",
+                (instante or self._now(), produto),
+            )
+            return antes
 
     def salvar_template_qualidade(
         self,

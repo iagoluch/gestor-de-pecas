@@ -1870,11 +1870,25 @@ label:has(> .required-mark) > :is(input, select, textarea, div) { flex-basis: 10
 .operator-workbench .station-state--rework, .highlight-page .station-state--rework, .cutting-page .station-state--rework { --sc: var(--fill-rework); }
 .operator-workbench .station-state--waiting, .highlight-page .station-state--waiting, .cutting-page .station-state--waiting { --sc: var(--fill-waiting); }
 
-.operator-workbench .operator-op-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; justify-content: stretch; gap: 12px; }
+.operator-workbench .operator-op-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; justify-content: stretch; gap: 12px; }
 .operator-workbench .operator-op-form label { width: auto; font-size: var(--text-md); }
 .operator-workbench .operator-op-form input { min-height: 64px; padding: 16px 18px; border-width: 2px; border-radius: var(--radius-card); font-size: 19px; }
 .operator-workbench .operator-op-form button { min-height: 64px; padding: 0 28px; border-radius: var(--radius-card); font-size: 17px; }
 .operator-workbench .operator-route { width: 100%; justify-content: start; }
+/* Interromper OP (10/11/2026): ação secundária ao lado do Carregar roteiro. */
+.operator-workbench .operator-op-form .operator-op-form__interrupt { border-color: var(--border-strong); color: var(--text); background: var(--surface); box-shadow: none; }
+.operator-workbench .operator-op-form .operator-op-form__interrupt:hover:not(:disabled) { border-color: var(--text); background: var(--surface); }
+.operator-op-form button:disabled { opacity: .45; cursor: not-allowed; }
+.operator-inspection-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.operator-inspection-steps li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); }
+.operator-inspection-steps li strong { font-size: var(--text-base); color: var(--text); }
+.operator-inspection-steps li span { font-size: 12px; font-weight: 700; }
+.operator-inspection-steps li.is-current { border: 2px solid var(--accent); background: var(--accent-soft); }
+.operator-inspection-steps li.is-done span { color: var(--success-ink); }
+@media (max-width: 560px) { .operator-inspection-steps { grid-template-columns: 1fr; } }
+.operator-setup-tool { display: grid; justify-items: center; gap: 4px; padding: 12px 0; }
+.operator-setup-tool small { color: var(--muted); font-weight: 700; }
+.operator-setup-tool time { font-size: clamp(36px, 5vw, 56px); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 .operator-workbench .operator-actions, .highlight-page .operator-actions { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
 .operator-workbench .operator-action, .highlight-page .operator-action { flex-direction: column; max-width: none; min-height: 104px; gap: 10px; padding: 12px 8px; border-radius: 22px; font-size: clamp(14px, 1.2vw, 17px); }

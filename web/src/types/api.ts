@@ -136,6 +136,7 @@ export interface FirstPieceGate {
   pecas_exigidas?: number;
   pecas_medidas?: number;
   pecas_registradas?: number;
+  pecas_previstas?: number;
   code: string;
   message: string;
   pendencias: string[];

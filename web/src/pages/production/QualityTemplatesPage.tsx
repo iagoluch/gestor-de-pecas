@@ -76,6 +76,23 @@ export function QualityTemplatesPage() {
   const [offset, setOffset] = useState(0);
   const [editing, setEditing] = useState<Editing>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [resetting, setResetting] = useState("");
+
+  // Qualidade volta o lote da inspeção do setup para 5 (10/11/2026); vale
+  // para todas as operações do produto a partir da próxima OP.
+  async function resetLote(codigo: string) {
+    if (!window.confirm(`Voltar o lote da inspeção do produto ${codigo} para 5 peças? Vale a partir da próxima OP.`)) return;
+    setResetting(codigo);
+    try {
+      await api.post(`${LIST_API}/${encodeURIComponent(codigo)}/inspection-level/reset`);
+      setFeedback({ tone: "success", text: `Lote da inspeção do produto ${codigo} voltou para 5.` });
+      query.reload();
+    } catch (reason) {
+      setFeedback({ tone: "error", text: reason instanceof ApiError ? reason.message : "Não foi possível voltar o lote para 5." });
+    } finally {
+      setResetting("");
+    }
+  }
   const debouncedProduto = useDebouncedValue(produto.trim());
 
   const path = useMemo(() => {
@@ -166,12 +183,26 @@ export function QualityTemplatesPage() {
                 { key: "por", label: "Atualizado por", render: (row) => row.atualizado_por || "—" },
                 { key: "em", label: "Atualizado em", render: (row) => (row.atualizado_em ? formatDateTime(row.atualizado_em) : "—") },
                 {
+                  key: "lote",
+                  label: "Lote da inspeção",
+                  render: (row: QualityTemplateRow) => (row.niveis_inspecao ?? []).length
+                    ? row.niveis_inspecao.map((item) => `Op ${item.numero_operacao}: ${item.nivel}`).join(" · ")
+                    : "5 (padrão)",
+                },
+                {
                   key: "acoes",
                   label: "Ações",
                   render: (row: QualityTemplateRow) => (
-                    <button type="button" aria-label={`Editar cotas de ${row.produto_codigo}`} onClick={() => { setFeedback(null); setEditing(row.produto_codigo); }}>
-                      Editar
-                    </button>
+                    <span className="operator-card-heading-actions">
+                      <button type="button" aria-label={`Editar cotas de ${row.produto_codigo}`} onClick={() => { setFeedback(null); setEditing(row.produto_codigo); }}>
+                        Editar
+                      </button>
+                      {(row.niveis_inspecao ?? []).some((item) => item.nivel < 5) ? (
+                        <button type="button" disabled={resetting === row.produto_codigo} aria-label={`Voltar lote da inspeção de ${row.produto_codigo} para 5`} onClick={() => void resetLote(row.produto_codigo)}>
+                          Voltar lote para 5
+                        </button>
+                      ) : null}
+                    </span>
                   ),
                 },
               ]}

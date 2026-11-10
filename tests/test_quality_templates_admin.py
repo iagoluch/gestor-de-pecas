@@ -135,7 +135,7 @@ class QualityTemplatesApiTests(unittest.TestCase):
         self.assertEqual(
             set(a),
             {"produto_codigo", "produto_descricao", "revisao", "quantidade_cotas",
-             "atualizado_por", "atualizado_em", "ativo"},
+             "atualizado_por", "atualizado_em", "ativo", "niveis_inspecao"},
         )
         self.assertEqual((a["produto_codigo"], a["quantidade_cotas"], a["revisao"]), ("PROD-A", 2, 1))
         self.assertIsNone(a["produto_descricao"])
@@ -177,6 +177,33 @@ class QualityTemplatesApiTests(unittest.TestCase):
         contexto = self.client.get("/api/v1/quality/context").json()
         self.assertTrue(contexto["can_edit_template"])
         self.assertFalse(contexto["available"])
+
+    def test_qualidade_volta_o_lote_da_inspecao_para_5(self):
+        # Reset do lote pela Qualidade (10/11/2026): todas as operações do produto.
+        self._as("operador_dobra")
+        self._salvar("PROD-A", "10")
+        self.db.progressive_levels[("PROD-A", "010")] = 2
+        self.db.progressive_levels[("PROD-A", "020")] = 4
+        self.db.progressive_levels[("PROD-B", "010")] = 1
+        reset = f"{URL}/PROD-A/inspection-level/reset"
+
+        for role in ("gestor", "supervisor", "operador_dobra"):
+            self._as(role)
+            self.assertEqual(self.client.post(reset).status_code, 403, role)
+        self.assertEqual(self.db.progressive_levels[("PROD-A", "010")], 2)
+
+        self._as("qualidade")
+        item = self.client.get(URL).json()["items"][0]
+        self.assertEqual(
+            item["niveis_inspecao"],
+            [{"numero_operacao": "010", "nivel": 2}, {"numero_operacao": "020", "nivel": 4}],
+        )
+        resposta = self.client.post(reset)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["operacoes"], 2)
+        self.assertEqual(self.db.progressive_levels[("PROD-A", "010")], 5)
+        self.assertEqual(self.db.progressive_levels[("PROD-A", "020")], 5)
+        self.assertEqual(self.db.progressive_levels[("PROD-B", "010")], 1)
 
     def test_gestor_continua_sem_acesso_ao_cadastro_de_cotas(self):
         self._as("gestor")

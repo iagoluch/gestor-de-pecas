@@ -1031,3 +1031,29 @@ def list_quality_templates(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.post(
+    "/quality-templates/{produto}/inspection-level/reset",
+    dependencies=[Depends(require_csrf)],
+)
+def reset_quality_inspection_level(
+    produto: str = ApiPath(min_length=1, max_length=60),
+    user: SessionUser = Depends(require_qualidade_user),
+    database=Depends(get_database),
+):
+    """Qualidade volta o lote da inspeção do setup para 5 (10/11/2026).
+
+    Vale para todas as operações do produto, a partir da próxima OP.
+    """
+
+    produto = produto.strip()
+    antes = database.reiniciar_nivel_inspecao_produto(produto)
+    if antes:
+        auditar(
+            database, user, "lote_inspecao", produto,
+            antes={"niveis": antes},
+            depois={"niveis": [{**item, "nivel": 5} for item in antes]},
+            acao="alterar",
+        )
+    return {"ok": True, "produto": produto, "nivel": 5, "operacoes": len(antes)}

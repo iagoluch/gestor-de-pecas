@@ -40,15 +40,17 @@ class RegraDeOcupacaoTests(unittest.TestCase):
         self.assertFalse(resource_concurrency_conflict(self.S, self.P, ["Parada"]))
         self.assertFalse(resource_concurrency_conflict(self.P, self.S, ["Em processo"]))
 
-    def test_setup_e_retrabalho_continuam_exclusivos(self):
-        self.assertTrue(resource_concurrency_conflict(self.P, self.R, ["Em processo"]))
-        self.assertTrue(resource_concurrency_conflict(self.P, OperatorState.REWORK, ["Em processo"]))
-        self.assertTrue(resource_concurrency_conflict(self.Q, self.P, ["Setup"]))
-        self.assertTrue(resource_concurrency_conflict(self.Q, self.P, ["Em processo", "Retrabalho"]))
-        self.assertTrue(resource_concurrency_conflict(self.S, self.P, ["Setup"]))
-
-    def test_parada_direto_da_fila_nao_contorna_a_trava(self):
-        self.assertTrue(resource_concurrency_conflict(self.Q, self.S, ["Em processo"]))
+    def test_recurso_aceita_qualquer_estado_com_outras_ops_ativas(self):
+        # Decisão do usuário (10/11/2026): várias OPs no recurso,
+        # independente do apontamento atual. Setup/Retrabalho não são mais
+        # exclusivos, e Parada direto da fila também passa.
+        ocupacoes = (["Em processo"], ["Setup"], ["Retrabalho"], ["Parada"],
+                     ["Em processo", "Retrabalho"])
+        for outros in ocupacoes:
+            for origem, destino in ((self.Q, self.P), (self.Q, self.R), (self.Q, self.F),
+                                    (self.Q, self.S), (self.P, self.R), (self.S, self.P)):
+                with self.subTest(origem=origem, destino=destino, outros=outros):
+                    self.assertFalse(resource_concurrency_conflict(origem, destino, outros))
 
 
 class DivisaoDoTempoTests(unittest.TestCase):

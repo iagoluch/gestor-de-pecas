@@ -8,6 +8,8 @@ export interface QualityTemplateRow {
   atualizado_por: string | null;
   atualizado_em: string | null;
   ativo: boolean;
+  /** Lote da inspeção do setup por operação (10/11/2026); vazio = começa em 5. */
+  niveis_inspecao: { numero_operacao: string; nivel: number }[];
 }
 
 export interface QualityTemplateListResponse {

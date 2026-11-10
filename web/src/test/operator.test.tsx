@@ -175,8 +175,12 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "10 - DOBRA — Atual" });
 
+    // Com o Setup em curso o clique reabre o Setup Ferramental; sem cotas,
+    // Prosseguir só fecha o popup.
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    expect(await screen.findByText(/Setup em andamento/)).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Setup Ferramental" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Setup Ferramental" })).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
 
     const retomar = await screen.findByRole("button", { name: "Retomar produção" });
@@ -609,6 +613,8 @@ describe("fluxo Web do operador", () => {
       // Inspeção progressiva (patch 09/11/2026): 1ª peça aprovada, faltam 2 de 3.
       // 2 medições gravadas: uma 1ª peça reprovada (não conta) + a aprovada.
       ...(options.progressiva ? { status: "CONFORME", pecas_exigidas: options.liberado ? 2 : 3, pecas_medidas: options.liberado ? 2 : 1, pecas_registradas: 2 } : {}),
+      // Antes da 1ª medição o N ainda não foi fixado; a API já diz quantas serão.
+      pecas_previstas: 5,
     };
     let setupApontado = options.emSetup ?? false;
     let iniciou = false;
@@ -729,8 +735,8 @@ describe("fluxo Web do operador", () => {
     // dispara nada.
     await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    await screen.findByRole("heading", { name: "Confirmar Setup" });
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await screen.findByRole("heading", { name: "Setup Ferramental" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     // O conteúdo do popup chega do backend: espere o checklist (ou o cadastro
     // de cotas) antes de interagir.
@@ -762,10 +768,10 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    if (!emSetup) {
-      await screen.findByRole("heading", { name: "Confirmar Setup" });
-      fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
-    }
+    // Fila ou Setup em curso: o clique abre o Setup Ferramental e o
+    // Prosseguir leva às cotas.
+    await screen.findByRole("heading", { name: "Setup Ferramental" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
 
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     await screen.findByRole("heading", { name: "Conferência concluída" });
@@ -829,13 +835,13 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
 
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    await screen.findByRole("heading", { name: "Confirmar Setup" });
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar" }));
 
     await screen.findByRole("heading", { name: "OP no recurso errado" });
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Confirmar e apontar" }));
+    await screen.findByRole("heading", { name: "Setup Ferramental" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     const setups = calls.filter((call) => call.method === "POST" && (call.body as { action?: string } | null)?.action === "Setup");
     expect(setups.at(-1)?.body).toMatchObject({ action: "Setup", confirm_resource_divergence: true });
@@ -864,6 +870,8 @@ describe("fluxo Web do operador", () => {
     else fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: saida }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    await screen.findByRole("heading", { name: "Setup Ferramental" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
 
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     await screen.findByLabelText("Medida da cota 1");
@@ -883,11 +891,71 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    await screen.findByRole("heading", { name: "Setup Ferramental" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
 
     await screen.findByRole("heading", { name: "Medição da peça 3 de 3" });
     expect(screen.getByLabelText("Medida da cota 1")).toHaveValue("");
     expect(calls.filter((call) => call.method === "POST" && call.path.includes("/operator/actions") && (call.body as { action?: string } | null)?.action === "Setup")).toHaveLength(1);
     expect(calls.filter((call) => call.method === "POST" && call.path.includes("/first-piece"))).toHaveLength(1);
+  });
+
+  async function carregarEmProcesso() {
+    const context = gateBackend({});
+    render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+    await screen.findByText("1303");
+    fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-GATE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
+    await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar" }));
+    await expectActionPosted("/operator/actions", "Início registrado com sucesso.");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
+    return context;
+  }
+
+  const acoes = (calls: { path: string; method?: string; body?: unknown }[]) => calls
+    .filter((call) => call.method === "POST" && call.path.includes("/operator/actions"))
+    .map((call) => String((call.body as { action?: string } | null)?.action));
+
+  it("Setup Ferramental mostra produto, quantidade e recurso, e Cancelar interrompe a OP", async () => {
+    const { calls } = await carregarEmProcesso();
+
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    const popup = await screen.findByRole("dialog", { name: "Setup Ferramental" });
+    expect(within(popup).getByText("PECA-GATE")).toBeInTheDocument();
+    expect(within(popup).getByText("10")).toBeInTheDocument();
+    expect(within(popup).getByText("1303")).toBeInTheDocument();
+    expect(within(popup).getByText("Tempo de setup")).toBeInTheDocument();
+    expect(acoes(calls)).toEqual(["Início", "Setup"]);
+
+    fireEvent.click(within(popup).getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => expect(acoes(calls)).toEqual(["Início", "Setup", "Interromper"]));
+    expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
+  });
+
+  it("Interromper OP pede confirmação e manda a OP para a fila", async () => {
+    const { calls } = await carregarEmProcesso();
+    const botao = screen.getByRole("button", { name: "Interromper OP" });
+    await waitFor(() => expect(botao).toBeEnabled());
+
+    fireEvent.click(botao);
+    const confirmacao = await screen.findByRole("dialog", { name: "Interromper OP" });
+    fireEvent.click(within(confirmacao).getByRole("button", { name: "Interromper" }));
+
+    await waitFor(() => expect(acoes(calls)).toEqual(["Início", "Interromper"]));
+    // A bancada solta a OP: não sobra "Retomar produção" de um estado que acabou.
+    await waitFor(() => expect(screen.getByPlaceholderText("Digite ou escaneie a OP")).toHaveValue(""));
+    expect(screen.queryByRole("button", { name: "Retomar produção" })).not.toBeInTheDocument();
+  });
+
+  it("o cabeçalho das cotas mostra a peça do lote", async () => {
+    await abrirPortao({ progressiva: true });
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("1/3 completas")).toBeInTheDocument();
+    expect(within(dialog).getByText("Primeira inspeção — 1/3 completas")).toBeInTheDocument();
+    expect(within(dialog).getByText("PECA-GATE")).toBeInTheDocument();
   });
 
   it("mede a cota, libera o lote e habilita Finalizar", async () => {
@@ -998,6 +1066,13 @@ describe("fluxo Web do operador", () => {
     expect(await screen.findByRole("heading", { name: "Cadastro das cotas do produto" })).toBeInTheDocument();
     expect(screen.getByLabelText("Padrão nominal da cota 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Tolerância da cota 1")).toBeInTheDocument();
+    // Sem cota padrão: o popup diz que primeiro registra e depois vem a inspeção 0/5.
+    const dialog = screen.getByRole("dialog");
+    const passos = within(dialog).getByRole("list", { name: "Passos do Setup" });
+    expect(within(passos).getByText("Registrar a cota padrão").closest("li")).toHaveAttribute("aria-current", "step");
+    expect(within(passos).getByText("Primeira inspeção — 0/5 completas")).toBeInTheDocument();
+    expect(within(dialog).getByText("0/5 completas")).toBeInTheDocument();
+    expect(within(dialog).getByText(/ainda não tem cota padrão registrada\. Primeiro registre a cota padrão/)).toBeInTheDocument();
   });
 
   it("mostra Solda Aço por número de estação e não oferece Setup", async () => {

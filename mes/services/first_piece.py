@@ -173,9 +173,26 @@ class FirstPieceService:
             # Toda medição gravada (conforme ou NC). A tela devolve este número
             # ao medir e o banco recusa o 2º envio da mesma peça.
             "pecas_registradas": int((linha or {}).get("inspecao_pecas_registradas") or 0),
+            # N que a inspeção vai pedir, já antes da 1ª medição (que é quando
+            # ele é fixado): a tela mostra "0/5" desde o cadastro das cotas.
+            "pecas_previstas": self._pecas_previstas(linha, setor, operacao),
             "registro": self._publico(linha),
             "checklist": self.checklist(setor=setor, operacao=operacao, registro=linha),
         }
+
+    def _pecas_previstas(self, linha, setor, operacao):
+        if not first_piece_gate_is_structured(setor, operacao):
+            return 0
+        prever = getattr(self.db, "prever_pecas_exigidas_inspecao", None)
+        if not callable(prever):
+            return 0
+        dados = dict(operacao or {})
+        base = dict(linha or {}) or {
+            "produto_codigo": dados.get("produto_codigo"),
+            "numero_operacao": dados.get("numero_operacao") or dados.get("codigo"),
+            "quantidade_planejada": dados.get("quantidade_planejada") or dados.get("quantidade"),
+        }
+        return int(prever(base) or 0)
 
     def checklist(self, *, setor, operacao, registro=None):
         """Checklist de cotas do produto, quando o portão é o estruturado.
@@ -680,13 +697,13 @@ class FirstPieceService:
             )
             codigo = "inspecao_progressiva_conforme"
         else:
+            # NC não avança: a mesma peça é refeita no mesmo número.
             mensagem = (
-                f"Peça {numero} de {exigidas} não conforme. A RNC "
-                f"{progressiva['rnc']['codigo']} foi aberta para a Qualidade decidir."
+                f"Peça {numero + 1} de {exigidas} não conforme. A RNC "
+                f"{progressiva['rnc']['codigo']} foi aberta para a Qualidade decidir. "
+                f"Refaça a peça {numero + 1} de {exigidas} e meça as cotas de novo."
             )
             codigo = "inspecao_progressiva_nao_conforme"
-            if numero < exigidas:
-                mensagem += f" Meça as cotas da peça {numero + 1}."
         return FirstPieceResult(
             True,
             mensagem,

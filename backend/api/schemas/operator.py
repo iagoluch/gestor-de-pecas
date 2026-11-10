@@ -8,7 +8,7 @@ class OperatorActionRequest(BaseModel):
 
     action: Literal[
         "Início", "Parada", "Setup", "Retrabalho", "Retomar", "Retornar", "Finalizado",
-        "Finalizar Retrabalho"
+        "Finalizar Retrabalho", "Interromper"
     ]
     resource: str = Field(min_length=1, max_length=120)
     op: str | None = Field(default=None, min_length=1, max_length=80)

@@ -19,7 +19,7 @@ import type {
 import { displayName, displayText, formatDateTime } from "../../utils/format";
 import { Notice, type NoticeTone } from "../../components/Notice";
 import { AsyncButton } from "../../components/AsyncButton";
-import { StationStateBanner } from "../../components/StationStateBanner";
+import { ElapsedTimer, StationStateBanner } from "../../components/StationStateBanner";
 import { operatorActionErrorMessage, STATION_EXCLUSIVE_REASON, stationIsBlocked } from "./stationOccupancy";
 import {
   type DraftDimension,
@@ -36,7 +36,9 @@ type DialogState =
   | { kind: "stop" }
   | { kind: "finish" }
   | { kind: "finishRework" }
-  | { kind: "confirm"; action: "Setup" | "Retrabalho" }
+  | { kind: "confirm"; action: "Retrabalho" }
+  | { kind: "setupTool"; since: string }
+  | { kind: "interrupt" }
   | { kind: "activity"; action: "Início" | "Finalizado" }
   | { kind: "authorization"; action: string; code: string; details?: Record<string, unknown> }
   | { kind: "list"; source: "production" | "queue" | "history" }
@@ -400,6 +402,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // Setores sem checklist continuam recebendo a orientação para Retomar.
   const canSetup = canPoint
     && ["", "Aguardando", "Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus);
+  const canInterrupt = canPoint && ["Setup", "Em processo", "Parada"].includes(currentStatus);
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
     operation: String(activeCard.operation ?? activeCard.numero_operacao ?? ""),
@@ -581,19 +584,30 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   async function setupAppointment() {
     // OP-07: com o Setup já em curso o clique só reabre o checklist — reenviar
     // "Setup" seria recusado pelo backend como ação já registrada.
+    // Setup Ferramental (10/11/2026): o clique grava o Setup e abre o popup
+    // com o cronômetro; Cancelar interrompe a OP e Prosseguir abre as cotas.
     if (currentStatus === "Setup") {
-      if (gateRequired || hasStructuredChecklist) openGate();
-      else setMessage("Setup em andamento. Use \"Retomar produção\" para encerrar o Setup ou Finalizar para concluir a etapa.");
+      openSetupTool(resourceState?.categoria === "setup" ? resourceState?.data_inicio : null);
       return;
     }
-    setDialog({ kind: "confirm", action: "Setup" });
+    if (await execute("Setup")) afterSetup("Setup");
   }
 
-  // O checklist só abre depois que o Setup foi gravado: abrir antes tapava a
+  function openSetupTool(since?: string | null) {
+    const valid = since && !Number.isNaN(new Date(since).getTime());
+    setDialog({ kind: "setupTool", since: valid ? since : new Date().toISOString() });
+  }
+
+  // O popup só abre depois que o Setup foi gravado: abrir antes tapava a
   // pergunta do servidor (ex.: "apontar neste posto?") e o Setup não ficava
   // registrado.
   function afterSetup(action: string) {
-    if (action === "Setup" && (gateRequired || hasStructuredChecklist)) openGate();
+    if (action === "Setup") openSetupTool();
+  }
+
+  function proceedSetup() {
+    if (gateRequired || hasStructuredChecklist) openGate();
+    else setDialog(null);
   }
 
   /**
@@ -727,7 +741,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       stations.reload();
       historyQuery.reload();
       operations.reload();
-      if (action === "Finalizado" && !response.data?.finalizacao_parcial) {
+      // Interromper devolve a OP à fila: como na finalização, a bancada solta a OP
+      // (senão os botões continuam com o estado velho, ex.: "Retomar produção").
+      if ((action === "Finalizado" && !response.data?.finalizacao_parcial) || action === "Interromper") {
         setOp("");
         setLoadedOp("");
         setRouteSelection(null);
@@ -770,6 +786,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       <form className="operator-op-form" onSubmit={loadOperations}>
         <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
         <button type="submit">Carregar roteiro</button>
+        {/* 10/11/2026: a OP volta para a fila sem lançar quantidade nem mexer no
+            Protheus. Retrabalho fica de fora: ele sai pelo Finalizar Ret. */}
+        <button type="button" className="operator-op-form__interrupt" disabled={submitting || !canInterrupt} onClick={() => setDialog({ kind: "interrupt" })}>Interromper OP</button>
       </form>
       {(operations.data?.items?.length ?? 0) > 0 ? (
         <ol className="operator-route" aria-label="Roteiro completo da OP">
@@ -868,6 +887,20 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} sector={sector} error={dialogError} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizar Retrabalho", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} error={dialogError} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then((ok) => { if (ok) afterSetup(action); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
+      {dialog?.kind === "setupTool" ? (
+        <OperatorDialog title="Setup Ferramental" context={<SetupContextLine context={context} />} onCancel={() => setDialog(null)}>
+          <div className="operator-setup-tool">
+            <small>Tempo de setup</small>
+            <ElapsedTimer since={dialog.since} />
+          </div>
+          <p className="operator-help">Prepare a máquina. Prosseguir abre as cotas; Cancelar interrompe a OP e ela volta para a fila sem lançar quantidade.</p>
+          <div className="operator-dialog__actions">
+            <AsyncButton pendingLabel="Interrompendo…" disabled={submitting} onClick={() => execute("Interromper")}>Cancelar</AsyncButton>
+            <button type="button" className="button button--primary" disabled={submitting} onClick={proceedSetup}>Prosseguir</button>
+          </div>
+        </OperatorDialog>
+      ) : null}
+      {dialog?.kind === "interrupt" ? <OperatorDialog title="Interromper OP" size="compact" context={<SetupContextLine context={context} />} onCancel={() => setDialog(null)}><p>A OP volta para a fila sem lançar quantidade e sem movimentar o Protheus. O tempo até agora fica registrado e soma com o da próxima vez.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><AsyncButton pendingLabel="Interrompendo…" className="button button--primary" disabled={submitting} onClick={() => execute("Interromper")}>Interromper</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "activity" ? <OperatorDialog title="Atividade sem OP" size="compact" onCancel={() => setDialog(null)}><p>{dialog.action === "Início" ? "Iniciar uma atividade sem OP neste posto?" : "Finalizar a atividade sem OP em andamento?"}</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={submitting} onClick={() => execute(dialog.action)}>Sim</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} code={dialog.code} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => { const action = dialog.action; return execute(action, { badges: badge ? [badge] : [], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
       {dialog?.kind === "list" ? <CardListDialog title={{ production: "Produção", queue: "Fila de Ordem", history: "Histórico" }[dialog.source]} items={dialog.source === "history" ? historyQuery.data?.items ?? [] : cards.data?.[dialog.source] ?? []} hasMore={dialog.source === "history" && Boolean(historyQuery.data?.has_more)} onCancel={() => setDialog(null)} onSelect={(item) => { selectCard(item); setDialog(null); }} /> : null}
@@ -1017,6 +1050,10 @@ function SetupQualityDialog({
   const medidas = state?.pecas_medidas ?? 0;
   const progressiva = state?.status === "CONFORME" && exigidas > medidas;
   const pecaAtual = medidas + 1;
+  // N só é fixado na 1ª medição; antes disso a API já diz quantas serão.
+  const total = exigidas || state?.pecas_previstas || 0;
+  const completas = Math.min(medidas, total);
+  const lote = total > 0 ? `${completas}/${total} completas` : undefined;
   const statusDaCota = (cota: QualityDimension) => {
     const atual = measures[cota.sequencia];
     if (!atual?.medida.trim()) return "";
@@ -1055,7 +1092,7 @@ function SetupQualityDialog({
   }
 
   return (
-    <OperatorDialog title="Setup e Qualidade" size="wide" context={<ContextLine {...context} />} onCancel={onCancel}>
+    <OperatorDialog title="Setup e Qualidade" size="wide" context={<SetupContextLine context={context} lote={lote} />} onCancel={onCancel}>
       {loading ? <LoadingState label="Carregando o Setup/Qualidade…" /> : null}
       {/* A ação anterior (autorizar, salvar cotas, enviar checklist) responde
           aqui dentro — o popup fica por cima do aviso da tela de fundo, e sem
@@ -1106,6 +1143,11 @@ function SetupQualityDialog({
       ) : null}
       {!loading && !state?.liberado && !state?.bloqueio_ativo && state?.checklist?.configuravel ? (
         <>
+          <InspectionSteps atual={1} completas={completas} total={total} />
+          <p className="operator-gate-setup" role="status">
+            Este produto ainda não tem cota padrão registrada. Primeiro registre a cota padrão e salve.
+            Depois disso começa a primeira inspeção{total > 0 ? ` (${completas}/${total} completas)` : ""}.
+          </p>
           <TemplateEditor
             drafts={drafts}
             saving={busy}
@@ -1119,6 +1161,7 @@ function SetupQualityDialog({
       ) : null}
       {!loading && !state?.liberado && !state?.bloqueio_ativo && !state?.checklist?.configuravel && cotas.length ? (
         <>
+          <InspectionSteps atual={2} completas={completas} total={total} />
           <h3 className="operator-step-title" data-step-title tabIndex={-1}>
             {progressiva ? `Medição da peça ${pecaAtual} de ${exigidas}` : "Medição da primeira peça"}
           </h3>
@@ -1287,6 +1330,27 @@ function RouteStepDialog({ op, current, target, onCancel, onConfirm }: { op: str
       </div>
     </OperatorDialog>
   );
+}
+
+// Cabeçalho do Setup Ferramental e das cotas (10/11/2026): OP, produto,
+// quantidade, recurso e, nas cotas, a peça do lote (ex.: 2/5).
+/** Os 2 passos do Setup: cota padrão (só se faltar) e a primeira inspeção. */
+function InspectionSteps({ atual, completas, total }: { atual: 1 | 2; completas: number; total: number }) {
+  const contagem = total > 0 ? ` — ${completas}/${total} completas` : "";
+  return (
+    <ol className="operator-inspection-steps" aria-label="Passos do Setup">
+      <li className={atual === 1 ? "is-current" : "is-done"} aria-current={atual === 1 ? "step" : undefined}>
+        <small>Passo 1 de 2</small><strong>Registrar a cota padrão</strong>{atual === 1 ? null : <span>Feito</span>}
+      </li>
+      <li className={atual === 2 ? "is-current" : ""} aria-current={atual === 2 ? "step" : undefined}>
+        <small>Passo 2 de 2</small><strong>Primeira inspeção{contagem}</strong>{atual === 1 ? <span>Depois do passo 1</span> : null}
+      </li>
+    </ol>
+  );
+}
+
+function SetupContextLine({ context, lote }: { context: OperationContext; lote?: string }) {
+  return <div className="operator-context-line">{lote ? <span><small>Lote</small><strong>{lote}</strong></span> : null}<span><small>OP</small><strong>{context.op || "—"}</strong></span><span><small>Produto</small><strong>{context.product || "—"}</strong></span><span><small>Quantidade</small><strong>{context.planned || "—"}</strong></span><span><small>Recurso</small><strong>{context.resource}</strong></span></div>;
 }
 
 function ContextLine({ op, operation, resource }: Pick<OperationContext, "op" | "operation" | "resource">) {

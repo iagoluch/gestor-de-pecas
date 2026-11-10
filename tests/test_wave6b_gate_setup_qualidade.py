@@ -770,7 +770,8 @@ class QuantidadesDoLoteTests(unittest.TestCase):
 
         self.assertTrue(parcial.ok, parcial.message)
         self.assertEqual(parcial.code, "finalizacao_parcial")
-        self.assertEqual(int(parcial.data["saldo_restante"]),3)  # 6 + a 1ª peça da inspeção
+        # As peças medidas no setup não somam mais (10/11/2026): só as 6.
+        self.assertEqual(int(parcial.data["saldo_restante"]), 4)
 
 
 class RestanteDoLoteTests(unittest.TestCase):
@@ -794,8 +795,8 @@ class RestanteDoLoteTests(unittest.TestCase):
         parcial = finalizar(fluxo, contexto, pecas_boas=6)
         self.assertTrue(parcial.ok, parcial.message)
         self.assertEqual(parcial.code, "finalizacao_parcial")
-        # A 1ª peça conforme já entra no total (patch 09/11/2026): 6 + 1 = 7.
-        self.assertEqual(int(parcial.data["saldo_restante"]), 3)
+        # As peças medidas no setup não somam mais (10/11/2026): só as 6.
+        self.assertEqual(int(parcial.data["saldo_restante"]), 4)
 
         linha = next(
             row
@@ -809,7 +810,7 @@ class RestanteDoLoteTests(unittest.TestCase):
 
         # Ciclo seguinte do mesmo lote: Início e Finalizar sem portão algum.
         self.assertTrue(fluxo.executar("Início", **contexto).ok)
-        final = finalizar(fluxo, contexto, pecas_boas=3)  # a 1ª peça não soma de novo
+        final = finalizar(fluxo, contexto, pecas_boas=4)
         self.assertTrue(final.ok, final.message)
         self.assertEqual(db.appointments[0]["status"], "Finalizado")
         self.assertEqual(int(db.appointments[0]["quantidade_boa"]), 10)

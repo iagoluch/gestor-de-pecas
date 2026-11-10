@@ -93,7 +93,8 @@ class OperatorParticipationService:
             return []
         instante = self._instante(apontamento)
 
-        if target == OperatorState.FINISHED:
+        # Interromper devolve a OP à fila: ninguém segue nela, como no fim.
+        if target in {OperatorState.FINISHED, OperatorState.QUEUED}:
             closer(apontamento_id, data_fim=instante)
             return list(lister(apontamento_id) or []) if callable(lister) else []
         if target not in PARTICIPATION_STATES:

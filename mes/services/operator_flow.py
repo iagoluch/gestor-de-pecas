@@ -57,6 +57,7 @@ _MENSAGEM_POR_ACAO = {
     "Retomar": "Produção retomada.",
     "Retornar": "Setup encerrado. Produção retomada.",
     "Finalizar Retrabalho": "Retrabalho finalizado. Produção retomada.",
+    "Interromper": "OP interrompida. Ela voltou para a fila sem lançar quantidade.",
 }
 # Estados em que uma linha de apontamento ainda ocupa a operação (a
 # finalização total é tratada à parte: a etapa vira "concluída").

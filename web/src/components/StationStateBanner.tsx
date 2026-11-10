@@ -28,7 +28,7 @@ function since(value?: string | null) {
 
 // Cronômetro do hero do posto: só apresenta o tempo desde `data_inicio`
 // (já decidido pelo backend), sem somar nem recalcular nada.
-function ElapsedTimer({ since: start }: { since: string }) {
+export function ElapsedTimer({ since: start }: { since: string }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);

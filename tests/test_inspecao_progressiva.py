@@ -8,8 +8,9 @@ Regras em uma frase cada:
 * A OP só finaliza depois das N peças medidas.
 * OP com as N peças conformes faz a próxima medir 1 a menos (mínimo 1).
 * NC numa peça abre RNC (vai para a Decisão de RNC) e o nível não desce.
-* As boas da inspeção entram no total; o Finalizar lança só a diferença
-  (2 + 8 = 10) e uma segunda finalização não soma de novo.
+* NC no meio (ex. 2/5) não avança: a mesma peça é refeita (10/11/2026).
+* As boas da inspeção NÃO entram no total (10/11/2026): o operador informa
+  todas as boas no Finalizar.
 """
 
 import unittest
@@ -54,6 +55,20 @@ class InspecaoProgressivaTests(unittest.TestCase):
         self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (5, 5))
         self.assertTrue(estado["liberado"])
 
+    def test_tela_ja_sabe_o_n_antes_da_primeira_medicao_sem_gravar(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=5)
+        db.progressive_levels.pop(chave, None)
+
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_previstas"], estado["pecas_exigidas"]), (5, 0))
+        self.assertNotIn(chave, db.progressive_levels)  # só leitura
+
+        db.progressive_levels[chave] = 2
+        self.assertEqual(servico.estado(**contexto)["pecas_previstas"], 2)
+        medir(servico, contexto)
+        db.progressive_levels[chave] = 4  # N já fixado na 1ª medição não muda
+        self.assertEqual(servico.estado(**contexto)["pecas_previstas"], 2)
+
     def test_n_nunca_passa_da_quantidade_da_op(self):
         db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5, quantidade=3)
 
@@ -96,6 +111,45 @@ class InspecaoProgressivaTests(unittest.TestCase):
         self.assertTrue(db.first_pieces[0]["inspecao_com_nc"])
         # Fica em 3 até a Qualidade decidir (volta para 5 / fica onde está).
         self.assertEqual(db.progressive_levels[chave], 3)
+
+    def test_interromper_volta_para_a_fila_sem_quantidade_e_inspecao_continua(self):
+        # Botão "Interromper OP" / Cancelar do Setup Ferramental (10/11/2026).
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        medir(servico, contexto)
+        medir(servico, contexto)
+
+        parou = fluxo.executar("Interromper", **contexto)
+
+        self.assertTrue(parou.ok, parou.message)
+        self.assertEqual(parou.data["status"], "Aguardando")
+        self.assertEqual(int(parou.data.get("quantidade_boa") or 0), 0)
+        self.assertEqual(int(parou.data.get("quantidade_refugo") or 0), 0)
+
+        # Pegou a OP de novo: o Setup volta e a inspeção segue na peça 3/5.
+        self.assertTrue(fluxo.executar("Setup", **contexto).ok)
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (2, 5))
+
+    def test_interromper_na_fila_e_recusado(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        self.assertTrue(fluxo.executar("Interromper", **contexto).ok)
+
+        self.assertFalse(fluxo.executar("Interromper", **contexto).ok)
+
+    def test_nc_no_meio_refaz_a_mesma_peca(self):
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=5)
+        medir(servico, contexto)
+
+        nc = medir(servico, contexto, RUIM)
+
+        self.assertEqual(servico.estado(**contexto)["pecas_medidas"], 1)
+        self.assertIn("Refaça a peça 2 de 5", nc.message)
+        refeita = medir(servico, contexto)
+        self.assertIn("Peça 2 de 5 conforme", refeita.message)
+        for _ in range(3):
+            medir(servico, contexto)
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (5, 5))
 
     def test_boas_da_inspecao_nao_somam_no_total_da_finalizacao(self):
         # Decisão da manufatura (10/11/2026): a medição do setup é conferência
@@ -150,7 +204,8 @@ class InspecaoProgressivaTests(unittest.TestCase):
         self.assertFalse(segundo.ok)
         self.assertEqual(segundo.code, "primeira_peca_ja_registrada")
         self.assertEqual(len(db.quality_rnc), 1)
-        self.assertEqual(db.first_pieces[0]["inspecao_pecas_medidas"], 2)
+        # NC não avança (10/11/2026): continua 1 conforme; a peça 2 é refeita.
+        self.assertEqual(db.first_pieces[0]["inspecao_pecas_medidas"], 1)
         self.assertEqual(len(db.progressive_pieces), 2)
 
     def test_envio_duplo_de_peca_conforme_conta_uma_vez(self):
