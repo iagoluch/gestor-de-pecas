@@ -57,7 +57,8 @@ function postedAction(fetchMock: ReturnType<typeof mockWorkbench>) {
 
 async function preencherCracha() {
   fireEvent.change(screen.getByLabelText("Crachá do operador"), { target: { value: "123" } });
-  fireEvent.click(screen.getByRole("button", { name: "Adicionar operador" }));
+  // Tab no campo preenchido adiciona o crachá, sem precisar clicar no +.
+  fireEvent.keyDown(screen.getByLabelText("Crachá do operador"), { key: "Tab" });
 }
 
 async function abrirPopup(fetchMock: ReturnType<typeof mockWorkbench>) {
@@ -92,7 +93,7 @@ describe("Finalizar Ret. no posto do operador", () => {
     expect(screen.getByLabelText("Peças boas (recuperadas)")).toHaveValue(null);
     expect(screen.getByLabelText("Peças para refugo")).toHaveValue(null);
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled();
-    expect(screen.getByText("Informe o crachá do operador e toque em + para confirmar.")).toBeInTheDocument();
+    expect(screen.getByText("Informe o crachá do operador e tecle Tab, Enter ou toque em +.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Peças para refugo"), { target: { value: "1" } });
     await preencherCracha();

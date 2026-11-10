@@ -1174,7 +1174,7 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("heading", { name: "Finalizar produção" });
     // OP-11: o botão travado diz o que falta; passar do saldo só avisa.
     expect(screen.getByRole("button", { name: "Confirmar finalização" })).toBeDisabled();
-    expect(screen.getByText("Informe o crachá do operador e toque em + para confirmar.")).toBeInTheDocument();
+    expect(screen.getByText("Informe o crachá do operador e tecle Tab, Enter ou toque em +.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Peças boas"), { target: { value: "999" } });
     expect(screen.getByText(/passa do saldo/)).toBeInTheDocument();
   });

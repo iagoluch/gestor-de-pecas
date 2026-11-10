@@ -1067,6 +1067,12 @@ function SetupQualityDialog({
   const algumaManual = cotas.some((cota) => !cota.conformidade_automatica);
   const faltaCracha = !progressiva && reprovada && destination === "REFUGO" && !badge.trim();
   // OP-09: o botão travado diz o que falta (Setup pendente já tem aviso próprio).
+  // Atalho de teste só para admin, ao lado do Cancelar: o servidor confere o nível de novo.
+  const skipButton = state?.skip_measures_allowed ? (
+    <AsyncButton pendingLabel="Liberando…" className="button" disabled={busy || setupPendente} title={setupPendente ? "Aponte o Setup antes de liberar." : undefined} onClick={onSkipMeasures}>
+      Prosseguir sem cotas (teste – admin)
+    </AsyncButton>
+  ) : null;
   const motivoBloqueio = setupPendente ? "" : !preenchidas ? "Informe a medida de todas as cotas para liberar o lote." : faltaCracha ? "Informe o crachá do responsável para registrar o refugo." : "";
 
   // OP-09: quando o popup troca de passo (bloqueio, cadastro, medição), o foco
@@ -1101,15 +1107,6 @@ function SetupQualityDialog({
           aqui dentro — o popup fica por cima do aviso da tela de fundo, e sem
           isso o operador não via o retorno de "Autorizar e liberar". */}
       {!loading && message ? <Notice tone={messageTone}>{message}</Notice> : null}
-      {/* Atalho de teste só para admin: o servidor confere o nível de novo. */}
-      {!loading && state?.skip_measures_allowed && state.checklist && !state.liberado && !state.bloqueio_ativo ? (
-        <div className="operator-dialog__actions">
-          {setupPendente ? <small className="disabled-reason">Aponte o Setup antes de liberar.</small> : null}
-          <AsyncButton pendingLabel="Liberando…" className="button" disabled={busy || setupPendente} onClick={onSkipMeasures}>
-            Prosseguir sem cotas (teste – admin)
-          </AsyncButton>
-        </div>
-      ) : null}
       <div ref={stepRef} className="operator-dialog__step">
       {!loading && state?.liberado ? (
         <>
@@ -1168,6 +1165,7 @@ function SetupQualityDialog({
           />
           <div className="operator-dialog__actions">
             <button type="button" onClick={onCancel}>Cancelar</button>
+            {skipButton}
           </div>
         </>
       ) : null}
@@ -1268,6 +1266,7 @@ function SetupQualityDialog({
           <div className="operator-dialog__actions">
             {motivoBloqueio ? <small className="disabled-reason">{motivoBloqueio}</small> : null}
             <button type="button" onClick={onCancel}>Cancelar</button>
+            {skipButton}
             <button
               type="button"
               className="button button--primary"
@@ -1412,7 +1411,7 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
   // Saldo já zerado (ex.: retrabalho recuperou tudo): 0/0 só encerra a etapa; o backend aceita.
   const balanceExhausted = context.planned > 0 && context.balance <= 0;
   const missing = !badges.length
-    ? "Informe o crachá do operador e toque em + para confirmar."
+    ? "Informe o crachá do operador e tecle Tab, Enter ou toque em +."
     : total <= 0 && !balanceExhausted ? "Informe a quantidade de peças boas ou de refugo."
       : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
   function addBadge() {
@@ -1451,7 +1450,7 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
         defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado na finalização; é necessária autorização para o descarte.`)}
       />
     </> : null}
-    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
+    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
     {badgeError ? <p className="form-error">{badgeError}</p> : null}
     <div className="operator-badge-list" aria-label="Operadores adicionados">
       {badges.length ? badges.map((item) => {
@@ -1480,7 +1479,7 @@ function FinishReworkDialog({ context, sector, error, operators, onCancel, onCon
   const total = Number(good || 0) + Number(scrap || 0);
   const aboveBalance = context.planned > 0 && total > context.balance;
   const missing = !badges.length
-    ? "Informe o crachá do operador e toque em + para confirmar."
+    ? "Informe o crachá do operador e tecle Tab, Enter ou toque em +."
     : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
   function addBadge() {
     const normalized = badge.trim();
@@ -1509,7 +1508,7 @@ function FinishReworkDialog({ context, sector, error, operators, onCancel, onCon
         defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado ao finalizar o retrabalho; é necessária autorização para o descarte.`)}
       />
     </> : null}
-    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
+    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
     {badgeError ? <p className="form-error">{badgeError}</p> : null}
     <div className="operator-badge-list" aria-label="Operadores adicionados">
       {badges.length ? badges.map((item) => {
