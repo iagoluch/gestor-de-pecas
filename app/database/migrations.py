@@ -3069,6 +3069,32 @@ INSPECAO_PROGRESSIVA_STATEMENTS = (
     """,
 )
 
+# Migration 76 — chamada que aparece dentro do sistema (10/11/2026).
+# O contato de chamada passa a poder apontar para uma conta (usuarios): quem
+# estiver logado nela vê o chamado na própria tela, sem depender do Telegram.
+# ``destinatario_usuario_id`` é o retrato da conta no instante da chamada;
+# ``contexto`` guarda máquina/setor/OP do posto (antes só ia no texto do
+# Telegram); ``atendida_em`` é quando o destinatário deu "Atendi";
+# ``telegram_dispensado`` marca a chamada que, de propósito, não usa o Telegram
+# (contato com conta e sem Telegram próprio) para o histórico não mostrar "pendente".
+# Aditiva: colunas nulas/com default, linhas antigas ficam como estavam.
+# Rollback: ALTER TABLE chamadas DROP COLUMN destinatario_usuario_id, DROP COLUMN contexto,
+# DROP COLUMN atendida_em, DROP COLUMN telegram_dispensado; ALTER TABLE chamada_contatos
+# DROP COLUMN usuario_id; DELETE FROM schema_migrations WHERE version = 76; SCHEMA_VERSION = 75.
+CHAMADA_NO_SISTEMA_DESCRIPTION = "chamada que aparece na tela do usuário logado"
+CHAMADA_NO_SISTEMA_STATEMENTS = (
+    "ALTER TABLE chamada_contatos ADD COLUMN usuario_id BIGINT REFERENCES usuarios(id) ON DELETE SET NULL",
+    "ALTER TABLE chamadas ADD COLUMN destinatario_usuario_id BIGINT REFERENCES usuarios(id) ON DELETE SET NULL",
+    "ALTER TABLE chamadas ADD COLUMN contexto JSONB",
+    "ALTER TABLE chamadas ADD COLUMN atendida_em TIMESTAMP WITHOUT TIME ZONE",
+    "ALTER TABLE chamadas ADD COLUMN telegram_dispensado BOOLEAN NOT NULL DEFAULT FALSE",
+    """
+    CREATE INDEX idx_chamadas_destinatario_pendentes
+    ON chamadas (destinatario_usuario_id, criado_em DESC)
+    WHERE atendida_em IS NULL AND destinatario_usuario_id IS NOT NULL
+    """,
+)
+
 
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
@@ -3148,6 +3174,7 @@ MIGRATIONS = {
     73: (TOTVS_OUTBOX_DESCARTE_DESCRIPTION, TOTVS_OUTBOX_DESCARTE_STATEMENTS),
     74: (LOG_SISTEMA_DESCRIPTION, LOG_SISTEMA_STATEMENTS),
     75: (INSPECAO_PROGRESSIVA_DESCRIPTION, INSPECAO_PROGRESSIVA_STATEMENTS),
+    76: (CHAMADA_NO_SISTEMA_DESCRIPTION, CHAMADA_NO_SISTEMA_STATEMENTS),
 }
 
 

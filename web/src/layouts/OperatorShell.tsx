@@ -2,6 +2,7 @@ import type { PropsWithChildren } from "react";
 import { leaveActingSector } from "../api/client";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { ChamadaButton } from "../components/ChamadaButton";
+import { ChamadaRecebida } from "../components/ChamadaRecebida";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -103,6 +104,7 @@ export function OperatorShell({
         <div className="operator-content">{children}</div>
       </main>
       {calls && !acting ? <ChamadaButton sector={sector} resource={resource} /> : null}
+      {calls && !acting ? <ChamadaRecebida /> : null}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 """Botão de chamada: contatos geridos pela gestão e o histórico de chamadas."""
 
+from psycopg.types.json import Jsonb
+
 
 #: Colunas seguras para o dropdown de busca (operador e gestão comum): nunca
 #: inclui ``telegram_chat_id`` — é dado de contato pessoal, só o admin vê.
@@ -50,6 +52,7 @@ class ChamadaRepositoryMixin:
         padrao_gestao=False,
         telegram_chat_id=None,
         setores=None,
+        usuario_id=None,
     ):
         """Cria ou atualiza um contato. Tela de gestão, nunca o Dev Observatory.
 
@@ -58,7 +61,8 @@ class ChamadaRepositoryMixin:
         anterior, na mesma transação. ``telegram_chat_id`` é opcional: quando
         preenchido, a chamada para este contato avisa direto esse chat, em
         vez do chat geral do ambiente. ``setores`` vazio/None mantém o
-        contato visível em todos os setores.
+        contato visível em todos os setores. ``usuario_id`` liga o contato a
+        uma conta: quem estiver logado nela vê a chamada na própria tela.
         """
 
         nome = str(nome or "").strip()
@@ -67,34 +71,41 @@ class ChamadaRepositoryMixin:
             raise ValueError("Nome e função do contato são obrigatórios.")
         telegram_chat_id = str(telegram_chat_id or "").strip() or None
         setores = [str(item).strip() for item in (setores or []) if str(item).strip()]
+        usuario_id = int(usuario_id) if usuario_id else None
         with self.connection() as connection, connection.cursor() as cursor:
+            if usuario_id is not None:
+                cursor.execute("SELECT 1 FROM usuarios WHERE id = %s AND ativo = TRUE", (usuario_id,))
+                if cursor.fetchone() is None:
+                    raise ValueError("A conta escolhida não existe ou está inativa.")
             if padrao_gestao:
                 cursor.execute("UPDATE chamada_contatos SET padrao_gestao = FALSE")
             if contato_id is None:
                 cursor.execute(
                     """
-                    INSERT INTO chamada_contatos (nome, funcao, ativo, padrao_gestao, telegram_chat_id, setores)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO chamada_contatos (nome, funcao, ativo, padrao_gestao, telegram_chat_id, setores, usuario_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (LOWER(nome), LOWER(funcao)) DO UPDATE SET
                         ativo = EXCLUDED.ativo,
                         padrao_gestao = EXCLUDED.padrao_gestao,
                         telegram_chat_id = EXCLUDED.telegram_chat_id,
                         setores = EXCLUDED.setores,
+                        usuario_id = EXCLUDED.usuario_id,
                         atualizado_em = CURRENT_TIMESTAMP
                     RETURNING *
                     """,
-                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, setores),
+                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, setores, usuario_id),
                 )
             else:
                 cursor.execute(
                     """
                     UPDATE chamada_contatos
                     SET nome = %s, funcao = %s, ativo = %s, padrao_gestao = %s,
-                        telegram_chat_id = %s, setores = %s, atualizado_em = CURRENT_TIMESTAMP
+                        telegram_chat_id = %s, setores = %s, usuario_id = %s,
+                        atualizado_em = CURRENT_TIMESTAMP
                     WHERE id = %s
                     RETURNING *
                     """,
-                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, setores, int(contato_id)),
+                    (nome, funcao, bool(ativo), bool(padrao_gestao), telegram_chat_id, setores, usuario_id, int(contato_id)),
                 )
             row = cursor.fetchone()
             if row is None:
@@ -133,13 +144,19 @@ class ChamadaRepositoryMixin:
         solicitante_cracha=None,
         solicitante_email=None,
         prioridade="Média",
+        contexto=None,
     ):
         """Grava a chamada com o retrato do contato no momento da chamada.
 
         ``solicitante_cracha``/``solicitante_email`` identificam quem de fato
         chamou quando o login é compartilhado (posto do operador, conta
         genérica da gestão) — a obrigatoriedade por perfil é decidida no
-        endpoint, não aqui.
+        endpoint, não aqui. ``contexto`` é o retrato do posto (máquina, setor,
+        OP) que a tela do destinatário mostra.
+
+        Contato ligado a uma conta ativa e sem Telegram próprio é avisado só
+        dentro do sistema (``telegram_dispensado``): não há por que cair no
+        chat geral. Conta inativa não conta — ninguém veria a chamada.
         """
 
         motivo = str(motivo or "").strip()
@@ -148,21 +165,24 @@ class ChamadaRepositoryMixin:
             raise ValueError("Motivo e comentário da chamada são obrigatórios.")
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT nome, funcao, telegram_chat_id FROM chamada_contatos "
-                "WHERE id = %s AND ativo = TRUE",
+                "SELECT c.nome, c.funcao, c.telegram_chat_id, u.id AS usuario_id "
+                "FROM chamada_contatos c "
+                "LEFT JOIN usuarios u ON u.id = c.usuario_id AND u.ativo = TRUE "
+                "WHERE c.id = %s AND c.ativo = TRUE",
                 (int(contato_id),),
             )
             contato = cursor.fetchone()
             if contato is None:
                 raise ValueError("Contato selecionado não existe ou não está mais ativo.")
+            sem_telegram_proprio = not str(contato["telegram_chat_id"] or "").strip()
             cursor.execute(
                 """
                 INSERT INTO chamadas (
                     contato_id, contato_nome, contato_funcao, motivo, comentario,
                     solicitante_nome, solicitante_nivel, solicitante_cracha, solicitante_email,
-                    prioridade
+                    prioridade, destinatario_usuario_id, contexto, telegram_dispensado
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -176,6 +196,9 @@ class ChamadaRepositoryMixin:
                     str(solicitante_cracha or "").strip() or None,
                     str(solicitante_email or "").strip() or None,
                     str(prioridade or "").strip() or "Média",
+                    contato["usuario_id"],
+                    Jsonb(dict(contexto)) if contexto else None,
+                    contato["usuario_id"] is not None and sem_telegram_proprio,
                 ),
             )
             resultado = dict(cursor.fetchone())
@@ -205,6 +228,44 @@ class ChamadaRepositoryMixin:
                 (int(limite),),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def listar_chamadas_para_usuario(self, usuario_id):
+        """Chamadas endereçadas a esta conta que ainda ninguém deu "Atendi".
+
+        Mais antigas primeiro: quem esperou mais aparece no topo da fila.
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM chamadas
+                WHERE destinatario_usuario_id = %s AND atendida_em IS NULL
+                ORDER BY criado_em, id
+                LIMIT 50
+                """,
+                (int(usuario_id),),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def atender_chamada(self, chamada_id, usuario_id, *, qualquer_destinatario=False):
+        """Marca "Atendi". Só o destinatário (ou o admin) pode; repetir é inofensivo.
+
+        Devolve a linha atualizada, ``None`` se a chamada não existe ou não é
+        desta conta. Já atendida devolve a linha como está (sem sobrescrever o horário).
+        """
+
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE chamadas
+                SET atendida_em = COALESCE(atendida_em, CURRENT_TIMESTAMP)
+                WHERE id = %s AND (%s OR destinatario_usuario_id = %s)
+                RETURNING *
+                """,
+                (int(chamada_id), bool(qualquer_destinatario), int(usuario_id)),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def contar_chamadas_nao_vistas(self, usuario_id):
         """Sininho pessoal: quantas chamadas têm id maior que a última vista.

@@ -86,6 +86,67 @@ class ChamadaRepositoryTests(unittest.TestCase):
         )
         self.assertIsNone(chamada_2["contato_telegram_chat_id"])
 
+    def _chamar(self, contato_id, **extra):
+        return self.db.registrar_chamada(
+            contato_id=contato_id, motivo="Manutenção", comentario="x",
+            solicitante_nome="Operador", solicitante_nivel="operador_dobra", **extra,
+        )
+
+    def test_contato_com_conta_sem_telegram_recebe_so_na_tela(self):
+        conta = self.db.criar_usuario("gabriel.fogaca", "senha-1234", nivel="supervisor")
+        contato = self.db.salvar_chamada_contato(
+            nome="Gabriel Fogaça", funcao="Manufatura", usuario_id=conta
+        )
+        chamada = self._chamar(contato["id"], contexto={"setor": "Dobra", "recurso": "Dobra 1"})
+        self.assertEqual(chamada["destinatario_usuario_id"], conta)
+        self.assertTrue(chamada["telegram_dispensado"])
+        self.assertEqual(chamada["contexto"]["recurso"], "Dobra 1")
+
+    def test_contato_com_conta_e_telegram_proprio_recebe_nos_dois(self):
+        conta = self.db.criar_usuario("gabriel.fogaca", "senha-1234", nivel="supervisor")
+        contato = self.db.salvar_chamada_contato(
+            nome="Gabriel Fogaça", funcao="Manufatura", usuario_id=conta,
+            telegram_chat_id="123456789",
+        )
+        chamada = self._chamar(contato["id"])
+        self.assertEqual(chamada["destinatario_usuario_id"], conta)
+        self.assertFalse(chamada["telegram_dispensado"])
+
+    def test_conta_inativa_nao_dispensa_o_telegram(self):
+        conta = self.db.criar_usuario("gabriel.fogaca", "senha-1234", nivel="supervisor")
+        contato = self.db.salvar_chamada_contato(
+            nome="Gabriel Fogaça", funcao="Manufatura", usuario_id=conta
+        )
+        with self.db.connection() as connection:
+            connection.execute("UPDATE usuarios SET ativo = FALSE WHERE id = %s", (conta,))
+        chamada = self._chamar(contato["id"])
+        self.assertIsNone(chamada["destinatario_usuario_id"])
+        self.assertFalse(chamada["telegram_dispensado"])
+
+    def test_contato_recusa_conta_inexistente_ou_inativa(self):
+        with self.assertRaises(ValueError):
+            self.db.salvar_chamada_contato(nome="X", funcao="Y", usuario_id=999999)
+
+    def test_para_mim_so_traz_as_chamadas_da_conta_e_atender_tira_da_lista(self):
+        fogaca = self.db.criar_usuario("gabriel.fogaca", "senha-1234", nivel="supervisor")
+        outra = self.db.criar_usuario("outra.pessoa", "senha-1234", nivel="supervisor")
+        contato = self.db.salvar_chamada_contato(nome="Gabriel", funcao="Manufatura", usuario_id=fogaca)
+        chamada = self._chamar(contato["id"])
+
+        self.assertEqual([c["id"] for c in self.db.listar_chamadas_para_usuario(fogaca)], [chamada["id"]])
+        self.assertEqual(self.db.listar_chamadas_para_usuario(outra), [])
+
+        # Outra conta não atende a chamada alheia; o dono atende.
+        self.assertIsNone(self.db.atender_chamada(chamada["id"], outra))
+        atendida = self.db.atender_chamada(chamada["id"], fogaca)
+        self.assertIsNotNone(atendida["atendida_em"])
+        self.assertEqual(self.db.listar_chamadas_para_usuario(fogaca), [])
+        # Admin pode atender qualquer uma.
+        outra_chamada = self._chamar(contato["id"])
+        self.assertIsNotNone(
+            self.db.atender_chamada(outra_chamada["id"], outra, qualquer_destinatario=True)
+        )
+
     def test_registrar_chamada_guarda_retrato_do_contato(self):
         contato = self.db.salvar_chamada_contato(nome="Fulano", funcao="Líder")
         chamada = self.db.registrar_chamada(
@@ -234,6 +295,11 @@ class _FakeChamadaDatabase:
         }
         self._next_id = 1
         self.vistas = {}
+        #: Contas do sistema que um contato pode representar (id -> linha).
+        self.contas = {
+            10: {"id": 10, "nome": "gabriel.fogaca", "nivel": "supervisor", "ativo": True},
+            11: {"id": 11, "nome": "conta.inativa", "nivel": "supervisor", "ativo": False},
+        }
         #: Apontamento ativo por (setor, máquina) — de onde vem OP/peça do aviso.
         self.apontamentos = {}
 
@@ -276,12 +342,16 @@ class _FakeChamadaDatabase:
         solicitante_cracha=None,
         solicitante_email=None,
         prioridade="Média",
+        contexto=None,
     ):
         contato = self.contatos.get(contato_id)
         if contato is None or not contato["ativo"]:
             raise ValueError("Contato selecionado não existe ou não está mais ativo.")
         if not str(motivo or "").strip() or not str(comentario or "").strip():
             raise ValueError("Motivo e comentário da chamada são obrigatórios.")
+        conta = self.contas.get(contato.get("usuario_id"))
+        usuario_id = conta["id"] if conta and conta["ativo"] else None
+        sem_telegram_proprio = not str(contato.get("telegram_chat_id") or "").strip()
         self._next_id += 1
         chamada = {
             "id": self._next_id,
@@ -297,6 +367,10 @@ class _FakeChamadaDatabase:
             "solicitante_email": solicitante_email,
             "telegram_enviado": False,
             "telegram_erro": None,
+            "destinatario_usuario_id": usuario_id,
+            "contexto": dict(contexto) if contexto else None,
+            "atendida_em": None,
+            "telegram_dispensado": usuario_id is not None and sem_telegram_proprio,
         }
         self.chamadas.append(chamada)
         resultado = dict(chamada)
@@ -313,10 +387,12 @@ class _FakeChamadaDatabase:
 
     def salvar_chamada_contato(
         self, *, contato_id=None, nome, funcao, ativo=True, padrao_gestao=False,
-        telegram_chat_id=None, setores=None,
+        telegram_chat_id=None, setores=None, usuario_id=None,
     ):
         if not str(nome or "").strip() or not str(funcao or "").strip():
             raise ValueError("Nome e função do contato são obrigatórios.")
+        if usuario_id is not None and not self.contas.get(usuario_id, {}).get("ativo"):
+            raise ValueError("A conta escolhida não existe ou está inativa.")
         if contato_id is None:
             contato_id = max(self.contatos, default=0) + 1
         if padrao_gestao:
@@ -325,9 +401,28 @@ class _FakeChamadaDatabase:
         self.contatos[contato_id] = {
             "id": contato_id, "nome": nome, "funcao": funcao, "ativo": ativo,
             "padrao_gestao": padrao_gestao, "telegram_chat_id": telegram_chat_id,
-            "setores": list(setores or []),
+            "setores": list(setores or []), "usuario_id": usuario_id,
         }
         return dict(self.contatos[contato_id])
+
+    def listar_usuarios(self):
+        return [dict(c) for c in self.contas.values()]
+
+    def listar_chamadas_para_usuario(self, usuario_id):
+        return [
+            dict(c) for c in self.chamadas
+            if c["destinatario_usuario_id"] == usuario_id and c["atendida_em"] is None
+        ]
+
+    def atender_chamada(self, chamada_id, usuario_id, *, qualquer_destinatario=False):
+        for chamada in self.chamadas:
+            if chamada["id"] != chamada_id:
+                continue
+            if not qualquer_destinatario and chamada["destinatario_usuario_id"] != usuario_id:
+                return None
+            chamada["atendida_em"] = chamada["atendida_em"] or "2026-11-10T10:00:00"
+            return dict(chamada)
+        return None
 
     def remover_chamada_contato(self, contato_id):
         return self.contatos.pop(contato_id, None) is not None
@@ -686,6 +781,92 @@ class ChamadaApiTests(unittest.TestCase):
         self.assertTrue(resposta.json()["telegram_agendado"])
         # Vai direto pro Telegram do contato, não pro chat geral do ambiente.
         self.assertEqual(mocked.call_args.kwargs["chat_id"], "555111222")
+
+    def test_contato_com_conta_e_sem_telegram_so_aparece_na_tela_dela(self):
+        self.db.contatos[1]["usuario_id"] = 10
+        self._cliente_com_telegram()
+        self._as(_operator_user())
+        with patch(
+            "mes.services.telegram_alerts.send_telegram_message_checked",
+            return_value=TelegramSendResult(ok=True),
+        ) as mocked:
+            resposta = self.client.post(
+                "/api/v1/chamadas",
+                json={
+                    "contato_id": 1, "motivo": "Qualidade", "comentario": "ajuda",
+                    "solicitante_cracha": "0042",
+                },
+            )
+        corpo = resposta.json()
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(corpo["telegram_agendado"])
+        self.assertEqual(corpo["item"]["telegram_status"], "so_sistema")
+        mocked.assert_not_called()  # nada vai ao chat geral
+
+        fogaca = SessionUser(
+            id=10, name="gabriel.fogaca", role="supervisor",
+            management_access=True, andon_access=True, operator_access=False,
+        )
+        self._as(fogaca)
+        recebidas = self.client.get("/api/v1/chamadas/para-mim").json()
+        self.assertEqual(recebidas["count"], 1)
+        self.assertEqual(recebidas["items"][0]["comentario"], "ajuda")
+
+        # Outra conta não vê a chamada do Fogaça.
+        self._as(_management_user())
+        self.assertEqual(self.client.get("/api/v1/chamadas/para-mim").json()["count"], 0)
+
+    def test_atender_so_pelo_destinatario_ou_admin(self):
+        self.db.contatos[1]["usuario_id"] = 10
+        self._as(_operator_user())
+        chamada_id = self.client.post(
+            "/api/v1/chamadas",
+            json={"contato_id": 1, "motivo": "Qualidade", "comentario": "x", "solicitante_cracha": "0042"},
+        ).json()["item"]["id"]
+
+        # Gestão comum que não é a destinatária recebe 404 (não revela a chamada).
+        self._as(_management_user())
+        self.assertEqual(self.client.post(f"/api/v1/chamadas/{chamada_id}/atender").status_code, 404)
+
+        fogaca = SessionUser(
+            id=10, name="gabriel.fogaca", role="supervisor",
+            management_access=True, andon_access=True, operator_access=False,
+        )
+        self._as(fogaca)
+        self.assertEqual(self.client.post(f"/api/v1/chamadas/{chamada_id}/atender").status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/chamadas/para-mim").json()["count"], 0)
+        # Chamada que não existe também é 404.
+        self.assertEqual(self.client.post("/api/v1/chamadas/9999/atender").status_code, 404)
+
+    def test_admin_atende_chamada_de_qualquer_conta(self):
+        self.db.contatos[1]["usuario_id"] = 10
+        self._as(_operator_user())
+        chamada_id = self.client.post(
+            "/api/v1/chamadas",
+            json={"contato_id": 1, "motivo": "Qualidade", "comentario": "x", "solicitante_cracha": "0042"},
+        ).json()["item"]["id"]
+        self._as(_admin_user())
+        self.assertEqual(self.client.post(f"/api/v1/chamadas/{chamada_id}/atender").status_code, 200)
+
+    def test_contas_para_contato_so_para_admin_e_so_ativas(self):
+        self._as(_management_user())
+        self.assertEqual(self.client.get("/api/v1/chamadas/admin/contas").status_code, 403)
+        self._as(_admin_user())
+        itens = self.client.get("/api/v1/chamadas/admin/contas").json()["items"]
+        self.assertEqual([i["nome"] for i in itens], ["gabriel.fogaca"])
+
+    def test_salvar_contato_com_conta_inativa_e_recusado(self):
+        self._as(_admin_user())
+        resposta = self.client.post(
+            "/api/v1/chamadas/admin/contatos",
+            json={"nome": "Gabriel", "funcao": "Manufatura", "usuario_id": 11},
+        )
+        self.assertEqual(resposta.status_code, 400)
+        ok = self.client.post(
+            "/api/v1/chamadas/admin/contatos",
+            json={"nome": "Gabriel", "funcao": "Manufatura", "usuario_id": 10},
+        )
+        self.assertEqual(ok.json()["item"]["usuario_id"], 10)
 
     def _cliente_com_telegram(self):
         self.app = create_app(

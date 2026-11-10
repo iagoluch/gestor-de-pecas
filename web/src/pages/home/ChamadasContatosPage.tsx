@@ -24,9 +24,16 @@ interface ChamadaContato {
   padrao_gestao: boolean;
   telegram_chat_id?: string | null;
   setores?: string[];
+  usuario_id?: number | null;
 }
 
-const NOVO: ChamadaContato = { id: 0, nome: "", funcao: "", ativo: true, padrao_gestao: false, telegram_chat_id: "", setores: [] };
+interface ContaSistema {
+  id: number;
+  nome: string;
+  nivel: string;
+}
+
+const NOVO: ChamadaContato = { id: 0, nome: "", funcao: "", ativo: true, padrao_gestao: false, telegram_chat_id: "", setores: [], usuario_id: null };
 
 const FILTROS_INICIAIS = { situacao: "", busca: "" };
 
@@ -40,6 +47,10 @@ export function DevChamadasContatosPage() {
   const contatosQuery = useApiQuery<{ items: ChamadaContato[] }>("/api/v1/chamadas/admin/contatos");
   const setoresQuery = useApiQuery<{ items: string[] }>("/api/v1/chamadas/setores");
   const setoresDisponiveis = setoresQuery.data?.items ?? [];
+  const contasQuery = useApiQuery<{ items: ContaSistema[] }>("/api/v1/chamadas/admin/contas");
+  const contas = contasQuery.data?.items ?? [];
+  const nomeDaConta = (id?: number | null) => contas.find((conta) => conta.id === id)?.nome;
+  const contaHintId = useId();
   const [mensagem, setMensagem] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
@@ -71,6 +82,7 @@ export function DevChamadasContatosPage() {
         padrao_gestao: contato.padrao_gestao ?? false,
         telegram_chat_id: contato.telegram_chat_id?.trim() || null,
         setores: contato.setores ?? [],
+        usuario_id: contato.usuario_id || null,
       });
       setMensagem("Contato salvo.");
       setEditando(null);
@@ -176,13 +188,23 @@ export function DevChamadasContatosPage() {
               render: (row) => (row.padrao_gestao ? <StatusBadge value="Padrão" /> : "—"),
             },
             {
+              key: "conta",
+              label: "Recebe na tela de",
+              render: (row) => (
+                row.usuario_id
+                  ? (nomeDaConta(row.usuario_id) ?? `Conta ${row.usuario_id}`)
+                  : <span className="section-count">Ninguém (só Telegram)</span>
+              ),
+            },
+            {
               key: "telegram",
               label: "Telegram",
-              render: (row) => (
-                row.telegram_chat_id
-                  ? <StatusBadge value="Configurado" />
-                  : <span className="section-count">Usa o chat geral</span>
-              ),
+              render: (row) => {
+                if (row.telegram_chat_id) return <StatusBadge value="Configurado" />;
+                return row.usuario_id
+                  ? <span className="section-count">Não usa</span>
+                  : <span className="section-count">Usa o chat geral</span>;
+              },
             },
             {
               key: "setores",
@@ -236,6 +258,25 @@ export function DevChamadasContatosPage() {
                 required
               />
             </label>
+            <label className="pause-form__wide">
+              Conta do sistema (opcional)
+              <select
+                value={editando.usuario_id ?? ""}
+                onChange={(event) =>
+                  setEditando({ ...editando, usuario_id: event.target.value ? Number(event.target.value) : null })
+                }
+                aria-describedby={contaHintId}
+              >
+                <option value="">Nenhuma — só pelo Telegram</option>
+                {contas.map((conta) => (
+                  <option key={conta.id} value={conta.id}>{conta.nome} ({conta.nivel})</option>
+                ))}
+              </select>
+            </label>
+            <p id={contaHintId} className="pause-form__hint pause-form__wide">
+              Quem estiver logado nessa conta vê a chamada na própria tela, sem precisar do Telegram. Com conta e
+              sem ID do Telegram, a chamada <strong>não</strong> vai para o chat geral.
+            </p>
             <label className="pause-form__wide">
               ID do Telegram (opcional)
               <input

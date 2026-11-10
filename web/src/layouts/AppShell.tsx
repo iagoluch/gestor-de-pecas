@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { AssistantDock } from "../components/AssistantDock";
+import { ChamadaRecebida } from "../components/ChamadaRecebida";
 import { ChamadaSino } from "../components/ChamadaSino";
 import { CommandPalette } from "../components/CommandPalette";
 import { LogoutButton } from "../components/LogoutButton";
@@ -131,6 +132,7 @@ export function AppShell({ children }: PropsWithChildren) {
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} role={user?.role} areaIds={areaIds} assignedLevel={user?.assigned_level} />
       <AssistantDock />
+      <ChamadaRecebida />
     </div>
   );
 }

@@ -20,13 +20,15 @@ interface Chamada {
   solicitante_email: string | null;
   telegram_enviado: boolean;
   /** Ausente em chamadas antigas: aí vale `telegram_enviado`. */
-  telegram_status?: "enviado" | "falhou" | "pendente";
+  telegram_status?: "enviado" | "falhou" | "pendente" | "so_sistema";
+  /** Quando o destinatário (contato ligado a uma conta) deu "Atendi". */
+  atendida_em?: string | null;
   /** Motivo da falha, em texto simples (sem token). */
   telegram_erro?: string | null;
   criado_em: string;
 }
 
-type AvisoEstado = "enviado" | "falhou" | "enviando" | "sem_confirmacao";
+type AvisoEstado = "enviado" | "falhou" | "enviando" | "sem_confirmacao" | "na_tela" | "atendida";
 
 const PRIORIDADE_TOM: Record<string, "danger" | "warning" | "info" | "success"> = {
   Urgente: "danger",
@@ -43,10 +45,14 @@ const AVISO_ROTULO: Record<AvisoEstado, { texto: string; tom: "success" | "dange
   falhou: { texto: "Falhou", tom: "danger" },
   enviando: { texto: "Enviando…", tom: "info" },
   sem_confirmacao: { texto: "Sem confirmação", tom: "warning" },
+  na_tela: { texto: "Na tela dele(a)", tom: "info" },
+  atendida: { texto: "Atendida", tom: "success" },
 };
 
 function estadoDoAviso(item: Chamada, agora: number): AvisoEstado {
   const status = item.telegram_status ?? (item.telegram_enviado ? "enviado" : "falhou");
+  // Contato com conta e sem Telegram: o aviso é a tela de quem foi chamado.
+  if (status === "so_sistema") return item.atendida_em ? "atendida" : "na_tela";
   if (status !== "pendente") return status;
   const criado = Date.parse(item.criado_em);
   return Number.isFinite(criado) && agora - criado > PENDENTE_SUSPEITO_MS ? "sem_confirmacao" : "enviando";

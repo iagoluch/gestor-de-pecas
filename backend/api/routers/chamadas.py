@@ -1,4 +1,7 @@
-"""Botão de chamada: disponível ao operador e à gestão, aviso só via Telegram.
+"""Botão de chamada: disponível ao operador e à gestão.
+
+O aviso sai pelo Telegram e, quando o contato está ligado a uma conta, também
+(ou só) na tela de quem estiver logado nela (10/11/2026).
 
 Decisão do usuário (14/09/2026): a lista de contatos (nome + função) é gerida
 numa tela própria dentro do sistema — nunca pelo Dev Observatory, que é
@@ -18,7 +21,7 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import ChamadaContatoRequest, ChamadaRequest
 from app.core.operator_sectors import OPERATOR_SECTORS
-from app.core.permissions import operator_sector_for_user_level
+from app.core.permissions import is_admin_level, operator_sector_for_user_level
 from mes.integrations.notifications.telegram import (
     format_chamada_message,
     telegram_outbound_allowed,
@@ -84,10 +87,13 @@ def telegram_status(chamada: dict) -> str:
 
     ``enviado``: o Telegram confirmou. ``falhou``: não saiu (``telegram_erro``
     traz o motivo). ``pendente``: gravada, envio ainda em andamento.
+    ``so_sistema``: o contato tem conta e o aviso é só dentro do sistema.
     """
 
     if chamada.get("telegram_enviado"):
         return "enviado"
+    if chamada.get("telegram_dispensado"):
+        return "so_sistema"
     return "falhou" if str(chamada.get("telegram_erro") or "").strip() else "pendente"
 
 
@@ -234,6 +240,9 @@ def criar_chamada(
         solicitante_nome = nome_canonico
         solicitante_cracha = cracha
 
+    # Retrato do posto no instante da chamada: vai gravado (a tela de quem
+    # recebe mostra máquina/OP) e é a base da mensagem do Telegram.
+    contexto = _contexto_do_posto(user, database, payload.recurso)
     try:
         chamada = database.registrar_chamada(
             contato_id=payload.contato_id,
@@ -244,13 +253,19 @@ def criar_chamada(
             solicitante_nivel=user.role,
             solicitante_cracha=solicitante_cracha,
             solicitante_email=solicitante_email,
+            contexto=contexto,
         )
     except ValueError as exc:
         raise AppError("chamada_invalida", str(exc)) from exc
 
-    # Sininho da tela de gestão: atualiza ao vivo, sem esperar recarregar a
-    # página nem depender de polling.
+    # Sininho da tela de gestão e aviso de quem foi chamado: atualiza ao vivo,
+    # sem esperar recarregar a página nem depender de polling.
     request.app.state.realtime.publish("chamadas")
+
+    # Contato com conta no sistema e sem Telegram próprio: o aviso é a tela de
+    # quem foi chamado. Nada vai ao chat geral nem fica "pendente" no histórico.
+    if chamada.get("telegram_dispensado"):
+        return {"ok": True, "item": _publica(chamada), "telegram_agendado": False}
 
     settings = request.app.state.settings
     bot_token = str(getattr(settings, "telegram_bot_token", "") or "").strip()
@@ -273,9 +288,7 @@ def criar_chamada(
     # A mensagem é montada agora, ainda dentro do request: máquina/OP/peça são
     # o retrato do posto no instante da chamada, não o de quando a tarefa rodar.
     # O envio em si sai depois da resposta — o operador não espera o Telegram.
-    mensagem = format_chamada_message(
-        {**_contexto_do_posto(user, database, payload.recurso), **chamada}
-    )
+    mensagem = format_chamada_message({**contexto, **chamada})
     background.add_task(
         deliver_chamada,
         database,
@@ -285,6 +298,37 @@ def criar_chamada(
         texto=mensagem,
     )
     return {"ok": True, "item": _publica(chamada), "telegram_agendado": True}
+
+
+# ---------------------------------------------------------------------------
+# Chamadas recebidas: o contato está ligado a uma conta, então quem estiver
+# logado nela vê o chamado na tela — sem depender do Telegram. Qualquer conta
+# autenticada pode ter chamadas endereçadas a ela (líder, supervisor, posto).
+# ---------------------------------------------------------------------------
+@router.get("/para-mim")
+def chamadas_para_mim(
+    user: SessionUser = Depends(get_current_user),
+    database=Depends(get_database),
+):
+    items = [_publica(item) for item in database.listar_chamadas_para_usuario(user.id)]
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/{chamada_id}/atender", dependencies=[Depends(require_csrf)])
+def atender_chamada(
+    chamada_id: int,
+    request: Request,
+    user: SessionUser = Depends(get_current_user),
+    database=Depends(get_database),
+):
+    chamada = database.atender_chamada(
+        chamada_id, user.id, qualquer_destinatario=is_admin_level(user.role)
+    )
+    if chamada is None:
+        # Mesma resposta para "não existe" e "não é sua": não revela chamada alheia.
+        raise AppError("chamada_nao_encontrada", "Chamada não encontrada.", status_code=404)
+    request.app.state.realtime.publish("chamadas")
+    return {"ok": True, "item": _publica(chamada)}
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +361,26 @@ def salvar_contato(
             padrao_gestao=payload.padrao_gestao,
             telegram_chat_id=payload.telegram_chat_id,
             setores=payload.setores,
+            usuario_id=payload.usuario_id,
         )
     except ValueError as exc:
         raise AppError("contato_invalido", str(exc)) from exc
     return {"ok": True, "item": item}
+
+
+@router.get("/admin/contas")
+def listar_contas_para_contato(
+    _user: SessionUser = Depends(require_admin_user),
+    database=Depends(get_database),
+):
+    """Contas ativas que o admin pode ligar a um contato de chamada."""
+
+    items = [
+        {"id": conta["id"], "nome": conta["nome"], "nivel": conta.get("nivel_rotulo") or conta["nivel"]}
+        for conta in database.listar_usuarios()
+        if conta.get("ativo")
+    ]
+    return {"items": items, "count": len(items)}
 
 
 @router.delete("/admin/contatos/{contato_id}", dependencies=[Depends(require_csrf)])

@@ -151,6 +151,9 @@ class ChamadaContatoRequest(BaseModel):
     setores: list[Annotated[str, StringConstraints(max_length=80)]] = Field(
         default_factory=list, max_length=20
     )
+    # Conta do sistema ligada ao contato: quem estiver logado nela vê a
+    # chamada na própria tela. Em branco = o contato só recebe pelo Telegram.
+    usuario_id: int | None = Field(default=None, ge=1)
 
 
 class ChamadaRequest(BaseModel):

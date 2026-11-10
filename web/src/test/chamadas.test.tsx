@@ -51,6 +51,17 @@ describe("Histórico de chamadas — coluna Aviso", () => {
     expect(screen.getByText("Sem aviso no Telegram").closest("article")?.querySelector(".metric-card__value")).toHaveTextContent("2");
   });
 
+  it("contato só no sistema: 'Na tela dele(a)' até atender, depois 'Atendida', e não conta como sem aviso", async () => {
+    historicoFetch([
+      { ...base, id: 1, telegram_enviado: false, telegram_status: "so_sistema", telegram_erro: null, atendida_em: null, criado_em: minutosAtras(1) },
+      { ...base, id: 2, telegram_enviado: false, telegram_status: "so_sistema", telegram_erro: null, atendida_em: minutosAtras(0), criado_em: minutosAtras(30) },
+    ]);
+    render(<MemoryRouter><ManagementChamadasPage /></MemoryRouter>);
+    expect(await screen.findByText("Na tela dele(a)")).toBeInTheDocument();
+    expect(screen.getByText("Atendida")).toBeInTheDocument();
+    expect(screen.getByText("Sem aviso no Telegram").closest("article")?.querySelector(".metric-card__value")).toHaveTextContent("0");
+  });
+
   it("sem telegram_status (mensagem antiga) cai em telegram_enviado", async () => {
     historicoFetch([
       { ...base, id: 1, telegram_enviado: true, criado_em: minutosAtras(60) },
