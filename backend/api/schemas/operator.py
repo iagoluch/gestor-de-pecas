@@ -56,7 +56,9 @@ class FirstPieceRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    action: Literal["produzida", "inspecionar", "autorizar", "checklist"]
+    # ``liberar_teste``: atalho só para admin/desenvolvedor (10/11/2026) que
+    # libera o setup sem medir cotas, contando o lote como OP sem NC.
+    action: Literal["produzida", "inspecionar", "autorizar", "checklist", "liberar_teste"]
     resource: str = Field(min_length=1, max_length=120)
     op: str = Field(min_length=1, max_length=80)
     operation_id: int | None = None

@@ -10,6 +10,7 @@ from fastapi import Path as ApiPath
 from fastapi.responses import FileResponse
 
 from app.core.operator_sectors import WELDING_OPEN_PICKER_SECTORS, WELDING_SECTOR_NAMES
+from app.core.permissions import is_admin_level
 from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, require_operator_user
 from backend.api.dependencies.clock import request_now_func
@@ -354,6 +355,17 @@ def operators(
 # setor de Qualidade habilitado. A inspeção dimensional peça a peça continua
 # existindo em `/quality`, para a operação INSPECAO do roteiro.
 # ---------------------------------------------------------------------------
+def can_skip_setup_measures(user: SessionUser) -> bool:
+    """Atalho "liberar sem cotas" (teste): só admin/desenvolvedor.
+
+    No posto o admin aponta pelo modo "agir pelo setor", que troca o nível da
+    sessão pelo do setor; esse modo só é aceito para admin, então
+    ``acting_sector`` preenchido já prova o nível de quem está agindo.
+    """
+
+    return bool(user.acting_sector) or is_admin_level(user.role)
+
+
 def _first_piece_service(database, user: SessionUser, request: Request | None = None):
     return FirstPieceService(
         database,
@@ -423,6 +435,7 @@ def first_piece_state(
         "operation_id": operation.get("id") or operation.get("catalogo_operacao_id"),
         "operation_number": operation.get("numero_operacao"),
         **state,
+        "skip_measures_allowed": can_skip_setup_measures(user),
     }
 
 
@@ -470,6 +483,16 @@ def first_piece_action(
             cracha_responsavel=payload.badge,
             observacao=payload.note,
             pecas_registradas=payload.inspection_recorded,
+        )
+    elif payload.action == "liberar_teste":
+        if not can_skip_setup_measures(user):
+            raise AppError(
+                "liberar_teste_negado",
+                "Só a administração pode liberar o setup sem cotas.",
+                status_code=403,
+            )
+        result = service.liberar_sem_cotas_teste(
+            op=payload.op, setor=sector.name, recurso=resource, operacao=operation
         )
     elif payload.action == "inspecionar":
         if not payload.result:

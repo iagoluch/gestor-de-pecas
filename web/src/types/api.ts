@@ -158,6 +158,8 @@ export interface FirstPieceState extends FirstPieceGate {
   operation_number?: string | null;
   registro?: FirstPieceRecord | null;
   checklist?: FirstPieceChecklist | null;
+  /** Só admin/desenvolvedor: atalho de teste que libera o setup sem cotas. */
+  skip_measures_allowed?: boolean;
 }
 
 export interface FirstPieceRecord {

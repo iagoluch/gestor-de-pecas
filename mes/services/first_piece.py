@@ -628,6 +628,96 @@ class FirstPieceService:
             },
         )
 
+    OBSERVACAO_SEM_COTAS = "Liberado sem cotas pela administração (teste)."
+
+    def liberar_sem_cotas_teste(self, *, op, setor, recurso, operacao, apontamento_id=None):
+        """Atalho de teste só para admin (pedido do usuário, 10/11/2026).
+
+        Faz o mesmo caminho da aprovação normal — 1ª peça conforme e as N peças
+        da inspeção progressiva gravadas como conformes, sem medidas — para que
+        o lote conte como OP sem NC (o nível desce 1, como no fluxo real). Não
+        exige cotas cadastradas. A permissão é conferida na rota.
+        """
+
+        if not first_piece_gate_is_structured(setor, operacao):
+            return _fail(
+                "primeira_peca_checklist_nao_aplicavel",
+                "Esta operação não usa o checklist de Setup/Qualidade.",
+            )
+        trava = getattr(self.db, "trava_primeira_peca", None)
+        if not callable(trava):
+            trava = lambda *_: nullcontext()  # noqa: E731 - fakes de teste
+        with trava(limpa_codigo(op), _operation_id(operacao)):
+            return self._liberar_sem_cotas_teste(
+                op=op, setor=setor, recurso=recurso, operacao=operacao,
+                apontamento_id=apontamento_id,
+            )
+
+    def _liberar_sem_cotas_teste(self, *, op, setor, recurso, operacao, apontamento_id):
+        linha = self._linha(op, operacao)
+        if linha and linha.get("bloqueio_ativo"):
+            return _fail(
+                "primeira_peca_bloqueada",
+                "A OP está bloqueada pelo retrabalho da primeira peça.",
+                self._publico(linha),
+            )
+        if not (linha and linha.get("status") == FIRST_PIECE_CONFORMING):
+            if linha is None:
+                linha = self.garantir(
+                    op=op, setor=setor, recurso=recurso, operacao=operacao,
+                    apontamento_id=apontamento_id,
+                )
+            if linha is None:
+                return _fail(
+                    "primeira_peca_indisponivel",
+                    "Não foi possível abrir a primeira peça desta operação.",
+                )
+            if linha.get("setup_obrigatorio") and not linha.get("setup_registrado_em"):
+                return _fail(
+                    "primeira_peca_setup_pendente",
+                    "Aponte o Setup desta operação pelo botão Setup antes de liberar o lote.",
+                    self._publico(linha),
+                )
+            producao = self.registrar_producao(
+                op=op, setor=setor, recurso=recurso, operacao=operacao,
+                apontamento_id=apontamento_id,
+            )
+            if not producao.ok:
+                return producao
+            inspecao = self.inspecionar(
+                op=op, setor=setor, recurso=recurso, operacao=operacao,
+                resultado=FIRST_PIECE_CONFORMING, observacao=self.OBSERVACAO_SEM_COTAS,
+            )
+            if not inspecao.ok:
+                return inspecao
+            # Relê a linha: o N acabou de ser fixado pela aprovação.
+            linha = self._linha(op, operacao) or linha
+        # Grava as peças que faltam como conformes, uma a uma pelo mesmo
+        # caminho da medição: é ele que desce o nível ao completar sem NC.
+        exigidas = int(linha.get("inspecao_pecas_exigidas") or 0)
+        for _ in range(max(exigidas, 1)):
+            progressiva = self._gravar_peca_progressiva(linha["id"], (), True)
+            if not progressiva or not progressiva.get("primeira_peca"):
+                break
+            linha = progressiva["primeira_peca"]
+            if not self._faltam_pecas(linha):
+                break
+        linha = self._linha(op, operacao) or linha
+        if self._faltam_pecas(linha):
+            # Não diz "liberado" se alguma peça não foi gravada (o nível não desceu).
+            return _fail(
+                "primeira_peca_liberacao_incompleta",
+                "Não foi possível completar o lote sem cotas. Tente de novo.",
+                self._publico(linha),
+            )
+        gate = self._avaliar(linha, setor, operacao).como_dicionario()
+        return FirstPieceResult(
+            True,
+            "Setup liberado sem cotas (teste). O lote está liberado.",
+            "primeira_peca_liberada_sem_cotas",
+            {**gate, "registro": self._publico(linha)},
+        )
+
     # ------------------------------------------------------------------
     # Inspeção progressiva (patch 09/11/2026)
     # ------------------------------------------------------------------

@@ -615,7 +615,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
    * declaração da peça produzida. A decisão é toda do backend.
    */
   async function executeFirstPiece(
-    action: "produzida" | "inspecionar" | "autorizar" | "checklist",
+    action: "produzida" | "inspecionar" | "autorizar" | "checklist" | "liberar_teste",
     extra: Record<string, unknown> = {},
   ) {
     // Usa o retrato tirado quando o popup abriu: `selected` acompanha o
@@ -919,6 +919,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
             void executeFirstPiece("checklist", { ...payload, inspection_recorded: gate.data?.pecas_registradas ?? 0 })
           }
           onRelease={(badge, note) => executeFirstPiece("autorizar", { badge, note })}
+          onSkipMeasures={() => executeFirstPiece("liberar_teste")}
           onSaveTemplate={(produto, cotas) => void saveChecklistTemplate(produto, cotas)}
         />
       ) : null}
@@ -1002,6 +1003,7 @@ function SetupQualityDialog({
   onCancel,
   onSubmit,
   onRelease,
+  onSkipMeasures,
   onSaveTemplate,
 }: {
   context: OperationContext;
@@ -1014,6 +1016,7 @@ function SetupQualityDialog({
   onCancel: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
   onRelease: (badge: string, note: string) => unknown;
+  onSkipMeasures: () => unknown;
   onSaveTemplate: (produto: string, cotas: DraftDimension[]) => void;
 }) {
   const [measures, setMeasures] = useState<Record<number, { medida: string; status: string }>>({});
@@ -1098,6 +1101,15 @@ function SetupQualityDialog({
           aqui dentro — o popup fica por cima do aviso da tela de fundo, e sem
           isso o operador não via o retorno de "Autorizar e liberar". */}
       {!loading && message ? <Notice tone={messageTone}>{message}</Notice> : null}
+      {/* Atalho de teste só para admin: o servidor confere o nível de novo. */}
+      {!loading && state?.skip_measures_allowed && state.checklist && !state.liberado && !state.bloqueio_ativo ? (
+        <div className="operator-dialog__actions">
+          {setupPendente ? <small className="disabled-reason">Aponte o Setup antes de liberar.</small> : null}
+          <AsyncButton pendingLabel="Liberando…" className="button" disabled={busy || setupPendente} onClick={onSkipMeasures}>
+            Prosseguir sem cotas (teste – admin)
+          </AsyncButton>
+        </div>
+      ) : null}
       <div ref={stepRef} className="operator-dialog__step">
       {!loading && state?.liberado ? (
         <>

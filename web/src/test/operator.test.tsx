@@ -595,7 +595,7 @@ describe("fluxo Web do operador", () => {
   // ------------------------------------------------------------------
   // Wave 6B — o portão Setup/Qualidade é a entrada do botão Iniciar.
   // ------------------------------------------------------------------
-  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean; progressiva?: boolean; ncNaPeca2?: boolean; emSetup?: boolean } = {}) {
+  function gateBackend(options: { liberado?: boolean; configuravel?: boolean; setupRegistrado?: boolean; recusaFinalizar?: boolean; recursoDivergente?: boolean; progressiva?: boolean; ncNaPeca2?: boolean; emSetup?: boolean; admin?: boolean } = {}) {
     const calls: { path: string; method: string; body: unknown }[] = [];
     const gate = {
       aplicavel: true,
@@ -674,6 +674,7 @@ describe("fluxo Web do operador", () => {
           setup_registrado: true,
           setup_obrigatorio: false,
           registro: null,
+          skip_measures_allowed: Boolean(options.admin),
           checklist: {
             produto: "PECA-GATE",
             configuravel: Boolean(options.configuravel),
@@ -721,7 +722,7 @@ describe("fluxo Web do operador", () => {
     return { calls };
   }
 
-  async function abrirPortao(options: { configuravel?: boolean; setupRegistrado?: boolean; progressiva?: boolean; ncNaPeca2?: boolean } = {}) {
+  async function abrirPortao(options: { configuravel?: boolean; setupRegistrado?: boolean; progressiva?: boolean; ncNaPeca2?: boolean; admin?: boolean } = {}) {
     const context = gateBackend(options);
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("1303");
@@ -956,6 +957,22 @@ describe("fluxo Web do operador", () => {
     expect(within(dialog).getByText("1/3 completas")).toBeInTheDocument();
     expect(within(dialog).getByText("Primeira inspeção — 1/3 completas")).toBeInTheDocument();
     expect(within(dialog).getByText("PECA-GATE")).toBeInTheDocument();
+  });
+
+  it("operador não vê o atalho Prosseguir sem cotas", async () => {
+    await abrirPortao();
+
+    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: /Prosseguir sem cotas/ })).not.toBeInTheDocument();
+  });
+
+  it("admin libera o setup sem cotas e o popup fecha", async () => {
+    const { calls } = await abrirPortao({ admin: true });
+
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Prosseguir sem cotas/ }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const envio = calls.find((call) => call.method === "POST" && call.path.includes("/first-piece"));
+    expect(envio?.body).toMatchObject({ action: "liberar_teste", op: "OP-GATE" });
   });
 
   it("mede a cota, libera o lote e habilita Finalizar", async () => {

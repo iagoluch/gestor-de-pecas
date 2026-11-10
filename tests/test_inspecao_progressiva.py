@@ -295,5 +295,57 @@ class InspecaoProgressivaTests(unittest.TestCase):
         self.assertEqual(db.listar_autorizacoes_primeira_peca(codigo_op=contexto["op"]), [])
 
 
+class LiberarSemCotasTesteTests(unittest.TestCase):
+    """Atalho de teste só para admin (10/11/2026): libera o setup sem medir,
+    mas conta o lote igual a uma OP sem NC (o nível desce)."""
+
+    def test_libera_o_lote_e_desce_o_nivel_como_op_sem_nc(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=5)
+
+        resultado = servico.liberar_sem_cotas_teste(**contexto)
+
+        self.assertTrue(resultado.ok, resultado.message)
+        self.assertTrue(resultado.data["liberado"])
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (5, 5))
+        self.assertEqual(db.progressive_levels[chave], 4)
+        self.assertTrue(finalizar(fluxo, contexto, pecas_boas=9).ok)
+
+    def test_no_meio_da_inspecao_completa_as_pecas_que_faltam(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=3)
+        medir(servico, contexto)
+
+        self.assertTrue(servico.liberar_sem_cotas_teste(**contexto).ok)
+
+        estado = servico.estado(**contexto)
+        self.assertEqual((estado["pecas_medidas"], estado["pecas_exigidas"]), (3, 3))
+        self.assertEqual(db.progressive_levels[chave], 2)
+
+    def test_segundo_clique_nao_desce_o_nivel_de_novo(self):
+        db, fluxo, contexto, servico, chave = preparar(nivel_inspecao=5)
+        servico.liberar_sem_cotas_teste(**contexto)
+
+        self.assertTrue(servico.liberar_sem_cotas_teste(**contexto).ok)
+
+        self.assertEqual(db.progressive_levels[chave], 4)
+
+
+class PermissaoLiberarSemCotasTests(unittest.TestCase):
+    def _usuario(self, role, acting_sector=None):
+        from backend.api.schemas.auth import SessionUser
+
+        return SessionUser(
+            id=1, name="X", role=role, management_access=False, andon_access=False,
+            operator_access=True, acting_sector=acting_sector,
+        )
+
+    def test_so_admin_ou_admin_agindo_pelo_setor(self):
+        from backend.api.routers.operator import can_skip_setup_measures
+
+        self.assertFalse(can_skip_setup_measures(self._usuario("dobra")))
+        self.assertTrue(can_skip_setup_measures(self._usuario("dobra", acting_sector="Dobra")))
+        self.assertTrue(can_skip_setup_measures(self._usuario("admin")))
+
+
 if __name__ == "__main__":
     unittest.main()
