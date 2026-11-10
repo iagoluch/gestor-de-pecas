@@ -5,11 +5,31 @@ import { useAuth } from "../auth/AuthContext";
 import { assets } from "../config/assets";
 import { limparCampoInvalido, validarFormulario } from "../components/ValidatedForm";
 
+const CHAVE_USUARIO = "gestor.login.usuario";
+
+// Só o usuário é guardado (nunca a senha); a senha fica com o gerenciador do navegador.
+function lerUsuarioLembrado(): string {
+  try {
+    return localStorage.getItem(CHAVE_USUARIO) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function guardarUsuario(usuario: string | null) {
+  try {
+    if (usuario) localStorage.setItem(CHAVE_USUARIO, usuario);
+    else localStorage.removeItem(CHAVE_USUARIO);
+  } catch {
+    /* navegador sem armazenamento: segue sem lembrar */
+  }
+}
+
 export function LoginPage() {
   const { user, login } = useAuth();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(() => lerUsuarioLembrado());
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => lerUsuarioLembrado() !== "");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -33,6 +53,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       const authenticated = await login(username, password, rememberMe);
+      guardarUsuario(rememberMe ? username : null);
       const requested = (location.state as { from?: string } | null)?.from;
       navigate(requested ?? homeFor(authenticated), { replace: true });
     } catch (reason) {
