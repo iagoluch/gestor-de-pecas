@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import type { ReactNode } from "react";
 import { useSectorScope } from "../auth/AuthContext";
 import { ALL_FILTER_FIELDS, useManagementFilters } from "../filters/FilterContext";
 import type { FilterField, ManagementFilters } from "../filters/FilterContext";
@@ -32,8 +33,12 @@ function countActive(filters: ManagementFilters, fields: Array<{ field: FilterFi
   return fields.filter((item) => filters[item.field].trim()).length;
 }
 
-export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
+export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS, extra, onClear }: {
   period?: boolean;
+  /** Filtros próprios da tela, mostrados numa linha logo abaixo dos gerais. */
+  extra?: ReactNode;
+  /** Chamado pelo "Limpar" geral, para a tela zerar também os filtros dela. */
+  onClear?: () => void;
   /** Campos que a fonte da tela realmente recorta; os demais não são exibidos. */
   fields?: FilterField[];
 } = {}) {
@@ -70,6 +75,7 @@ export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
   function clear() {
     setExpanded(false);
     context.reset();
+    onClear?.();
   }
 
   function presetRange(days: number | "month") {
@@ -147,6 +153,7 @@ export function FilterBar({ period = true, fields = ALL_FILTER_FIELDS }: {
           ))}
         </div>
       ) : null}
+      {extra ? <div className="filter-bar__advanced">{extra}</div> : null}
     </form>
   );
 }

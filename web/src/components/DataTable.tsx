@@ -27,11 +27,14 @@ export function DataTable<T>({
   columns,
   rows,
   rowKey,
+  rowClassName,
   emptyTitle,
 }: {
   columns: TableColumn<T>[];
   rows: T[];
   rowKey: (row: T, index: number) => string | number;
+  /** Classe CSS opcional por linha (ex.: cor pela situação da linha). */
+  rowClassName?: (row: T) => string | undefined;
   emptyTitle?: string;
 }) {
   const [sort, setSort] = useState<Sort | null>(null);
@@ -78,7 +81,7 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {indexed.map(({ row, index }) => (
-            <tr key={rowKey(row, index)}>
+            <tr key={rowKey(row, index)} className={rowClassName?.(row)}>
               {columns.map((column) => <td key={column.key} className={column.sticky ? "data-table__sticky" : undefined}>{column.render(row)}</td>)}
             </tr>
           ))}

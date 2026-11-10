@@ -10,7 +10,7 @@ import { FilterBar } from "./FilterBar";
 import { Notice } from "./Notice";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
-export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, filterFields, staleError }: PropsWithChildren<{
+export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, filterFields, extraFilters, onClearFilters, staleError }: PropsWithChildren<{
   sectionId: ManagementSectionId;
   title: string;
   subtitle: string;
@@ -24,6 +24,9 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
    * campos aplicáveis em vez de exibir um filtro sem efeito.
    */
   filterFields?: FilterField[];
+  /** Filtros próprios da tela, na mesma barra dos filtros gerais. */
+  extraFilters?: ReactNode;
+  onClearFilters?: () => void;
   /**
    * Erro de uma atualização que falhou depois de já haver dados na tela.
    * Os dados continuam visíveis; o aviso só sinaliza que podem estar
@@ -61,7 +64,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
           </div>
           {actions}
         </header>
-        {filters ? <FilterBar period={period} fields={filterFields} /> : null}
+        {filters ? <FilterBar period={period} fields={filterFields} extra={extraFilters} onClear={onClearFilters} /> : null}
         {staleError ? (
           <Notice tone="stale">
             Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.

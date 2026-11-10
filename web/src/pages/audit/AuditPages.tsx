@@ -1,15 +1,16 @@
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { DataTable } from "../../components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
 import { ExplainableValue } from "../../components/ExplainableValue";
 import { MetricCard } from "../../components/MetricCard";
 import { PageFrame } from "../../components/PageFrame";
-import { ResourceDivergenceBadge } from "../../components/ResourceDivergenceBadge";
 import { SectionCard } from "../../components/SectionCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useManagementFilters } from "../../filters/FilterContext";
+import type { FilterField } from "../../filters/FilterContext";
 import { useApiQuery } from "../../hooks/useApiQuery";
-import type { AuditResponse, IssueRow, PagedInspectionWaivers, PagedOrders } from "../../types/management";
+import type { AuditResponse, IssueRow, PagedInspectionWaivers } from "../../types/management";
 import { displayName, displayText, formatDateTime, formatHours, formatNumber, humanize } from "../../utils/format";
 
 interface AlertsResponse {
@@ -64,47 +65,277 @@ function LoadingPage({ title, subtitle }: { title: string; subtitle: string }) {
   return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><LoadingState /></PageFrame>;
 }
 
-export function AuditAppointmentsPage() {
+interface EventsPage<T, S> {
+  items: T[];
+  summary: S;
+  page: { page: number; page_size: number; total: number };
+}
+
+interface StatusEvent {
+  id: number;
+  recurso?: string | null;
+  /** Nome líquido do recurso (catálogo); `recurso` é o código. */
+  recurso_nome?: string | null;
+  setor?: string | null;
+  codigo_status?: string | null;
+  descricao?: string | null;
+  categoria: string;
+  classificacao?: "planejada" | "nao_planejada" | null;
+  inicio?: string | null;
+  fim?: string | null;
+  em_aberto: boolean;
+  duracao_segundos?: number | null;
+  operador?: string | null;
+  motivo?: string | null;
+  comentario?: string | null;
+  op?: string | null;
+  operacao?: string | null;
+}
+
+interface ProductionEvent {
+  apontamento_id?: number | null;
+  op?: string | null;
+  tarefa?: string | null;
+  plano?: string | null;
+  produto?: string | null;
+  operacao?: string | null;
+  setor?: string | null;
+  recurso?: string | null;
+  colaborador?: string | null;
+  atividade?: string | null;
+  inicio?: string | null;
+  fim?: string | null;
+  tempo_real_segundos?: number | null;
+  tempo_padrao_segundos?: number | null;
+  quantidade_boa?: number | null;
+  quantidade_refugo?: number | null;
+  quantidade_retrabalho?: number | null;
+  inconsistencia?: string | null;
+}
+
+const opLink = (op?: string | null) => (op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(op)}`}>{op}</Link> : "—");
+const qty = (value?: number | null) => (value == null ? "—" : formatNumber(value));
+
+/** Parada recebe a classificação central (planejada / não planejada); o resto mostra a categoria física. */
+export function statusClassLabel(row: Pick<StatusEvent, "categoria" | "classificacao">) {
+  if (row.categoria === "parada" && row.classificacao) {
+    return row.classificacao === "planejada" ? "Parada planejada" : "Parada não planejada";
+  }
+  return humanize(row.categoria);
+}
+
+/** Chave da classificação, igual à do filtro; dá a cor da linha (ver .status-row no CSS). */
+function statusClassKey(row: Pick<StatusEvent, "categoria" | "classificacao">) {
+  return row.categoria === "parada" && row.classificacao ? `parada_${row.classificacao}` : row.categoria;
+}
+
+/** Nome da classe do status (mesma chave que o servidor usa no filtro). */
+export function statusClassName(classe: string) {
+  if (classe === "parada_planejada") return "Parada planejada";
+  if (classe === "parada_nao_planejada") return "Parada não planejada";
+  return humanize(classe);
+}
+
+const STATUS_PAGE_SIZE = 100;
+const EMPTY_STATUS_FILTERS = { recurso: "", status: "", classe: "", op: "", aberto: "" };
+
+interface StatusEventsResponse extends EventsPage<StatusEvent, { eventos: number; recursos: number; paradas_nao_planejadas: number; em_aberto: number }> {
+  opcoes?: { recursos: Array<{ codigo: string; nome: string }>; status: string[]; classes: string[] };
+}
+
+type PickOption = { value: string; label: string };
+
+function toOptions(values: string[] = [], name: (value: string) => string = (value) => value): PickOption[] {
+  return values.map((value) => ({ value, label: name(value) }));
+}
+
+/**
+ * Campo de escolha onde dá para digitar: a lista de sugestões filtra enquanto
+ * digita. Vale a opção igual ao texto ou, senão, a primeira que contém o texto;
+ * texto vazio volta para "Todos"; texto sem nenhuma opção volta ao valor atual.
+ */
+function SearchPick({ label, value, options, onPick }: {
+  label: string;
+  value: string;
+  options: PickOption[];
+  onPick: (value: string) => void;
+}) {
+  const listId = useId();
+  const current = options.find((option) => option.value === value)?.label ?? value;
+  const [text, setText] = useState(current);
+  const [shown, setShown] = useState(current);
+  if (shown !== current) {
+    setShown(current);
+    setText(current);
+  }
+  const find = (typed: string, exact: boolean) => {
+    const wanted = typed.trim().toLocaleLowerCase("pt-BR");
+    return options.find((option) => option.label.toLocaleLowerCase("pt-BR") === wanted)
+      ?? (exact ? undefined : options.find((option) => option.label.toLocaleLowerCase("pt-BR").includes(wanted)));
+  };
+  const commit = () => {
+    if (!text.trim()) { if (value) onPick(""); return; }
+    const match = find(text, false);
+    if (match) { setText(match.label); if (match.value !== value) onPick(match.value); }
+    else setText(current);
+  };
+  return (
+    <label>{label}
+      <input
+        list={listId}
+        value={text}
+        placeholder="Todos"
+        onChange={(event) => {
+          setText(event.target.value);
+          // Escolha clicada na lista chega com o texto exato da opção.
+          const match = find(event.target.value, true);
+          if (match && match.value !== value) onPick(match.value);
+        }}
+        onBlur={commit}
+        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } }}
+      />
+      <datalist id={listId}>
+        {options.map((option) => <option key={option.value} value={option.label} />)}
+      </datalist>
+    </label>
+  );
+}
+
+export function AuditStatusEventsPage() {
   const filters = useManagementFilters();
-  const query = useApiQuery<PagedOrders>(`/api/v1/audit/appointments?${filters.query}&page=1&page_size=200`);
-  const title = "Auditoria — Apontamentos";
-  const subtitle = "Registros operacionais e referências de origem para conferência.";
+  const [table, setTable] = useState(EMPTY_STATUS_FILTERS);
+  const [opDraft, setOpDraft] = useState("");
+  const [page, setPage] = useState(1);
+  // Mudou período/setor/etc.: a página antiga pode nem existir mais; volta à 1.
+  const [pagedQuery, setPagedQuery] = useState(filters.query);
+  if (pagedQuery !== filters.query) {
+    setPagedQuery(filters.query);
+    setPage(1);
+  }
+  const params = new URLSearchParams({ page: String(page), page_size: String(STATUS_PAGE_SIZE) });
+  if (table.recurso) params.set("evento_recurso", table.recurso);
+  if (table.status) params.set("evento_status", table.status);
+  if (table.classe) params.set("evento_classe", table.classe);
+  if (table.op) params.set("evento_op", table.op);
+  if (table.aberto) params.set("em_aberto", "true");
+  const query = useApiQuery<StatusEventsResponse>(`/api/v1/audit/status-events?${filters.query}&${params}`);
+  // Trocar um filtro muda o endereço da consulta e zera `query.data`; a tela
+  // segue mostrando o último resultado até o novo chegar, sem piscar nem
+  // desmontar os campos de filtro enquanto a pessoa digita.
+  const [kept, setKept] = useState<StatusEventsResponse | null>(null);
+  if (query.data && query.data !== kept) setKept(query.data);
+  const data = query.data ?? kept;
+  const title = "Auditoria — Eventos de Status";
+  const subtitle = "Em que condição cada recurso esteve e por quanto tempo, produzindo ou parado.";
+  const frame = { sectionId: "audit" as const, title, subtitle, filterFields: ["sector", "product", "operator"] as FilterField[] };
+  if (!data && !query.error) return <PageFrame {...frame}><LoadingState /></PageFrame>;
+  if (query.error && !data) return <PageFrame {...frame}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  const summary = data?.summary;
+  const options = data?.opcoes;
+  const total = data?.page.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / STATUS_PAGE_SIZE));
+  const change = (patch: Partial<typeof EMPTY_STATUS_FILTERS>) => { setTable((current) => ({ ...current, ...patch })); setPage(1); };
+  const commitOp = () => { if (opDraft.trim() !== table.op) change({ op: opDraft.trim() }); };
+  const clearTable = () => { setOpDraft(""); change(EMPTY_STATUS_FILTERS); };
+  const extraFilters = (
+    <>
+      <label>OP
+        <input
+          value={opDraft}
+          onChange={(event) => setOpDraft(event.target.value)}
+          onBlur={commitOp}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitOp(); } }}
+          placeholder="Todas"
+        />
+      </label>
+      <SearchPick label="Recurso" value={table.recurso} options={(options?.recursos ?? []).map((item) => ({ value: item.codigo, label: item.nome }))} onPick={(value) => change({ recurso: value })} />
+      <SearchPick label="Status" value={table.status} options={toOptions(options?.status)} onPick={(value) => change({ status: value })} />
+      <SearchPick label="Classificação" value={table.classe} options={toOptions(options?.classes, statusClassName)} onPick={(value) => change({ classe: value })} />
+      <label>Situação
+        <select value={table.aberto} onChange={(event) => change({ aberto: event.target.value })}>
+          <option value="">Todos</option>
+          <option value="1">Só em aberto</option>
+        </select>
+      </label>
+    </>
+  );
+  return (
+    <PageFrame staleError={query.error} {...frame} extraFilters={extraFilters} onClearFilters={clearTable}>
+      <div className="metric-grid metric-grid--four">
+        <MetricCard label="Eventos de status" value={formatNumber(summary?.eventos ?? 0)} />
+        <MetricCard label="Recursos" value={formatNumber(summary?.recursos ?? 0)} accent="teal" />
+        <MetricCard label="Paradas não planejadas" value={formatNumber(summary?.paradas_nao_planejadas ?? 0)} accent="danger" />
+        <MetricCard label="Em aberto" value={formatNumber(summary?.em_aberto ?? 0)} detail="Status que ainda não terminou" accent="warning" />
+      </div>
+      <SectionCard title="Eventos de status do período" className="content-section section-card--table">
+        <DataTable
+          rows={data?.items ?? []}
+          rowKey={(row) => row.id}
+          rowClassName={(row) => `status-row status-row--${statusClassKey(row)}`}
+          columns={[
+            { key: "op", label: "OP", render: (row) => opLink(row.op) },
+            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_nome ?? row.recurso) },
+            { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
+            { key: "code", label: "Código", render: (row) => row.codigo_status ?? "—" },
+            { key: "status", label: "Status", render: (row) => displayText(row.descricao, humanize(row.categoria)) },
+            { key: "class", label: "Classificação", render: (row) => statusClassLabel(row) },
+            { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
+            { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.em_aberto ? "Em aberto" : formatDateTime(row.fim)) },
+            { key: "duration", label: "Duração no período", sortValue: (row) => row.duracao_segundos, render: (row) => formatHours(row.duracao_segundos) },
+            { key: "operator", label: "Colaborador", render: (row) => displayName(row.operador) },
+            { key: "reason", label: "Motivo / observação", render: (row) => displayText([row.motivo, row.comentario].filter(Boolean).join(" — ") || null) },
+          ]}
+        />
+        {total > STATUS_PAGE_SIZE ? (
+          <div className="filter-bar__row" role="navigation" aria-label="Páginas dos eventos">
+            <button type="button" className="filter-bar__reset" disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</button>
+            <span>
+              {formatNumber((page - 1) * STATUS_PAGE_SIZE + 1)}–{formatNumber(Math.min(page * STATUS_PAGE_SIZE, total))} de {formatNumber(total)}
+            </span>
+            <button type="button" className="filter-bar__reset" disabled={page >= pages} onClick={() => setPage(page + 1)}>Próxima</button>
+          </div>
+        ) : null}
+      </SectionCard>
+    </PageFrame>
+  );
+}
+
+export function AuditProductionEventsPage() {
+  const filters = useManagementFilters();
+  const query = useApiQuery<EventsPage<ProductionEvent, { eventos: number; quantidade_boa: number; quantidade_refugo: number; quantidade_retrabalho: number; quantidade_sem_evento: number }>>(`/api/v1/audit/production-events?${filters.query}&page=1&page_size=200`);
+  const title = "Auditoria — Eventos de Produção";
+  const subtitle = "O que foi executado: OP, produto, operação, recurso e colaborador, com tempo real e quantidades.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
   if (query.error && !query.data) return <PageFrame sectionId="audit" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
-  const rows = query.data?.items ?? [];
-  // Auditoria responde quem/quando/o quê. A contagem abaixo apenas resume as
-  // linhas já entregues pelo backend; nenhum indicador é recalculado aqui.
-  const resumo = {
-    finalizados: rows.filter((row) => String(row.status ?? "") === "Finalizado").length,
-    recursos: new Set(rows.map((row) => row.recurso_real).filter(Boolean)).size,
-    operadores: new Set(rows.map((row) => row.operador_inicio).filter(Boolean)).size,
-  };
+  const summary = query.data?.summary;
+  const orphans = summary?.quantidade_sem_evento ?? 0;
   return (
     <PageFrame staleError={query.error} sectionId="audit" title={title} subtitle={subtitle}>
       <div className="metric-grid metric-grid--four">
-        <MetricCard label="Apontamentos" value={formatNumber(query.data?.page.total ?? 0)} />
-        <MetricCard label="Finalizados" value={formatNumber(resumo.finalizados)} detail={rows.length ? `${formatNumber(rows.length - resumo.finalizados)} ainda em aberto` : undefined} accent="success" />
-        <MetricCard label="Recursos envolvidos" value={formatNumber(resumo.recursos)} accent="teal" />
-        <MetricCard label="Operadores envolvidos" value={formatNumber(resumo.operadores)} detail="Quem registrou no período" accent="purple" />
+        <MetricCard label="Eventos de produção" value={formatNumber(summary?.eventos ?? 0)} detail={orphans ? `${formatNumber(orphans)} quantidade(s) sem evento` : undefined} />
+        <MetricCard label="Peças boas" value={formatNumber(summary?.quantidade_boa ?? 0)} accent="success" />
+        <MetricCard label="Refugo" value={formatNumber(summary?.quantidade_refugo ?? 0)} accent="danger" />
+        <MetricCard label="Retrabalho" value={formatNumber(summary?.quantidade_retrabalho ?? 0)} accent="warning" />
       </div>
-      <SectionCard title="Apontamentos do período" className="content-section section-card--table">
+      <SectionCard title="Eventos de produção do período" className="content-section section-card--table">
         <DataTable
-          rows={rows}
-          rowKey={(row, index) => row.apontamento_id ?? index}
+          rows={query.data?.items ?? []}
+          rowKey={(row, index) => `${row.apontamento_id ?? row.tarefa ?? "q"}-${row.atividade ?? ""}-${row.inicio ?? ""}-${index}`}
           columns={[
-            { key: "id", label: "ID", render: (row) => row.apontamento_id ?? "—" },
-            { key: "op", label: "OP", render: (row) => row.op ? <Link className="table-link" to={`/rastreabilidade/op-produto?op=${encodeURIComponent(row.op)}`}>{row.op}</Link> : "—" },
-            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao_atual) },
+            { key: "op", label: "OP", render: (row) => (row.tarefa ? `Tarefa ${row.tarefa}${row.plano ? ` · Plano ${row.plano}` : ""}` : opLink(row.op)) },
+            { key: "product", label: "Produto", render: (row) => displayText(row.produto, "—") },
+            { key: "operation", label: "Operação", render: (row) => displayName(row.operacao) },
             { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
-            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso_real) },
-            { key: "divergence", label: "Recurso divergente", render: (row) => row.recurso_divergente ? <ResourceDivergenceBadge planned={row.recurso_planejado} actual={row.recurso_apontado || row.recurso_real} /> : "—" },
-            { key: "operator", label: "Operador", render: (row) => row.operador_inicio ?? row.operador_fim ?? "—" },
-            { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status} /> },
-            { key: "good", label: "Boas", render: (row) => formatNumber(row.quantidade_boa) },
-            { key: "scrap", label: "Refugo", render: (row) => formatNumber(row.refugo) },
-            { key: "rework", label: "Retrabalho", render: (row) => formatNumber(row.retrabalho) },
-            { key: "start", label: "Início", render: (row) => formatDateTime(row.inicio_real) },
-            { key: "end", label: "Fim", render: (row) => formatDateTime(row.fim_real) },
+            { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
+            { key: "operator", label: "Colaborador", render: (row) => displayName(row.colaborador) },
+            { key: "activity", label: "Atividade", render: (row) => (row.inconsistencia === "quantidade_sem_evento" ? <span className="status-badge status-badge--warning">Quantidade sem evento</span> : humanize(row.atividade)) },
+            { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
+            { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.inicio && !row.fim ? "Em andamento" : formatDateTime(row.fim)) },
+            { key: "real", label: "Tempo real", sortValue: (row) => row.tempo_real_segundos, render: (row) => formatHours(row.tempo_real_segundos) },
+            { key: "standard", label: "Tempo padrão", sortValue: (row) => row.tempo_padrao_segundos, render: (row) => (row.tempo_padrao_segundos == null ? "—" : `${formatHours(row.tempo_padrao_segundos)} ${row.tarefa ? "por plano" : "por peça"}`) },
+            { key: "good", label: "Boas", render: (row) => qty(row.quantidade_boa) },
+            { key: "scrap", label: "Refugo", render: (row) => qty(row.quantidade_refugo) },
+            { key: "rework", label: "Retrabalho", render: (row) => qty(row.quantidade_retrabalho) },
           ]}
         />
       </SectionCard>

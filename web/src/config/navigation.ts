@@ -224,9 +224,10 @@ export const managementSections: ManagementSection[] = [
     id: "audit",
     label: "Auditoria",
     icon: assets.navigation.audit,
-    defaultPath: "/auditoria/apontamentos",
+    defaultPath: "/auditoria/eventos-status",
     tabs: [
-      { label: "Apontamentos", path: "/auditoria/apontamentos", screen: "audit-appointments" },
+      { label: "Eventos de Status", path: "/auditoria/eventos-status", screen: "audit-status-events" },
+      { label: "Eventos de Produção", path: "/auditoria/eventos-producao", screen: "audit-production-events" },
       { label: "Alertas e inconsistências", path: "/auditoria/alertas-inconsistencias", screen: "audit-alerts-issues" },
       { label: "Confiabilidade dos dados", path: "/auditoria/confiabilidade", screen: "audit-reliability" },
     ],

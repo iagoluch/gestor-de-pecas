@@ -4,7 +4,6 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterProvider } from "../filters/FilterContext";
 import { AnalyticsQualityPage } from "../pages/analytics/AnalyticsPages";
-import { AuditAppointmentsPage } from "../pages/audit/AuditPages";
 import { TraceabilityOrderPage } from "../pages/traceability/TraceabilityPages";
 
 afterEach(() => {
@@ -79,23 +78,6 @@ describe("Rastreabilidade: recurso divergente", () => {
     }, "/?op=OP1");
     const badge = await screen.findByText(/Divergente: previsto LASER1 \(Laser 1\) → real LASER2/);
     expect(badge).toBeInTheDocument();
-    expect(screen.getAllByText(/^Divergente/)).toHaveLength(1);
-    expect(screen.getByText("Recurso divergente")).toBeInTheDocument();
-  });
-});
-
-describe("Auditoria > Apontamentos: recurso divergente", () => {
-  it("mostra o selo quando a linha traz recurso_divergente e traço quando não", async () => {
-    renderWith(<AuditAppointmentsPage />, {
-      "/audit/appointments": {
-        periodo: {}, availability: "disponivel", page: { page: 1, page_size: 200, total: 2 },
-        items: [
-          { apontamento_id: 1, op: "OP1", recurso_planejado: "LASER1", recurso_real: "LASER2", recurso_apontado: "LASER2", recurso_divergente: true, quantidade_boa: 1, refugo: 0, retrabalho: 0 },
-          { apontamento_id: 2, op: "OP2", recurso_planejado: "DOBRA1", recurso_real: "DOBRA1", recurso_divergente: false, quantidade_boa: 1, refugo: 0, retrabalho: 0 },
-        ],
-      },
-    });
-    expect(await screen.findByText(/Divergente: previsto LASER1 → real LASER2/)).toBeInTheDocument();
     expect(screen.getAllByText(/^Divergente/)).toHaveLength(1);
     expect(screen.getByText("Recurso divergente")).toBeInTheDocument();
   });

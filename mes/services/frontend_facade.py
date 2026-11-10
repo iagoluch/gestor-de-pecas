@@ -37,6 +37,7 @@ from mes.domain import (
     STOP_CLASSIFICATION_COLORS,
     STOP_CLASSIFICATION_UI_TOKENS,
 )
+from mes.services import event_log
 from mes.services.audit import AuditService
 from mes.services.andon import AndonService
 from mes.services.calendar import CalendarService
@@ -1266,6 +1267,65 @@ class FrontendBackendFacade:
 
     def auditoria(self, filters: AnalyticsFilter):
         return self.audit_service.run_period(filters)
+
+    def _estados_periodo(self, filters: AnalyticsFilter):
+        loader = getattr(self.db, "listar_estados_recurso_periodo", None)
+        return list(loader(
+            filters.inicio,
+            filters.fim,
+            setor=filters.setor,
+            recurso=filters.recurso,
+            op=filters.op,
+            operacao=filters.operacao,
+        ) or []) if callable(loader) else []
+
+    def eventos_status(self, filters: AnalyticsFilter, **table):
+        states = self._estados_periodo(filters)
+        if filters.produto:
+            # O estado não guarda produto: o filtro chega pelas OPs daquele produto.
+            loader = getattr(self.db, "listar_fatos_operacionais_periodo", None)
+            facts = loader(filters.inicio, filters.fim, produto=filters.produto) if callable(loader) else []
+            ops = {str(fact.get("op") or "").strip().upper() for fact in facts or []} - {""}
+            states = [row for row in states if str(row.get("op") or "").strip().upper() in ops]
+        loader = getattr(self.db, "listar_recursos_pcfactory", None)
+        catalog = loader() if callable(loader) else None
+        nomes = {
+            str(row.get("codigo") or "").strip().casefold(): row.get("nome")
+            for row in catalog or []
+            if str(row.get("codigo") or "").strip()
+        }
+        return event_log.status_events(states, operador=filters.operador, nomes=nomes, **table)
+
+    def eventos_producao(self, filters: AnalyticsFilter):
+        common = {
+            "setor": filters.setor,
+            "recurso": filters.recurso,
+            "op": filters.op,
+            "operacao": filters.operacao,
+            "produto": filters.produto,
+            "operador": filters.operador,
+        }
+        facts_loader = getattr(self.db, "listar_fatos_operacionais_periodo", None)
+        facts = list(facts_loader(filters.inicio, filters.fim, **common) or []) if callable(facts_loader) else []
+        qty_loader = getattr(self.db, "listar_eventos_quantidade_periodo", None)
+        quantities = list(qty_loader(filters.inicio, filters.fim, **common) or []) if callable(qty_loader) else []
+        # Estados sem filtro de OP/operação: o vínculo é pelo id do apontamento.
+        states = self._estados_periodo(
+            AnalyticsFilter(inicio=filters.inicio, fim=filters.fim, setor=filters.setor, recurso=filters.recurso)
+        )
+        cuts = []
+        cut_loader = getattr(self.db, "listar_apontamentos_corte", None)
+        corte_no_filtro = (
+            not any((filters.op, filters.operacao, filters.produto))
+            and (not filters.setor or str(filters.setor).strip().upper() == "CORTE")
+        )
+        if corte_no_filtro and callable(cut_loader):
+            alvo = str(filters.operador or "").strip().casefold()
+            cuts = [
+                cut for cut in (cut_loader(filters.inicio, filters.fim, maquina=filters.recurso) or [])
+                if not alvo or alvo in f"{cut.get('operador_inicio') or ''} {cut.get('operador_fim') or ''}".casefold()
+            ]
+        return event_log.production_events(facts, states, quantities, cuts)
 
     def rastreabilidade(self, op: str):
         return self.traceability.trace_op(op)

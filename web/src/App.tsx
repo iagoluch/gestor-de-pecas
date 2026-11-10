@@ -33,7 +33,7 @@ import {
   AnalyticsReliabilityPage,
   AnalyticsStandardPage,
 } from "./pages/analytics/AnalyticsPages";
-import { AuditAlertsIssuesPage, AuditAppointmentsPage, AuditReliabilityPage } from "./pages/audit/AuditPages";
+import { AuditAlertsIssuesPage, AuditProductionEventsPage, AuditReliabilityPage, AuditStatusEventsPage } from "./pages/audit/AuditPages";
 import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage } from "./pages/operations/OperationsPages";
 import { OrderConsultationPage } from "./pages/production/OrderConsultationPage";
@@ -221,7 +221,9 @@ export default function App() {
         <Route path="analises/capacidade-gargalos" element={<AnalyticsCapacityPage />} />
         <Route path="analises/confiabilidade" element={<AnalyticsReliabilityPage />} />
 
-        <Route path="auditoria/apontamentos" element={<AuditAppointmentsPage />} />
+        <Route path="auditoria/eventos-status" element={<AuditStatusEventsPage />} />
+        <Route path="auditoria/eventos-producao" element={<AuditProductionEventsPage />} />
+        <Route path="auditoria/apontamentos" element={<Navigate to="/auditoria/eventos-producao" replace />} />
         <Route path="auditoria/alertas-inconsistencias" element={<AuditAlertsIssuesPage />} />
         <Route path="auditoria/inconsistencias" element={<Navigate to="/auditoria/alertas-inconsistencias" replace />} />
         <Route path="auditoria/confiabilidade" element={<AuditReliabilityPage />} />

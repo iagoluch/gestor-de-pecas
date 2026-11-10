@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from backend.api.dependencies.auth import require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
@@ -25,6 +25,40 @@ def appointments(
         "items": params.slice(items),
         "page": params.meta(len(items)),
     }
+
+
+def _paged_events(payload, params: PageParams):
+    items = list(payload.get("items", []))
+    return {"summary": payload.get("summary"), "items": params.slice(items), "page": params.meta(len(items))}
+
+
+@router.get("/status-events")
+def status_events(
+    filters: AnalyticsFilter = Depends(analytics_filter),
+    params: PageParams = Depends(pagination),
+    _user: SessionUser = Depends(require_management_user),
+    facade=Depends(get_frontend_facade),
+    evento_recurso: str | None = Query(default=None, max_length=120),
+    evento_status: str | None = Query(default=None, max_length=160),
+    evento_classe: str | None = Query(default=None, max_length=60),
+    evento_op: str | None = Query(default=None, max_length=120),
+    em_aberto: bool = Query(default=False),
+):
+    """Filtros ``evento_*`` são da tabela da tela; ``opcoes`` vem sem eles aplicados."""
+    payload = facade.eventos_status(
+        filters, recurso=evento_recurso, status=evento_status, classe=evento_classe, op=evento_op, em_aberto=em_aberto,
+    )
+    return {**_paged_events(payload, params), "opcoes": payload.get("opcoes")}
+
+
+@router.get("/production-events")
+def production_events(
+    filters: AnalyticsFilter = Depends(analytics_filter),
+    params: PageParams = Depends(pagination),
+    _user: SessionUser = Depends(require_management_user),
+    facade=Depends(get_frontend_facade),
+):
+    return _paged_events(facade.eventos_producao(filters), params)
 
 
 @router.get("")

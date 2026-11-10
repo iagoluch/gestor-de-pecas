@@ -2099,3 +2099,13 @@ label:has(> .required-mark) > :is(input, select, textarea, div) { flex-basis: 10
 .home-dashboard-block .feed { max-height: none; }
 
 .operator-acting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; background: var(--warning-bg, #fff3cd); color: var(--warning-fg, #5c4300); font-weight: 600; }
+
+/* Auditoria > Eventos de Status: linha inteira na cor da classificação. */
+.status-row > td { background: color-mix(in srgb, var(--row-color, transparent) 14%, var(--surface, transparent)); }
+.status-row:hover > td { background: color-mix(in srgb, var(--row-color, var(--primary)) 26%, var(--surface, transparent)); }
+.status-row > td:first-child { box-shadow: inset 4px 0 0 var(--row-color, transparent); }
+.status-row--producao { --row-color: #22c55e; }
+.status-row--setup { --row-color: #3b82f6; }
+.status-row--sem_demanda { --row-color: #eab308; }
+.status-row--parada_planejada { --row-color: #fb923c; }
+.status-row--parada_nao_planejada { --row-color: #f87171; }

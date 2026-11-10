@@ -1621,6 +1621,8 @@ class WebApiTests(unittest.TestCase):
             "/api/v1/analytics/chronoanalysis",
             "/api/v1/analytics/capacity",
             "/api/v1/audit/appointments",
+            "/api/v1/audit/status-events",
+            "/api/v1/audit/production-events",
             "/api/v1/audit",
             "/api/v1/audit/reliability",
             "/api/v1/reports/gerencial",
