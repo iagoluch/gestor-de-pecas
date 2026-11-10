@@ -540,13 +540,12 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(stopped.status_code, 200, stopped.text)
         resumed = self.client.post("/api/v1/operator/actions", headers=self.csrf(), json=payload)
         self.assertEqual(resumed.status_code, 200, resumed.text)
-        # Wave 4: OP-WEB prevê 2 peças e boas + refugo têm esse teto. A 1ª peça
-        # conforme da inspeção já conta como boa (patch 09/11/2026), então um
-        # refugo fecha o saldo: 1 boa (inspeção) + 1 refugo, sem contar em dobro.
+        # Wave 4: OP-WEB prevê 2 peças e boas + refugo têm esse teto. A medição
+        # do setup não soma (10/11/2026): o operador informa 1 boa + 1 refugo.
         finished = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
-            json={**payload, "action": "Finalizado", "good": 0, "scrap": 1, "badges": ["1"]},
+            json={**payload, "action": "Finalizado", "good": 1, "scrap": 1, "badges": ["1"]},
         )
         self.assertEqual(finished.status_code, 200, finished.text)
         self.assertEqual(self.db.appointments[0]["quantidade_boa"], 1)

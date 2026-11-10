@@ -707,7 +707,6 @@ describe("fluxo Web do operador", () => {
           pode_finalizar: gate.liberado,
           exige_gate_primeira_peca: !gate.liberado,
           primeira_peca: gate,
-          pecas_boas_inspecao: options.progressiva ? gate.pecas_medidas : 0,
         }] });
       }
       return json({ code: "not_found", message: "Não encontrado" }, 404);
@@ -937,7 +936,8 @@ describe("fluxo Web do operador", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finalizar" }));
     await screen.findByRole("heading", { name: "Finalizar produção" });
-    expect(screen.getByText(/3 peça\(s\) boa\(s\) da inspeção já entram no total/)).toBeInTheDocument();
+    // As peças medidas no setup não somam: o operador informa todas as boas.
+    expect(screen.queryByText(/da inspeção já entram no total/)).not.toBeInTheDocument();
   });
 
   it("mostra a peça não conforme da inspeção como aviso, não como sucesso", async () => {

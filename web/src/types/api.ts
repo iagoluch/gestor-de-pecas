@@ -113,8 +113,6 @@ export interface OperatorOperation extends Record<string, unknown> {
   /** Wave 6B: a primeira peça desta etapa ainda não foi aprovada — o Setup
    *  abre o checklist e o Finalizar é recusado até a aprovação. */
   exige_gate_primeira_peca?: boolean;
-  /** Peças boas da inspeção progressiva que o Finalizar soma sozinho (patch 09/11/2026). */
-  pecas_boas_inspecao?: number;
 }
 
 /**

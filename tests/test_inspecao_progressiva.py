@@ -97,31 +97,40 @@ class InspecaoProgressivaTests(unittest.TestCase):
         # Fica em 3 até a Qualidade decidir (volta para 5 / fica onde está).
         self.assertEqual(db.progressive_levels[chave], 3)
 
-    def test_boas_da_inspecao_somam_no_total_sem_contar_em_dobro(self):
+    def test_boas_da_inspecao_nao_somam_no_total_da_finalizacao(self):
+        # Decisão da manufatura (10/11/2026): a medição do setup é conferência
+        # de qualidade; o operador informa TODAS as peças boas ao finalizar.
         db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=2, quantidade=10)
         medir(servico, contexto)
         medir(servico, contexto)
 
-        final = finalizar(fluxo, contexto, pecas_boas=8)
+        final = finalizar(fluxo, contexto, pecas_boas=10)
 
         self.assertTrue(final.ok, final.message)
-        self.assertEqual(int(final.data["quantidade_boa"]), 10)  # 2 + 8
+        self.assertEqual(int(final.data["quantidade_boa"]), 10)
         self.assertEqual(int(final.data["saldo_restante"] or 0), 0)
-        self.assertEqual(db.contar_boas_inspecao_progressiva_pendentes(db.first_pieces[0]["id"]), 0)
-        self.assertTrue(all(p["apontamento_lancado_id"] for p in db.progressive_pieces))
 
-    def test_finalizacao_parcial_lanca_as_boas_uma_vez_so(self):
+    def test_finalizar_so_com_a_diferenca_deixa_saldo_pendente(self):
         db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=2, quantidade=10)
         medir(servico, contexto)
         medir(servico, contexto)
 
-        parcial = finalizar(fluxo, contexto, pecas_boas=3)
-        self.assertTrue(parcial.ok, parcial.message)
-        self.assertEqual(int(parcial.data["saldo_restante"]), 5)  # 10 - (2 + 3)
+        parcial = finalizar(fluxo, contexto, pecas_boas=8)
 
-        self.assertTrue(fluxo.executar("Início", **contexto).ok)
-        final = finalizar(fluxo, contexto, pecas_boas=5)
+        self.assertTrue(parcial.ok, parcial.message)
+        self.assertEqual(int(parcial.data["quantidade_boa"]), 8)
+        self.assertEqual(int(parcial.data["saldo_restante"]), 2)
+
+    def test_op_pequena_com_inspecao_nao_fica_com_peca_a_mais(self):
+        # Caso da OP PCMCY901001 (2 peças, 2 medidas no setup, 2 informadas).
+        db, fluxo, contexto, servico, _ = preparar(nivel_inspecao=2, quantidade=2)
+        medir(servico, contexto)
+        medir(servico, contexto)
+
+        final = finalizar(fluxo, contexto, pecas_boas=2)
+
         self.assertTrue(final.ok, final.message)
+        self.assertEqual(int(final.data["quantidade_boa"]), 2)
         self.assertEqual(int(final.data["saldo_restante"] or 0), 0)
 
     # --- Achados do Codex (09/11/2026): envio duplo e janela entre transações ---

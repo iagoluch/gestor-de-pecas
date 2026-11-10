@@ -69,8 +69,6 @@ interface OperationContext {
   registeredScrap: number;
   attended: number;
   balance: number;
-  /** Peças boas já medidas na inspeção progressiva: entram no total sozinhas. */
-  inspectionGood: number;
 }
 
 function operationLabel(item: OperatorOperation | undefined) {
@@ -299,7 +297,6 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     registeredScrap: Number(selected?.quantidade_refugo_registrada ?? selectedCard?.scrap ?? 0),
     attended: Number(selected?.quantidade_atendida ?? selectedCard?.attended ?? 0),
     balance: Number(selected?.saldo_quantidade ?? selected?.saldo_quantidade_boa ?? selectedCard?.balance ?? 0),
-    inspectionGood: Number(selected?.pecas_boas_inspecao ?? 0),
   }), [loadedOp, selected, selectedCard, resource]);
   // Setup é apontamento de estado do posto (tempo de preparação da máquina).
   // Quais setores possuem Setup é decisão do domínio (`SECTORS_WITHOUT_SETUP`):
@@ -414,7 +411,6 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     registeredScrap: Number(activeCard.scrap ?? 0),
     attended: Number(activeCard.attended ?? 0),
     balance: Number(activeCard.balance ?? 0),
-    inspectionGood: 0,
   } : context;
 
   // OP digitada que não existe (nem local, nem no TOTVS). A busca remota já
@@ -1334,7 +1330,7 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
   // mesma regra do retrabalho da primeira peça. Quem valida é o backend.
   const [scrapBadge, setScrapBadge] = useState("");
   const scrapRequiresApproval = Number(scrap || 0) > 0;
-  const total = Number(good || 0) + Number(scrap || 0) + context.inspectionGood;
+  const total = Number(good || 0) + Number(scrap || 0);
   // OP-11: aviso (não bloqueia) — o backend segue dono do limite de quantidade.
   const aboveBalance = context.planned > 0 && total > context.balance;
   // Saldo já zerado (ex.: retrabalho recuperou tudo): 0/0 só encerra a etapa; o backend aceita.
@@ -1366,7 +1362,6 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
       <div><small>Saldo</small><strong>{context.balance}</strong></div>
     </div>
     <div className="operator-quantity-grid"><label>Peças boas<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
-    {context.inspectionGood > 0 ? <p className="operator-help" role="status"><strong>{context.inspectionGood} peça(s) boa(s) da inspeção já entram no total.</strong> Informe só as demais.</p> : null}
     <p className="operator-help">O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado.</p>
     {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s). Confira antes de confirmar.</p> : null}
     {scrapRequiresApproval ? <>

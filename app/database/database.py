@@ -2460,14 +2460,8 @@ class Database(
         setor_destino="Almoxarifado",
         data_hora=None,
         encerrar_retrabalho=False,
-        lancar_inspecao_progressiva=None,
     ):
         """Executa uma transição e registra lote, evento e participantes atomicamente.
-
-        ``lancar_inspecao_progressiva`` = ``(primeira_peca_id, quantidade)``: na
-        finalização, marca as peças conformes da inspeção do setup como lançadas
-        neste apontamento, na mesma transação (já somadas em ``quantidade_boa``
-        pelo serviço). Se a contagem mudou no meio, nada é gravado.
 
         ``encerrar_retrabalho`` é a única porta de Retrabalho para Em processo
         ("Finalizar Ret."): o retrabalho acaba, a OP volta a produzir e as
@@ -2604,22 +2598,6 @@ class Database(
                         "A soma de peças boas e refugo excede a quantidade prevista restante."
                     )
                 finalizacao_parcial = total_atendido < int(atual["quantidade"])
-                if lancar_inspecao_progressiva:
-                    primeira_peca_id, esperadas = lancar_inspecao_progressiva
-                    cursor.execute(
-                        """
-                        UPDATE qualidade_inspecao_progressiva_pecas
-                           SET apontamento_lancado_id = %s
-                         WHERE primeira_peca_id = %s AND conforme
-                           AND apontamento_lancado_id IS NULL
-                        RETURNING id
-                        """,
-                        (apontamento_id, int(primeira_peca_id)),
-                    )
-                    if len(cursor.fetchall()) != int(esperadas):
-                        raise ValueError(
-                            "As peças da inspeção mudaram durante a finalização. Atualize e tente de novo."
-                        )
 
             if encerrar_retrabalho:
                 total_boas += boas

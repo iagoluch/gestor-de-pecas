@@ -155,21 +155,14 @@ class FirstPieceRepositoryMixin:
 
         O roteiro do posto projeta o portão em cada etapa; consultar linha a
         linha transformaria a abertura de uma OP em N consultas.
-        ``inspecao_pecas_boas_pendentes`` (patch 09/11/2026) são as peças
-        conformes da inspeção progressiva que o Finalizar ainda vai somar.
         """
 
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT pp.*,
-                       (SELECT COUNT(*) FROM qualidade_inspecao_progressiva_pecas ip
-                         WHERE ip.primeira_peca_id = pp.id AND ip.conforme
-                           AND ip.apontamento_lancado_id IS NULL
-                       ) AS inspecao_pecas_boas_pendentes
-                FROM qualidade_primeira_peca pp
-                WHERE UPPER(pp.codigo_op) = UPPER(%s)
-                ORDER BY pp.id
+                SELECT * FROM qualidade_primeira_peca
+                WHERE UPPER(codigo_op) = UPPER(%s)
+                ORDER BY id
                 """,
                 (limpa_codigo(codigo_op),),
             )
@@ -517,19 +510,6 @@ class FirstPieceRepositoryMixin:
                 "completa": completa,
                 "nivel_desceu": nivel_desceu,
             }
-
-    def contar_boas_inspecao_progressiva_pendentes(self, primeira_peca_id):
-        """Peças conformes da inspeção ainda não lançadas em um apontamento."""
-
-        with self.connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT COUNT(*) AS total FROM qualidade_inspecao_progressiva_pecas
-                 WHERE primeira_peca_id = %s AND conforme AND apontamento_lancado_id IS NULL
-                """,
-                (int(primeira_peca_id),),
-            )
-            return int(cursor.fetchone()["total"])
 
     def liberar_primeira_peca_bloqueada(
         self, primeira_peca_id, *, cracha, nome, instante=None

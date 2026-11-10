@@ -900,20 +900,6 @@ class FirstPieceService:
             )
         return operador, None
 
-    def boas_da_inspecao_pendentes(self, op, operacao):
-        """``(primeira_peca_id, n)`` das peças boas da inspeção ainda não lançadas.
-
-        Patch 09/11/2026: as peças conformes medidas no 2º estágio entram no
-        total da OP; o Finalizar lança só a diferença e marca essas peças na
-        mesma transação, para não contar em dobro.
-        """
-
-        contar = getattr(self.db, "contar_boas_inspecao_progressiva_pendentes", None)
-        linha = self._linha(op, operacao) if callable(contar) else None
-        if not linha:
-            return None, 0
-        return linha["id"], int(contar(linha["id"]) or 0)
-
     def _linha(self, op, operacao):
         finder = getattr(self.db, "buscar_primeira_peca", None)
         if not callable(finder):

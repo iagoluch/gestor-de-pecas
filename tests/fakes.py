@@ -1339,7 +1339,7 @@ class FakeDatabase:
     def listar_primeiras_pecas_da_op(self, codigo_op):
         codigo = limpa_codigo(codigo_op)
         return [
-            {**row, "inspecao_pecas_boas_pendentes": self.contar_boas_inspecao_progressiva_pendentes(row["id"])}
+            dict(row)
             for row in self.first_pieces
             if limpa_codigo(row["codigo_op"]) == codigo
         ]
@@ -1439,13 +1439,6 @@ class FakeDatabase:
             "completa": completa,
             "nivel_desceu": nivel_desceu,
         }
-
-    def contar_boas_inspecao_progressiva_pendentes(self, primeira_peca_id):
-        return sum(
-            1 for p in self.progressive_pieces
-            if p["primeira_peca_id"] == int(primeira_peca_id)
-            and p["conforme"] and p["apontamento_lancado_id"] is None
-        )
 
     def registrar_primeira_peca_produzida(
         self, primeira_peca_id, *, operador, apontamento_id=None, instante=None
@@ -2096,7 +2089,6 @@ class FakeDatabase:
         setor_roteiro=None, setor_divergente=False,
         recurso_exclusivo=False,
         setor_destino="Almoxarifado", data_hora=None, encerrar_retrabalho=False,
-        lancar_inspecao_progressiva=None,
     ):
         row = next((item for item in self.appointments if item["id"] == apontamento_id), None)
         if not row:
@@ -2159,19 +2151,6 @@ class FakeDatabase:
             if attended > int(row["quantidade"]):
                 raise ValueError("A soma de peças boas e refugo excede a quantidade prevista restante.")
             partial = attended < int(row["quantidade"])
-            if lancar_inspecao_progressiva:
-                primeira_peca_id, esperadas = lancar_inspecao_progressiva
-                pendentes = [
-                    p for p in self.progressive_pieces
-                    if p["primeira_peca_id"] == int(primeira_peca_id)
-                    and p["conforme"] and p["apontamento_lancado_id"] is None
-                ]
-                if len(pendentes) != int(esperadas):
-                    raise ValueError(
-                        "As peças da inspeção mudaram durante a finalização. Atualize e tente de novo."
-                    )
-                for peca in pendentes:
-                    peca["apontamento_lancado_id"] = apontamento_id
         if encerrar_retrabalho:
             next_good += int(quantidade_boa or 0)
             next_scrap += int(quantidade_refugo or 0)
