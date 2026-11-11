@@ -56,6 +56,9 @@ class ApiFakeDatabase(FakeDatabase):
     def listar_chamada_contatos(self, *args, **kwargs):
         return []
 
+    def listar_chamadas(self, *args, **kwargs):
+        return []
+
     def buscar_contato_padrao_gestao(self, *args, **kwargs):
         return None
 
@@ -1649,9 +1652,20 @@ class WebApiTests(unittest.TestCase):
         self.client.cookies.clear()
         self.login_manager()
         self.assertEqual(self.client.get("/api/v1/audit/reports/99").status_code, 422)
-        for tipo in ("01", "02"):
+        catalogo = self.client.get("/api/v1/audit/reports").json()
+        visiveis = {item["id"] for item in catalogo["tipos"]}
+        self.assertTrue({"01", "02", "11", "20"} <= visiveis)
+        for tipo in sorted(f"{n:02d}" for n in range(1, 22)):
+            if tipo not in visiveis:
+                with self.subTest(tipo=tipo, oculto=True):
+                    self.assertEqual(self.client.get(f"/api/v1/audit/reports/{tipo}").status_code, 403)
+                continue
+            if tipo == "13":
+                continue  # exige OP: coberto em test_audit_reports
             with self.subTest(tipo=tipo):
-                payload = self.client.get(f"/api/v1/audit/reports/{tipo}").json()
+                response = self.client.get(f"/api/v1/audit/reports/{tipo}")
+                self.assertEqual(response.status_code, 200, response.text)
+                payload = response.json()
                 self.assertIn(payload["estado"], {"com_dados", "zero", "sem_registros", "indisponivel"})
                 self.assertTrue(payload["as_of"])
                 self.assertIn("regra_periodo", payload)

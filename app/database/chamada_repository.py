@@ -8,6 +8,21 @@ from psycopg.types.json import Jsonb
 _COLUNAS_CONTATO_BUSCA = "id, nome, funcao, ativo, padrao_gestao"
 
 
+def telegram_status(chamada: dict) -> str:
+    """Desfecho do aviso, derivado das colunas existentes (sem coluna nova).
+
+    ``enviado``: o Telegram confirmou. ``falhou``: não saiu (``telegram_erro``
+    traz o motivo). ``pendente``: gravada, envio ainda em andamento.
+    ``so_sistema``: o contato tem conta e o aviso é só dentro do sistema.
+    """
+
+    if chamada.get("telegram_enviado"):
+        return "enviado"
+    if chamada.get("telegram_dispensado"):
+        return "so_sistema"
+    return "falhou" if str(chamada.get("telegram_erro") or "").strip() else "pendente"
+
+
 class ChamadaRepositoryMixin:
     def listar_chamada_contatos(self, *, somente_ativos=True, busca=None, completo=False, setor=None):
         """Lista de contatos.

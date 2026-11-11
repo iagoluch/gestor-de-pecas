@@ -8,7 +8,8 @@ from fastapi import Path as ApiPath
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
 
-from backend.api.dependencies.auth import require_management_user
+from backend.api.dependencies.auth import get_current_user, require_management_user
+from backend.api.errors import AppError
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import PageParams, analytics_filter, pagination
 from backend.api.report_workbook.kit import safe_text
@@ -106,20 +107,35 @@ def reliability(
     }
 
 
-# --- Auditoria Analítica (Etapa 2): tipos 01 e 02 numa rota só ------------------
+# --- Auditoria Analítica: tipos 01 a 21 numa rota só ------------------------------
 
-TipoRelatorio = Literal["01", "02"]
+TipoRelatorio = Literal[
+    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11",
+    "12", "13", "14", "15", "16", "17", "18", "19", "20", "21",
+]
 
 
 @router.get("/reports")
-def report_catalog(_user: SessionUser = Depends(require_management_user)):
-    return audit_reports.catalogo()
+def report_catalog(user: SessionUser = Depends(get_current_user)):
+    """Só os tipos que a conta pode abrir (a guarda de cada módulo de origem)."""
+    catalogo = audit_reports.catalogo(user)
+    if not catalogo["tipos"]:
+        raise AppError("forbidden", "Sem acesso à Auditoria Analítica.", status_code=403)
+    return catalogo
 
 
-def _run_report(facade, tipo, filters, **table):
+def _guard(tipo, user):
+    if not audit_reports.pode_ver(audit_reports.TIPOS[tipo], user):
+        raise AppError("forbidden", "Seu nível não abre este tipo de relatório.", status_code=403)
+
+
+def _run_report(facade, tipo, filters, user, **table):
     """Envelope do tipo, ou ``(None, resposta de erro)`` com ``estado: erro``."""
+    _guard(tipo, user)
     try:
-        return audit_reports.run(facade, tipo, filters, **table), None
+        return audit_reports.run(facade, tipo, filters, user=user, **table), None
+    except audit_reports.ForaDoEscopo:
+        raise AppError("trace_out_of_scope", "Esta OP não passou pelo seu setor.", status_code=403)
     except Exception:  # noqa: BLE001 -- a falha vira estado "erro" explícito, com log
         logging.exception("Falha na Auditoria Analítica tipo=%s", tipo)
         body = {
@@ -136,7 +152,7 @@ def report(
     tipo: TipoRelatorio = ApiPath(...),
     filters: AnalyticsFilter = Depends(analytics_filter),
     params: PageParams = Depends(pagination),
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(get_current_user),
     facade=Depends(get_frontend_facade),
     evento_status: str | None = Query(default=None, max_length=160),
     evento_classe: str | None = Query(default=None, max_length=60),
@@ -144,7 +160,7 @@ def report(
 ):
     """Filtros ``evento_*`` e ``em_aberto`` só valem no tipo 01."""
     table = {"status": evento_status, "classe": evento_classe, "em_aberto": em_aberto} if tipo == "01" else {}
-    payload, error = _run_report(facade, tipo, filters, **table)
+    payload, error = _run_report(facade, tipo, filters, user, **table)
     if error is not None:
         return error
     items = payload.pop("items")
@@ -162,7 +178,7 @@ def _csv_cell(value):
 def report_export_csv(
     tipo: TipoRelatorio = ApiPath(...),
     filters: AnalyticsFilter = Depends(analytics_filter),
-    _user: SessionUser = Depends(require_management_user),
+    user: SessionUser = Depends(get_current_user),
     facade=Depends(get_frontend_facade),
     evento_status: str | None = Query(default=None, max_length=160),
     evento_classe: str | None = Query(default=None, max_length=60),
@@ -170,7 +186,7 @@ def report_export_csv(
 ):
     """Todas as linhas e todos os campos do tipo, com os mesmos filtros da tela."""
     table = {"status": evento_status, "classe": evento_classe, "em_aberto": em_aberto} if tipo == "01" else {}
-    payload, error = _run_report(facade, tipo, filters, **table)
+    payload, error = _run_report(facade, tipo, filters, user, **table)
     if error is not None:
         return error
     campos = [campo["chave"] for campo in payload["campos"]]

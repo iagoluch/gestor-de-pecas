@@ -21,6 +21,7 @@ from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.common import ChamadaContatoRequest, ChamadaRequest
 from app.core.operator_sectors import OPERATOR_SECTORS
+from app.database.chamada_repository import telegram_status
 from app.core.permissions import is_admin_level, operator_sector_for_user_level
 from mes.integrations.notifications.telegram import (
     format_chamada_message,
@@ -81,21 +82,6 @@ def _contexto_do_posto(user: SessionUser, database, recurso) -> dict:
     if setor is None or recurso not in setor.resources:
         return {}
     return station_context(database, setor=setor.name, recurso=recurso)
-
-
-def telegram_status(chamada: dict) -> str:
-    """Desfecho do aviso, derivado das colunas existentes (sem coluna nova).
-
-    ``enviado``: o Telegram confirmou. ``falhou``: não saiu (``telegram_erro``
-    traz o motivo). ``pendente``: gravada, envio ainda em andamento.
-    ``so_sistema``: o contato tem conta e o aviso é só dentro do sistema.
-    """
-
-    if chamada.get("telegram_enviado"):
-        return "enviado"
-    if chamada.get("telegram_dispensado"):
-        return "so_sistema"
-    return "falhou" if str(chamada.get("telegram_erro") or "").strip() else "pendente"
 
 
 def _publica(chamada: dict) -> dict:

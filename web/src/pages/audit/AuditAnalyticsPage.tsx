@@ -24,19 +24,21 @@ import {
 } from "./AuditPages";
 import type { ProductionEvent, StatusEvent } from "./AuditPages";
 
-type Tipo = "01" | "02";
+type Tipo = string;
 type Row = Record<string, unknown>;
 
 interface Campo { chave: string; rotulo: string }
 interface TipoInfo {
   id: Tipo;
+  grupo: string;
   titulo: string;
+  somente_consulta: boolean;
   descricao: string;
   filtros_comuns: string[];
   filtros_proprios: string[];
   campos: Campo[];
 }
-interface Catalogo { regra_periodo: string; tipos: TipoInfo[] }
+interface Catalogo { regra_periodo: string; grupos: string[]; tipos: TipoInfo[] }
 
 interface Relatorio {
   tipo: Tipo;
@@ -47,7 +49,7 @@ interface Relatorio {
   avisos: string[];
   regra_periodo: string;
   campos: Campo[];
-  summary: Record<string, number> | null;
+  summary: Record<string, unknown> | null;
   opcoes?: { status: string[]; classes: string[] } | null;
   items: Row[];
   page: { page: number; page_size: number; total: number };
@@ -69,12 +71,16 @@ function fieldValue(key: string, value: unknown) {
   if (value == null || value === "") return "—";
   if (typeof value === "boolean") return value ? "Sim" : "Não";
   if (key.endsWith("_segundos") && typeof value === "number") return `${formatHours(value)} (${formatNumber(value)} s)`;
-  if ((key === "inicio" || key === "fim") && typeof value === "string") return formatDateTime(value);
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTime(value);
+  if (typeof value === "number") return formatNumber(value);
   return String(value);
 }
 
-function Metrics({ tipo, summary }: { tipo: Tipo; summary: Record<string, number> | null }) {
-  const n = (key: string) => formatNumber(summary?.[key] ?? 0);
+/** "media_ponderada_segundos" → "Media ponderada segundos" (o resumo vem pronto do servidor). */
+const summaryLabel = (key: string) => (key.charAt(0).toUpperCase() + key.slice(1)).replaceAll("_", " ");
+
+function Metrics({ tipo, summary }: { tipo: Tipo; summary: Record<string, unknown> | null }) {
+  const n = (key: string) => formatNumber(Number(summary?.[key] ?? 0));
   if (tipo === "01") {
     return (
       <div className="metric-grid metric-grid--four">
@@ -85,7 +91,19 @@ function Metrics({ tipo, summary }: { tipo: Tipo; summary: Record<string, number
       </div>
     );
   }
-  const orphans = summary?.quantidade_sem_evento ?? 0;
+  if (tipo !== "02") {
+    // Demais tipos: um cartão por valor simples do resumo; null = sem dado, nunca 0.
+    const entries = Object.entries(summary ?? {}).filter(([, value]) => value === null || ["number", "string"].includes(typeof value));
+    if (!entries.length) return null;
+    return (
+      <div className="metric-grid metric-grid--four">
+        {entries.slice(0, 8).map(([key, value]) => (
+          <MetricCard key={key} label={summaryLabel(key)} value={value === null ? "sem registros" : fieldValue(key, value)} />
+        ))}
+      </div>
+    );
+  }
+  const orphans = Number(summary?.quantidade_sem_evento ?? 0);
   return (
     <div className="metric-grid metric-grid--four">
       <MetricCard label="Eventos de produção" value={n("eventos")} detail={orphans ? `${formatNumber(orphans)} quantidade(s) sem evento` : undefined} />
@@ -104,13 +122,15 @@ function Metrics({ tipo, summary }: { tipo: Tipo; summary: Record<string, number
 export function AuditAnalyticsPage() {
   const filters = useManagementFilters();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tipo: Tipo = searchParams.get("tipo") === "02" ? "02" : "01";
+  const asked = searchParams.get("tipo") ?? "01";
   const [table, setTable] = useState(EMPTY_TABLE);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<number | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
   const catalog = useApiQuery<Catalogo>("/api/v1/audit/reports");
+  // Tipo fora do catálogo desta conta: abre o primeiro que ela pode ver.
+  const tipo: Tipo = !catalog.data || catalog.data.tipos.some((item) => item.id === asked) ? asked : (catalog.data.tipos[0]?.id ?? "01");
   const info = catalog.data?.tipos.find((item) => item.id === tipo);
   const accepted = new Set([...(info?.filtros_comuns ?? []), ...(info?.filtros_proprios ?? [])]);
   const fields = info ? ALL_FIELDS.filter((field) => accepted.has(FIELD_PARAM[field])) : ALL_FIELDS;
@@ -133,7 +153,8 @@ export function AuditAnalyticsPage() {
   }
   const filterQuery = own.toString() ? `${base}&${own}` : base;
   const paging = new URLSearchParams({ page: String(page), page_size: String(STATUS_PAGE_SIZE) });
-  const query = useApiQuery<Relatorio>(`/api/v1/audit/reports/${tipo}?${filterQuery}&${paging}`);
+  // Espera o catálogo: assim um tipo sem acesso nunca é pedido à API.
+  const query = useApiQuery<Relatorio>(catalog.data ? `/api/v1/audit/reports/${tipo}?${filterQuery}&${paging}` : null);
   // Mostra o último resultado do mesmo tipo enquanto o novo chega (sem piscar).
   const [kept, setKept] = useState<Relatorio | null>(null);
   if (query.data && query.data !== kept) setKept(query.data);
@@ -141,7 +162,7 @@ export function AuditAnalyticsPage() {
 
   // Avisos de filtro: ativo na barra, mas este tipo não recorta por ele.
   const ignored = ALL_FIELDS.filter((field) => filters.filters[field].trim() && !fields.includes(field)).map((field) => FIELD_LABEL[field]);
-  if (tipo === "02" && (table.status || table.classe || table.aberto)) ignored.push("Status, Classificação e Situação (só valem nos Eventos de status)");
+  if (tipo !== "01" && (table.status || table.classe || table.aberto)) ignored.push("Status, Classificação e Situação (só valem nos Eventos de status)");
 
   const title = "Auditoria analítica";
   const subtitle = info?.descricao ?? "Escolha o tipo de relatório; os filtros comuns continuam valendo ao trocar de tipo.";
@@ -155,9 +176,18 @@ export function AuditAnalyticsPage() {
     <>
       <label>Tipo de relatório
         <select value={tipo} onChange={(event) => chooseTipo(event.target.value)}>
-          {(catalog.data?.tipos ?? [{ id: "01", titulo: "Eventos de status" }, { id: "02", titulo: "Eventos de produção" }]).map((item) => (
-            <option key={item.id} value={item.id}>{item.id} — {item.titulo}</option>
-          ))}
+          {catalog.data ? (
+            catalog.data.grupos.map((grupo) => {
+              const tipos = catalog.data!.tipos.filter((item) => item.grupo === grupo);
+              return tipos.length ? (
+                <optgroup key={grupo} label={grupo}>
+                  {tipos.map((item) => <option key={item.id} value={item.id}>{item.id} — {item.titulo}</option>)}
+                </optgroup>
+              ) : null;
+            })
+          ) : (
+            <option value={tipo}>{tipo}</option>
+          )}
         </select>
       </label>
       {tipo === "01" ? (
@@ -222,6 +252,11 @@ export function AuditAnalyticsPage() {
     },
   };
   const table01 = tipo === "01";
+  const genericColumns: TableColumn<Row>[] = data.campos.map((campo) => ({
+    key: campo.chave,
+    label: campo.rotulo,
+    render: (row) => fieldValue(campo.chave, row[campo.chave]),
+  }));
 
   return (
     <PageFrame staleError={query.error} {...frame}>
@@ -231,11 +266,14 @@ export function AuditAnalyticsPage() {
       {ignored.length ? (
         <p className="chart-note" role="status">Filtro que não vale neste tipo e foi ignorado: {ignored.join("; ")}.</p>
       ) : null}
+      {info?.somente_consulta ? (
+        <p className="chart-note" role="status">Só consulta: as ações deste assunto continuam na tela própria.</p>
+      ) : null}
       {data.avisos.map((aviso) => <p key={aviso} className="chart-note" role="status">{aviso}</p>)}
       {data.estado === "indisponivel" ? (
         <EmptyState title="Fonte indisponível" detail="Uma fonte obrigatória deste relatório não existe nesta instalação. Isto não quer dizer zero." state="indisponivel" />
       ) : data.estado === "sem_registros" ? (
-        <EmptyState title="Sem registros" detail="Nenhum evento no período e nos filtros escolhidos." />
+        <EmptyState title="Sem registros" detail="Nenhum registro no período e nos filtros escolhidos." />
       ) : (
         <>
           <Metrics tipo={tipo} summary={data.summary} />
@@ -248,12 +286,14 @@ export function AuditAnalyticsPage() {
                 rowClassName={(row) => statusRowClass(row as unknown as StatusEvent)}
                 columns={[viewColumn, ...(STATUS_COLUMNS as unknown as TableColumn<Row>[])]}
               />
-            ) : (
+            ) : tipo === "02" ? (
               <DataTable<Row>
                 rows={items}
                 rowKey={(row, index) => productionRowKey(row as ProductionEvent, index)}
                 columns={[viewColumn, ...(PRODUCTION_COLUMNS as unknown as TableColumn<Row>[])]}
               />
+            ) : (
+              <DataTable<Row> rows={items} rowKey={(_row, index) => `${tipo}-${page}-${index}`} columns={[viewColumn, ...genericColumns]} />
             )}
             {total > STATUS_PAGE_SIZE ? (
               <div className="filter-bar__row" role="navigation" aria-label="Páginas do relatório">

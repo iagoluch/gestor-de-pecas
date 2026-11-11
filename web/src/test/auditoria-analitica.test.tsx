@@ -13,9 +13,12 @@ afterEach(() => {
 
 const CATALOGO = {
   regra_periodo: "Entra todo evento que toca o período.",
+  grupos: ["Produção e rastreio", "Paradas e tempos", "Dados e sistema"],
   tipos: [
-    { id: "01", titulo: "Eventos de status", descricao: "Status", filtros_comuns: ["setor", "recurso", "op", "operador"], filtros_proprios: ["produto", "operacao", "evento_status", "evento_classe", "em_aberto"], campos: [] },
-    { id: "02", titulo: "Eventos de produção", descricao: "Produção", filtros_comuns: ["setor", "recurso", "op", "operador"], filtros_proprios: ["produto", "operacao"], campos: [] },
+    { id: "01", grupo: "Produção e rastreio", somente_consulta: false, titulo: "Eventos de status", descricao: "Status", filtros_comuns: ["setor", "recurso", "op", "operador"], filtros_proprios: ["produto", "operacao", "evento_status", "evento_classe", "em_aberto"], campos: [] },
+    { id: "02", grupo: "Produção e rastreio", somente_consulta: false, titulo: "Eventos de produção", descricao: "Produção", filtros_comuns: ["setor", "recurso", "op", "operador"], filtros_proprios: ["produto", "operacao"], campos: [] },
+    { id: "08", grupo: "Paradas e tempos", somente_consulta: false, titulo: "Tempo padrão x real", descricao: "Tempo", filtros_comuns: ["setor", "recurso", "op", "operador"], filtros_proprios: [], campos: [] },
+    { id: "19", grupo: "Dados e sistema", somente_consulta: true, titulo: "Envios ao Protheus", descricao: "Envios", filtros_comuns: [], filtros_proprios: [], campos: [] },
   ],
 };
 
@@ -38,6 +41,17 @@ const PRODUCAO = {
   avisos: ["Com filtro de OP, operação ou produto, as linhas do Corte (por tarefa e plano) não entram."],
   regra_periodo: "Entra todo evento que toca o período.", campos: [], summary: {}, page: { page: 1, page_size: 100, total: 0 }, items: [],
 };
+
+const TEMPO = {
+  tipo: "08", titulo: "Tempo padrão x real", as_of: "2026-11-10T09:30:00", estado: "com_dados", fontes: {}, avisos: [],
+  regra_periodo: "Entra todo evento que toca o período.",
+  campos: [{ chave: "op", rotulo: "OP" }, { chave: "desvio_percentual", rotulo: "Desvio %" }],
+  summary: { comparaveis: 2, desvio_percentual: null },
+  page: { page: 1, page_size: 100, total: 2 },
+  items: [{ op: "OP7", desvio_percentual: 25 }, { op: "OP8", desvio_percentual: null }],
+};
+
+const ENVIOS = { ...TEMPO, tipo: "19", titulo: "Envios ao Protheus", campos: [{ chave: "op", rotulo: "OP" }], summary: { envios: 0 }, estado: "sem_registros", items: [], page: { page: 1, page_size: 100, total: 0 } };
 
 function stubFetch(routes: Record<string, unknown>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -100,5 +114,23 @@ describe("Auditoria analítica", () => {
     const [path, name] = download.mock.calls[0];
     expect(path).toMatch(/^\/api\/v1\/audit\/reports\/01\/export\.csv\?inicio=/);
     expect(name).toBe("auditoria_tipo_01.csv");
+  });
+
+  it("tipos novos: agrupados, colunas do catálogo, desvio pronto do servidor e sem dado como 'sem registros'", async () => {
+    stubFetch({ "/audit/reports/08": TEMPO, "/audit/reports": CATALOGO });
+    renderPage("/auditoria/analitica?tipo=08");
+    expect(await screen.findByText("OP7")).toBeTruthy();
+    expect(screen.getByText("25")).toBeTruthy();
+    expect(screen.getByText("sem registros")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Paradas e tempos" })).toBeTruthy();
+  });
+
+  it("Envios ao Protheus é só consulta e tipo desconhecido cai no primeiro do catálogo", async () => {
+    stubFetch({ "/audit/reports/19": ENVIOS, "/audit/reports/01": STATUS, "/audit/reports": CATALOGO });
+    renderPage("/auditoria/analitica?tipo=19");
+    expect(await screen.findByText(/Só consulta/)).toBeTruthy();
+    cleanup();
+    renderPage("/auditoria/analitica?tipo=17");
+    expect(await screen.findByText("Falta de material", { selector: "td, td *" })).toBeTruthy();
   });
 });
