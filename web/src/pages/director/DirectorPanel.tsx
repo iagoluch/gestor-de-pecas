@@ -8,7 +8,7 @@ import type { DirectorPanel as DirectorPanelData, DirectorPeriodName, DirectorSe
 import { formatNumber } from "../../utils/format";
 import { DirectorExplainable } from "./DirectorExplainable";
 import { DirectorIndicators } from "./DirectorIndicators";
-import { costLine, costText, EFFICIENCY_ABOVE_100_NOTICE, efficiencyText, efficiencyValue, formatHoursValue, producedText } from "./directorFormat";
+import { costLine, costText, EFFICIENCY_ABOVE_100_NOTICE, efficiencyValue, formatHoursValue } from "./directorFormat";
 
 export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeriodName; onOpenSector: (setor: string) => void }) {
   const query = useApiQuery<DirectorPanelData>(directorPaths.panel(periodo));
@@ -18,39 +18,20 @@ export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeri
     return <LoadingState />;
   }
   const { cards } = data;
+  // Produzido, Horas paradas e Eficiência repetiam Peças boas, Horas paradas não
+  // planejadas e OEE dos indicadores acima; fica só o que existe só aqui: o custo em R$.
+  // Melhor setor com 0% não diz nada: vira "sem dados".
+  const best = data.melhor_setor && data.melhor_setor.oee > 0 ? data.melhor_setor : null;
   return (
     <>
       <DirectorIndicators periodo={periodo} />
-      <div className="metric-grid metric-grid--four">
-        <MetricCard
-          label="Produzido"
-          value={producedText(cards.produzido)}
-          valueNode={<DirectorExplainable context={`Produzido ${producedText(cards.produzido)}`} target={{ metric: "dir.produzido", periodo }}>{producedText(cards.produzido)}</DirectorExplainable>}
-          detail="Peças boas lançadas no período"
-          accent="success"
-        />
-        <MetricCard
-          label="Horas paradas"
-          value={formatHoursValue(cards.horas_paradas)}
-          valueNode={<DirectorExplainable context={`Horas paradas ${formatHoursValue(cards.horas_paradas)}`} target={{ metric: "dir.horas_paradas", periodo }}>{formatHoursValue(cards.horas_paradas)}</DirectorExplainable>}
-          detail="Só paradas que não estavam planejadas"
-          accent="warning"
-        />
+      <div className="metric-grid">
         <MetricCard
           label="Custo das paradas"
           value={costText(cards.custo_parada, data.custo_completo)}
           valueNode={<DirectorExplainable context={`Custo das paradas ${costText(cards.custo_parada, data.custo_completo)}`} target={{ metric: "dir.custo_parada", periodo }}>{costText(cards.custo_parada, data.custo_completo)}</DirectorExplainable>}
           detail={data.custo_completo ? "Horas paradas × valor da hora" : "Valor parcial: faltam valores da hora em Custos"}
           accent="danger"
-        />
-        <MetricCard
-          label="Eficiência"
-          value={efficiencyText(cards.eficiencia_oee)}
-          valueNode={hasEfficiency(cards.eficiencia_oee)
-            ? <DirectorExplainable context={`Eficiência ${efficiencyText(cards.eficiencia_oee)}`} target={{ metric: "dir.eficiencia", periodo }}>{efficiencyText(cards.eficiencia_oee)}</DirectorExplainable>
-            : undefined}
-          detail="Quanto do tempo virou peça boa (o mesmo OEE da Visão Geral)"
-          accent="purple"
         />
       </div>
       {data.aviso ? <Notice tone="stale" className="director-warning">{data.aviso}</Notice> : null}
@@ -101,13 +82,13 @@ export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeri
       </SectionCard>
 
       <div className="director-highlights">
-        <Highlight tone="good" title="Setor que melhor aproveitou o tempo" rank={data.melhor_setor} periodo={periodo} empty="Sem dados de eficiência por setor no período." />
+        <Highlight tone="good" title="Setor que melhor aproveitou o tempo" rank={best} periodo={periodo} empty="Sem dados de eficiência por setor no período." />
         <Highlight
           tone="bad"
           title="Setor que mais desperdiçou tempo"
-          rank={data.pior_setor}
+          rank={best ? data.pior_setor : null}
           periodo={periodo}
-          empty={data.melhor_setor ? "Só um setor teve dados no período." : "Sem dados de eficiência por setor no período."}
+          empty={best ? "Só um setor teve dados no período." : "Sem dados de eficiência por setor no período."}
         />
       </div>
     </>
@@ -136,10 +117,4 @@ function Highlight({ tone, title, rank, periodo, empty }: { tone: "good" | "bad"
       )}
     </article>
   );
-}
-
-/** Só abre a conta quando existe um percentual; "dados insuficientes" fica texto. */
-function hasEfficiency(metric: DirectorPanelData["cards"]["eficiencia_oee"]) {
-  if (typeof metric === "number") return true;
-  return metric !== null && metric !== undefined && metric.value !== null && metric.value !== undefined;
 }

@@ -124,28 +124,35 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Aba Diretoria — Painel", () => {
-  it("mostra os 4 cartões em R$ e o aviso de custos faltando", async () => {
+  it("mostra só o custo das paradas em R$ (sem repetir os indicadores) e o aviso de custos faltando", async () => {
     stub();
     renderPage();
     expect(await screen.findByText("faltam custos de 3 recursos/pessoas — o valor real é maior")).toBeInTheDocument();
-    expect(screen.getByText("Produzido")).toBeInTheDocument();
-    expect(screen.getByText("Eficiência")).toBeInTheDocument();
+    expect(screen.getByText("Custo das paradas")).toBeInTheDocument();
     expect(screen.getByText("R$ 2.250")).toBeInTheDocument();
-    expect(screen.getByText("12,5 h")).toBeInTheDocument();
-    expect(screen.getByText("71,4%")).toBeInTheDocument();
+    // Produzido, Horas paradas e Eficiência repetiam Peças boas, Horas paradas não planejadas e OEE.
+    expect(screen.queryByText("Produzido")).not.toBeInTheDocument();
+    expect(screen.queryByText("Eficiência")).not.toBeInTheDocument();
+    expect(screen.queryByText("Horas paradas")).not.toBeInTheDocument();
     expect(screen.getByText(/Pintura/, { selector: ".director-highlight strong" })).toBeInTheDocument();
   });
 
-  it("eficiência acima de 100% mostra o valor real e um aviso; abaixo disso não avisa", async () => {
+  it("eficiência acima de 100% avisa; abaixo disso não avisa", async () => {
     stub({ painel: { ...PAINEL, cards: { ...PAINEL.cards, eficiencia_oee: { value: 112.3, unit: "%", availability: "disponivel" } } } });
     const { unmount } = renderPage();
     expect(await screen.findByText(/Eficiência acima de 100%/)).toBeInTheDocument();
-    expect(screen.getByText("112,3%")).toBeInTheDocument();
     unmount();
     stub();
     renderPage();
-    await screen.findByText("71,4%");
+    await screen.findByText("Custo das paradas");
     expect(screen.queryByText(/Eficiência acima de 100%/)).not.toBeInTheDocument();
+  });
+
+  it("melhor setor com 0% não vira destaque: mostra sem dados nos dois cartões", async () => {
+    stub({ painel: { ...PAINEL, melhor_setor: { nome: "Corte", oee: 0 }, pior_setor: { nome: "Solda", oee: 0 } } });
+    renderPage();
+    expect(await screen.findAllByText("Sem dados de eficiência por setor no período.")).toHaveLength(2);
+    expect(screen.queryByText(/Corte/, { selector: ".director-highlight strong" })).not.toBeInTheDocument();
   });
 
   it("setor com eficiência acima de 100% mostra o valor real e um aviso no cartão; abaixo disso não avisa", async () => {
@@ -156,7 +163,7 @@ describe("Aba Diretoria — Painel", () => {
     unmount();
     stub();
     renderPage();
-    await screen.findByText("71,4%");
+    await screen.findByText(/Pintura/, { selector: ".director-highlight strong" });
     expect(screen.queryByText(/confira o tempo padrão deste setor/)).not.toBeInTheDocument();
   });
 

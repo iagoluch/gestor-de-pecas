@@ -972,3 +972,32 @@ Observação: a API da 8001 estava rodando código de antes da Etapa 4 (sem `--r
 
 1. Corrigir na hora o "Produzido 0 × sem registros" (correção pequena e reversível, na mesma linha da decisão da Etapa 4) em vez de deixar como pendência.
 2. Reiniciar a API da 8001 para validar o código atual (era a única API; mesma porta e mesmo banco de teste).
+
+## Revisão da aba Diretoria (11/11/2026)
+
+Pedido: a Diretoria já tem aba própria; decidir se o que existe fica, é completado pelo plano ou sai. Decisão: a própria `/diretoria` é a casa do Dashboard definitivo (já protegida por `require_diretoria_user`); não foi criada segunda tela. O topo do Painel são os 6 indicadores do plano (Etapa 4), cada um abrindo a Auditoria filtrada. Contrato da API não mudou (o backend segue mandando os campos; o front só deixou de mostrar).
+
+| Item da aba | Onde | Plano cobre? | Destino | Motivo |
+|---|---|---|---|---|
+| 6 indicadores (Peças boas, Refugo, Horas paradas não planejadas, OEE, Disponibilidade, Desvio do tempo padrão) | Painel | Sim | Mantido | São o Dashboard do plano; clique leva à Auditoria tipo 02/04/11/08 |
+| Cartão "Produzido" | Painel | Sim (Peças boas) | Removido | Mesmo número de Peças boas com outro nome |
+| Cartão "Horas paradas" | Painel | Sim (Horas paradas não planejadas) | Removido | Mesma conta (só paradas fora do planejado) com nome mais curto |
+| Cartão "Eficiência" | Painel | Sim (OEE) | Removido | É o OEE com outro nome |
+| Cartão "Custo das paradas" (R$) | Painel | Não | Mantido | Só existe aqui; custo em R$ é exclusivo da Diretoria |
+| Aviso "faltam custos de N recursos/pessoas" | Painel | Não | Mantido | Explica custo parcial |
+| Aviso "eficiência acima de 100%" | Painel | Não | Mantido | Avisa OEE impossível (tempo padrão errado); vale para o indicador OEE acima |
+| "Onde mais perdemos" (top 3 setores, horas, R$, motivo, abre a Ficha) | Painel | Não | Mantido | Só existe aqui; traz R$ e o motivo, e é a porta para a Ficha |
+| "Setor que melhor aproveitou / mais desperdiçou o tempo" | Painel | Não | Mantido, sem o zero | Ranking por setor não existe no plano; mas quando o melhor setor tem 0% (caso do TEST: "Corte, eficiência 0%") os dois cartões viram "Sem dados", porque 0% como "melhor" não diz nada |
+| Ficha do setor: Trabalhou, Produzido, Parado, Custo do trabalho, Custo das paradas, Paradas por motivo, Quem operou, Tempo que não entra no custo | Ficha | Parcial (só no total da fábrica) | Mantido | É a visão por setor/recurso com R$; a Auditoria não tem essa visão consolidada por setor com custo |
+| Edição do valor da hora (recurso e pessoa) | Custos | Não | Mantido | Configuração que alimenta todo R$; só existe aqui |
+
+Arquivos: `web/src/pages/director/DirectorPanel.tsx`, `web/src/test/director-page.test.tsx`, `web/src/test/director-explanation.test.tsx` (este último também passou a montar a página com roteador e filtros; quebrava desde a Etapa 4 porque os indicadores navegam para a Auditoria).
+
+Validação: vitest director-page 26 e director-explanation 7 passaram; tsc limpo; build ok; conferido no navegador em `/diretoria` (6 indicadores, Custo das paradas, Onde mais perdemos e destaques "sem dados" no lugar de "Corte 0%").
+
+## Decisões tomadas sem o usuário (revisão da aba Diretoria)
+
+1. Manter `/diretoria` como o Dashboard definitivo em vez de criar outra tela (pedido explícito: não criar segunda tela).
+2. Esconder no front, sem mudar a API: os campos `produzido`, `horas_paradas` e `eficiencia_oee` continuam no `/diretoria/painel` (reversível; `eficiencia_oee` ainda alimenta o aviso de acima de 100%).
+3. Manter os destaques de melhor/pior setor em vez de removê-los, só trocando o "0%" por "sem dados" (o ranking por setor não existe em outro lugar).
+4. Manter a Ficha inteira, inclusive Produzido e Parado por setor: repetem a Auditoria só no total da fábrica, não por setor com custo.

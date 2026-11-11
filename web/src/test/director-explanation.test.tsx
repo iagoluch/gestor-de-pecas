@@ -1,6 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DirectorPage } from "../pages/director/DirectorPage";
+import { MemoryRouter } from "react-router-dom";
+import { FilterProvider } from "../filters/FilterContext";
+import { DirectorPage as Page } from "../pages/director/DirectorPage";
+
+// O painel usa navegação (indicadores levam à Auditoria) e os filtros da gestão.
+function DirectorPage() {
+  return <MemoryRouter><FilterProvider><Page /></FilterProvider></MemoryRouter>;
+}
 
 const PAINEL = {
   periodo: { nome: "hoje", inicio: "2026-10-20T00:00:00", fim: "2026-10-20T23:59:59" },
@@ -101,13 +108,10 @@ afterEach(() => {
 });
 
 describe("Diretoria: números clicáveis", () => {
-  it("Painel: os 4 cartões abrem dir.* com o período da tela", async () => {
+  it("Painel: o cartão de custo das paradas abre dir.custo_parada com o período da tela", async () => {
     const mock = stub();
     render(<DirectorPage />);
-    await clickAndExpect(mock, /Ver de onde vem este número: Produzido/, ["metric=dir.produzido", "periodo=hoje"]);
-    await clickAndExpect(mock, /Ver de onde vem este número: Horas paradas/, ["metric=dir.horas_paradas"]);
-    await clickAndExpect(mock, /Ver de onde vem este número: Custo das paradas/, ["metric=dir.custo_parada"]);
-    await clickAndExpect(mock, /Ver de onde vem este número: Eficiência/, ["metric=dir.eficiencia"]);
+    await clickAndExpect(mock, /Ver de onde vem este número: Custo das paradas/, ["metric=dir.custo_parada", "periodo=hoje"]);
   });
 
   it("Painel: horas e custo de cada setor do ranking levam o setor", async () => {
@@ -136,18 +140,6 @@ describe("Diretoria: números clicáveis", () => {
     const semSetor = lines.find((li) => li.textContent?.includes("Sem setor"));
     expect(semSetor).toBeDefined();
     expect(semSetor!.querySelectorAll("button.explainable-value")).toHaveLength(0);
-  });
-
-  it("Painel: eficiência sem valor fica como texto simples", async () => {
-    const mock = vi.fn(async (input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path.includes("/diretoria/painel")) return json({ ...PAINEL, cards: { ...PAINEL.cards, eficiencia_oee: { value: null, availability: "dados_insuficientes" } } });
-      return json({ code: "not_found", message: "x" }, 404);
-    });
-    vi.stubGlobal("fetch", mock);
-    render(<DirectorPage />);
-    await screen.findByText("Onde mais perdemos");
-    expect(screen.queryByRole("button", { name: /Ver de onde vem este número: Eficiência/ })).not.toBeInTheDocument();
   });
 
   it("Ficha: cinco cartões e a hora de cada motivo abrem dir.* com os filtros da ficha", async () => {
@@ -188,7 +180,7 @@ describe("Diretoria: números clicáveis", () => {
   it("recusa 403 mostra mensagem de acesso, sem expor erro técnico", async () => {
     stub(403);
     render(<DirectorPage />);
-    fireEvent.click(await screen.findByRole("button", { name: /Ver de onde vem este número: Produzido/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Ver de onde vem este número: Custo das paradas/ }));
     expect(await screen.findByText("Você não tem acesso a esta explicação.")).toBeInTheDocument();
   });
 });
