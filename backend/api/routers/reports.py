@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import csv
-import io
 import json
 from datetime import datetime
 import asyncio
@@ -35,7 +33,6 @@ from mes.contracts import (
 )
 
 from backend.api.report_workbook import build_report_workbook
-from backend.api.report_workbook.kit import safe_text
 
 
 router = APIRouter(prefix="/reports", tags=["Relatórios"], dependencies=[Depends(management_read_slot)])
@@ -214,41 +211,6 @@ def _tabular_rows(payload):
     if candidates:
         return candidates
     return [{"dados": json.dumps(encoded, ensure_ascii=False, separators=(",", ":"))}]
-
-
-def _csv_cell(value):
-    # Texto livre do chão de fábrica (observação, motivo) não pode virar
-    # fórmula no Excel do gestor (BK-04). Números seguem números.
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False)
-    return safe_text(value) if isinstance(value, str) else value
-
-
-@router.get("/{report_type}/export.csv")
-def export_csv(
-    report_type: str,
-    filters: AnalyticsFilter = Depends(analytics_filter),
-    _user: SessionUser = Depends(require_management_user),
-    facade=Depends(get_frontend_facade),
-):
-    rows = _tabular_rows(facade.relatorio(report_type, filters))
-    columns = []
-    for row in rows:
-        for key in row:
-            if key not in columns:
-                columns.append(key)
-    output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore", delimiter=";")
-    writer.writeheader()
-    for row in rows:
-        writer.writerow({key: _csv_cell(value) for key, value in row.items()})
-    content = "\ufeff" + output.getvalue()
-    safe_type = report_type.strip().casefold().replace("-", "_")
-    return Response(
-        content=content.encode("utf-8"),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="gestor_{safe_type}.csv"'},
-    )
 
 
 @router.get("/{report_type}/export.xlsx")

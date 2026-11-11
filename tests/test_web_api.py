@@ -1,5 +1,4 @@
 import base64
-import csv
 import io
 import json
 import tempfile
@@ -1105,33 +1104,15 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(self.client.get("/api/v1/auth/session").status_code, 401)
 
-    def test_relatorio_csv_e_utf8(self):
+    def test_relatorio_exporta_so_excel(self):
+        # Exportação só em .xlsx no sistema inteiro (pedido do usuário, 11/11/2026).
+        # A proteção contra fórmula da planilha está em test_intelligence_reports.
         self.login_manager()
-        response = self.client.get("/api/v1/reports/producao/export.csv")
+        self.assertEqual(self.client.get("/api/v1/reports/producao/export.csv").status_code, 404)
+        response = self.client.get("/api/v1/reports/producao/export.xlsx")
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertTrue(response.content.startswith(b"\xef\xbb\xbf"))
-        self.assertIn("attachment", response.headers["content-disposition"])
-
-    def test_relatorio_csv_neutraliza_formula_de_texto_livre(self):
-        # BK-04: observação digitada no chão não pode virar fórmula no Excel.
-        from backend.api.dependencies.facade import get_frontend_facade
-
-        class Facade:
-            def relatorio(self, report_type, filters):
-                return {"linhas": [
-                    {"obs": '=HYPERLINK("http://x")', "motivo": "\tcmd", "extra": "\r@SUM(1)", "saldo": -5, "ok": "Normal"},
-                ]}
-
-        self.app.dependency_overrides[get_frontend_facade] = lambda: Facade()
-        self.login_manager()
-        response = self.client.get("/api/v1/reports/producao/export.csv")
-        self.assertEqual(response.status_code, 200, response.text)
-        rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"), newline=""), delimiter=";"))
-        self.assertEqual(rows[0]["obs"], "\'=HYPERLINK(\"http://x\")")
-        self.assertEqual(rows[0]["motivo"], "\'\tcmd")
-        self.assertEqual(rows[0]["extra"], "\'\r@SUM(1)")
-        self.assertEqual(rows[0]["saldo"], "-5")
-        self.assertEqual(rows[0]["ok"], "Normal")
+        self.assertIn("spreadsheetml", response.headers["content-type"])
+        self.assertIn(".xlsx", response.headers["content-disposition"])
 
     def test_relatorio_excel_formatado(self):
         self.login_manager()
