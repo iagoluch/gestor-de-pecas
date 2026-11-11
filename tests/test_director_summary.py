@@ -253,6 +253,16 @@ class PanelTests(unittest.TestCase):
         self.assertEqual(panel["cards"]["produzido"], 148)
         self.assertAlmostEqual(panel["cards"]["horas_paradas"], 9 + 4 + 1 + 0.5)
 
+    def test_a2_produzido_sem_dado_e_none_nao_zero(self):
+        from unittest import mock
+
+        with mock.patch.object(ManagementService, "get_overview", return_value={"hours": {}}):
+            panel = self.service.panel("semana", NOW)
+            sheet = self.service.sheet("semana", None, None, NOW)
+        self.assertIsNone(panel["cards"]["produzido"])
+        self.assertIsNone(sheet["produzido"])
+        self.assertIn("sem registros de produção", sheet["texto"])
+
     def test_b_onde_perdemos_so_nao_planejada_ordenado_e_no_maximo_3(self):
         panel = self.service.panel("semana", NOW)
         ranking = panel["onde_perdemos"]

@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, putOperatorRate, putResourceRate } from "../api/client";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { FilterProvider, useManagementFilters } from "../filters/FilterContext";
 import { DirectorPage } from "../pages/director/DirectorPage";
 
 // Leituras passam pelo fetch falso; as gravações são espiadas na própria função do client.
@@ -70,9 +72,40 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+const INDICADORES = {
+  periodo: { nome: "semana", inicio: "2026-11-09T00:00:00", fim: "2026-11-11T23:59:59" },
+  as_of: "2026-11-11T10:00:00",
+  itens: [
+    { chave: "pecas_boas", rotulo: "Peças boas", tipo: "02", campo: "quantidade_boa", unidade: "pecas", valor: 40, estado: "com_dados" },
+    { chave: "refugo", rotulo: "Refugo", tipo: "02", campo: "quantidade_refugo", unidade: "pecas", valor: null, estado: "sem_registros" },
+    { chave: "horas_paradas", rotulo: "Horas paradas não planejadas", tipo: "04", campo: "unplanned_downtime_seconds", unidade: "segundos", valor: 5400, estado: "com_dados" },
+    { chave: "oee", rotulo: "OEE", tipo: "11", campo: "oee", unidade: "percentual", valor: 61.5, estado: "com_dados" },
+  ],
+};
+
+function AuditoriaAberta() {
+  const { filters } = useManagementFilters();
+  const location = useLocation();
+  return <p>Auditoria {location.search} de {filters.startDate} até {filters.endDate}</p>;
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/diretoria"]}>
+      <FilterProvider>
+        <Routes>
+          <Route path="/diretoria" element={<DirectorPage />} />
+          <Route path="/auditoria/analitica" element={<AuditoriaAberta />} />
+        </Routes>
+      </FilterProvider>
+    </MemoryRouter>,
+  );
+}
+
 function stub(overrides: { painel?: unknown; ficha?: unknown } = {}) {
   const mock = vi.fn(async (input: RequestInfo | URL) => {
     const path = String(input);
+    if (path.includes("/diretoria/indicadores")) return json(INDICADORES);
     if (path.includes("/diretoria/painel")) return json(overrides.painel ?? PAINEL);
     if (path.includes("/diretoria/ficha")) return json(overrides.ficha ?? FICHA);
     if (path.includes("/diretoria/custos")) return json(CUSTOS);
@@ -93,7 +126,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("Aba Diretoria — Painel", () => {
   it("mostra os 4 cartões em R$ e o aviso de custos faltando", async () => {
     stub();
-    render(<DirectorPage />);
+    renderPage();
     expect(await screen.findByText("faltam custos de 3 recursos/pessoas — o valor real é maior")).toBeInTheDocument();
     expect(screen.getByText("Produzido")).toBeInTheDocument();
     expect(screen.getByText("Eficiência")).toBeInTheDocument();
@@ -105,31 +138,31 @@ describe("Aba Diretoria — Painel", () => {
 
   it("eficiência acima de 100% mostra o valor real e um aviso; abaixo disso não avisa", async () => {
     stub({ painel: { ...PAINEL, cards: { ...PAINEL.cards, eficiencia_oee: { value: 112.3, unit: "%", availability: "disponivel" } } } });
-    const { unmount } = render(<DirectorPage />);
+    const { unmount } = renderPage();
     expect(await screen.findByText(/Eficiência acima de 100%/)).toBeInTheDocument();
     expect(screen.getByText("112,3%")).toBeInTheDocument();
     unmount();
     stub();
-    render(<DirectorPage />);
+    renderPage();
     await screen.findByText("71,4%");
     expect(screen.queryByText(/Eficiência acima de 100%/)).not.toBeInTheDocument();
   });
 
   it("setor com eficiência acima de 100% mostra o valor real e um aviso no cartão; abaixo disso não avisa", async () => {
     stub({ painel: { ...PAINEL, melhor_setor: { nome: "Pintura", oee: 1087.7 } } });
-    const { unmount } = render(<DirectorPage />);
+    const { unmount } = renderPage();
     expect(await screen.findByText(/confira o tempo padrão deste setor/)).toBeInTheDocument();
     expect(screen.getByText("1.087,7%")).toBeInTheDocument();
     unmount();
     stub();
-    render(<DirectorPage />);
+    renderPage();
     await screen.findByText("71,4%");
     expect(screen.queryByText(/confira o tempo padrão deste setor/)).not.toBeInTheDocument();
   });
 
   it("custo incompleto e zerado não vira um R$ 0 mentiroso", async () => {
     stub({ painel: { ...PAINEL, cards: { ...PAINEL.cards, custo_parada: 0 } } });
-    render(<DirectorPage />);
+    renderPage();
     await screen.findByText("Onde mais perdemos");
     expect(screen.queryByText(/R\$ 0\b/)).not.toBeInTheDocument();
     expect(screen.getAllByText("Sem custo cadastrado").length).toBeGreaterThanOrEqual(2);
@@ -137,7 +170,7 @@ describe("Aba Diretoria — Painel", () => {
 
   it("trocar o período pede o painel do novo período", async () => {
     const mock = stub();
-    render(<DirectorPage />);
+    renderPage();
     await screen.findByText("Onde mais perdemos");
     fireEvent.click(screen.getByRole("button", { name: "Semana" }));
     await waitFor(() => expect(mock.mock.calls.some(([path]) => String(path).endsWith("/diretoria/painel?periodo=semana"))).toBe(true));
@@ -146,13 +179,13 @@ describe("Aba Diretoria — Painel", () => {
 
   it("período sem paradas mostra 'sem paradas no período'", async () => {
     stub({ painel: { ...PAINEL, onde_perdemos: [], aviso: null, custo_completo: true, custos_faltando: 0 } });
-    render(<DirectorPage />);
+    renderPage();
     expect(await screen.findByText(/sem paradas no período/i)).toBeInTheDocument();
   });
 
   it("clicar no setor do ranking abre a Ficha já filtrada no setor", async () => {
     const mock = stub();
-    render(<DirectorPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Ver a ficha do setor Corte/ }));
     expect(await screen.findByText(FICHA.texto)).toBeInTheDocument();
     expect(screen.getByLabelText("Setor")).toHaveValue("Corte");
@@ -160,10 +193,24 @@ describe("Aba Diretoria — Painel", () => {
   });
 });
 
+describe("Aba Diretoria — Indicadores da Auditoria", () => {
+  it("mostra os números da Auditoria, 'sem registros' sem dado, e o clique abre a Auditoria no período", async () => {
+    stub();
+    renderPage();
+    expect(await screen.findByText("Peças boas")).toBeInTheDocument();
+    expect(screen.getByText("40 peças")).toBeInTheDocument();
+    expect(screen.getByText("sem registros")).toBeInTheDocument();
+    expect(screen.getByText("1,5 h")).toBeInTheDocument();
+    expect(screen.getByText("61,5%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Horas paradas não planejadas/ }));
+    expect(await screen.findByText("Auditoria ?tipo=04 de 2026-11-09 até 2026-11-11")).toBeInTheDocument();
+  });
+});
+
 describe("Aba Diretoria — Ficha", () => {
   it("mostra o texto pronto antes da lista de motivos, quem operou e as horas sem R$", async () => {
     stub();
-    render(<DirectorPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Ficha" }));
     const texto = await screen.findByText(FICHA.texto);
     const motivos = screen.getByRole("heading", { name: "Paradas por motivo" });
@@ -181,14 +228,14 @@ describe("Aba Diretoria — Ficha", () => {
 
   it("período vazio mostra o texto do servidor", async () => {
     stub({ ficha: FICHA_VAZIA });
-    render(<DirectorPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Ficha" }));
     expect(await screen.findByText("Sem paradas no período.")).toBeInTheDocument();
   });
 
   it("escolher um recurso pede a ficha do recurso", async () => {
     const mock = stub();
-    render(<DirectorPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Ficha" }));
     await screen.findByText(FICHA.texto);
     const recurso = screen.getByLabelText("Recurso");
@@ -201,7 +248,7 @@ describe("Aba Diretoria — Ficha", () => {
 describe("Aba Diretoria — Custos", () => {
   async function openCosts() {
     stub();
-    render(<DirectorPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Custos" }));
     return screen.findByLabelText("Valor da hora de LASER1");
   }

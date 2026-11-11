@@ -160,7 +160,8 @@ class DirectorSummaryService:
         return {
             "periodo": {"nome": normalize_period(period), "inicio": inicio.isoformat(), "fim": fim.isoformat()},
             "cards": {
-                "produzido": (overview.get("production") or {}).get("good", 0),
+                # Sem dado de produção é "sem registros" (None), nunca zero.
+                "produzido": (overview.get("production") or {}).get("good"),
                 "horas_paradas": _unplanned_stop_hours(hours),
                 "custo_parada": _money(total_stop.custo),
                 "eficiencia_oee": (overview.get("kpis") or {}).get("oee"),
@@ -194,7 +195,7 @@ class DirectorSummaryService:
         worked_h = float(bases.get("worked_seconds") or 0.0) / 3600.0
         available_h = float(bases.get("available_seconds") or 0.0) / 3600.0
         stopped_h = _unplanned_stop_hours(hours)
-        produced = (overview.get("production") or {}).get("good", 0)
+        produced = (overview.get("production") or {}).get("good")  # None = sem registros
         reasons = ctx.reasons()
         main_reason = reasons[0] if reasons else None
 
@@ -500,10 +501,13 @@ class _Context:
 
 def _sheet_text(*, subject, worked_h, available_h, produced, stopped_h, stop_cost_value,
                 main_reason, missing, feminine=False):
-    pieces = "peça" if produced == 1 else "peças"
+    if produced is None:
+        produced_text = "sem registros de produção"
+    else:
+        produced_text = f"produziu {produced} {'peça' if produced == 1 else 'peças'}"
     text = (
         f"{subject} trabalhou {format_hours(worked_h)} de {format_hours(available_h)} "
-        f"e produziu {produced} {pieces}."
+        f"e {produced_text}."
     )
     if stopped_h > 0:
         stopped = "parada" if feminine else "parado"

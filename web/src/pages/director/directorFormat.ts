@@ -1,4 +1,4 @@
-import { formatNumber } from "../../utils/format";
+import { formatNumber, formatPieces } from "../../utils/format";
 import { humanizeSystemState } from "../../utils/systemState";
 import type { DirectorCards } from "../../types/director";
 
@@ -65,4 +65,9 @@ export function parseRate(text: string): number | null {
   if (RATE_WITH_THOUSANDS.test(value)) return Number(value.replace(/\./g, "").replace(",", "."));
   if (RATE_PLAIN.test(value)) return Number(value.replace(",", "."));
   return null;
+}
+
+/** Produzido sem dado aparece como "sem registros", nunca 0 peças. */
+export function producedText(value: number | null | undefined) {
+  return value === null || value === undefined ? "sem registros" : formatPieces(value);
 }

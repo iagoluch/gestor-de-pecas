@@ -16,12 +16,14 @@ from backend.api.database import get_database
 from backend.api.dependencies.auth import require_csrf, require_diretoria_user
 from backend.api.dependencies.bulkhead import management_read_slot
 from backend.api.dependencies.clock import request_now_func
+from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from backend.api.schemas.change_audit import AuditResponse
 from backend.api.schemas.explanation import ValueExplanationResponse
 from backend.api.schemas.director import (
     DirectorCostsResponse,
+    DirectorIndicatorsResponse,
     DirectorPanelResponse,
     DirectorRateRequest,
     DirectorSheetResponse,
@@ -32,7 +34,11 @@ from mes.services.director_summary import (
     DirectorSummaryError,
     DirectorSummaryService,
     _resource_key,  # mesma chave que o serviço grava (resolve apelidos do recurso)
+    normalize_period,
+    resolve_period,
 )
+from mes.contracts import AnalyticsFilter
+from mes.services import audit_reports
 
 
 router = APIRouter(
@@ -63,6 +69,27 @@ def panel(
         return DirectorSummaryService(database).panel(periodo, _now(request))
     except DirectorSummaryError as error:
         raise _app_error(error) from error
+
+
+@router.get("/indicadores", response_model=DirectorIndicatorsResponse)
+def indicators(
+    request: Request,
+    periodo: str = Query(default="hoje", max_length=20),
+    user: SessionUser = Depends(require_diretoria_user),
+    facade=Depends(get_frontend_facade),
+):
+    """Até 6 números lidos dos tipos da Auditoria Analítica (sem recalcular)."""
+    now = _now(request)
+    try:
+        inicio, fim = resolve_period(periodo, now)
+    except DirectorSummaryError as error:
+        raise _app_error(error) from error
+    payload = audit_reports.indicadores_diretoria(facade, AnalyticsFilter(inicio, fim), user=user, now=now)
+    return {
+        "periodo": {"nome": normalize_period(periodo), "inicio": inicio.isoformat(), "fim": fim.isoformat()},
+        "as_of": payload["as_of"].isoformat(),
+        "itens": payload["itens"],
+    }
 
 
 @router.get("/ficha", response_model=DirectorSheetResponse)

@@ -899,3 +899,24 @@ Revisão Codex (high): 2 achados. Corrigido: medida ausente virava estado "zero"
 5. Tipo 16 (Confiabilidade) fica vazio quando nenhum registro foi analisado, em vez de mostrar 100%.
 6. O estado do tipo 04 é calculado pela lista de paradas; o total do resumo pode vir de fora da lista e há aviso quando diferem.
 7. Um único commit para a Etapa 3 em vez de um por grupo: os grupos dividem o mesmo arquivo de serviço, a mesma rota e a mesma tela; separar exigiria commits parciais de arquivo sem ganho.
+
+---
+
+# Etapa 4 — Dashboard da Diretoria — 11/11/2026
+
+Entregue: no Painel da Diretoria, uma linha nova com até 6 indicadores acima dos 4 cartões em R$: Peças boas e Refugo (tipo 02), Horas paradas não planejadas (tipo 04), OEE e Disponibilidade (tipo 11), Desvio do tempo padrão (tipo 08). Cada número é o `summary` do tipo da Auditoria (`audit_reports.indicadores_diretoria`), rodado uma vez por tipo no mesmo `as_of`; nada é recalculado. Rota nova `GET /diretoria/indicadores?periodo=` (mesma guarda da Diretoria). Clicar num indicador grava o período no filtro gerencial (setor/recurso/OP limpos) e abre `/auditoria/analitica?tipo=XX`.
+
+Mesmo relógio: as rotas da Auditoria passaram a usar `request_now_func` (o relógio da Diretoria e da simulação).
+
+Corrigido: `director_summary.py` (cartões do Painel e Ficha) usava `.get("good", 0)`; sem dado de produção agora é `null` e a tela mostra "sem registros" (o texto da Ficha diz "sem registros de produção").
+
+Validação: `tests/test_director_api.py` (inclui o teste que compara cada indicador com `/audit/reports/XX` no mesmo período e `as_of`, "sem registros" = null, tipo quebrado não derruba os outros, 403 para todo nível fora da Diretoria), `test_director_summary.py` (produzido null), demais testes da Diretoria e da Auditoria (97 ok), vitest `director-page` (25) e `auditoria-analitica` (5), `tsc`.
+
+Revisão Codex (high): 2 achados. Corrigido: erro de um tipo derrubava a rota inteira (500); agora o indicador sai com estado "erro" e "não foi possível ler". Descartado/pendente: "ao abrir a Auditoria num período em andamento o as_of avança" — é verdade, mas a Auditoria mostra o próprio `as_of` na tela; congelar exigiria um parâmetro `as_of` novo no contrato da Auditoria. Fica como pendência.
+
+## Decisões tomadas sem o usuário (Etapa 4)
+
+1. Os 4 cartões em R$ continuam (as explicações "de onde vem o número" dependem deles); os 6 indicadores entram numa linha nova acima. Total na tela: os 6 da Auditoria + os 4 de R$ que já existiam.
+2. Horas paradas do indicador = só as não planejadas (`unplanned_downtime_seconds` do tipo 04), igual ao cartão "Horas paradas" que a Diretoria já usava.
+3. Indicador cujo tipo a conta não abre não aparece (a Diretoria abre todos os quatro tipos usados).
+4. Período: os mesmos nomes da Diretoria (hoje/semana/mês); ao abrir a Auditoria, só as datas do período vão para o filtro e os demais filtros são limpos, para o número bater.

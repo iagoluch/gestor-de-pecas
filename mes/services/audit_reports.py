@@ -19,6 +19,7 @@ Regra de período (tipos 01 e 02) — ver ``REGRA_PERIODO``.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 REGRA_PERIODO = (
@@ -805,3 +806,45 @@ def run(facade, tipo: str, filters, *, user=None, now=None, status=None, classe=
         "opcoes": opcoes,
         "items": items,
     }
+
+
+# --- Dashboard da Diretoria: indicadores lidos dos mesmos tipos da Auditoria -------
+
+INDICADORES_DIRETORIA = (
+    # (chave, rótulo, tipo da Auditoria, campo do summary, unidade)
+    ("pecas_boas", "Peças boas", "02", "quantidade_boa", "pecas"),
+    ("refugo", "Refugo", "02", "quantidade_refugo", "pecas"),
+    ("horas_paradas", "Horas paradas não planejadas", "04", "unplanned_downtime_seconds", "segundos"),
+    ("oee", "OEE", "11", "oee", "percentual"),
+    ("disponibilidade", "Disponibilidade", "11", "disponibilidade", "percentual"),
+    ("desvio_tempo_padrao", "Desvio do tempo padrão", "08", "desvio_percentual", "percentual"),
+)
+
+
+def indicadores_diretoria(facade, filters, *, user=None, now=None) -> dict:
+    """Até 6 números do Dashboard, cada um é o ``summary`` de um tipo da Auditoria.
+
+    Nada é recalculado aqui: o número é o mesmo que a Auditoria mostra no
+    mesmo período e no mesmo ``as_of``. Sem registro ou fonte fora: ``None``.
+    """
+
+    as_of = as_of_for(filters, now)
+    envelopes = {}
+    itens = []
+    for chave, rotulo, tipo, campo, unidade in INDICADORES_DIRETORIA:
+        if user is not None and not pode_ver(TIPOS[tipo], user):
+            continue
+        if tipo not in envelopes:
+            try:
+                envelopes[tipo] = run(facade, tipo, filters, user=user, now=as_of)
+            except Exception:  # noqa: BLE001 -- um tipo quebrado não derruba os outros indicadores
+                logging.exception("Falha no indicador da Diretoria tipo=%s", tipo)
+                envelopes[tipo] = {"estado": "erro", "summary": None}
+        envelope = envelopes[tipo]
+        sem_dado = envelope["estado"] in ("sem_registros", "indisponivel", "erro")
+        valor = None if sem_dado else (envelope.get("summary") or {}).get(campo)
+        itens.append({
+            "chave": chave, "rotulo": rotulo, "tipo": tipo, "campo": campo, "unidade": unidade,
+            "valor": valor, "estado": envelope["estado"],
+        })
+    return {"as_of": as_of, "itens": itens}

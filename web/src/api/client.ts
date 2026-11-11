@@ -138,6 +138,7 @@ const DIRECTOR_BASE = "/api/v1/diretoria";
 /** Rotas de leitura da Diretoria, para `useApiQuery` (carregamento, erro e atualização ao vivo). */
 export const directorPaths = {
   panel: (periodo: DirectorPeriodName) => `${DIRECTOR_BASE}/painel?periodo=${periodo}`,
+  indicators: (periodo: DirectorPeriodName) => `${DIRECTOR_BASE}/indicadores?periodo=${periodo}`,
   sheet: (periodo: DirectorPeriodName, setor = "", recurso = "") => {
     const query = new URLSearchParams({ periodo });
     if (setor) query.set("setor", setor);

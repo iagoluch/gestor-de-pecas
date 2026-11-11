@@ -21,7 +21,7 @@ export interface DirectorEfficiencyMetric {
 }
 
 export interface DirectorCards {
-  produzido: number;
+  produzido: number | null;
   horas_paradas: number;
   custo_parada: number;
   eficiencia_oee: DirectorEfficiencyMetric | number | null;
@@ -67,7 +67,7 @@ export interface DirectorSheet {
   texto: string;
   trabalhou_h: number;
   disponivel_h: number;
-  produzido: number;
+  produzido: number | null;
   custo_trabalho: number;
   parado_h: number;
   custo_parada: number;
@@ -101,4 +101,21 @@ export interface DirectorPersonRate {
 export interface DirectorCosts {
   recursos: DirectorResourceRate[];
   pessoas: DirectorPersonRate[];
+}
+
+/** Dashboard: cada número é o resumo de um tipo da Auditoria Analítica. */
+export interface DirectorIndicator {
+  chave: string;
+  rotulo: string;
+  tipo: string;
+  campo: string;
+  unidade: "pecas" | "segundos" | "percentual";
+  valor: number | null;
+  estado: string;
+}
+
+export interface DirectorIndicators {
+  periodo: { nome: string; inicio: string; fim: string };
+  as_of: string;
+  itens: DirectorIndicator[];
 }

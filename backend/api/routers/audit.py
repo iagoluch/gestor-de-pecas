@@ -3,12 +3,13 @@ import io
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
 
 from backend.api.dependencies.auth import get_current_user, require_management_user
+from backend.api.dependencies.clock import request_now_func
 from backend.api.errors import AppError
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import PageParams, analytics_filter, pagination
@@ -129,11 +130,18 @@ def _guard(tipo, user):
         raise AppError("forbidden", "Seu nível não abre este tipo de relatório.", status_code=403)
 
 
-def _run_report(facade, tipo, filters, user, **table):
+def _now(request):
+    # Mesmo relógio da Diretoria (``clock.now`` em simulação), para o as_of bater.
+    now_func = request_now_func(request) if request is not None else None
+    return now_func() if now_func is not None else None
+
+
+def _run_report(facade, tipo, filters, user, request=None, **table):
     """Envelope do tipo, ou ``(None, resposta de erro)`` com ``estado: erro``."""
     _guard(tipo, user)
+    now = _now(request)
     try:
-        return audit_reports.run(facade, tipo, filters, user=user, **table), None
+        return audit_reports.run(facade, tipo, filters, user=user, now=now, **table), None
     except audit_reports.ForaDoEscopo:
         raise AppError("trace_out_of_scope", "Esta OP não passou pelo seu setor.", status_code=403)
     except Exception:  # noqa: BLE001 -- a falha vira estado "erro" explícito, com log
@@ -141,7 +149,7 @@ def _run_report(facade, tipo, filters, user, **table):
         body = {
             "tipo": tipo,
             "estado": "erro",
-            "as_of": audit_reports.as_of_for(filters),
+            "as_of": audit_reports.as_of_for(filters, now),
             "detail": "Não foi possível consultar este relatório agora. Tente de novo.",
         }
         return None, JSONResponse(status_code=500, content=jsonable_encoder(body))
@@ -149,6 +157,7 @@ def _run_report(facade, tipo, filters, user, **table):
 
 @router.get("/reports/{tipo}")
 def report(
+    request: Request,
     tipo: TipoRelatorio = ApiPath(...),
     filters: AnalyticsFilter = Depends(analytics_filter),
     params: PageParams = Depends(pagination),
@@ -160,7 +169,7 @@ def report(
 ):
     """Filtros ``evento_*`` e ``em_aberto`` só valem no tipo 01."""
     table = {"status": evento_status, "classe": evento_classe, "em_aberto": em_aberto} if tipo == "01" else {}
-    payload, error = _run_report(facade, tipo, filters, user, **table)
+    payload, error = _run_report(facade, tipo, filters, user, request, **table)
     if error is not None:
         return error
     items = payload.pop("items")
@@ -176,6 +185,7 @@ def _csv_cell(value):
 
 @router.get("/reports/{tipo}/export.csv")
 def report_export_csv(
+    request: Request,
     tipo: TipoRelatorio = ApiPath(...),
     filters: AnalyticsFilter = Depends(analytics_filter),
     user: SessionUser = Depends(get_current_user),
@@ -186,7 +196,7 @@ def report_export_csv(
 ):
     """Todas as linhas e todos os campos do tipo, com os mesmos filtros da tela."""
     table = {"status": evento_status, "classe": evento_classe, "em_aberto": em_aberto} if tipo == "01" else {}
-    payload, error = _run_report(facade, tipo, filters, user, **table)
+    payload, error = _run_report(facade, tipo, filters, user, request, **table)
     if error is not None:
         return error
     campos = [campo["chave"] for campo in payload["campos"]]

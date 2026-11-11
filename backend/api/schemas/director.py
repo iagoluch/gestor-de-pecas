@@ -18,7 +18,7 @@ class DirectorPeriod(BaseModel):
 
 
 class DirectorCards(BaseModel):
-    produzido: int | float
+    produzido: int | float | None = None
     horas_paradas: float
     custo_parada: float
     # Mesmo objeto de OEE da Visão Geral (valor, componentes, motivo).
@@ -65,7 +65,7 @@ class DirectorSheetResponse(BaseModel):
     texto: str
     trabalhou_h: float
     disponivel_h: float
-    produzido: int | float
+    produzido: int | float | None = None
     custo_trabalho: float
     parado_h: float
     custo_parada: float
@@ -108,3 +108,21 @@ class DirectorRateRequest(BaseModel):
 
     # Estrito: número JSON (inteiro ou decimal); recusa true/false e texto ("NaN", "12").
     valor_hora: StrictFloat
+
+
+class DirectorIndicator(BaseModel):
+    chave: str
+    rotulo: str
+    tipo: str
+    campo: str
+    unidade: str
+    valor: int | float | None = None
+    estado: str
+
+
+class DirectorIndicatorsResponse(BaseModel):
+    """Dashboard: cada número é o ``summary`` do tipo da Auditoria no mesmo ``as_of``."""
+
+    periodo: DirectorPeriod
+    as_of: str
+    itens: list[DirectorIndicator]

@@ -5,9 +5,10 @@ import { Notice } from "../../components/Notice";
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { DirectorPanel as DirectorPanelData, DirectorPeriodName, DirectorSectorRank } from "../../types/director";
-import { formatNumber, formatPieces } from "../../utils/format";
+import { formatNumber } from "../../utils/format";
 import { DirectorExplainable } from "./DirectorExplainable";
-import { costLine, costText, EFFICIENCY_ABOVE_100_NOTICE, efficiencyText, efficiencyValue, formatHoursValue } from "./directorFormat";
+import { DirectorIndicators } from "./DirectorIndicators";
+import { costLine, costText, EFFICIENCY_ABOVE_100_NOTICE, efficiencyText, efficiencyValue, formatHoursValue, producedText } from "./directorFormat";
 
 export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeriodName; onOpenSector: (setor: string) => void }) {
   const query = useApiQuery<DirectorPanelData>(directorPaths.panel(periodo));
@@ -19,11 +20,12 @@ export function DirectorPanel({ periodo, onOpenSector }: { periodo: DirectorPeri
   const { cards } = data;
   return (
     <>
+      <DirectorIndicators periodo={periodo} />
       <div className="metric-grid metric-grid--four">
         <MetricCard
           label="Produzido"
-          value={formatPieces(cards.produzido)}
-          valueNode={<DirectorExplainable context={`Produzido ${formatPieces(cards.produzido)}`} target={{ metric: "dir.produzido", periodo }}>{formatPieces(cards.produzido)}</DirectorExplainable>}
+          value={producedText(cards.produzido)}
+          valueNode={<DirectorExplainable context={`Produzido ${producedText(cards.produzido)}`} target={{ metric: "dir.produzido", periodo }}>{producedText(cards.produzido)}</DirectorExplainable>}
           detail="Peças boas lançadas no período"
           accent="success"
         />

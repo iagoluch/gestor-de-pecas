@@ -17,6 +17,8 @@ from app.core.permissions import USER_LEVELS
 from backend.api.database import get_database
 from backend.api.dependencies.auth import get_current_user, require_csrf
 from backend.api.main import create_app
+from backend.api.dependencies.facade import get_frontend_facade
+from backend.api.routers import audit as audit_router
 from backend.api.routers import director as director_router
 from tests.test_director_summary import NOW, _Repo, _with_rates
 from tests.test_standard_time import _settings, _user
@@ -27,6 +29,7 @@ READ_ROUTES = (
     f"{BASE}/painel?periodo=hoje",
     f"{BASE}/ficha?periodo=hoje",
     f"{BASE}/custos",
+    f"{BASE}/indicadores?periodo=hoje",
 )
 PUT_ROUTES = (
     f"{BASE}/custos/recurso/LASER1",
@@ -240,6 +243,88 @@ class DirectorLeakTests(_ApiCase):
 
     def test_varredura_acha_chave_aninhada(self):
         self.assertEqual(_money_keys({"a": [{"b": {"custo": 1}}]}), ["$.a[0].b.custo"])
+
+
+class _IndicatorsFacade:
+    """Fachada falsa com números conhecidos nas fontes dos tipos 02, 04, 08 e 11."""
+
+    def __init__(self, db):
+        # Fontes do tipo 02 presentes: a falta delas vira "indisponivel".
+        for name in ("listar_fatos_operacionais_periodo", "listar_eventos_quantidade_periodo",
+                     "listar_estados_recurso_periodo"):
+            if not callable(getattr(db, name, None)):
+                setattr(db, name, lambda *args, **kwargs: [])
+        self.db = db
+
+    def eventos_producao(self, filters):
+        item = {"op": "OP1", "quantidade_boa": 40, "quantidade_refugo": 2, "tempo_real_segundos": 600}
+        return {"items": [item], "summary": {"quantidade_boa": 40, "quantidade_refugo": 2, "quantidade_retrabalho": 0}}
+
+    def paradas_tela(self, filters):
+        return {"items": [{"recurso": "LASER1", "duracao_segundos": 0}], "count": 1, "total_seconds": 0,
+                "unplanned_downtime_seconds": 0, "planned_downtime_seconds": 0}
+
+    def analise(self, kind, filters):
+        assert kind == "tempo_padrao_x_real"
+        return {"items": [{"tempo_padrao_estimado_segundos": 100, "tempo_producao_real_segundos": 125}]}
+
+    def inicio(self, filters, include_insights=False):
+        return {"kpis": {"oee": {"value": 61.5}, "availability": {"value": 80.0}}, "resource_kpis": [
+            {"recurso": "LASER1", "metrics": {"oee": {"value": 61.5}, "availability": {"value": 80.0}}},
+        ]}
+
+
+class DirectorIndicatorsTests(_ApiCase):
+    def setUp(self):
+        self._build(_LeakDatabase())
+        self.app.dependency_overrides[get_frontend_facade] = lambda: _IndicatorsFacade(self.db)
+        clock = mock.patch.object(audit_router, "request_now_func", return_value=lambda: NOW)
+        clock.start()
+        self.addCleanup(clock.stop)
+
+    def test_indicadores_batem_com_a_auditoria_no_mesmo_as_of(self):
+        self._as("diretoria")
+        body = self.client.get(f"{BASE}/indicadores", params={"periodo": "hoje"})
+        self.assertEqual(body.status_code, 200, body.text)
+        body = body.json()
+        self.assertLessEqual(len(body["itens"]), 6)
+        valores = {item["chave"]: item["valor"] for item in body["itens"]}
+        # Zero medido (parada 0) continua zero; desvio vem do servidor (25%).
+        self.assertEqual(valores, {"pecas_boas": 40, "refugo": 2, "horas_paradas": 0, "oee": 61.5,
+                                   "disponibilidade": 80.0, "desvio_tempo_padrao": 25.0})
+        periodo = {"inicio": body["periodo"]["inicio"], "fim": body["periodo"]["fim"]}
+        for item in body["itens"]:
+            with self.subTest(chave=item["chave"]):
+                audit = self.client.get(f"/api/v1/audit/reports/{item['tipo']}", params=periodo)
+                self.assertEqual(audit.status_code, 200, audit.text)
+                audit = audit.json()
+                self.assertEqual(audit["as_of"], body["as_of"])
+                self.assertEqual(audit["summary"][item["campo"]], item["valor"])
+
+    def test_sem_registros_e_none_nao_zero(self):
+        self._as("diretoria")
+        vazia = _IndicatorsFacade(self.db)
+        vazia.eventos_producao = lambda filters: {"items": [], "summary": {"quantidade_boa": 0}}
+        self.app.dependency_overrides[get_frontend_facade] = lambda: vazia
+        body = self.client.get(f"{BASE}/indicadores", params={"periodo": "hoje"}).json()
+        pecas = next(item for item in body["itens"] if item["chave"] == "pecas_boas")
+        self.assertIsNone(pecas["valor"])
+        self.assertEqual(pecas["estado"], "sem_registros")
+
+    def test_tipo_quebrado_nao_derruba_os_outros(self):
+        self._as("diretoria")
+        quebrada = _IndicatorsFacade(self.db)
+
+        def _falha(filters, include_insights=False):
+            raise RuntimeError("fonte caiu")
+
+        quebrada.inicio = _falha
+        self.app.dependency_overrides[get_frontend_facade] = lambda: quebrada
+        response = self.client.get(f"{BASE}/indicadores", params={"periodo": "hoje"})
+        self.assertEqual(response.status_code, 200, response.text)
+        estados = {item["chave"]: (item["estado"], item["valor"]) for item in response.json()["itens"]}
+        self.assertEqual(estados["oee"], ("erro", None))
+        self.assertEqual(estados["pecas_boas"], ("com_dados", 40))
 
 
 if __name__ == "__main__":

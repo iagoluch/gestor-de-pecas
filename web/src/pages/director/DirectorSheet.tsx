@@ -5,9 +5,9 @@ import { Notice } from "../../components/Notice";
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type { DirectorCosts, DirectorPeriodName, DirectorSheet as DirectorSheetData } from "../../types/director";
-import { displayName, formatNumber, formatPieces } from "../../utils/format";
+import { displayName, formatNumber } from "../../utils/format";
 import { DirectorExplainable } from "./DirectorExplainable";
-import { costLine, costText, formatHoursValue } from "./directorFormat";
+import { costLine, costText, formatHoursValue, producedText } from "./directorFormat";
 
 function sorted(values: Iterable<string>) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -68,7 +68,7 @@ export function DirectorSheet({ periodo, setor, recurso, onSetor, onRecurso }: {
 
           <div className="metric-grid metric-grid--five">
             <MetricCard label="Trabalhou" value={formatHoursValue(data.trabalhou_h)} valueNode={explain("dir.trabalhou", "Trabalhou", formatHoursValue(data.trabalhou_h))} detail={`de ${formatHoursValue(data.disponivel_h)} disponíveis no turno`} accent="success" />
-            <MetricCard label="Produzido" value={formatPieces(data.produzido)} valueNode={explain("dir.produzido", "Produzido", formatPieces(data.produzido))} detail="Peças boas lançadas" accent="teal" />
+            <MetricCard label="Produzido" value={producedText(data.produzido)} valueNode={explain("dir.produzido", "Produzido", producedText(data.produzido))} detail="Peças boas lançadas" accent="teal" />
             <MetricCard
               label="Parado"
               value={formatHoursValue(data.parado_h)}
