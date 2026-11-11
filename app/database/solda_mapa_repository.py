@@ -88,7 +88,7 @@ class SoldaMapaRepositoryMixin:
             return self.obter_solda_produto(produto_id)
         sets = ", ".join(f"{nome} = %s" for nome in campos)  # nomes vêm da lista fechada
         return self._solda_executar(
-            f"UPDATE solda_produtos SET {sets} WHERE id = %s"
+            f"UPDATE solda_produtos SET {sets} WHERE id = %s"  # nosec B608 -- nomes das colunas vêm de _CAMPOS_PRODUTO (lista fechada); valores vão por parâmetro
             " RETURNING id, setor, nome, codigo, ativo, ordem",
             (*campos.values(), produto_id),
         )
@@ -106,7 +106,7 @@ class SoldaMapaRepositoryMixin:
             return self.obter_solda_subconjunto(subconjunto_id)
         sets = ", ".join(f"{nome} = %s" for nome in campos)  # nomes vêm da lista fechada
         return self._solda_executar(
-            f"UPDATE solda_subconjuntos SET {sets} WHERE id = %s"
+            f"UPDATE solda_subconjuntos SET {sets} WHERE id = %s"  # nosec B608 -- nomes das colunas vêm de _CAMPOS_SUBCONJUNTO (lista fechada); valores vão por parâmetro
             " RETURNING id, produto_id, nome, codigo, ativo, ordem",
             (*campos.values(), subconjunto_id),
         )
