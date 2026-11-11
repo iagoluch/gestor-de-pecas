@@ -93,8 +93,16 @@ describe("contrato gerencial Web", () => {
   });
 
   it("mantém as telas gerenciais e inclui as sub-abas do Andon", () => {
-    expect(managementRoutes).toHaveLength(50);
-    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(50);
+    // Etapa 5 (11/11/2026): 12 telas de consulta viraram tipos da Auditoria
+    // analítica e saíram do menu (as rotas antigas redirecionam).
+    expect(managementRoutes).toHaveLength(38);
+    expect(new Set(managementRoutes.map((route) => route.path)).size).toBe(38);
+    for (const path of ["/analises/oee", "/analises/paradas", "/auditoria/eventos-status", "/inicio/log-sistema"]) {
+      expect(managementRoutes).not.toContainEqual(expect.objectContaining({ path }));
+    }
+    for (const path of ["/producao/ordens", "/inicio/envios-protheus", "/qualidade/rnc", "/inicio/cadastro", "/inicio/alteracoes", "/inicio/sistema"]) {
+      expect(managementRoutes).toContainEqual(expect.objectContaining({ path }));
+    }
     // Reorganização 15/09/2026: Andon/Metas/Pausas saíram da Tela inicial
     // para a seção própria "Painéis Operacionais". A tela gerencial da Solda
     // foi removida do sistema em 07/10/2026.
@@ -122,10 +130,9 @@ describe("contrato gerencial Web", () => {
     // inteira, não é preferência de gestão comum.
     // Envios ao Protheus (990eed2): reenviar ou descartar envios em erro, só admin.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Envios ao Protheus", path: "/inicio/envios-protheus", sectionId: "dev", adminOnly: true }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Log do Sistema", path: "/inicio/log-sistema", sectionId: "dev", adminOnly: true }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Apontamento por setor", path: "/inicio/apontamento-por-setor", sectionId: "dev", adminOnly: true }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Turnos", path: "/inicio/turnos", sectionId: "dev" }));
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Confiabilidade", path: "/analises/confiabilidade", sectionId: "analytics" }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Auditoria analítica", path: "/auditoria/analitica", sectionId: "audit" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "IA", path: "/inicio/ia", sectionId: "home" }));
     // SPC da Qualidade (26/10/2026): aba somente leitura, mesmos níveis das cotas padrão.
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "SPC", path: "/qualidade/spc", sectionId: "quality" }));
@@ -346,7 +353,8 @@ describe("contrato gerencial Web", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fechar explicação" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Ver análise relacionada a DOBRA-01 está em parada não programada/i }));
-    await screen.findByRole("heading", { name: "Análises — Paradas & Setup" });
+    // Paradas & Setup virou o tipo 04 da Auditoria analítica (Etapa 5).
+    await screen.findByRole("heading", { name: /Auditoria analítica/ });
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
     await screen.findByRole("heading", { name: "Entrar no Gestor" });
     expect(fetchMock.mock.calls.some(([path, init]) => String(path).includes("/auth/logout") && init?.method === "POST")).toBe(true);

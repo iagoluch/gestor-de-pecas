@@ -920,3 +920,22 @@ Revisão Codex (high): 2 achados. Corrigido: erro de um tipo derrubava a rota in
 2. Horas paradas do indicador = só as não planejadas (`unplanned_downtime_seconds` do tipo 04), igual ao cartão "Horas paradas" que a Diretoria já usava.
 3. Indicador cujo tipo a conta não abre não aparece (a Diretoria abre todos os quatro tipos usados).
 4. Período: os mesmos nomes da Diretoria (hoje/semana/mês); ao abrir a Auditoria, só as datas do período vão para o filtro e os demais filtros são limpos, para o número bater.
+
+# Etapa 5 — Menu e redirecionamentos — 11/11/2026
+
+Entregue: 12 telas só de consulta saíram do menu. A rota antiga continua existindo e leva para a Auditoria analítica no tipo certo, mantendo a query string (`RedirectToAudit` em `web/src/App.tsx`). Os filtros (período, setor, recurso) vêm do filtro gerencial compartilhado, então os atalhos da Visão Geral continuam abrindo com o mesmo filtro.
+
+Mapa rota antiga → tipo: `/analises/oee` → 11 · `/analises/paradas` → 04 · `/analises/qualidade` → 06 · `/analises/tempo-padrao-real` → 08 · `/analises/cronoanalise` → 09 · `/analises/capacidade-gargalos` → 10 · `/analises/confiabilidade` → 12 · `/auditoria/eventos-status` → 01 · `/auditoria/eventos-producao` e `/auditoria/apontamentos` → 02 · `/auditoria/alertas-inconsistencias`, `/auditoria/inconsistencias` e `/inicio/alertas` → 15 · `/auditoria/confiabilidade` → 16 · `/inicio/log-sistema` → 18.
+
+Ficam no menu (pedido): Consulta de OP, Envios ao Protheus (Reenviar/Descartar), Decisão de RNC, Cadastro, Alterações, Sistema. Página padrão de Análises: Horas & Utilização; da Auditoria: Auditoria analítica.
+
+Validação: vitest `management.test.tsx` (67 ok; menu com 38 rotas; confere que as 4 rotas-exemplo saíram e as 6 pedidas ficaram; o clique em "Ver análise relacionada" da Visão Geral cai na Auditoria analítica), `tsc` limpo.
+
+Revisão Codex (high): sem achados.
+
+## Decisões tomadas sem o usuário (Etapa 5)
+
+1. Regra usada: sai do menu só a tela que apenas consulta e cujo destino no inventário é exatamente um tipo da Auditoria.
+2. Ficam, apesar de terem tipo parecido: Horas & Utilização (mistura as 3 bases de tempo, sem tipo único); Rastreabilidade (o link "Rastrear OP" usa `?op=`, que a Auditoria não lê); Chamadas da Gestão (destino do sininho); SPC (gráfico de controle, exclusiva da Qualidade; o tipo 07 é de gestão); Produção realizada e Planejado × Realizado (destino indefinido DASH/OPER); Relatórios (exporta .xlsx); telas de operação (Execução das OPs, OPs em andamento, Visão Geral, Recursos, Pausas, Crachás, Turnos, Apontamento por setor, Chamadas do IagoDev).
+3. Os arquivos das páginas antigas não foram apagados (volta atrás = devolver a rota e a aba). Os gráficos das antigas Análises deixam de aparecer; a Auditoria mostra o resumo e a tabela do tipo.
+4. Textos não alterados (para não mexer no visual): botões da Visão Geral ainda dizem "Abrir Análises: OEE" etc., e a ajuda `src/help/content/gestao/70-analises-oee.md` ainda cita `/analises/oee`. Ambos funcionam pelo redirecionamento; ficam como pendência de texto.

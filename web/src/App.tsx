@@ -17,24 +17,13 @@ import { ManagementShiftsPage } from "./pages/home/ShiftsPage";
 import { ActingSectorPage } from "./pages/home/ActingSectorPage";
 import { ChangeAuditPage } from "./pages/home/ChangeAuditPage";
 import { TotvsOutboxPage } from "./pages/home/TotvsOutboxPage";
-import { SystemLogPage } from "./pages/home/SystemLogPage";
 import { ManagementSystemPage } from "./pages/home/SystemPage";
 import { ManagementUsersPage } from "./pages/home/UsersPage";
 import { AIPage } from "./pages/AIPage";
 import { OperatorPortalPage } from "./pages/operator/OperatorPortalPage";
 import { HelpPage } from "./help/HelpPage";
-import {
-  AnalyticsCapacityPage,
-  AnalyticsChronoPage,
-  AnalyticsDowntimesPage,
-  AnalyticsHoursPage,
-  AnalyticsOeePage,
-  AnalyticsQualityPage,
-  AnalyticsReliabilityPage,
-  AnalyticsStandardPage,
-} from "./pages/analytics/AnalyticsPages";
+import { AnalyticsHoursPage } from "./pages/analytics/AnalyticsPages";
 import { AuditAnalyticsPage } from "./pages/audit/AuditAnalyticsPage";
-import { AuditAlertsIssuesPage, AuditProductionEventsPage, AuditReliabilityPage, AuditStatusEventsPage } from "./pages/audit/AuditPages";
 import { AreaPage } from "./pages/areas/AreaPage";
 import { OperationsOrdersPage,OperationsOverviewPage, OperationsResourcesPage } from "./pages/operations/OperationsPages";
 import { OrderConsultationPage } from "./pages/production/OrderConsultationPage";
@@ -53,6 +42,14 @@ import { TraceabilityNestingPage, TraceabilityOrderPage } from "./pages/traceabi
 function RedirectKeepingSearch({ to }: { to: string }) {
   const { search } = useLocation();
   return <Navigate to={`${to}${search}`} replace />;
+}
+
+/** Tela de consulta que virou tipo da Auditoria Analítica (Etapa 5): leva junto a query string. */
+function RedirectToAudit({ tipo }: { tipo: string }) {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("tipo", tipo);
+  return <Navigate to={`/auditoria/analitica?${params.toString()}`} replace />;
 }
 
 function roleHome(user: { management_access: boolean; andon_access?: boolean; maintenance_access?: boolean }) {
@@ -177,7 +174,7 @@ export default function App() {
         <Route index element={<Navigate to="/inicio/visao-geral" replace />} />
         <Route path="inicio/visao-geral" element={<ManagementOverviewPage />} />
         <Route path="inicio/setores" element={<Navigate to="/inicio/visao-geral" replace />} />
-        <Route path="inicio/alertas" element={<Navigate to="/auditoria/alertas-inconsistencias" replace />} />
+        <Route path="inicio/alertas" element={<RedirectToAudit tipo="15" />} />
         <Route path="inicio/andon" element={<Navigate to="/andon" replace />} />
         <Route path="inicio/mapa-fabrica" element={<Navigate to="/mapa-fabrica" replace />} />
         <Route path="inicio/pausas" element={<ManagementPausesPage />} />
@@ -188,7 +185,7 @@ export default function App() {
         <Route path="inicio/apontamento-por-setor" element={<RequireAdmin><ActingSectorPage /></RequireAdmin>} />
         <Route path="inicio/alteracoes" element={<RequireAdmin><ChangeAuditPage /></RequireAdmin>} />
         <Route path="inicio/envios-protheus" element={<RequireAdmin><TotvsOutboxPage /></RequireAdmin>} />
-        <Route path="inicio/log-sistema" element={<RequireAdmin><SystemLogPage /></RequireAdmin>} />
+        <Route path="inicio/log-sistema" element={<RedirectToAudit tipo="18" />} />
         <Route path="inicio/sistema" element={<RequireAdmin><ManagementSystemPage /></RequireAdmin>} />
         <Route path="inicio/cadastro" element={<RequireAdmin><ManagementUsersPage /></RequireAdmin>} />
         <Route path="inicio/ia" element={<AIPage />} />
@@ -213,22 +210,22 @@ export default function App() {
 
         <Route path="melhoria-continua" element={<RequireImprovementAccess><ImprovementPage /></RequireImprovementAccess>} />
 
-        <Route path="analises/oee" element={<AnalyticsOeePage />} />
+        <Route path="analises/oee" element={<RedirectToAudit tipo="11" />} />
         <Route path="analises/horas-utilizacao" element={<AnalyticsHoursPage />} />
-        <Route path="analises/paradas" element={<AnalyticsDowntimesPage />} />
-        <Route path="analises/qualidade" element={<AnalyticsQualityPage />} />
-        <Route path="analises/tempo-padrao-real" element={<AnalyticsStandardPage />} />
-        <Route path="analises/cronoanalise" element={<AnalyticsChronoPage />} />
-        <Route path="analises/capacidade-gargalos" element={<AnalyticsCapacityPage />} />
-        <Route path="analises/confiabilidade" element={<AnalyticsReliabilityPage />} />
+        <Route path="analises/paradas" element={<RedirectToAudit tipo="04" />} />
+        <Route path="analises/qualidade" element={<RedirectToAudit tipo="06" />} />
+        <Route path="analises/tempo-padrao-real" element={<RedirectToAudit tipo="08" />} />
+        <Route path="analises/cronoanalise" element={<RedirectToAudit tipo="09" />} />
+        <Route path="analises/capacidade-gargalos" element={<RedirectToAudit tipo="10" />} />
+        <Route path="analises/confiabilidade" element={<RedirectToAudit tipo="12" />} />
 
         <Route path="auditoria/analitica" element={<AuditAnalyticsPage />} />
-        <Route path="auditoria/eventos-status" element={<AuditStatusEventsPage />} />
-        <Route path="auditoria/eventos-producao" element={<AuditProductionEventsPage />} />
-        <Route path="auditoria/apontamentos" element={<Navigate to="/auditoria/eventos-producao" replace />} />
-        <Route path="auditoria/alertas-inconsistencias" element={<AuditAlertsIssuesPage />} />
-        <Route path="auditoria/inconsistencias" element={<Navigate to="/auditoria/alertas-inconsistencias" replace />} />
-        <Route path="auditoria/confiabilidade" element={<AuditReliabilityPage />} />
+        <Route path="auditoria/eventos-status" element={<RedirectToAudit tipo="01" />} />
+        <Route path="auditoria/eventos-producao" element={<RedirectToAudit tipo="02" />} />
+        <Route path="auditoria/apontamentos" element={<RedirectToAudit tipo="02" />} />
+        <Route path="auditoria/alertas-inconsistencias" element={<RedirectToAudit tipo="15" />} />
+        <Route path="auditoria/inconsistencias" element={<RedirectToAudit tipo="15" />} />
+        <Route path="auditoria/confiabilidade" element={<RedirectToAudit tipo="16" />} />
 
         <Route path="relatorios" element={<ReportsPage />} />
         <Route path="relatorios/gerencial" element={<Navigate to="/relatorios?tipo=gerencial" replace />} />
