@@ -1,4 +1,3 @@
-import csv
 import io
 import logging
 from typing import Literal
@@ -7,13 +6,15 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 from backend.api.dependencies.auth import get_current_user, require_management_user
 from backend.api.dependencies.clock import request_now_func
 from backend.api.errors import AppError
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import PageParams, analytics_filter, pagination
-from backend.api.report_workbook.kit import safe_text
+from backend.api.report_workbook.kit import MUTED, NAVY, WHITE, fill, filters_label, font, period_label, safe_text
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
 from mes.services import audit_reports
@@ -176,15 +177,30 @@ def report(
     return {**payload, "items": params.slice(items), "page": params.meta(len(items))}
 
 
-def _csv_cell(value):
+_XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_XLSX_HEADER_ROW = 5
+
+
+def _xlsx_cell(value):
     # Texto livre do chão de fábrica não pode virar fórmula no Excel (BK-04).
     if isinstance(value, bool):
         return "sim" if value else "não"
+    if isinstance(value, (dict, list)):
+        return safe_text(str(value))
     return safe_text(value) if isinstance(value, str) else value
 
 
-@router.get("/reports/{tipo}/export.csv")
-def report_export_csv(
+def _filter_line(filters, table) -> str:
+    partes = [f"Período: {period_label(filters)}", filters_label(filters)]
+    extras = (("status", "Evento"), ("classe", "Classe"))
+    partes.extend(f"{rotulo}: {table[chave]}" for chave, rotulo in extras if table.get(chave))
+    if table.get("em_aberto"):
+        partes.append("Só em aberto")
+    return "Filtro: " + " • ".join(partes)
+
+
+@router.get("/reports/{tipo}/export.xlsx")
+def report_export_xlsx(
     request: Request,
     tipo: TipoRelatorio = ApiPath(...),
     filters: AnalyticsFilter = Depends(analytics_filter),
@@ -194,7 +210,7 @@ def report_export_csv(
     evento_classe: str | None = Query(default=None, max_length=60),
     em_aberto: bool = Query(default=False),
 ):
-    """Todas as linhas e todos os campos do tipo, com os mesmos filtros da tela."""
+    """Planilha Excel com todas as linhas e todos os campos do tipo, com os mesmos filtros da tela."""
     table = {"status": evento_status, "classe": evento_classe, "em_aberto": em_aberto} if tipo == "01" else {}
     payload, error = _run_report(facade, tipo, filters, user, request, **table)
     if error is not None:
@@ -204,17 +220,32 @@ def report_export_csv(
     # Campo novo na fonte que o catálogo ainda não conhece também sai, no fim.
     for item in payload["items"]:
         campos.extend(key for key in item if key not in campos)
-    output = io.StringIO(newline="")
-    writer = csv.writer(output, delimiter=";")
-    writer.writerow([rotulos.get(key, key) for key in campos])
-    for item in jsonable_encoder(payload["items"]):
-        writer.writerow([_csv_cell(item.get(key)) for key in campos])
     as_of = jsonable_encoder(payload["as_of"])
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = f"Auditoria tipo {tipo}"
+    sheet["A1"] = safe_text(f"Auditoria analítica — tipo {tipo}: {payload['titulo']}")
+    sheet["A1"].font = font(size=14, bold=True, color=NAVY)
+    sheet["A2"] = safe_text(_filter_line(filters, table))
+    sheet["A3"] = f"Referência (as_of): {as_of}"
+    for cell in (sheet["A2"], sheet["A3"]):
+        cell.font = font(color=MUTED)
+    for col, key in enumerate(campos, start=1):
+        cell = sheet.cell(row=_XLSX_HEADER_ROW, column=col, value=safe_text(rotulos.get(key, key)))
+        cell.font = font(bold=True, color=WHITE)
+        cell.fill = fill(NAVY)
+        sheet.column_dimensions[get_column_letter(col)].width = max(12, min(40, len(str(cell.value)) + 4))
+    for row, item in enumerate(jsonable_encoder(payload["items"]), start=_XLSX_HEADER_ROW + 1):
+        for col, key in enumerate(campos, start=1):
+            sheet.cell(row=row, column=col, value=_xlsx_cell(item.get(key)))
+    sheet.freeze_panes = sheet.cell(row=_XLSX_HEADER_ROW + 1, column=1)
+    output = io.BytesIO()
+    workbook.save(output)
     return Response(
-        content=("\ufeff" + output.getvalue()).encode("utf-8"),
-        media_type="text/csv; charset=utf-8",
+        content=output.getvalue(),
+        media_type=_XLSX_MEDIA,
         headers={
-            "Content-Disposition": f'attachment; filename="auditoria_tipo_{tipo}.csv"',
+            "Content-Disposition": f'attachment; filename="auditoria_tipo_{tipo}.xlsx"',
             "X-Gestor-As-Of": as_of,
         },
     )

@@ -205,10 +205,10 @@ export function AuditAnalyticsPage() {
     </>
   );
 
-  async function exportCsv() {
+  async function exportXlsx() {
     setExportError(null);
     try {
-      await api.download(`/api/v1/audit/reports/${tipo}/export.csv?${filterQuery}`, `auditoria_tipo_${tipo}.csv`);
+      await api.download(`/api/v1/audit/reports/${tipo}/export.xlsx?${filterQuery}`, `auditoria_tipo_${tipo}.xlsx`);
     } catch (reason) {
       setExportError(`Não foi possível exportar. ${apiErrorMessage(reason)}`);
     }
@@ -224,7 +224,7 @@ export function AuditAnalyticsPage() {
     actions: (
       <div className="download-action">
         <div className="download-action__buttons">
-          <AsyncButton className="button button--primary" pendingLabel="Gerando…" title="Baixar todas as linhas e todos os campos (.csv)" onClick={exportCsv}>Exportar CSV</AsyncButton>
+          <AsyncButton className="button button--primary" pendingLabel="Gerando…" title="Baixar planilha Excel com todas as linhas, todos os campos, o filtro e o as_of" onClick={exportXlsx}>Exportar Excel</AsyncButton>
         </div>
         {exportError ? <span role="alert" className="download-action__error">{exportError}</span> : null}
       </div>
@@ -258,11 +258,20 @@ export function AuditAnalyticsPage() {
     render: (row) => fieldValue(campo.chave, row[campo.chave]),
   }));
 
-  return (
-    <PageFrame staleError={query.error} {...frame}>
+  const hasMetrics = data.estado !== "indisponivel" && data.estado !== "sem_registros";
+  // Ordem da tela: cards principais (com o as_of) no topo, depois filtros, depois a tabela.
+  const summary = (
+    <>
+      {hasMetrics ? <Metrics tipo={tipo} summary={data.summary} /> : null}
       <p className="chart-note">
         Referência (as_of): <strong>{formatDateTime(data.as_of)}</strong>. {data.regra_periodo}
       </p>
+      {data.estado === "zero" ? <p className="chart-note" role="status">Há registros, mas a medida principal soma zero.</p> : null}
+    </>
+  );
+
+  return (
+    <PageFrame staleError={query.error} summary={summary} {...frame}>
       {ignored.length ? (
         <p className="chart-note" role="status">Filtro que não vale neste tipo e foi ignorado: {ignored.join("; ")}.</p>
       ) : null}
@@ -276,8 +285,6 @@ export function AuditAnalyticsPage() {
         <EmptyState title="Sem registros" detail="Nenhum registro no período e nos filtros escolhidos." />
       ) : (
         <>
-          <Metrics tipo={tipo} summary={data.summary} />
-          {data.estado === "zero" ? <p className="chart-note" role="status">Há registros, mas a medida principal soma zero.</p> : null}
           <SectionCard title={`${data.tipo} — ${data.titulo}`} className="content-section section-card--table">
             {table01 ? (
               <DataTable<Row>

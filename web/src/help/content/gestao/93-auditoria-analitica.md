@@ -14,7 +14,9 @@ Ela só **mostra**. Nada aqui altera o histórico.
 
 ## Filtros
 
-Período, setor, recurso, OP, colaborador, produto e operação ficam na barra de cima e **continuam valendo quando você troca o tipo**. Se algum filtro não vale no tipo escolhido, a tela avisa que ele foi ignorado (ele não é apagado).
+Os cartões com os números principais e a Referência ficam no topo, logo abaixo do título. Abaixo deles vem a barra de filtros e, por último, a tabela.
+
+Período, setor, recurso, OP, colaborador, produto e operação ficam na barra de filtros e **continuam valendo quando você troca o tipo**. Se algum filtro não vale no tipo escolhido, a tela avisa que ele foi ignorado (ele não é apagado).
 
 O tipo 01 tem filtros próprios: **Status**, **Classificação** e **Situação** (só em aberto).
 
@@ -35,4 +37,4 @@ Entra todo evento que toca o período, mesmo que tenha começado antes ou termin
 
 Clique em **Ver** numa linha para abrir todos os campos do registro.
 
-**Exportar CSV** baixa todas as linhas (não só a página) e todos os campos, com os mesmos filtros da tela.
+**Exportar Excel** baixa uma planilha Excel (.xlsx) com todas as linhas (não só a página) e todos os campos, com os mesmos filtros da tela. O topo da planilha traz o filtro usado e a Referência (as_of).

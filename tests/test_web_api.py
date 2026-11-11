@@ -1646,7 +1646,7 @@ class WebApiTests(unittest.TestCase):
 
     def test_auditoria_analitica_tipos_01_02_permissao_envelope_e_exportacao(self):
         self.login_operator()
-        for path in ("/api/v1/audit/reports", "/api/v1/audit/reports/01", "/api/v1/audit/reports/02/export.csv"):
+        for path in ("/api/v1/audit/reports", "/api/v1/audit/reports/01", "/api/v1/audit/reports/02/export.xlsx"):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 403)
         self.client.cookies.clear()
@@ -1669,11 +1669,16 @@ class WebApiTests(unittest.TestCase):
                 self.assertIn(payload["estado"], {"com_dados", "zero", "sem_registros", "indisponivel"})
                 self.assertTrue(payload["as_of"])
                 self.assertIn("regra_periodo", payload)
-                exported = self.client.get(f"/api/v1/audit/reports/{tipo}/export.csv")
+                exported = self.client.get(f"/api/v1/audit/reports/{tipo}/export.xlsx")
                 self.assertEqual(exported.status_code, 200)
-                header = exported.content.decode("utf-8-sig").splitlines()[0].split(";")
+                self.assertIn("spreadsheetml", exported.headers["content-type"])
+                sheet = load_workbook(io.BytesIO(exported.content)).active
+                self.assertTrue(str(sheet["A2"].value).startswith("Filtro: Período:"))
+                self.assertEqual(sheet["A3"].value, f"Referência (as_of): {exported.headers['x-gestor-as-of']}")
+                header = [cell.value for cell in sheet[5]]
                 self.assertEqual(header[: len(payload["campos"])], [campo["rotulo"] for campo in payload["campos"]])
-                self.assertTrue(exported.headers["x-gestor-as-of"])
+                self.assertEqual(sheet.max_row - 5, payload["page"]["total"])
+                self.assertEqual(self.client.get(f"/api/v1/audit/reports/{tipo}/export.csv").status_code, 404)
 
     def test_alias_gestor_peca_e_apenas_configuracao_publica(self):
         self.assertEqual(self.app.state.settings.public_host, "gestor-peca")

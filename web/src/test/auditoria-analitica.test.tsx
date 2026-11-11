@@ -109,11 +109,12 @@ describe("Auditoria analítica", () => {
     const download = vi.spyOn(api, "download").mockResolvedValue(undefined);
     renderPage();
     await screen.findByText("Falta de material", { selector: "td, td *" });
-    fireEvent.click(screen.getByRole("button", { name: "Exportar CSV" }));
+    expect(screen.queryByRole("button", { name: /CSV/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Exportar Excel" }));
     await waitFor(() => expect(download).toHaveBeenCalled());
     const [path, name] = download.mock.calls[0];
-    expect(path).toMatch(/^\/api\/v1\/audit\/reports\/01\/export\.csv\?inicio=/);
-    expect(name).toBe("auditoria_tipo_01.csv");
+    expect(path).toMatch(/^\/api\/v1\/audit\/reports\/01\/export\.xlsx\?inicio=/);
+    expect(name).toBe("auditoria_tipo_01.xlsx");
   });
 
   it("tipos novos: agrupados, colunas do catálogo, desvio pronto do servidor e sem dado como 'sem registros'", async () => {

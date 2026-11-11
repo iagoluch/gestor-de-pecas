@@ -10,11 +10,13 @@ import { FilterBar } from "./FilterBar";
 import { Notice } from "./Notice";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
-export function PageFrame({ sectionId, title, subtitle, actions, children, filters = true, period = true, filterFields, extraFilters, onClearFilters, staleError }: PropsWithChildren<{
+export function PageFrame({ sectionId, title, subtitle, actions, summary, children, filters = true, period = true, filterFields, extraFilters, onClearFilters, staleError }: PropsWithChildren<{
   sectionId: ManagementSectionId;
   title: string;
   subtitle: string;
   actions?: ReactNode;
+  /** Cards principais: ficam logo abaixo do título, acima dos filtros. */
+  summary?: ReactNode;
   filters?: boolean;
   /** Falso nas telas de situação atual, que consultam apenas o dia corrente. */
   period?: boolean;
@@ -64,6 +66,7 @@ export function PageFrame({ sectionId, title, subtitle, actions, children, filte
           </div>
           {actions}
         </header>
+        {summary}
         {filters ? <FilterBar period={period} fields={filterFields} extra={extraFilters} onClear={onClearFilters} /> : null}
         {staleError ? (
           <Notice tone="stale">

@@ -1001,3 +1001,11 @@ Validação: vitest director-page 26 e director-explanation 7 passaram; tsc limp
 2. Esconder no front, sem mudar a API: os campos `produzido`, `horas_paradas` e `eficiencia_oee` continuam no `/diretoria/painel` (reversível; `eficiencia_oee` ainda alimenta o aviso de acima de 100%).
 3. Manter os destaques de melhor/pior setor em vez de removê-los, só trocando o "0%" por "sem dados" (o ranking por setor não existe em outro lugar).
 4. Manter a Ficha inteira, inclusive Produzido e Parado por setor: repetem a Auditoria só no total da fábrica, não por setor com custo.
+
+## Ajustes de 11/11/2026: Excel em vez de CSV e cards acima dos filtros
+
+Pedido do usuário, válido para a Auditoria analítica, a Diretoria e toda tela nova: exportar só planilha Excel (.xlsx), nunca CSV; cards principais no topo, filtros embaixo deles, tabela por último.
+
+- Auditoria analítica: a rota `export.csv` saiu (agora 404) e entrou `GET /api/v1/audit/reports/{tipo}/export.xlsx`, com o mesmo gerador openpyxl dos Relatórios. A planilha traz título (A1), filtro usado (A2), `Referência (as_of)` (A3), cabeçalho com todos os campos na linha 5 e todas as linhas a partir da 6. Texto passa pelo `safe_text` (proteção contra fórmula).
+- Auditoria analítica: cards e a linha da Referência subiram para logo abaixo do título (prop `summary` do `PageFrame`), em todos os tipos.
+- Diretoria: sem mudança. Ela não tem exportação, e o seletor Hoje/Semana/Mês fica na barra de navegação (junto de Painel/Ficha/Custos), com os indicadores logo abaixo; não há barra de filtros acima dos cards para inverter.
