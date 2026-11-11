@@ -263,6 +263,17 @@ class PanelTests(unittest.TestCase):
         self.assertIsNone(sheet["produzido"])
         self.assertIn("sem registros de produção", sheet["texto"])
 
+    def test_a3_produzido_zero_da_visao_geral_sem_registro_vira_none(self):
+        # Formato real da Visão Geral num dia sem produção: good=0 com availability "sem_registros".
+        from unittest import mock
+
+        overview = {"hours": {}, "production": {"good": 0, "availability": "sem_registros"}}
+        with mock.patch.object(ManagementService, "get_overview", return_value=overview):
+            panel = self.service.panel("semana", NOW)
+            sheet = self.service.sheet("semana", None, None, NOW)
+        self.assertIsNone(panel["cards"]["produzido"])
+        self.assertIsNone(sheet["produzido"])
+
     def test_b_onde_perdemos_so_nao_planejada_ordenado_e_no_maximo_3(self):
         panel = self.service.panel("semana", NOW)
         ranking = panel["onde_perdemos"]

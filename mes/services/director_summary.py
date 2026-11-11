@@ -20,7 +20,7 @@ from mes.analytics.oee import _WORKED_CATEGORIES
 from mes.analytics.physical_time import consolidate_physical_time
 from mes.analytics.resource_state import classify_state_row
 from mes.contracts import AnalyticsFilter
-from mes.domain import EventCategory, ManufacturingRules, StopClassification
+from mes.domain import DataAvailability, EventCategory, ManufacturingRules, StopClassification
 from mes.domain.director_cost import CostRates, CostResult, StopSlice, stop_cost, work_cost
 from mes.services.display_labels import strip_status_code_prefix
 from mes.services.industrial_analytics import IndustrialAnalyticsService
@@ -161,7 +161,7 @@ class DirectorSummaryService:
             "periodo": {"nome": normalize_period(period), "inicio": inicio.isoformat(), "fim": fim.isoformat()},
             "cards": {
                 # Sem dado de produção é "sem registros" (None), nunca zero.
-                "produzido": (overview.get("production") or {}).get("good"),
+                "produzido": _produced(overview),
                 "horas_paradas": _unplanned_stop_hours(hours),
                 "custo_parada": _money(total_stop.custo),
                 "eficiencia_oee": (overview.get("kpis") or {}).get("oee"),
@@ -195,7 +195,7 @@ class DirectorSummaryService:
         worked_h = float(bases.get("worked_seconds") or 0.0) / 3600.0
         available_h = float(bases.get("available_seconds") or 0.0) / 3600.0
         stopped_h = _unplanned_stop_hours(hours)
-        produced = (overview.get("production") or {}).get("good")  # None = sem registros
+        produced = _produced(overview)  # None = sem registros
         reasons = ctx.reasons()
         main_reason = reasons[0] if reasons else None
 
@@ -498,6 +498,14 @@ class _Context:
 
 
 # --------------------------------------------------------------------------- auxiliares
+
+def _produced(overview) -> int | None:
+    """Peças boas da Visão Geral; ``None`` quando a fonte diz que não há registro de quantidade."""
+    production = overview.get("production") or {}
+    if production.get("availability") == DataAvailability.NO_RECORDS.value:
+        return None
+    return production.get("good")
+
 
 def _sheet_text(*, subject, worked_h, available_h, produced, stopped_h, stop_cost_value,
                 main_reason, missing, feminine=False):

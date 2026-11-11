@@ -939,3 +939,36 @@ Revisão Codex (high): sem achados.
 2. Ficam, apesar de terem tipo parecido: Horas & Utilização (mistura as 3 bases de tempo, sem tipo único); Rastreabilidade (o link "Rastrear OP" usa `?op=`, que a Auditoria não lê); Chamadas da Gestão (destino do sininho); SPC (gráfico de controle, exclusiva da Qualidade; o tipo 07 é de gestão); Produção realizada e Planejado × Realizado (destino indefinido DASH/OPER); Relatórios (exporta .xlsx); telas de operação (Execução das OPs, OPs em andamento, Visão Geral, Recursos, Pausas, Crachás, Turnos, Apontamento por setor, Chamadas do IagoDev).
 3. Os arquivos das páginas antigas não foram apagados (volta atrás = devolver a rota e a aba). Os gráficos das antigas Análises deixam de aparecer; a Auditoria mostra o resumo e a tabela do tipo.
 4. Textos não alterados (para não mexer no visual): botões da Visão Geral ainda dizem "Abrir Análises: OEE" etc., e a ajuda `src/help/content/gestao/70-analises-oee.md` ainda cita `/analises/oee`. Ambos funcionam pelo redirecionamento; ficam como pendência de texto.
+
+# Etapa 6 — Validação final e relatório — 11/11/2026
+
+Validação:
+- vitest, um arquivo por vez: `auditoria-analitica` (5), `director-page` (25), `auditoria-eventos` (4), `management` (67) — todos ok.
+- `tsc` limpo; `npm run build` ok (só o aviso de pacote acima de 500 kB, que já existia). O projeto web não tem ESLint configurado; o `tsc` faz esse papel.
+- pytest `test_director_summary.py` + `test_director_api.py`: 47 ok.
+- Navegador (API única na 8001, banco `gestor_pecas_test`, development, IA e Telegram desligados, conta de teste admin): `/analises/oee` abre `/auditoria/analitica?tipo=11`; o grupo Análises do menu só tem Horas & Utilização; Log do Sistema saiu; Diretoria mostra os 6 indicadores com o `as_of` e "Abrir na Auditoria".
+
+Achado na conferência e corrigido: com o dado real de um dia sem produção, o cartão "Produzido" da Diretoria mostrava "0 peças" enquanto o tipo 02 dizia "sem registros". A Visão Geral manda `good: 0` junto com `availability: sem_registros`, e o resumo da Diretoria só olhava o número. Agora `_produced` em `mes/services/director_summary.py` devolve `null` quando a fonte diz "sem registros" (painel e ficha); teste novo `test_a3`. Prova no navegador: "Produzido — sem registros". Codex (high): sem achados.
+
+Observação: a API da 8001 estava rodando código de antes da Etapa 4 (sem `--reload`); foi reiniciada com o código atual.
+
+## Commits das etapas 2 a 6
+
+- 548e769 — Auditoria analítica, tipos 01 e 02, `as_of`, estados e CSV (Etapa 2)
+- 4704cdb — tipos 03 a 21 (Etapa 3)
+- bb3f5a5 — 6 indicadores da Diretoria lidos da Auditoria (Etapa 4)
+- 25ac11d — telas de consulta saem do menu e redirecionam (Etapa 5)
+- commit deste relatório — "Produzido" sem registros + relatório (Etapa 6)
+
+## Pendências
+
+1. `as_of` móvel: ao abrir a Auditoria a partir da Diretoria num período em andamento, o `as_of` avança (achado 2 do Codex na Etapa 4). Congelar pede um parâmetro `as_of` novo no contrato da Auditoria.
+2. No indicador Disponibilidade, o estado interno vem "zero" mesmo com valor 100% (o estado é o do relatório tipo 11 inteiro). A tela mostra 100% certo; só o rótulo interno é impreciso.
+3. Textos: botões da Visão Geral ("Abrir Análises: OEE" etc.) e a ajuda `70-analises-oee.md` ainda citam as telas antigas; funcionam pelo redirecionamento.
+4. Gráficos das antigas Análises não aparecem mais no menu (arquivos mantidos); se fizerem falta, viram parte da Auditoria ou voltam ao menu.
+5. Rastreabilidade não saiu porque a Auditoria não lê `?op=`; dá para tirar depois que a Auditoria aceitar filtro de OP pela URL.
+
+## Decisões tomadas sem o usuário (Etapa 6)
+
+1. Corrigir na hora o "Produzido 0 × sem registros" (correção pequena e reversível, na mesma linha da decisão da Etapa 4) em vez de deixar como pendência.
+2. Reiniciar a API da 8001 para validar o código atual (era a única API; mesma porta e mesmo banco de teste).
