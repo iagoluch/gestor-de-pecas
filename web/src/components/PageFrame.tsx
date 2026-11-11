@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Children, isValidElement, useEffect, useState } from "react";
 import type { PropsWithChildren, ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { aiApi } from "../api/ai";
@@ -49,6 +49,14 @@ export function PageFrame({ sectionId, title, subtitle, actions, summary, childr
   const activeTab = section.tabs.find((tab) => pathname === tab.path || pathname.startsWith(`${tab.path}/`));
   const heading = activeTab ? `${section.label} — ${activeTab.label}` : title;
   useDocumentTitle(heading);
+  // Regra global (11/11/2026): cards em cima, filtros embaixo. Sem `summary`
+  // explícito, a grade de cards que abre o conteúdo sobe para cima da barra.
+  const items = Children.toArray(children);
+  const first = items[0];
+  const hoisted = summary === undefined && filters && isValidElement<{ className?: string }>(first)
+    && first.type === "div" && /(^| )metric-grid( |$)/.test(first.props.className ?? "");
+  const top = hoisted ? first : summary;
+  const body = hoisted ? items.slice(1) : children;
   return (
     <div className="page-wrap">
       <nav className="page-tabs" aria-label={section.label}>
@@ -66,14 +74,14 @@ export function PageFrame({ sectionId, title, subtitle, actions, summary, childr
           </div>
           {actions}
         </header>
-        {summary}
+        {top}
         {filters ? <FilterBar period={period} fields={filterFields} extra={extraFilters} onClear={onClearFilters} /> : null}
         {staleError ? (
           <Notice tone="stale">
             Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.
           </Notice>
         ) : null}
-        {children}
+        {body}
       </section>
     </div>
   );

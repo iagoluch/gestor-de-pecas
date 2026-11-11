@@ -376,15 +376,22 @@ export function AuditAlertsIssuesPage() {
     ) : undefined
   );
   return (
-    <PageFrame staleError={alertsQuery.error ?? query.error} sectionId="audit" title={title} subtitle={subtitle}>
-      <SectionCard title="Alertas — resumo do período" className="content-section">
-        <div className="metric-grid metric-grid--four" role="group" aria-label="Resumo dos alertas">
-          <MetricCard label="Críticos" value={formatNumber(alerts?.by_severity.critico ?? 0)} valueNode={auditNode("qld.auditoria.critico", "Alertas críticos", alerts?.by_severity.critico)} accent="danger" />
-          <MetricCard label="Erros" value={formatNumber(alerts?.by_severity.erro ?? 0)} valueNode={auditNode("qld.auditoria.erro", "Alertas com erro", alerts?.by_severity.erro)} accent="danger" />
-          <MetricCard label="Atenções" value={formatNumber(alerts?.by_severity.aviso ?? 0)} valueNode={auditNode("qld.auditoria.aviso", "Alertas de atenção", alerts?.by_severity.aviso)} accent="warning" />
-          <MetricCard label="Total" value={formatNumber(alerts?.count ?? 0)} valueNode={auditNode("qld.auditoria.total", "Total de alertas", alerts?.count)} accent="primary" detail={alerts?.reliability_reason} />
-        </div>
-      </SectionCard>
+    <PageFrame
+      staleError={alertsQuery.error ?? query.error}
+      sectionId="audit"
+      title={title}
+      subtitle={subtitle}
+      summary={(
+        <SectionCard title="Alertas — resumo do período" className="content-section">
+          <div className="metric-grid metric-grid--four" role="group" aria-label="Resumo dos alertas">
+            <MetricCard label="Críticos" value={formatNumber(alerts?.by_severity.critico ?? 0)} valueNode={auditNode("qld.auditoria.critico", "Alertas críticos", alerts?.by_severity.critico)} accent="danger" />
+            <MetricCard label="Erros" value={formatNumber(alerts?.by_severity.erro ?? 0)} valueNode={auditNode("qld.auditoria.erro", "Alertas com erro", alerts?.by_severity.erro)} accent="danger" />
+            <MetricCard label="Atenções" value={formatNumber(alerts?.by_severity.aviso ?? 0)} valueNode={auditNode("qld.auditoria.aviso", "Alertas de atenção", alerts?.by_severity.aviso)} accent="warning" />
+            <MetricCard label="Total" value={formatNumber(alerts?.count ?? 0)} valueNode={auditNode("qld.auditoria.total", "Total de alertas", alerts?.count)} accent="primary" detail={alerts?.reliability_reason} />
+          </div>
+        </SectionCard>
+      )}
+    >
       <SectionCard title="Alertas do período" className="content-section">
         <DataTable
           rows={alerts?.items ?? []}
