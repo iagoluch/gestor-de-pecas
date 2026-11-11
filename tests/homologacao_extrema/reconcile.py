@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import csv
+from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import json
@@ -41,7 +41,7 @@ from tests.homologacao_extrema.seed_homologacao_extrema import (  # noqa: E402
 
 OUTPUT_PATH = Path(__file__).with_name("actual_results.json")
 API_MATRIX_PATH = Path(__file__).with_name("api_matrix.json")
-EXPORT_PATH = Path(__file__).with_name("exports") / "dados_analiticos.csv"
+EXPORT_PATH = Path(__file__).with_name("exports") / "dados_analiticos.xlsx"
 
 
 class Checkbook:
@@ -392,14 +392,17 @@ def _api_snapshot(target_dsn: str, primary_db: Database) -> dict:
                 "/api/v1/orders",
                 params={"inicio": END.isoformat(), "fim": START.isoformat()},
             )
-            csv_response = client.get(
-                "/api/v1/reports/dados_analiticos/export.csv",
+            xlsx_response = client.get(
+                "/api/v1/reports/dados_analiticos/export.xlsx",
                 params=period,
             )
             EXPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-            EXPORT_PATH.write_bytes(csv_response.content)
-            csv_text = csv_response.content.decode("utf-8-sig", errors="strict")
-            csv_rows = list(csv.DictReader(csv_text.splitlines(), delimiter=";"))
+            EXPORT_PATH.write_bytes(xlsx_response.content)
+            from openpyxl import load_workbook
+
+            xlsx_cells = [str(c) for ws in load_workbook(BytesIO(xlsx_response.content), read_only=True) for row in ws.iter_rows(values_only=True) for c in row if c is not None]
+            xlsx_text = "\n".join(xlsx_cells)
+            xlsx_rows = xlsx_cells
             app_root = client.get("/")
 
         with TestClient(app) as operator_client:
@@ -443,11 +446,11 @@ def _api_snapshot(target_dsn: str, primary_db: Database) -> dict:
             "pagination": page.json().get("page") if page.status_code == 200 else None,
             "filtered_count": filtered.json().get("page", {}).get("total") if filtered.status_code == 200 else None,
             "invalid_period_status": invalid_period.status_code,
-            "csv_status": csv_response.status_code,
-            "csv_utf8_bom": csv_response.content.startswith(b"\xef\xbb\xbf"),
-            "csv_has_accents": "Peça" in csv_response.content.decode("utf-8-sig", errors="replace"),
-            "csv_rows": len(csv_rows),
-            "csv_export_path": str(EXPORT_PATH.relative_to(ROOT)),
+            "xlsx_status": xlsx_response.status_code,
+            "xlsx_valid_zip": xlsx_response.content.startswith(b"PK"),
+            "xlsx_has_accents": "Peça" in xlsx_text,
+            "xlsx_rows": len(xlsx_rows),
+            "xlsx_export_path": str(EXPORT_PATH.relative_to(ROOT)),
             "spa_status": app_root.status_code,
             "operator_login_status": operator_login.status_code,
             "operator_management_denied": denied_management.status_code,
@@ -548,10 +551,10 @@ def reconcile() -> dict:
         checks.truth("api_session_cookie_http_only", api["manager_cookie_http_only"])
         checks.truth("api_all_domain_routes", api["all_routes_ok"])
         checks.check("api_invalid_period", api["invalid_period_status"], 400)
-        checks.check("api_csv_export", api["csv_status"], 200)
-        checks.truth("api_csv_utf8_bom", api["csv_utf8_bom"])
-        checks.truth("api_csv_has_accents", api["csv_has_accents"])
-        checks.truth("api_csv_has_rows", api["csv_rows"] > 0)
+        checks.check("api_xlsx_export", api["xlsx_status"], 200)
+        checks.truth("api_xlsx_valid_zip", api["xlsx_valid_zip"])
+        checks.truth("api_xlsx_has_accents", api["xlsx_has_accents"])
+        checks.truth("api_xlsx_has_rows", api["xlsx_rows"] > 0)
         checks.check("api_operator_denied_management", api["operator_management_denied"], 403)
         checks.check("api_concurrent_requests", api["concurrency"]["successes"], api["concurrency"]["requests"])
 

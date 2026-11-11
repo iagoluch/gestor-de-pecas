@@ -1012,6 +1012,6 @@ Pedido do usuário, válido para a Auditoria analítica, a Diretoria e toda tela
 
 ## Ajustes globais de 11/11/2026
 
-**Excel no sistema inteiro.** O único CSV restante (Relatórios, `export.csv`) saiu; fica a planilha .xlsx técnica e simples. Os roteiros antigos de homologação `tests/simulacao_historica_3_meses/reconcile.py` e `tests/homologacao_extrema/reconcile.py` ainda chamam `export.csv` e precisam ser ajustados se forem rodados de novo.
+**Excel no sistema inteiro.** O único CSV restante (Relatórios, `export.csv`) saiu; fica a planilha .xlsx técnica e simples. Os roteiros antigos de homologação `tests/simulacao_historica_3_meses/reconcile.py` e `tests/homologacao_extrema/reconcile.py` passaram a baixar `export.xlsx` e conferir a planilha (resposta 200, arquivo Excel válido, acentos e linhas).
 
 **Cards em cima, filtros embaixo.** A regra fica no `PageFrame`: quando a tela tem filtros e o conteúdo começa por uma grade de cards (`metric-grid`), essa grade sobe para cima da barra de filtros. Telas que passam `summary` usam o que passaram. Valeu para Análises, Produção (realizada, execução das OPs, planejado × realizado), Auditoria (eventos de status, confiabilidade, alertas), Rastreabilidade (lote/material/nesting) e Operações com filtro. Andon, TV e telas do operador não usam essa barra e não mudaram. A Tela inicial (Visão Geral) também não mudou: a grade arrastável de blocos é o próprio conteúdo, e subi-la jogaria os filtros para o fim da página.

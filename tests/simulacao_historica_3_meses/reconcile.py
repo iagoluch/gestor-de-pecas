@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
-import csv
+from io import BytesIO
 import json
 from pathlib import Path
 import secrets
@@ -37,7 +37,7 @@ from tests.simulacao_historica_3_meses.seed_simulacao_historica import (  # noqa
 
 OUTPUT_PATH = Path(__file__).with_name("actual_results.json")
 API_MATRIX_PATH = Path(__file__).with_name("api_matrix.json")
-EXPORT_PATH = Path(__file__).with_name("exports") / "dados_analiticos.csv"
+EXPORT_PATH = Path(__file__).with_name("exports") / "dados_analiticos.xlsx"
 
 MONTHS = {
     "6": (datetime(2026, 6, 1, 6), datetime(2026, 6, 30, 23, 59, 59)),
@@ -502,11 +502,14 @@ def _api_snapshot(target_dsn: str, primary_db: Database) -> dict:
             page = client.get("/api/v1/orders", params={**full_params, "page": 2, "page_size": 17})
             operation_filter = client.get("/api/v1/orders", params={**full_params, "operacao": "10", "page": 1, "page_size": 17})
             invalid_period = client.get("/api/v1/orders", params={"inicio": SIMULATED_NOW.isoformat(), "fim": START.isoformat()})
-            csv_response = client.get("/api/v1/reports/dados_analiticos/export.csv", params=full_params)
+            xlsx_response = client.get("/api/v1/reports/dados_analiticos/export.xlsx", params=full_params)
             EXPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-            EXPORT_PATH.write_bytes(csv_response.content)
-            csv_text = csv_response.content.decode("utf-8-sig", errors="strict")
-            csv_rows = list(csv.DictReader(csv_text.splitlines(), delimiter=";"))
+            EXPORT_PATH.write_bytes(xlsx_response.content)
+            from openpyxl import load_workbook
+
+            xlsx_cells = [str(c) for ws in load_workbook(BytesIO(xlsx_response.content), read_only=True) for row in ws.iter_rows(values_only=True) for c in row if c is not None]
+            xlsx_text = "\n".join(xlsx_cells)
+            xlsx_rows = xlsx_cells
             csrf = client.cookies.get(settings.csrf_cookie_name)
             logout = client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": csrf})
             session_after_logout = client.get("/api/v1/auth/session")
@@ -520,10 +523,10 @@ def _api_snapshot(target_dsn: str, primary_db: Database) -> dict:
                 "pagination": page.json().get("page") if page.status_code == 200 else None,
                 "operation_filter_total": operation_filter.json().get("page", {}).get("total") if operation_filter.status_code == 200 else None,
                 "invalid_period_status": invalid_period.status_code,
-                "csv_status": csv_response.status_code,
-                "csv_utf8_bom": csv_response.content.startswith(b"\xef\xbb\xbf"),
-                "csv_has_accents": "Peça" in csv_text,
-                "csv_rows": len(csv_rows),
+                "xlsx_status": xlsx_response.status_code,
+                "xlsx_valid_zip": xlsx_response.content.startswith(b"PK"),
+                "xlsx_has_accents": "Peça" in xlsx_text,
+                "xlsx_rows": len(xlsx_rows),
                 "logout_status": logout.status_code,
                 "session_after_logout_status": session_after_logout.status_code,
             }
@@ -657,10 +660,10 @@ def reconcile() -> dict:
         checks.check("api_pagination_size", api["pagination"]["page_size"], 17)
         checks.truth("api_operation_filter", 0 < api["operation_filter_total"] < expected["counts"]["orders"])
         checks.check("api_invalid_period", api["invalid_period_status"], 400)
-        checks.check("api_csv", api["csv_status"], 200)
-        checks.truth("api_csv_utf8_bom", api["csv_utf8_bom"])
-        checks.truth("api_csv_accents", api["csv_has_accents"])
-        checks.truth("api_csv_rows", api["csv_rows"] > 0)
+        checks.check("api_xlsx", api["xlsx_status"], 200)
+        checks.truth("api_xlsx_valid_zip", api["xlsx_valid_zip"])
+        checks.truth("api_xlsx_accents", api["xlsx_has_accents"])
+        checks.truth("api_xlsx_rows", api["xlsx_rows"] > 0)
         checks.check("api_logout", api["logout_status"], 204)
         checks.check("api_session_closed_after_logout", api["session_after_logout_status"], 401)
         aggregate_prefixes = (
