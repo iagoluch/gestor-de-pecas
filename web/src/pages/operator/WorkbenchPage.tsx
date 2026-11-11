@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, ApiError, apiErrorMessage } from "../../api/client";
 import { ChamadaButton } from "../../components/ChamadaButton";
 import { EmptyState, ErrorState, LoadingState } from "../../components/DataState";
@@ -57,7 +58,7 @@ const GATE_CODES = ["primeira_peca_gate_obrigatorio", "primeira_peca_bloqueada"]
 interface OperationsSync { source?: string; pending?: boolean; remote_available?: boolean; status?: string; message?: string; found?: boolean }
 interface OperationsResponse { items: OperatorOperation[]; sync?: OperationsSync }
 interface ResourceState { categoria?: string; motivo?: string; op?: string | null; data_inicio?: string | null }
-interface WorkbenchResponse { sector: string; resource: string; resource_state?: ResourceState | null; queue: OperatorCard[]; production: OperatorCard[] }
+interface WorkbenchResponse { sector: string; resource: string; resource_state?: ResourceState | null; queue: OperatorCard[]; production: OperatorCard[]; filtro?: { subconjunto_id: number; subconjunto: string; produto: string | null } }
 interface HistoryResponse { sector: string; resource: string; items: OperatorCard[]; page: number; page_size: number; has_more: boolean }
 interface OperatorBadge { cracha: string; nome: string; ativo?: boolean }
 interface OperationContext {
@@ -168,7 +169,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     ? `/api/v1/operator/operations/${encodeURIComponent(loadedOp)}?resource=${encodeURIComponent(resource)}`
     : null;
   const operations = useApiQuery<OperationsResponse>(operationsPath);
-  const cards = useApiQuery<WorkbenchResponse>(`/api/v1/operator/workbench?resource=${encodeURIComponent(resource)}`);
+  // Solda em três níveis: o subconjunto escolhido no mapa só filtra a fila.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const subconjunto = searchParams.get("subconjunto");
+  const cards = useApiQuery<WorkbenchResponse>(`/api/v1/operator/workbench?resource=${encodeURIComponent(resource)}${subconjunto ? `&subconjunto=${encodeURIComponent(subconjunto)}` : ""}`);
+  const filtro = cards.data?.filtro;
   const historyQuery = useApiQuery<HistoryResponse>(`/api/v1/operator/history?resource=${encodeURIComponent(resource)}&page=1&page_size=100`);
   const reasons = useApiQuery<{ items: StopReason[] }>("/api/v1/operator/stop-reasons");
   // Quem diz se o posto aceita outra OP é o backend; sem resposta, a tela não bloqueia.
@@ -866,6 +871,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
             data={drawing.data}
             onOpen={() => setDialog({ kind: "drawing" })}
           />
+          {filtro ? (
+            <div className="operator-queue-filter" role="status">
+              <span>Filtrando: <strong>{filtro.produto ? `${filtro.produto} › ` : ""}{filtro.subconjunto}</strong></span>
+              <button type="button" className="button" onClick={() => setSearchParams({})}>Ver fila inteira</button>
+            </div>
+          ) : null}
           <div className="operator-card-columns">
             {cardsGate ? null : <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />}
             <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : historyQuery.error && !historyQuery.data ? "Não foi possível carregar o histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />

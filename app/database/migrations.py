@@ -3096,6 +3096,58 @@ CHAMADA_NO_SISTEMA_STATEMENTS = (
 )
 
 
+# Migration 77 — Solda em três níveis (fase 1, 11/11/2026): cada setor da frente
+# de Solda ganha um mapa Produto -> Subconjunto. O vínculo liga o código EXATO do
+# item da OP (o Protheus não manda o produto pai) ao produto e, opcionalmente, ao
+# subconjunto. É só agrupamento/filtro da fila: o apontamento continua na
+# estação física, então nada aqui entra em OEE, Andon ou identidade do trabalho.
+# Rollback: DROP TABLE solda_vinculos, solda_subconjuntos, solda_produtos;
+# DELETE FROM schema_migrations WHERE version = 77; SCHEMA_VERSION = 76.
+SOLDA_MAPA_DESCRIPTION = "Solda: mapa de produtos e subconjuntos por setor"
+SOLDA_MAPA_STATEMENTS = (
+    """
+    CREATE TABLE solda_produtos (
+        id BIGSERIAL PRIMARY KEY,
+        setor TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        criado_por TEXT,
+        criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (setor, codigo)
+    )
+    """,
+    """
+    CREATE TABLE solda_subconjuntos (
+        id BIGSERIAL PRIMARY KEY,
+        produto_id BIGINT NOT NULL REFERENCES solda_produtos(id),
+        nome TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        criado_por TEXT,
+        criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (produto_id, codigo)
+    )
+    """,
+    """
+    CREATE TABLE solda_vinculos (
+        id BIGSERIAL PRIMARY KEY,
+        produto_id BIGINT NOT NULL REFERENCES solda_produtos(id),
+        subconjunto_id BIGINT REFERENCES solda_subconjuntos(id),
+        codigo_item TEXT NOT NULL CHECK (codigo_item = btrim(codigo_item) AND codigo_item <> ''),
+        criado_por TEXT,
+        criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX uq_solda_vinculos_destino_item
+    ON solda_vinculos (produto_id, COALESCE(subconjunto_id, 0), codigo_item)
+    """,
+)
+
+
 MIGRATIONS = {
     2:("catálogos PCP e SIGMANEST", CATALOG_STATEMENTS),
     3: ("fila e apontamento operacional de Corte", CUT_STATEMENTS),
@@ -3175,6 +3227,7 @@ MIGRATIONS = {
     74: (LOG_SISTEMA_DESCRIPTION, LOG_SISTEMA_STATEMENTS),
     75: (INSPECAO_PROGRESSIVA_DESCRIPTION, INSPECAO_PROGRESSIVA_STATEMENTS),
     76: (CHAMADA_NO_SISTEMA_DESCRIPTION, CHAMADA_NO_SISTEMA_STATEMENTS),
+    77: (SOLDA_MAPA_DESCRIPTION, SOLDA_MAPA_STATEMENTS),
 }
 
 

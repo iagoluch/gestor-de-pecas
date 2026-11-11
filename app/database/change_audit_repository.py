@@ -41,6 +41,10 @@ CAMPOS_AUDITAVEIS = {
         "codigo_op", "numero_operacao", "descricao_operacao", "setor", "recurso",
         "apos_operacao", "motivo", "ativo",
     ),
+    # Mapa da Solda (migration 77).
+    "solda_produto": ("setor", "nome", "codigo", "ativo", "ordem"),
+    "solda_subconjunto": ("produto_id", "nome", "codigo", "ativo", "ordem"),
+    "solda_vinculo": ("produto_id", "subconjunto_id", "codigo_item"),
 }
 
 # Entidades em R$: só a aba Diretoria as expõe (``/diretoria/custos/auditoria``).

@@ -31,6 +31,7 @@ from app.database.system_log_repository import SystemLogRepositoryMixin
 from app.database.cost_rate_repository import CostRateRepositoryMixin
 from app.database.first_piece_repository import FirstPieceRepositoryMixin
 from app.database.manual_queue_repository import ManualQueueRepositoryMixin
+from app.database.solda_mapa_repository import SoldaMapaRepositoryMixin
 from app.database.order_route_repository import OrderRouteRepositoryMixin
 from app.database.standard_time_repository import (
     PROTHEUS_TIME_SQL,
@@ -228,6 +229,7 @@ class Database(
     ReportRepositoryMixin,
     AIRepositoryMixin,
     ManualQueueRepositoryMixin,
+    SoldaMapaRepositoryMixin,
     OrderRouteRepositoryMixin,
     CostRateRepositoryMixin,
     ChangeAuditRepositoryMixin,

@@ -23,6 +23,7 @@ from mes.services.drawings import DrawingLookupService, parse_drawing_roots
 from mes.services.first_piece import FirstPieceService
 from mes.services.operator_flow import OperatorFlowService
 from mes.services.order_provisioning import STATUS_INDISPONIVEL, OrderProvisioningService
+from mes.services.solda_mapa import classificar
 from mes.services.telegram_alerts import schedule_resource_stop_alert
 
 
@@ -267,10 +268,32 @@ def provision_operation_order(
     }
 
 
+def _filtrar_subconjunto(database, setor: str, subconjunto_id: int, fila: list) -> dict:
+    """Solda em três níveis: só filtra a fila (nunca a produção em curso)."""
+
+    sub = database.obter_solda_subconjunto(subconjunto_id)
+    if sub is None or sub["setor"] != setor:
+        raise AppError("solda_nao_encontrado", "Subconjunto não encontrado neste setor.", status_code=404)
+    mapa = database.listar_solda_mapa(setor)
+    produto = next((p for p in mapa["produtos"] if p["id"] == sub["produto_id"]), {})
+    return {
+        "queue": [
+            card for card in fila
+            if classificar(card.get("product"), mapa)["subconjunto_id"] == subconjunto_id
+        ],
+        "filtro": {
+            "subconjunto_id": subconjunto_id,
+            "subconjunto": sub["nome"],
+            "produto": produto.get("nome"),
+        },
+    }
+
+
 @router.get("/workbench")
 def workbench(
     request: Request,
     resource: str = Query(min_length=1, max_length=120),
+    subconjunto: int | None = Query(default=None, ge=1),
     user: SessionUser = Depends(require_operator_user),
     database=Depends(get_database),
 ):
@@ -279,6 +302,8 @@ def workbench(
         raise AppError("operator_workflow_mismatch", "Use a fila automática do Corte.", status_code=409)
     service = _service(database, user, request)
     cards = service.listar_cartoes(sector.name, resource)
+    if subconjunto is not None:
+        cards = {**cards, **_filtrar_subconjunto(database, sector.name, subconjunto, cards["queue"])}
     # O estado físico do recurso não cabe nos cards: uma parada registrada sem
     # OP não tem apontamento e, sem ele, a tela não teria como oferecer a
     # retomada. Mesmo contrato já usado pela fila do Corte.

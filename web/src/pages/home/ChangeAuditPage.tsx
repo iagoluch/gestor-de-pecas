@@ -31,6 +31,9 @@ const ENTITIES: Record<string, string> = {
   calendario_turno: "Turno do calendário",
   calendario_recurso: "Calendário do recurso",
   cracha: "Crachá",
+  solda_produto: "Produto da Solda",
+  solda_subconjunto: "Subconjunto da Solda",
+  solda_vinculo: "Código de item da Solda",
 };
 
 const ACTIONS: Record<ChangeAction, string> = { criar: "Criou", alterar: "Alterou", excluir: "Excluiu" };

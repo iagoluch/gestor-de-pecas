@@ -2119,3 +2119,27 @@ label:has(> .required-mark) > :is(input, select, textarea, div) { flex-basis: 10
 }
 .audit-detail dt { font-size: 0.78rem; color: var(--muted); }
 .audit-detail dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+
+/* Solda em três níveis: mapa Produto -> Subconjunto (compacto, 3 colunas). */
+.solda-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+.solda-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
+.solda-card header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.solda-card small, .solda-ajuda { color: var(--muted); }
+.solda-card__contagem { font-weight: 700; }
+.solda-card__pendencia { color: var(--warning-ink); font-weight: 700; }
+.solda-card--inativo { opacity: .65; }
+.solda-card details summary { cursor: pointer; color: var(--muted); }
+.solda-status { padding: 2px 8px; border-radius: 999px; font-size: .8em; font-weight: 700; }
+.solda-status--ativo { background: color-mix(in srgb, var(--success-ink) 15%, transparent); color: var(--success-ink); }
+.solda-status--inativo { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+.solda-form, .solda-codigos form, .solda-estacoes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); }
+.solda-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; }
+.solda-form input, .solda-codigos input { min-height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); }
+.solda-codigos ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; padding: 0; list-style: none; }
+.solda-codigos li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+.solda-codigos li button { min-width: 28px; min-height: 28px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 1.1em; }
+.solda-pendencias summary { cursor: pointer; font-weight: 700; }
+.solda-pendencias ul { max-height: 220px; overflow: auto; margin: 6px 0 0; padding-left: 18px; }
+.operator-queue-filter { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius-control); background: var(--surface); }
+@media (max-width: 1024px) { .solda-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .solda-grid { grid-template-columns: 1fr; } }

@@ -7,6 +7,7 @@ import { Notice } from "../../components/Notice";
 import { PageFrame } from "../../components/PageFrame";
 import { SectionCard } from "../../components/SectionCard";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { SOLDA_SETORES } from "./SoldaMapaPages";
 
 interface ActingSector {
   level: string;
@@ -47,12 +48,23 @@ export function ActingSectorPage() {
       {query.data ? (
         <SectionCard title="Escolha o setor" className="content-section">
           <div className="operator-resource-grid">
-            {query.data.items.map((sector) => (
+            {query.data.items.filter((sector) => !SOLDA_SETORES.includes(sector.name)).map((sector) => (
               <button type="button" key={sector.level} className="operator-resource-card" onClick={() => void enter(sector)}>
                 <strong>{sector.name}</strong>
                 <span className="operator-resource-card__usage">{`${sector.resources.length} recurso(s)`}</span>
               </button>
             ))}
+            {SOLDA_SETORES.map((nome) => {
+              // Solda: um cartão por setor abre o mapa Produto -> Subconjunto (não entra direto numa estação).
+              const recursos = query.data!.items.filter((sector) => sector.name === nome).flatMap((sector) => sector.resources);
+              if (!recursos.length) return null;
+              return (
+                <button type="button" key={nome} className="operator-resource-card" onClick={() => navigate(`/inicio/apontamento-por-setor/solda/${encodeURIComponent(nome)}`)}>
+                  <strong>{nome}</strong>
+                  <span className="operator-resource-card__usage">{`${recursos.length} recurso(s) · ver produtos`}</span>
+                </button>
+              );
+            })}
           </div>
         </SectionCard>
       ) : null}

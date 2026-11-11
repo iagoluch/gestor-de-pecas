@@ -42,6 +42,7 @@ from backend.api.routers import (
     andon,
     analytics,
     area_queue,
+    solda_mapa,
     audit,
     auth,
     chamadas,
@@ -1041,6 +1042,7 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
     application.include_router(ai.router, prefix=prefix)
     application.include_router(operator.router, prefix=prefix)
     application.include_router(area_queue.router, prefix=prefix)
+    application.include_router(solda_mapa.router, prefix=prefix)
     application.include_router(quality.router, prefix=prefix)
     application.include_router(cutting.router, prefix=prefix)
     application.include_router(highlight.router, prefix=prefix)
