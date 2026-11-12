@@ -123,16 +123,6 @@ WELDING_SECTOR_KEYS = frozenset(
 SECTOR_OWNED_RESOURCE_SECTORS = {"pintura", "montagem", *WELDING_SECTOR_KEYS}
 
 
-# Setores onde o bloqueio de "recurso divergente do roteiro" (confirmação por
-# crachá antes de apontar) fica desativado. Decisão do usuário em 14/09/2026:
-# a Solda cresceu para múltiplas contas de recurso (Aço, Alumínio, Robô,
-# Ferramentaria, Protótipo) e o bloqueio atrapalha o fluxo sem agregar controle
-# real, porque o posto já é dono do setor (SECTOR_OWNED_RESOURCE_SECTORS). Não
-# afeta o registro de auditoria (setor_roteiro/setor_divergente continuam
-# gravados normalmente); só remove a exigência de crachá para prosseguir.
-RESOURCE_CONFIRMATION_EXEMPT_SECTORS = set(WELDING_SECTOR_KEYS)
-
-
 # Associação funcional oficial aprovada diretamente pela Manufatura, usada
 # somente quando o cadastro ainda não declara o ``tipo_setor`` do recurso. Não
 # é alias: o código do recurso permanece exatamente como está no roteiro.
@@ -343,3 +333,24 @@ def station_matches_route(sector, station, route_code, *, resource_sector=None):
     elif canonical_resource_code(station) == expected:
         return True
     return sector_serves_resource(sector, route_code, resource_sector)
+
+
+def station_differs_from_route(sector, station, route_code, *, resource_sector=None):
+    """Indica se o posto aberto não é o recurso do roteiro (pede confirmação).
+
+    Homologação 11/11/2026: nos setores donos do posto (Pintura, Solda,
+    Montagem) o posto continua enxergando e podendo apontar qualquer recurso do
+    setor, mas quando o posto tem código próprio e ele é outro, o operador
+    confirma — como nos demais setores. Posto sem código próprio (as estações
+    da Solda, cujo roteiro traz um código compartilhado como SOLDA4) não tem
+    como ser comparado e segue sem confirmação, como antes.
+    """
+
+    if not normalize_resource_code(route_code):
+        return False
+    if str(sector or "").strip().casefold() in SECTOR_OWNED_RESOURCE_SECTORS:
+        own = station_resource_code(sector, station)
+        return bool(own) and canonical_resource_code(own) != canonical_resource_code(route_code)
+    return not station_matches_route(
+        sector, station, route_code, resource_sector=resource_sector
+    )

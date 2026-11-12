@@ -1325,7 +1325,13 @@ class FrontendBackendFacade:
                 cut for cut in (cut_loader(filters.inicio, filters.fim, maquina=filters.recurso) or [])
                 if not alvo or alvo in f"{cut.get('operador_inicio') or ''} {cut.get('operador_fim') or ''}".casefold()
             ]
-        return event_log.production_events(facts, states, quantities, cuts)
+        # Tempo de cada OP pelos cliques do próprio operador: OPs simultâneas
+        # no posto mostram, cada uma, o tempo inteiro (homologação 11/11/2026).
+        events_loader = getattr(self.db, "listar_eventos_apontamento_operador_lote", None)
+        operator_events = (
+            events_loader([fact.get("id") for fact in facts]) if callable(events_loader) and facts else []
+        )
+        return event_log.production_events(facts, states, quantities, cuts, operator_events)
 
     def rastreabilidade(self, op: str):
         return self.traceability.trace_op(op)

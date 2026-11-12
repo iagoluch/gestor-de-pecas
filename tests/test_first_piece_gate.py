@@ -681,6 +681,13 @@ class FirstPieceOperatorFlowTests(unittest.TestCase):
             resultado="CONFORME",
         )
         medir_pecas_restantes(db)
+        # OP-28 (11/11/2026): a saída do retrabalho é "Finalizar Ret.".
+        self.assertTrue(
+            servico.executar(
+                "Finalizar Retrabalho", op="OP-FLUXO", setor="Dobra",
+                recurso="Gasparini", operacao=operacao, operadores_cracha=["1"],
+            ).ok
+        )
         liberado = servico.executar(
             "Finalizado",
             op="OP-FLUXO",

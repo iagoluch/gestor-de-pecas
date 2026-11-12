@@ -1172,11 +1172,13 @@ describe("fluxo Web do operador", () => {
     expect(finalizar).toBeEnabled();
     fireEvent.click(finalizar);
     await screen.findByRole("heading", { name: "Finalizar produção" });
-    // OP-11: o botão travado diz o que falta; passar do saldo só avisa.
+    // OP-11: o botão travado diz o que falta; OP-09: passar do saldo bloqueia.
     expect(screen.getByRole("button", { name: "Confirmar finalização" })).toBeDisabled();
     expect(screen.getByText("Informe o crachá do operador e tecle Tab, Enter ou toque em +.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Peças boas"), { target: { value: "999" } });
     expect(screen.getByText(/passa do saldo/)).toBeInTheDocument();
+    expect(screen.getByText("Reduza a quantidade para no máximo o saldo da OP.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar finalização" })).toBeDisabled();
   });
 
   it("recusa escolher estação de Solda Aço quando o login não tem perfil fixo", async () => {

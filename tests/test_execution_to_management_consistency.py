@@ -136,18 +136,20 @@ class ExecutionToManagementTests(unittest.TestCase):
         self._executar("Parada", motivo_codigo="0201", comentario="sem chapa")
         self._executar("Retomar")
         self._executar("Retrabalho")
+        # OP-28 (11/11/2026): sai do retrabalho por "Finalizar Ret.".
+        self._executar("Finalizar Retrabalho", operadores_cracha=["7001"])
         # Wave 4: boas + refugo têm o planejado como teto. 6 boas + 2 refugos
         # atendem 8 de 10 e a OP permanece aberta; a parcial devolve a OP à
         # fila, então o operador precisa reabrir antes de encerrar as 2
         # restantes. Boa e refugo continuam grandezas separadas.
-        # Patch 09/11/2026: a 1ª peça conforme (nível 1) já é 1 boa, então
-        # o fim lança só a diferença: 1 + 6 + 1 = 8 boas.
+        # Decisão de 10/11/2026: a 1ª peça não soma sozinha; o operador
+        # informa todas as boas (6 + 2 = 8).
         parcial = self._executar(
             "Finalizado", pecas_boas=6, refugo=2, operadores_cracha=["7001"]
         )
         self.assertEqual(parcial.code, "finalizacao_parcial")
         self._executar("Início")
-        self._executar("Finalizado", pecas_boas=1, operadores_cracha=["7001"])
+        self._executar("Finalizado", pecas_boas=2, operadores_cracha=["7001"])
 
         apontamento = self._rows("SELECT * FROM apontamentos_operacionais WHERE op = 'OP-4A'")[0]
         self.assertEqual(apontamento["status"], "Finalizado")
@@ -164,7 +166,7 @@ class ExecutionToManagementTests(unittest.TestCase):
         self.assertEqual(
             estados,
             ["fila", "producao", "setup", "producao", "parada", "producao",
-             "retrabalho", "parcial", "producao", "finalizado"],
+             "retrabalho", "producao", "parcial", "producao", "finalizado"],
         )
 
         # 2. Motivo da parada preservado com o código do catálogo.

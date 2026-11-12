@@ -4786,6 +4786,7 @@ class Database(
         # (Setup e Retrabalho deixaram de ser exclusivos); com estados mistos
         # o estado físico segue a ordem produção > retrabalho > setup > parada,
         # e motivo/código vêm só das OPs do estado vencedor.
+        linhas_vencedoras = active
         if len(categories) > 1:
             vencedora = next(
                 c for c in ("producao", "retrabalho", "setup", "parada")
@@ -4822,7 +4823,14 @@ class Database(
             # Parada manual é sempre não programada pela regra da Manufatura.
             planned = False if category == "parada" else None
 
-        single = active[0] if len(active) == 1 else None
+        # A OP do estado físico é a única OP do estado vencedor (homologação
+        # OP-22, 11/11/2026): Setup de uma OP + Início de outra deixava o
+        # tempo de produção do posto sem OP, embora só uma OP produzisse.
+        single = (
+            linhas_vencedoras[0]
+            if not conflict and len(linhas_vencedoras) == 1
+            else None
+        )
         if preservar_intervalo and not inicia_trabalho:
             paused = self._manter_intervalo_tx(
                 cursor, resource, instante, tipo_setor=sector, operador=operador,
@@ -5745,6 +5753,28 @@ class Database(
                 ORDER BY evento.data_hora, evento.id
                 """,
                 (apontamento_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def listar_eventos_apontamento_operador_lote(self, apontamento_ids):
+        """Transições do operador de vários apontamentos, numa consulta só.
+
+        Base do tempo por OP no relatório de Eventos de Produção: com OPs
+        simultâneas no posto, o estado físico guarda uma OP só por linha.
+        """
+
+        ids = sorted({int(item) for item in apontamento_ids or [] if item is not None})
+        if not ids:
+            return []
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, apontamento_id, estado, data_hora
+                FROM eventos_apontamento_operador
+                WHERE apontamento_id = ANY(%s)
+                ORDER BY apontamento_id, data_hora, id
+                """,
+                (ids,),
             )
             return [dict(row) for row in cursor.fetchall()]
 

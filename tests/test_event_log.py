@@ -114,3 +114,42 @@ def test_status_events_mostra_nome_liquido_do_recurso_e_filtra_pelo_codigo():
     assert {item["id"]: item["recurso_nome"] for item in result["items"]} == {1: "Gasparini", 2: "JATEAMENTO", 3: "JATEAMENTO"}
     assert result["opcoes"]["recursos"] == [{"codigo": "DOBRA1", "nome": "Gasparini"}, {"codigo": "Jato", "nome": "JATEAMENTO"}]
     assert [item["id"] for item in event_log.status_events(rows, nomes=nomes, recurso="Jato")["items"]] == [3, 2]
+
+
+def op_event(apontamento_id, estado, moment, id_=0):
+    return {"id": id_, "apontamento_id": apontamento_id, "estado": estado, "data_hora": moment}
+
+
+def physical(categoria, start, end, apontamento_id=1, recurso="DOBRA1"):
+    return {**state(apontamento_id, categoria, start, end, (end - start).total_seconds()), "recurso": recurso}
+
+
+def test_ops_simultaneas_cada_uma_com_o_tempo_inteiro_sem_o_intervalo():
+    # Homologação 11/11/2026: a 1ª OP levava todo o tempo do posto e a 2ª ficava
+    # zerada. Cada OP mostra o tempo em que esteve ativa; o intervalo não conta.
+    facts = [fact(1, op="OPA", start=dt(8), end=dt(10)), fact(2, op="OPB", start=dt(9), end=dt(10))]
+    states = [
+        physical("producao", dt(8), dt(9, 30)),
+        physical("intervalo", dt(9, 30), dt(9, 45), apontamento_id=None),
+        physical("producao", dt(9, 45), dt(10)),
+    ]
+    events = [
+        op_event(1, "producao", dt(8), 1), op_event(1, "finalizado", dt(10), 4),
+        op_event(2, "producao", dt(9), 2), op_event(2, "finalizado", dt(10), 3),
+    ]
+    result = event_log.production_events(facts, states, [], operator_events=events)
+    tempos = {item["op"]: item["tempo_real_segundos"] for item in result["items"]}
+    assert tempos == {"OPA": 6300, "OPB": 2700}
+
+
+def test_setup_de_uma_op_enquanto_outra_produz_aparece_com_seu_tempo():
+    facts = [fact(1, op="OPA", start=dt(8), end=dt(10)), fact(2, op="OPB", start=dt(8), end=dt(10))]
+    states = [physical("producao", dt(8), dt(10), apontamento_id=2)]
+    events = [
+        op_event(1, "setup", dt(8), 1), op_event(1, "producao", dt(8, 30), 3), op_event(1, "parcial", dt(9), 4),
+        op_event(1, "producao", dt(9, 30), 5), op_event(1, "finalizado", dt(10), 6),
+        op_event(2, "producao", dt(8), 2), op_event(2, "finalizado", dt(10), 5),
+    ]
+    result = event_log.production_events(facts, states, [], operator_events=events)
+    linhas = {(item["op"], item["atividade"]): item["tempo_real_segundos"] for item in result["items"]}
+    assert linhas == {("OPA", "setup"): 1800, ("OPA", "producao"): 3600, ("OPB", "producao"): 7200}

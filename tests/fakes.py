@@ -1213,6 +1213,7 @@ class FakeDatabase:
             category, reason = "desconhecido", "Estados simultâneos incompatíveis no mesmo recurso"
         return self.transicionar_estado_recurso(
             recurso, category, tipo_setor=sector, operador=operador, motivo=reason, data_hora=instante,
+            op=active[0].get("op") if len(active) == 1 else None,
         )
 
     def transicionar_estado_recurso(self, recurso, categoria, **kwargs):
@@ -2385,6 +2386,10 @@ class FakeDatabase:
             dict(item) for item in self.operator_events
             if item.get("apontamento_id") == apontamento_id
         ]
+
+    def listar_eventos_apontamento_operador_lote(self, apontamento_ids):
+        ids = set(apontamento_ids or [])
+        return [dict(item) for item in self.operator_events if item.get("apontamento_id") in ids]
 
     def listar_eventos_quantidade_periodo(
         self, inicio, fim, *, setor=None, recurso=None, op=None, operacao=None, produto=None,

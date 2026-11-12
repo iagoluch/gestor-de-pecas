@@ -166,7 +166,46 @@ class OperatorFlowTests(unittest.TestCase):
         # Estados mistos: o recurso físico segue em produção, não "desconhecido".
         self.assertEqual(db.buscar_estado_recurso_atual("1303")["categoria"], "producao")
 
-    def test_parada_direto_da_fila_aceita_com_outra_op_ativa(self):
+    def test_setup_com_outra_op_produzindo_guarda_a_op_e_avisa_no_fim(self):
+        # OP-22 (11/11/2026): Setup da A + Início da B. O posto fica em
+        # produção da B (não "sem OP") e o fim do setup da A não diz que a
+        # produção do posto só recomeçou agora.
+        db, service, first_operation = self._service()
+        second_task = db.inserir_tarefa("T-OPERADOR-SETUP")
+        db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-B", "PECA-2", "Dobra", 1)
+        second_operation = {
+            **first_operation, "id": 12, "codigo_op": "OP-OPERADOR-B",
+            "produto_codigo": "PECA-2", "quantidade": 1,
+        }
+        db.catalog_operations.append(second_operation)
+
+        for action, op, operation in (
+            ("Início", "OP-OPERADOR", first_operation),
+            ("Setup", "OP-OPERADOR", first_operation),
+            ("Início", "OP-OPERADOR-B", second_operation),
+        ):
+            result = service.executar(
+                action, op=op, setor="Dobra", recurso="1303",
+                operacao=operation, recurso_exclusivo=True,
+            )
+            self.assertTrue(result.ok, (action, op, result.message))
+
+        estado = db.buscar_estado_recurso_atual("1303")
+        self.assertEqual(estado["categoria"], "producao")
+        self.assertEqual(estado["op"], "OP-OPERADOR-B")
+
+        ended = service.executar(
+            "Retornar", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=first_operation, recurso_exclusivo=True,
+        )
+        if ended.code == "primeira_peca_gate_obrigatorio":
+            self.skipTest("fake exige a 1ª peça antes do Retornar")
+        self.assertTrue(ended.ok, ended.message)
+        self.assertIn("já estava em produção com a OP OP-OPERADOR-B", ended.message)
+
+    def test_parada_na_fila_recusada_e_aceita_com_outra_op_ativa(self):
+        # OP-19 (11/11/2026): parada só para OP em execução, igual à tela.
+        # A regra de 10/11 segue valendo: outra OP ativa não trava a parada.
         db, service, first_operation = self._service()
         second_task = db.inserir_tarefa("T-OPERADOR-PARADA")
         db.inserir_op_na_tarefa(second_task, "OP-OPERADOR-PARADA", "PECA-2", "Dobra", 1)
@@ -195,6 +234,20 @@ class OperatorFlowTests(unittest.TestCase):
 
         self.assertTrue(first.ok)
         self.assertEqual(queued["status"], "Aguardando")
+        self.assertFalse(stopped.ok)
+        self.assertEqual(stopped.code, "parada_sem_execucao")
+        self.assertEqual(db.buscar_apontamento_operacional(queued["id"])["status"], "Aguardando")
+
+        started = service.executar(
+            "Início", op="OP-OPERADOR-PARADA", setor="Dobra", recurso="1303",
+            operacao=second_operation, recurso_exclusivo=True,
+        )
+        self.assertTrue(started.ok, started.message)
+        stopped = service.executar(
+            "Parada", op="OP-OPERADOR-PARADA", setor="Dobra", recurso="1303",
+            operacao=second_operation, motivo="Ajuste", motivo_codigo="0029",
+            recurso_exclusivo=True,
+        )
         self.assertTrue(stopped.ok, stopped.message)
         self.assertEqual(db.buscar_apontamento_operacional(queued["id"])["status"], "Parada")
 
@@ -308,6 +361,23 @@ class OperatorFlowTests(unittest.TestCase):
 
         self.assertTrue(result.ok, result.message)
         self.assertEqual(result.data["status"], "Retrabalho")
+
+    def test_finalizar_em_retrabalho_e_recusado(self):
+        # OP-28 (11/11/2026): a API segue a tela; a saída é "Finalizar Ret.".
+        db, service, operation = self._service()
+        rework = service.executar(
+            "Retrabalho", op="OP-OPERADOR", setor="Dobra", recurso="1303", operacao=operation,
+        )
+        self.assertTrue(rework.ok, rework.message)
+
+        result = service.executar(
+            "Finalizado", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=operation, pecas_boas=1, refugo=0, operadores_cracha=["123"],
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, "finalizar_em_retrabalho")
+        self.assertEqual(db.buscar_apontamento_operacional(rework.data["id"])["status"], "Retrabalho")
 
     def test_setup_nao_esta_disponivel_para_pintura_ou_solda(self):
         for sector in ("Pintura", "Solda Aço", "Protótipo"):

@@ -27,6 +27,7 @@ from app.core.operator_sectors import (
 )
 from app.core.permissions import USER_LEVELS, navigation_for_level
 from app.core.resource_mapping import (
+    station_differs_from_route,
     SECTOR_OWNED_RESOURCE_SECTORS,
     resource_display_name,
     station_matches_route,
@@ -311,8 +312,8 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
             )
             self.assertTrue(resultado.ok, resultado.message)
 
-    def _finalizar_etapa_de_pintura(self, codigo_op):
-        self._executar_etapa_completa(codigo_op, "Pintura", "Pintura")
+    def _finalizar_etapa_de_pintura(self, codigo_op, posto="Pintura"):
+        self._executar_etapa_completa(codigo_op, "Pintura", posto)
 
     def _publicar_nesting_do_corte(self, codigo_op, codigo_tarefa="TSK-ETAPA3"):
         """Planejamento de Corte pela fonte existente (SIGMANEST/nesting)."""
@@ -786,8 +787,12 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         # 09/11/2026 (3410fa4): cada etapa seguinte chega ao posto do seu
         # próprio recurso canônico (JATO no Jato, INSPE2 na Inspeção Final).
         esperado = [("50", "JATO", "Jato"), ("60", "PINT.L", "Pintura"), ("70", "INSPE2", "Inspeção Final")]
+        # Cada etapa é finalizada no próprio posto: em outro, pede confirmação
+        # (homologação 11/11/2026).
+        posto_da_etapa = "Pintura"
         for numero, codigo_recurso, posto in esperado:
-            self._finalizar_etapa_de_pintura("10796502001")
+            self._finalizar_etapa_de_pintura("10796502001", posto_da_etapa)
+            posto_da_etapa = posto
             fila = self.flow.listar_cartoes("Pintura", posto)["queue"]
             with self.subTest(operacao=numero):
                 self.assertEqual(len(fila), 1)
@@ -937,7 +942,9 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
             len(self.flow.listar_cartoes("Usinagem", "Romi D 1000")["queue"]), 1
         )
 
-    def test_apontar_recurso_canonico_de_pintura_nao_exige_autorizacao_de_excecao(self):
+    def test_pintura_pede_confirmacao_quando_o_posto_nao_e_o_do_roteiro(self):
+        """Homologação 11/11/2026: posto da Pintura com código próprio e
+        diferente do roteiro pede confirmação; no próprio posto, não pede."""
         self._seed_rota_manual(
             "PINTURA-ETAPA3",
             [
@@ -952,12 +959,17 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         )
         self._seed_execucao()
         operacao = self.db.listar_operacoes_para_op("PINTURA-ETAPA3")[0]
+        contexto = dict(op="PINTURA-ETAPA3", setor="Pintura", operacao=operacao)
+        # O posto "Pintura" é o PINT.L; o roteiro pede JATO.
+        recusa = self.flow.executar("Início", recurso="Pintura", **contexto)
+        self.assertFalse(recusa.ok)
+        self.assertEqual(recusa.code, "confirmacao_recurso_obrigatoria")
+        # No próprio posto do roteiro não há confirmação.
+        self.assertFalse(
+            station_differs_from_route("Pintura", "Jato", "JATO", resource_sector="Pintura")
+        )
         resultado = self.flow.executar(
-            "Início",
-            op="PINTURA-ETAPA3",
-            setor="Pintura",
-            recurso="Pintura",
-            operacao=operacao,
+            "Início", recurso="Pintura", confirmar_recurso_divergente=True, **contexto
         )
         self.assertTrue(resultado.ok, resultado.message)
 
@@ -973,7 +985,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         )[-1]
         self.assertEqual(evento["recurso_roteiro_codigo"], "JATO")
         self.assertEqual(evento["recurso_apontado"], "Pintura")
-        self.assertFalse(evento["recurso_divergente"])
+        self.assertTrue(evento["recurso_divergente"])
 
     def test_ambiente_de_execucao_dos_testes_e_isolado_do_banco_real(self):
         alvo = self.db.safe_target
@@ -1021,6 +1033,13 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         direto = executar("Início")
         self.assertFalse(direto.ok)
         self.assertEqual(direto.code, "transicao_invalida")
+        # Homologação 11/11/2026 (OP-28): a saída do retrabalho é "Finalizar Ret.".
+        self.assertEqual(
+            executar("Finalizado", pecas_boas=1, operadores_cracha=["9001"]).code,
+            "finalizar_em_retrabalho",
+        )
+        self.assertTrue(executar("Finalizar Retrabalho", operadores_cracha=["9001"]).ok)
+        self.assertEqual(self._estado_atual(), "Em processo")
 
         # Peças boas não podem exceder o saldo previsto da OP.
         excedente = executar("Finalizado", pecas_boas=11, operadores_cracha=["9001"])
@@ -1039,11 +1058,13 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         )
         self.assertTrue(parcial.ok)
         self.assertEqual(parcial.code, "finalizacao_parcial")
-        self.assertEqual(int(parcial.data["saldo_restante"]), 1)  # 10 - (1 + 6 + 2)
+        # Decisão de 10/11/2026: a 1ª peça não soma sozinha; o operador
+        # informa todas as boas.
+        self.assertEqual(int(parcial.data["saldo_restante"]), 2)  # 10 - (6 + 2)
         self.assertEqual(self._estado_atual(), "Aguardando")
 
         self.assertTrue(executar("Início").ok)
-        final = executar("Finalizado", pecas_boas=1, operadores_cracha=["9001"])
+        final = executar("Finalizado", pecas_boas=2, operadores_cracha=["9001"])
         self.assertTrue(final.ok)
         self.assertEqual(self._estado_atual(), "Finalizado")
 
@@ -1069,6 +1090,7 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
                 "parada",
                 "producao",
                 "retrabalho",
+                "producao",
                 "parcial",
                 "producao",
                 "finalizado",

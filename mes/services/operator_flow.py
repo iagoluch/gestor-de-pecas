@@ -10,11 +10,11 @@ from datetime import datetime
 import logging
 
 from app.core.resource_mapping import (
-    RESOURCE_CONFIRMATION_EXEMPT_SECTORS,
     WELDING_SECTOR_KEYS,
     resolve_resource_identity,
     resource_display_name,
     station_resource_code,
+    station_differs_from_route,
     station_matches_route,
 )
 from app.core.normalization import limpa_codigo
@@ -1099,14 +1099,11 @@ class OperatorFlowService:
             else (operacao.get("codigo_recurso") or operacao.get("recurso") or "")
         ).strip()
         route_name = resource_display_name(route_code, operacao.get("recurso_nome"))
-        divergent_resource = bool(
-            route_code
-            and not station_matches_route(
-                setor,
-                recurso,
-                route_code,
-                resource_sector=operacao.get("recurso_tipo_setor"),
-            )
+        divergent_resource = station_differs_from_route(
+            setor,
+            recurso,
+            route_code,
+            resource_sector=operacao.get("recurso_tipo_setor"),
         )
         # Wave 5.1 — o setor de origem do roteiro é preservado ao lado do setor
         # onde a OP foi realmente apontada. O evento histórico não é reescrito:
@@ -1284,13 +1281,9 @@ class OperatorFlowService:
                         "operacao": dict(operacao),
                     },
                 )
-            sector_exempt_from_resource_confirmation = (
-                str(setor or "").strip().casefold() in RESOURCE_CONFIRMATION_EXEMPT_SECTORS
-            )
             if (
                 divergent_resource
                 and not confirmar_recurso_divergente
-                and not sector_exempt_from_resource_confirmation
                 and not puxada_pelo_lider
             ):
                 return OperatorFlowResult(
@@ -1445,6 +1438,31 @@ class OperatorFlowService:
         )
         if recusa_gate is not None:
             return recusa_gate
+        # Mesmas travas da tela (homologação 11/11/2026), valendo também para
+        # quem chama a API direto.
+        if requested_action == OperatorAction.STOP and current == OperatorState.QUEUED:
+            # OP-19: parada só vale para OP em execução no posto. A linha que
+            # este pedido acabou de enfileirar não pode ficar para trás.
+            if enfileirado_agora is not None:
+                self.db.descartar_inicio_nao_iniciado(enfileirado_agora)
+            return OperatorFlowResult(
+                False,
+                "A OP ainda não está em execução neste posto. Inicie a produção antes de registrar parada.",
+                "parada_sem_execucao",
+            )
+        if (
+            requested_action == OperatorAction.FINISH
+            and current == OperatorState.REWORK
+            and not atual.get("retorno_retrabalho_qualidade")
+        ):
+            # OP-28: em retrabalho a saída é "Finalizar Ret.", que conta boas
+            # e refugo. O retorno da Qualidade (linha só de retrabalho) segue
+            # finalizando direto, como antes.
+            return OperatorFlowResult(
+                False,
+                "Encerre o retrabalho primeiro (Finalizar Ret.).",
+                "finalizar_em_retrabalho",
+            )
         ending_rework = requested_action == OperatorAction.END_REWORK
 
         try:
@@ -1660,6 +1678,19 @@ class OperatorFlowService:
                 "finalizacao_parcial",
                 row,
             )
+        if str(getattr(action, "value", action)) == "Retornar":
+            # Homologação OP-22: com outra OP produzindo, o posto já estava em
+            # produção; "Produção retomada" soava como se o setup acabasse agora.
+            outras = [
+                o.get("op") for o in self._ocupantes_do_recurso(setor, recurso)
+                if o.get("status") == "Em processo" and o.get("op") != row.get("op")
+            ]
+            if outras:
+                return OperatorFlowResult(
+                    True,
+                    f"Setup da OP {codigo} encerrado. O posto já estava em produção com a OP {outras[0]}.",
+                    data=row,
+                )
         return OperatorFlowResult(
             True, _mensagem_sucesso(action, target, codigo, boas, refugos), data=row
         )

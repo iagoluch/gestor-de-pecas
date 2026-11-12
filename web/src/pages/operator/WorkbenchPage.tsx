@@ -1417,11 +1417,13 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
   const [scrapBadge, setScrapBadge] = useState("");
   const scrapRequiresApproval = Number(scrap || 0) > 0;
   const total = Number(good || 0) + Number(scrap || 0);
-  // OP-11: aviso (não bloqueia) — o backend segue dono do limite de quantidade.
+  // Acima do saldo bloqueia (decisão 11/11/2026); o backend também recusa.
   const aboveBalance = context.planned > 0 && total > context.balance;
   // Saldo já zerado (ex.: retrabalho recuperou tudo): 0/0 só encerra a etapa; o backend aceita.
   const balanceExhausted = context.planned > 0 && context.balance <= 0;
-  const missing = !badges.length
+  const missing = aboveBalance
+    ? "Reduza a quantidade para no máximo o saldo da OP."
+    : !badges.length
     ? "Informe o crachá do operador e tecle Tab, Enter ou toque em +."
     : total <= 0 && !balanceExhausted ? "Informe a quantidade de peças boas ou de refugo."
       : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
@@ -1449,7 +1451,7 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
     </div>
     <div className="operator-quantity-grid"><label>Peças boas<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
     <p className="operator-help">O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado.</p>
-    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s). Confira antes de confirmar.</p> : null}
+    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s).</p> : null}
     {scrapRequiresApproval ? <>
       <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>
       <ChamadaButton
@@ -1489,7 +1491,9 @@ function FinishReworkDialog({ context, sector, error, operators, onCancel, onCon
   const scrapRequiresApproval = Number(scrap || 0) > 0;
   const total = Number(good || 0) + Number(scrap || 0);
   const aboveBalance = context.planned > 0 && total > context.balance;
-  const missing = !badges.length
+  const missing = aboveBalance
+    ? "Reduza a quantidade para no máximo o saldo da OP."
+    : !badges.length
     ? "Informe o crachá do operador e tecle Tab, Enter ou toque em +."
     : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
   function addBadge() {
@@ -1507,7 +1511,7 @@ function FinishReworkDialog({ context, sector, error, operators, onCancel, onCon
   return <OperatorDialog title="Finalizar retrabalho" context={<ContextLine {...context} />} onCancel={onCancel}>
     <p className="operator-help">Das peças em retrabalho, quantas ficaram boas e quantas vão para refugo? Campo vazio vale 0. Depois disso a OP volta para Em processo.</p>
     <div className="operator-quantity-grid"><label>Peças boas (recuperadas)<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Peças para refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
-    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s). Confira antes de confirmar.</p> : null}
+    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s).</p> : null}
     {scrapRequiresApproval ? <>
       <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>
       <ChamadaButton

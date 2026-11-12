@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from app.core.resource_mapping import resource_display_name
+from app.core.resource_mapping import resolve_resource_identity, resource_display_name
 from mes.analytics.resource_state import classify_state_row, physical_state_category
 from mes.domain import EventCategory, QuantityKind
 
@@ -120,9 +120,91 @@ def status_events(states, *, operador=None, recurso=None, status=None, classe=No
     }
 
 
-def _work_by_appointment(states):
+def _resource_identity(value) -> str:
+    text = str(value or "").strip()
+    return str(resolve_resource_identity(text) or text).strip().upper()
+
+
+def _operator_intervals(events, end_of):
+    """Intervalos de trabalho de cada apontamento pelos cliques do operador.
+
+    ``producao``/``setup``/``retrabalho`` abrem um intervalo daquela
+    atividade; ``fila``/``parada``/``finalizado``/``parcial`` fecham (a
+    finalização parcial devolve a OP para Aguardando). Intervalo ainda aberto termina em ``end_of[id]`` (fim do
+    apontamento) ou fica aberto (``None``).
+    """
+
+    by_id = defaultdict(list)
+    for event in events or []:
+        if event.get("apontamento_id") is not None and isinstance(event.get("data_hora"), datetime):
+            by_id[event["apontamento_id"]].append(event)
+    work_values = {category.value for category in _WORK_CATEGORIES}
+    result = {}
+    for appointment_id, rows in by_id.items():
+        rows.sort(key=lambda row: (row["data_hora"], row.get("id") or 0))
+        intervals = []
+        current = None
+        for row in rows:
+            state = str(row.get("estado") or "")
+            if current is not None:
+                intervals.append((current[0], current[1], row["data_hora"]))
+                current = None
+            if state in work_values:
+                current = (state, row["data_hora"])
+        if current is not None:
+            intervals.append((current[0], current[1], end_of.get(appointment_id)))
+        result[appointment_id] = intervals
+    return result
+
+
+def _work_by_appointment(states, facts=(), operator_events=None):
+    """Tempo de trabalho de cada apontamento, por atividade.
+
+    Com os eventos do operador, cada OP recebe o tempo inteiro em que esteve
+    ativa, recortado pelo tempo em que o posto de fato trabalhou (produção,
+    setup ou retrabalho físico). OPs simultâneas no mesmo posto mostram,
+    cada uma, o tempo todo, sem divisão (decisão da manufatura, 11/11/2026);
+    intervalo, fora de turno e parada do posto não entram. Sem eventos do
+    operador, vale o vínculo do estado físico com o apontamento.
+    """
+
     grouped = defaultdict(lambda: defaultdict(list))
+    end_of = {
+        fact.get("id"): fact.get("data_fim") for fact in facts or []
+        if isinstance(fact.get("data_fim"), datetime)
+    }
+    intervals = _operator_intervals(operator_events, end_of) if operator_events else {}
+    if intervals:
+        physical = defaultdict(list)
+        for row in states or []:
+            if str(row.get("categoria") or "") in {category.value for category in _WORK_CATEGORIES}:
+                physical[_resource_identity(row.get("recurso"))].append(row)
+        for fact in facts or []:
+            appointment_id = fact.get("id")
+            if appointment_id not in intervals:
+                continue
+            rows = physical.get(_resource_identity(fact.get("maquina") or fact.get("codigo_recurso")), [])
+            for activity, start, end in intervals[appointment_id]:
+                for row in rows:
+                    row_start, row_end = row.get("inicio_periodo"), row.get("fim_periodo")
+                    if not isinstance(row_start, datetime) or not isinstance(row_end, datetime):
+                        continue
+                    clip_start = max(start, row_start)
+                    clip_end = row_end if end is None else min(end, row_end)
+                    if clip_end <= clip_start:
+                        continue
+                    grouped[appointment_id][activity].append({
+                        "inicio_periodo": clip_start,
+                        "fim_periodo": clip_end,
+                        "segundos_periodo": (clip_end - clip_start).total_seconds(),
+                        "data_fim": None if end is None and row.get("data_fim") is None else clip_end,
+                    })
+    # Apontamento já resolvido pelos cliques não repete o vínculo físico;
+    # sem cruzamento (posto com outro nome), vale o vínculo antigo.
+    resolved = set(grouped)
     for row in states or []:
+        if row.get("apontamento_id") in resolved:
+            continue
         if row.get("apontamento_id") is None:
             continue
         try:
@@ -187,9 +269,9 @@ def _sum_quantities(events):
     return total
 
 
-def production_events(facts, states, quantities, cuts=()):
+def production_events(facts, states, quantities, cuts=(), operator_events=None):
     facts = list(facts or [])
-    work = _work_by_appointment(states)
+    work = _work_by_appointment(states, facts, operator_events)
     assigned, orphans = _assign_quantities(facts, quantities)
     items = []
 

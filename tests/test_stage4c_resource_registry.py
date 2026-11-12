@@ -27,6 +27,7 @@ from app.core.resource_mapping import (
     normalize_resource_code,
     resource_display_name,
     resolve_resource_identity,
+    station_differs_from_route,
     station_matches_route,
     station_resource_code,
 )
@@ -262,6 +263,15 @@ class MatrizElegibilidadeTests(unittest.TestCase):
                     station_matches_route(setor, posto, codigo, resource_sector=setor)
                 )
                 self.assertEqual(canonical_resource_code(codigo), normalize_resource_code(codigo))
+
+    def test_confirmacao_de_posto_so_quando_o_posto_tem_codigo_proprio(self):
+        """Homologação 11/11/2026: posto com código próprio e diferente do
+        roteiro pede confirmação; estação de Solda sem código não pede."""
+
+        self.assertTrue(station_differs_from_route("Pintura", "Pintura", "JATO", resource_sector="Pintura"))
+        self.assertFalse(station_differs_from_route("Pintura", "Jato", "JATO", resource_sector="Pintura"))
+        self.assertFalse(station_differs_from_route("Solda Aço", "Estação 1", "SOLDA4"))
+        self.assertFalse(station_differs_from_route("Pintura", "Pintura", ""))
 
     def test_chaves_da_frente_de_solda_acompanham_os_nomes_oficiais(self):
         """Trava as duas pontas do nome do setor.
