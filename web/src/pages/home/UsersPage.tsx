@@ -233,8 +233,8 @@ export function ManagementUsersPage() {
       subtitle={subtitle}
       filters={false}
       actions={
-        <>
-          <button type="button" onClick={() => { setErro(""); setNovoNivel({ rotulo: "", nivel_base: "gestor" }); }}>
+        <div className="page-heading__actions">
+          <button type="button" className="button" onClick={() => { setErro(""); setNovoNivel({ rotulo: "", nivel_base: "gestor" }); }}>
             Novo nível
           </button>
           <button
@@ -244,7 +244,7 @@ export function ManagementUsersPage() {
           >
             Novo usuário
           </button>
-        </>
+        </div>
       }
     >
       <div className="metric-grid metric-grid--four">

@@ -1,0 +1,40 @@
+/* Acabamento visual das telas de gestão (rework 12/11/2026).
+   Só aparência: nenhuma regra aqui muda dado, rota ou comportamento.
+   Importado por último em main.tsx para valer sobre global.css sem
+   reescrever as regras originais. Usa só os tokens de tokens.css. */
+
+/* Marca da barra lateral: em 1366 a coluna tem 200px e o logo fixo de
+   184px vazava por baixo do botão de recolher, cortando "Peças". */
+.sidebar__brand { justify-content: flex-start; padding-right: 14px; }
+.sidebar__brand img { width: auto; min-width: 0; max-width: min(200px, 100%); height: auto; max-height: 45px; object-position: left center; }
+
+/* Cards que sobem para cima dos filtros encostavam no subtítulo. */
+.page-heading + .metric-grid { margin-top: var(--space-5); }
+
+/* Consulta de OP: o campo de busca aparecia com a borda fina do navegador. */
+.order-consult__search input, .order-consult__form input, .order-consult__form select,
+.order-consult__form textarea, .order-consult__reason textarea {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-base);
+}
+.order-consult__search input:hover, .order-consult__form :is(input, select, textarea):hover, .order-consult__reason textarea:hover { border-color: var(--border-strong); }
+.order-consult__search input:focus, .order-consult__form :is(input, select, textarea):focus, .order-consult__reason textarea:focus { border-color: var(--primary); box-shadow: var(--focus-ring); outline: none; }
+
+/* Busca dentro da barra de filtros da tabela (Cadastro, Contatos...): a
+   regra genérica de rótulo da barra empilhava a lupa em cima do texto. */
+.record-toolbar__fields .search-input { display: flex; align-items: center; gap: 8px; align-self: flex-end; color: var(--text); font-size: var(--text-base); font-weight: 400; letter-spacing: normal; text-transform: none; }
+
+/* <small> dentro de tabela caía para 10,8px (abaixo do piso de 11px). */
+.app-content td small, .app-content th small { font-size: var(--text-xs); }
+
+/* "Maiores perdas" com poucos itens ficava solto no meio do card alto. */
+.management-impact-list { margin: 0 0 auto; }
+
+/* Mais de uma ação no cabeçalho da página ficam juntas, à direita. */
+.page-heading__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }

@@ -14,6 +14,7 @@ import "./styles/quality-spc.css";
 import "./styles/maintenance.css";
 import "./styles/dashboard-customizer.css";
 import "./styles/help.css";
+import "./styles/management-polish.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
