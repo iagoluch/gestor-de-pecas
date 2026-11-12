@@ -844,6 +844,9 @@ def create_app(*, settings: WebSettings | None = None, database_factory=None) ->
                     await observatory_task
                 with suppress(Exception):
                     _app.state.dev_observatory.flush_metrics(force=True)
+            recorder_encerrando = getattr(_app.state, "dev_observatory", None)
+            if recorder_encerrando is not None:
+                recorder_encerrando.close()
             _app.state.system_log.stop()
             real_observer = getattr(_app.state, "dev_observatory_real", None)
             if real_observer is not None:

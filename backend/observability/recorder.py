@@ -104,6 +104,9 @@ class DevObservatoryRecorder:
         self.latency_warning_ms = float(latency_warning_ms)
         self.latency_error_ms = float(latency_error_ms)
         self._lock = threading.Lock()
+        self._io_lock = threading.Lock()
+        self._handles: dict[Path, Any] = {}
+        self._closed = False
         self._sequence = 0
         self._events: deque[dict] = deque(maxlen=buffer_size)
         self._traffic: deque[dict] = deque(maxlen=300)
@@ -124,12 +127,46 @@ class DevObservatoryRecorder:
         self._directories_ready = True
 
     def _append(self, path: Path, payload: dict) -> None:
+        # Arquivo mantido aberto: abrir/fechar a cada evento fazia o antivírus do
+        # Windows reexaminar o .jsonl inteiro (~0,8 s por escrita num arquivo de
+        # 9 MB) dentro do event loop, travando a API toda. Aberto + flush ~0,07 ms.
         try:
             self._ensure_directories()
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+            line = json.dumps(payload, ensure_ascii=False, default=str) + "\n"
+            with self._io_lock:
+                if self._closed:
+                    # Escrita tardia (thread que terminou depois do encerramento):
+                    # não deixa arquivo aberto para trás.
+                    with path.open("a", encoding="utf-8") as late:
+                        late.write(line)
+                    return
+                handle = self._handles.get(path)
+                if handle is None or handle.closed:
+                    # Um arquivo por dia: ao virar o dia, solta o do dia anterior.
+                    self._close_handles_locked(except_path=path, same_dir=path.parent)
+                    handle = path.open("a", encoding="utf-8")
+                    self._handles[path] = handle
+                handle.write(line)
+                handle.flush()
         except Exception:  # pragma: no cover - observar nunca pode quebrar o request
             logging.debug("Dev Observatory: falha ao persistir %s", path, exc_info=True)
+
+    def _close_handles_locked(self, *, except_path: Path | None = None, same_dir: Path | None = None) -> None:
+        for known, handle in list(self._handles.items()):
+            if known == except_path or (same_dir is not None and known.parent != same_dir):
+                continue
+            try:
+                handle.close()
+            except Exception:  # pragma: no cover
+                pass
+            del self._handles[known]
+
+    def close(self) -> None:
+        """Fecha os arquivos abertos (encerramento da API)."""
+
+        with self._io_lock:
+            self._closed = True
+            self._close_handles_locked()
 
     def events_path(self, moment: datetime) -> Path:
         return self.events_dir / f"{moment.date().isoformat()}.jsonl"

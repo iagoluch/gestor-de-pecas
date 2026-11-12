@@ -192,6 +192,7 @@ class DevObservatoryApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
+        self.app.state.dev_observatory.close()  # Windows não apaga arquivo aberto
         self._temp.cleanup()
 
     def _login(self, username, password):
@@ -616,6 +617,7 @@ class SegredoRepetidoTests(unittest.TestCase):
             dev_observatory_session_secret=self.SEGREDO,
         )
         self.client = TestClient(create_app(settings=settings, database_factory=lambda: self.db))
+        self.addCleanup(self.client.app.state.dev_observatory.close)
         self.addCleanup(self.client.close)
 
     def test_cookie_do_login_principal_nao_vira_sessao_do_observatorio(self):
