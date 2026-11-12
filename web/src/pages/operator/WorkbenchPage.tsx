@@ -920,7 +920,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} cards={stoppableCards} initial={activeCard && stoppableCards.includes(activeCard) ? activeCard : stoppableCards[0]} onCancel={() => setDialog(null)} onConfirm={(code, comment, targets) => stopCards(targets, { stop_reason_code: code, comment })} /> : null}
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => confirmFirstPiece(result, note)} /> : null}
       {/* Finalização sem crachá (12/11/2026): vale quem está no card do recurso. */}
-      {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} sector={sector} error={dialogError} team={team} onCancel={() => setDialog(null)} onConfirm={(good, scrap, scrapBadge) => execute("Finalizar Retrabalho", { good, scrap, scrap_authorization_badge: scrapBadge || null })} /> : null}
+      {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} error={dialogError} team={team} onCancel={() => setDialog(null)} onConfirm={() => execute("Finalizar Retrabalho", { good: 0, scrap: 0 })} /> : null}
       {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} error={dialogError} team={team} onCancel={() => setDialog(null)} onConfirm={(good, scrap, scrapBadge) => execute("Finalizado", { good, scrap, scrap_authorization_badge: scrapBadge || null })} /> : null}
       {dialog?.kind === "startBadges" ? <StartBadgesDialog action={dialog.action} context={context} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(badges) => { const { action, extra } = dialog; return execute(action, { ...extra, badges }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then((ok) => { if (ok) afterSetup(action); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
@@ -1481,40 +1481,16 @@ function FinishDialog({ context, sector, error, team, onCancel, onConfirm }: { c
 }
 
 /**
- * "Finalizar Ret.": encerra o retrabalho e a OP volta a Em processo (não
- * finaliza a OP). Campo vazio vale 0; 0/0 só devolve a OP à produção. As peças
- * lançadas aqui entram como recuperadas — quem marca isso é o backend.
+ * "Finalizar Ret.": só encerra o retrabalho e a OP volta a Em processo. Não
+ * lança peça boa nem refugo (12/11/2026): quem conta é o Finalizar normal.
  */
-function FinishReworkDialog({ context, sector, error, team, onCancel, onConfirm }: { context: OperationContext; sector: string; error: string; team: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, scrapBadge: string) => unknown }) {
-  const [good, setGood] = useState("");
-  const [scrap, setScrap] = useState("");
-  const [scrapBadge, setScrapBadge] = useState("");
-  const scrapRequiresApproval = Number(scrap || 0) > 0;
-  const total = Number(good || 0) + Number(scrap || 0);
-  const aboveBalance = context.planned > 0 && total > context.balance;
-  const missing = aboveBalance
-    ? "Reduza a quantidade para no máximo o saldo da OP."
-    : !team.length
-    ? "Ninguém no recurso. Adicione o crachá no card Pessoas no recurso."
-    : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
+function FinishReworkDialog({ context, error, team, onCancel, onConfirm }: { context: OperationContext; error: string; team: OperatorBadge[]; onCancel: () => void; onConfirm: () => unknown }) {
+  const missing = !team.length ? "Ninguém no recurso. Adicione o crachá no card Pessoas no recurso." : "";
   return <OperatorDialog title="Finalizar retrabalho" context={<ContextLine {...context} />} onCancel={onCancel}>
-    <p className="operator-help">Das peças em retrabalho, quantas ficaram boas e quantas vão para refugo? Campo vazio vale 0. Depois disso a OP volta para Em processo.</p>
-    <div className="operator-quantity-grid"><label>Peças boas (recuperadas)<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Peças para refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
-    {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s).</p> : null}
-    {scrapRequiresApproval ? <>
-      <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>
-      <ChamadaButton
-        inline
-        label="Chamar responsável"
-        sector={sector}
-        resource={context.resource}
-        defaultReason="Qualidade"
-        defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado ao finalizar o retrabalho; é necessária autorização para o descarte.`)}
-      />
-    </> : null}
+    <p className="operator-help">O retrabalho termina e a OP volta para Em processo. As peças boas e o refugo são informados no Finalizar da OP.</p>
     <p className="operator-help operator-team-summary">Quem trabalhou: {team.length ? team.map((item) => `${item.nome} (${item.cracha})`).join(", ") : "ninguém no recurso"}.</p>
     {error ? <Notice tone="error">{error}</Notice> : null}
-    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), scrapBadge.trim())}>Confirmar</AsyncButton></div>
+    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm()}>Confirmar</AsyncButton></div>
   </OperatorDialog>;
 }
 

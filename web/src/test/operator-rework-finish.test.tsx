@@ -81,42 +81,16 @@ describe("Finalizar Ret. no posto do operador", () => {
     expect(screen.queryByRole("button", { name: "Retrabalho" })).not.toBeInTheDocument();
   });
 
-  it("usa quem está no card; só refugo pede o responsável e envia boas 0", async () => {
+  it("não pede peças (12/11/2026): só encerra o retrabalho, com quem está no card", async () => {
     const fetchMock = mockWorkbench("Retrabalho");
     await abrirPopup(fetchMock);
-    expect(screen.getByLabelText("Peças boas (recuperadas)")).toHaveValue(null);
-    expect(screen.getByLabelText("Peças para refugo")).toHaveValue(null);
-    // Finalização sem crachá (12/11/2026): vale quem está no card do recurso.
+    expect(screen.queryByLabelText("Peças boas (recuperadas)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Peças para refugo")).not.toBeInTheDocument();
     expect(screen.getByText("Quem trabalhou: Ana (123).")).toBeInTheDocument();
     expect(screen.queryByLabelText("Crachá do operador")).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Peças para refugo"), { target: { value: "1" } });
-    expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled();
-    expect(screen.getByText("Informe o crachá do responsável que autoriza o refugo.")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Crachá do responsável que autoriza o refugo"), { target: { value: "123" } });
-    const confirmar = screen.getByRole("button", { name: "Confirmar" });
-    await waitFor(() => expect(confirmar).toBeEnabled());
-    fireEvent.click(confirmar);
-
-    await waitFor(() => expect(postedAction(fetchMock)).toBeDefined());
-    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 0, scrap: 1, scrap_authorization_badge: "123" });
   });
 
-  it("só boas envia refugo 0 e sem crachá de responsável", async () => {
-    const fetchMock = mockWorkbench("Retrabalho");
-    await abrirPopup(fetchMock);
-    fireEvent.change(screen.getByLabelText("Peças boas (recuperadas)"), { target: { value: "2" } });
-    const confirmar = screen.getByRole("button", { name: "Confirmar" });
-    await waitFor(() => expect(confirmar).toBeEnabled());
-    fireEvent.click(confirmar);
-
-    await waitFor(() => expect(postedAction(fetchMock)).toBeDefined());
-    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 2, scrap: 0 });
-    expect(postedAction(fetchMock).badges).toBeUndefined();
-  });
-
-  it("campos vazios (0/0) só encerram o retrabalho", async () => {
+  it("confirmar envia 0/0 e só encerra o retrabalho", async () => {
     const fetchMock = mockWorkbench("Retrabalho");
     await abrirPopup(fetchMock);
     const confirmar = screen.getByRole("button", { name: "Confirmar" });

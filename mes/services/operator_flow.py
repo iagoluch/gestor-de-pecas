@@ -1560,6 +1560,14 @@ class OperatorFlowService:
             return OperatorFlowResult(
                 False, "Peças boas, refugo e retrabalho não podem ser negativos.", "quantidade_invalida"
             )
+        if ending_rework and (boas or refugos):
+            # 12/11/2026: "Finalizar Ret." só encerra o retrabalho. Lançar peça
+            # aqui esgotava o saldo e travava a OP; boas e refugo vão no Finalizar.
+            return OperatorFlowResult(
+                False,
+                "Finalizar Ret. não lança peças. Informe boas e refugo no Finalizar da OP.",
+                "quantidade_invalida",
+            )
         # A INSPECAO herdada sem checklist (Solda/Pintura hoje — ver
         # `inspecao_sem_checklist` acima) é apontada pelo posto só para contar
         # o tempo e seguir a OP; ela não produz peça própria, quem produziu

@@ -30,18 +30,10 @@ Se a OP ainda estiver bloqueada por um retrabalho antigo (feito antes de 09/11/2
 ## Finalizar o retrabalho
 
 1. Clique em **Finalizar Ret.** Abre **Finalizar retrabalho**.
-2. Texto do popup: "Das peças em retrabalho, quantas ficaram boas e quantas vão para refugo? Campo vazio vale 0. Depois disso a OP volta para Em processo."
-3. Preencha:
+2. Texto do popup: "O retrabalho termina e a OP volta para Em processo. As peças boas e o refugo são informados no Finalizar da OP."
+3. Clique em **Confirmar**. Basta ter alguém no card **Pessoas no recurso**.
 
-| Campo | O que informar |
-|---|---|
-| **Peças boas (recuperadas)** | Quantas peças foram consertadas. |
-| **Peças para refugo** | Quantas não têm conserto. |
-
-4. Se informou refugo, preencha o crachá do responsável (veja [Finalizar e informar quantidades](topico:09-finalizar-quantidades-e-crachas)).
-5. Clique em **Confirmar** (o botão se chama só "Confirmar", e não exige quantidade: só o crachá do operador e, havendo refugo, o do responsável).
-
-A OP volta para **Em processo**.
+A OP volta para **Em processo**. O **Finalizar Ret.** não lança peça boa nem refugo: as peças consertadas e as sem conserto são informadas depois, no **Finalizar** da OP (veja [Finalizar e informar quantidades](topico:09-finalizar-quantidades-e-crachas)).
 
 ## Regras importantes
 

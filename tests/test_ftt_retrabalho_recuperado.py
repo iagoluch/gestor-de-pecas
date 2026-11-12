@@ -302,52 +302,25 @@ class FttRecuperadaPostgresTests(unittest.TestCase):
         )
         return apontamento, linha
 
-    def test_encerrar_retrabalho_so_com_refugo_marca_a_recuperada(self):
-        _, linha = self._finalizar_retrabalho(quantidade_boa=0, quantidade_refugo=1)
-        self.assertEqual(linha["status"], "Em processo")  # não finaliza a OP
-        self.assertIsNone(linha["data_fim"])
-        self.assertEqual(linha["quantidade_refugo"], 1)
-        self.assertEqual(
-            self._eventos(), [{"tipo": "refugo", "quantidade": 1, "quantidade_recuperada": 1}]
-        )
+    # 12/11/2026: "Finalizar Ret." não lança peça (esgotava o saldo da OP).
+    def test_encerrar_retrabalho_recusa_peca_boa_sem_gravar(self):
+        with self.assertRaisesRegex(ValueError, "não lança peças"):
+            self._finalizar_retrabalho(quantidade_boa=1)
+        self.assertEqual(self._eventos(), [])
 
-    def test_encerrar_retrabalho_so_com_boas_marca_a_recuperada(self):
-        _, linha = self._finalizar_retrabalho(quantidade_boa=1, quantidade_refugo=0)
-        self.assertEqual(linha["status"], "Em processo")
-        self.assertEqual(linha["quantidade_boa"], 10)  # produção física intacta
-        self.assertEqual(
-            self._eventos(), [{"tipo": "boa", "quantidade": 1, "quantidade_recuperada": 1}]
-        )
-
-    def test_encerrar_retrabalho_campo_vazio_vale_zero(self):
-        _, linha = self._finalizar_retrabalho(quantidade_boa=None, quantidade_refugo=1)
-        self.assertEqual(linha["quantidade_refugo"], 1)
-        self.assertEqual(
-            self._eventos(), [{"tipo": "refugo", "quantidade": 1, "quantidade_recuperada": 1}]
-        )
+    def test_encerrar_retrabalho_recusa_refugo_sem_gravar(self):
+        with self.assertRaisesRegex(ValueError, "não lança peças"):
+            self._finalizar_retrabalho(quantidade_refugo=1)
+        self.assertEqual(self._eventos(), [])
 
     def test_encerrar_retrabalho_zero_a_zero_so_volta_a_producao(self):
         _, linha = self._finalizar_retrabalho()
         self.assertEqual(linha["status"], "Em processo")
         self.assertEqual(self._eventos(), [])
 
-    def test_encerrar_retrabalho_misto_marca_boa_e_refugo(self):
-        # 8 boas + 2 em retrabalho: 1 volta boa e 1 vira refugo.
-        _, linha = self._finalizar_retrabalho(
-            boas=8, retrabalho=2, quantidade_boa=1, quantidade_refugo=1
-        )
-        self.assertEqual(linha["status"], "Em processo")
-        self.assertEqual(
-            self._eventos(),
-            [
-                {"tipo": "boa", "quantidade": 1, "quantidade_recuperada": 1},
-                {"tipo": "refugo", "quantidade": 1, "quantidade_recuperada": 1},
-            ],
-        )
-
     def test_encerrar_retrabalho_registra_evento_de_producao(self):
         # O tempo de produção normal volta a correr: o último estado é 'producao'.
-        apontamento, _ = self._finalizar_retrabalho(quantidade_boa=1)
+        apontamento, _ = self._finalizar_retrabalho()
         estados = self._scalar(
             "SELECT estado FROM eventos_apontamento_operador"
             " WHERE apontamento_id = %s ORDER BY id DESC LIMIT 1",
@@ -362,26 +335,13 @@ class FttRecuperadaPostgresTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Crachá não cadastrado"):
             self.db.transicionar_apontamento_operador(
                 apontamento, "producao", "Ana", operadores_cracha=["0000"],
-                quantidade_boa=1, data_hora=DIA, encerrar_retrabalho=True,
+                data_hora=DIA, encerrar_retrabalho=True,
             )
         self.assertEqual(self._eventos(), [])
         self.assertEqual(
             self._scalar("SELECT status FROM apontamentos_operacionais WHERE id = %s", (apontamento,)),
             "Retrabalho",
         )
-
-    def test_encerrar_retrabalho_nao_ultrapassa_o_saldo(self):
-        cracha = self._cracha()
-        apontamento = self._apontamento(
-            setor="Dobra", boas=9, retrabalho=1, status="Retrabalho"
-        )
-        with self.assertRaisesRegex(ValueError, "excede"):
-            self.db.transicionar_apontamento_operador(
-                apontamento, "producao", "Ana", operadores_cracha=[cracha],
-                quantidade_boa=1, quantidade_refugo=1, data_hora=DIA,
-                encerrar_retrabalho=True,
-            )
-        self.assertEqual(self._eventos(), [])
 
     def test_retrabalho_para_producao_sem_a_marca_continua_recusado(self):
         apontamento = self._apontamento(
@@ -399,16 +359,6 @@ class FttRecuperadaPostgresTests(unittest.TestCase):
             self.db.transicionar_apontamento_operador(
                 apontamento, "producao", "Ana", data_hora=DIA, encerrar_retrabalho=True
             )
-        )
-
-    def test_ftt_9_boas_1_retrabalho_recuperado_da_90_por_cento(self):
-        self._finalizar_retrabalho(quantidade_boa=1)
-        eventos = self._eventos()
-        recuperada = sum(e["quantidade_recuperada"] for e in eventos if e["tipo"] == "boa")
-        self.assertEqual(recuperada, 1)
-        # 9 boas de primeira + 1 recuperada (física: 10), 1 retrabalho na base.
-        self.assertAlmostEqual(
-            _ftt(10, 0, 1, recovered_good_quantity=recuperada).value, 90.0
         )
 
     def test_finalizar_comum_fora_do_retrabalho_nao_e_marcado(self):

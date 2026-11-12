@@ -2601,15 +2601,11 @@ class Database(
                     )
                 finalizacao_parcial = total_atendido < int(atual["quantidade"])
 
-            if encerrar_retrabalho:
-                total_boas += boas
-                total_refugos += refugos
-                if ManufacturingRules.attended_quantity(
-                    total_boas, total_refugos
-                ) > int(atual["quantidade"]):
-                    raise ValueError(
-                        "A soma de peças boas e refugo excede a quantidade prevista restante."
-                    )
+            if encerrar_retrabalho and (boas or refugos):
+                # 12/11/2026: encerrar o retrabalho não lança peça (travava o saldo).
+                raise ValueError(
+                    "Finalizar Ret. não lança peças. Informe boas e refugo no Finalizar da OP."
+                )
 
             if destino == OperatorState.PRODUCTION:
                 cursor.execute(
