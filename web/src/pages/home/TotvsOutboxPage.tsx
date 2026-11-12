@@ -52,6 +52,7 @@ export function TotvsOutboxPage() {
 
   async function act(item: OutboxItem, kind: "reprocess" | "discard") {
     let body: { motivo: string } | undefined;
+    if (kind === "reprocess" && !window.confirm(`Reenviar o envio ${item.id} (OP ${item.production_order ?? "?"}) ao Protheus agora?`)) return;
     if (kind === "discard") {
       const motivo = window.prompt(`Por que descartar o envio ${item.id} (OP ${item.production_order ?? "?"})? Ele não será mais enviado ao Protheus.`);
       if (motivo === null) return;
