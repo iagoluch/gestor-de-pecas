@@ -119,7 +119,7 @@ Não transformar logs, prompts ou relatórios históricos em fonte de verdade at
 ## Regras industriais canônicas
 
 - `Quantidade Produzida` significa **somente peças boas**. Refugo e retrabalho são grandezas separadas.
-- Refugo não completa a quantidade planejada da OP.
+- Boas + refugo completam a quantidade planejada da OP; retrabalho não conta (ver `docs/REGRAS_MANUFATURA_CANONICAS.md`).
 - Setup é classificado como produtivo e **não deve reduzir Disponibilidade nem Performance**.
 - Atividade sem OP é classificada como produtiva.
 - Parada lançada manualmente pelo operador é não programada.

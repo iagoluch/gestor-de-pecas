@@ -43,6 +43,8 @@ BASE_FACT_TABLES = frozenset({
     # Sugestão de manutenção deriva das paradas apagadas aqui (sem FK); sem isso
     # sobraria sugestão de parada que não existe mais.
     "manutencao_sugestoes",
+    # Nível da inspeção progressiva nasce das inspeções; volta ao padrão junto.
+    "qualidade_inspecao_progressiva_nivel",
 })
 # Exclusivamente tabelas dependentes de fatos, para não deixar vínculos soltos.
 # Qualquer FK nova fora desta lista bloqueia a limpeza, em vez de expandi-la.
@@ -56,6 +58,7 @@ ALLOWED_DEPENDENTS = frozenset({
     "qualidade_rnc_decisoes",
     "qualidade_pecas_inspecionadas",
     "qualidade_resultados_cota",
+    "qualidade_inspecao_progressiva_pecas",
 })
 REQUIRED_TABLES = frozenset({
     "apontamentos_operacionais",
