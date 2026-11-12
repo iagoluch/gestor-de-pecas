@@ -968,6 +968,21 @@ class TraceabilityTests(unittest.TestCase):
             {"eventos_quantidade_producao", "apontamentos_corte", "historico_legado"},
         )
 
+    def test_linha_do_tempo_mostra_o_mais_recente_no_topo(self):
+        class _Repo(_TraceRepo):
+            def get_op_timeline(self, op):
+                return [
+                    {"id": 1, "op": op, "tipo": "antigo", "data_hora": datetime(2026, 8, 1, 8, 0)},
+                    {"id": 2, "op": op, "tipo": "sem_data"},
+                    {"id": 3, "op": op, "tipo": "novo", "data_hora": datetime(2026, 8, 2, 8, 0)},
+                ]
+
+        legado = [
+            item["type"] for item in TraceabilityService(_Repo()).trace_op("OP9")["timeline"]
+            if item["source"] == "historico_legado"
+        ]
+        self.assertEqual(legado, ["novo", "antigo", "sem_data"])
+
     def test_operacoes_trazem_o_operador_do_apontamento(self):
         # Diagnóstico 14/10, item 3.4: a coluna Operador dizia "Ver linha do tempo".
         operation = TraceabilityService(_TraceRepo()).trace_op("OP9")["operations"][0]

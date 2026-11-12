@@ -306,7 +306,14 @@ class TraceabilityService:
                 "record_id": movement.get("id"),
                 "appointment_id": movement.get("apontamento_id"),
             })
-        timeline.sort(key=lambda item: (_timestamp(item.get("timestamp")), item.get("record_id") or 0))
+        # Mais recente no topo (regra do sistema para listas com data); sem data vai para o fim.
+        timeline.sort(
+            key=lambda item: (
+                _dt(item.get("timestamp")) is None,
+                -_timestamp(item.get("timestamp")),
+                -(item.get("record_id") or 0),
+            )
+        )
 
         return {
             "op": code,

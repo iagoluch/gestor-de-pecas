@@ -51,7 +51,7 @@ Vazio: "Nenhuma peça inspecionada — Esta OP não tem inspeção registrada pe
 
 ## Linha do tempo
 
-O bloco se chama "Linha do tempo da OP (número) — eventos em ordem cronológica". Colunas: Data e hora, Máquina/recurso, OP, Operação, Evento, Status, Operador, Quantidade, Motivo/detalhe, Registro original ("Fonte não disponível" quando não há).
+O bloco se chama "Linha do tempo da OP (número) — mais recente primeiro". Colunas: Data e hora, Máquina/recurso, OP, Operação, Evento, Status, Operador, Quantidade, Motivo/detalhe, Registro original ("Fonte não disponível" quando não há).
 
 ## Quem pode ver
 

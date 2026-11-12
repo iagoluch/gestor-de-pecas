@@ -224,7 +224,7 @@ export function TraceabilityOrderPage() {
             </SectionCard>
           ) : null}
           <InspectedPiecesSection pieces={query.data?.pieces ?? []} />
-          <SectionCard title={`Linha do tempo da OP ${op} — eventos em ordem cronológica`} className="content-section section-card--table">
+          <SectionCard title={`Linha do tempo da OP ${op} — mais recente primeiro`} className="content-section section-card--table">
             <DataTable
               rows={query.data?.timeline ?? []}
               rowKey={(row, index) => `${row.source}-${row.record_id ?? index}-${row.type}`}
