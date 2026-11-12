@@ -1155,5 +1155,102 @@ class OperatorResourceQueueTests(unittest.TestCase):
         self.assertTrue(queue[0]["origem_recurso"])
 
 
+class OperatorTeamCardTests(unittest.TestCase):
+    """Card de pessoas do recurso (12/11/2026)."""
+
+    _service = OperatorFlowTests._service
+
+    def _iniciar(self, service, operation, **extra):
+        return service.executar(
+            "Início", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=operation, **extra,
+        )
+
+    def test_bancada_exige_cracha_ao_iniciar_mas_outros_fluxos_nao(self):
+        db, service, operation = self._service()
+        recusado = self._iniciar(service, operation, exigir_cracha_inicio=True)
+        self.assertFalse(recusado.ok)
+        self.assertEqual(recusado.code, "cracha_obrigatorio_inicio")
+        # Sem a exigência (ex.: Inspeção da Qualidade) o início segue aceito.
+        self.assertTrue(self._iniciar(service, operation).ok)
+
+    def test_finalizacao_sem_cracha_usa_quem_esta_no_card(self):
+        db, service, operation = self._service()
+        db.cadastrar_operador_apontamento("2", "Maria", fonte="teste")
+        self.assertTrue(
+            self._iniciar(
+                service, operation, operadores_cracha=["1"], exigir_cracha_inicio=True
+            ).ok
+        )
+        self.assertTrue(
+            service.alterar_equipe(setor="Dobra", recurso="1303", cracha="2", entrar=True).ok
+        )
+        finished = service.executar(
+            "Finalizado", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=operation, pecas_boas=2, refugo=0,
+        )
+        self.assertTrue(finished.ok, finished.message)
+        self.assertEqual(
+            sorted(item["cracha"] for item in db.operator_events[-1]["operadores"]),
+            ["1", "2"],
+        )
+
+    def test_card_adiciona_e_remove_pessoa_sem_tirar_a_ultima(self):
+        db, service, operation = self._service()
+        db.cadastrar_operador_apontamento("2", "Maria", fonte="teste")
+        vazio = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="1", entrar=True)
+        self.assertEqual(vazio.code, "recurso_sem_apontamento")
+        self.assertTrue(self._iniciar(service, operation, operadores_cracha=["1"]).ok)
+
+        invalido = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="999", entrar=True)
+        self.assertEqual(invalido.code, "cracha_invalido")
+        entrou = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="2", entrar=True)
+        self.assertTrue(entrou.ok)
+        self.assertEqual(sorted(p["cracha"] for p in entrou.data["team"]), ["1", "2"])
+        # Entrar de novo não duplica a pessoa.
+        service.alterar_equipe(setor="Dobra", recurso="1303", cracha="2", entrar=True)
+        self.assertEqual(len(service.equipe_recurso("Dobra", "1303")), 2)
+
+        saiu = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="1", entrar=False)
+        self.assertTrue(saiu.ok)
+        self.assertEqual([p["cracha"] for p in saiu.data["team"]], ["2"])
+        # A participação de quem saiu foi fechada, não apagada: o tempo dela fica.
+        fechadas = [p for p in db.participations if p["cracha"] == "1"]
+        self.assertTrue(fechadas and all(p.get("data_fim") for p in fechadas))
+
+        fora = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="1", entrar=False)
+        self.assertEqual(fora.code, "cracha_fora_da_equipe")
+        ultima = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="2", entrar=False)
+        self.assertEqual(ultima.code, "equipe_vazia")
+
+    def test_retrabalho_em_op_aberta_sem_ninguem_tambem_pede_cracha(self):
+        db, service, operation = self._service()
+        # OP aberta antes da regra (sem crachá): ninguém no card.
+        self.assertTrue(self._iniciar(service, operation).ok)
+        sem = service.executar(
+            "Retrabalho", op="OP-OPERADOR", setor="Dobra", recurso="1303",
+            operacao=operation, exigir_cracha_inicio=True,
+        )
+        self.assertEqual(sem.code, "cracha_obrigatorio_inicio")
+
+    def test_remover_nao_deixa_nenhuma_op_do_recurso_sem_pessoa(self):
+        from unittest import mock
+
+        db, service, operation = self._service()
+        # Duas OPs no recurso: A só com "1", B só com "2". O card soma dois,
+        # mas tirar "1" deixaria A sem ninguém para finalizar.
+        equipes = {1: [{"cracha": "1", "nome": "Ana"}], 2: [{"cracha": "2", "nome": "Bia"}]}
+        with mock.patch.object(
+            service, "_ocupantes_do_recurso", return_value=[{"id": 1}, {"id": 2}]
+        ), mock.patch.object(
+            service._participacoes,
+            "equipe",
+            side_effect=lambda aps: [p for ap in aps for p in equipes[ap["id"]]],
+        ), mock.patch.object(service._participacoes, "sair") as sair:
+            recusado = service.alterar_equipe(setor="Dobra", recurso="1303", cracha="1", entrar=False)
+        self.assertEqual(recusado.code, "equipe_vazia")
+        sair.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

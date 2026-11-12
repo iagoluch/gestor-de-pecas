@@ -105,3 +105,13 @@ class HighlightActionRequest(BaseModel):
     stop_reason_code: str | None = Field(default=None, max_length=40)
     comment: str | None = Field(default=None, max_length=1000)
     badge: str | None = Field(default=None, max_length=80)
+
+
+class OperatorTeamRequest(BaseModel):
+    """Põe ou tira uma pessoa do card do recurso (tempo-pessoa separado)."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    resource: str = Field(min_length=1, max_length=120)
+    badge: str = Field(min_length=1, max_length=80)
+    action: Literal["add", "remove"]

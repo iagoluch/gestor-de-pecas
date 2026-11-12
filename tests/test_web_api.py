@@ -431,7 +431,7 @@ class WebApiTests(unittest.TestCase):
         operations = self.client.get("/api/v1/operator/operations/OP-WEB")
         self.assertEqual(operations.status_code, 200, operations.text)
         self.assertEqual(operations.json()["items"][0]["id"], 101)
-        payload = {"action": "Início", "resource": "1303", "op": "OP-WEB", "operation_id": 101}
+        payload = {"action": "Início", "resource": "1303", "op": "OP-WEB", "operation_id": 101, "badges": ["1"]}
         no_csrf = self.client.post("/api/v1/operator/actions", json=payload)
         self.assertEqual(no_csrf.status_code, 403)
 
@@ -566,7 +566,7 @@ class WebApiTests(unittest.TestCase):
         setup = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
-            json={"action": "Setup", "resource": "1303", "op": "OP-WEB", "operation_id": 101},
+            json={"action": "Setup", "resource": "1303", "op": "OP-WEB", "operation_id": 101, "badges": ["1"]},
         )
         self.assertEqual(setup.status_code, 200, setup.text)
         self.assertEqual(setup.json()["data"]["status"], "Setup")
@@ -604,6 +604,7 @@ class WebApiTests(unittest.TestCase):
             "resource": "1303",
             "op": "OP-WEB",
             "operation_id": 101,
+            "badges": ["1"],
         }
         # Wave 6B — o portão Setup/Qualidade vem antes de produzir em Dobra.
         liberar_primeira_peca(
@@ -642,6 +643,7 @@ class WebApiTests(unittest.TestCase):
             "resource": "1303",
             "op": "OP-WEB",
             "operation_id": 101,
+            "badges": ["1"],
         }
         rework = self.client.post(
             "/api/v1/operator/actions",
@@ -684,6 +686,7 @@ class WebApiTests(unittest.TestCase):
             "resource": "1303",
             "op": "OP-WEB",
             "operation_id": 101,
+            "badges": ["1"],
         }
         rework = self.client.post(
             "/api/v1/operator/actions",
@@ -910,7 +913,7 @@ class WebApiTests(unittest.TestCase):
         started = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
-            json={"action": "Início", "resource": "Estação 1", "op": "OP-SOLDA-A", "operation_id": 201},
+            json={"action": "Início", "resource": "Estação 1", "op": "OP-SOLDA-A", "operation_id": 201, "badges": ["1"]},
         )
         self.assertEqual(started.status_code, 200, started.text)
 
@@ -925,12 +928,61 @@ class WebApiTests(unittest.TestCase):
         second = self.client.post(
             "/api/v1/operator/actions",
             headers=self.csrf(),
-            json={"action": "Início", "resource": "Estação 1", "op": "OP-SOLDA-B", "operation_id": 202},
+            json={"action": "Início", "resource": "Estação 1", "op": "OP-SOLDA-B", "operation_id": 202, "badges": ["1"]},
         )
         self.assertEqual(second.status_code, 200, second.text)
         stations = self.client.get("/api/v1/operator/stations")
         station = next(item for item in stations.json()["items"] if item["resource"] == "Estação 1")
         self.assertEqual(station["ocupantes_total"], 2)
+
+    def test_card_de_pessoas_do_recurso_pela_api(self):
+        self.login_operator()
+        self.db.cadastrar_operador_apontamento("2", "Maria")
+        base = {"resource": "1303", "op": "OP-WEB", "operation_id": 101}
+        sem_cracha = self.client.post(
+            "/api/v1/operator/actions", headers=self.csrf(), json={**base, "action": "Início"}
+        )
+        self.assertEqual(sem_cracha.status_code, 409, sem_cracha.text)
+        self.assertEqual(sem_cracha.json()["code"], "cracha_obrigatorio_inicio")
+        started = self.client.post(
+            "/api/v1/operator/actions",
+            headers=self.csrf(),
+            json={**base, "action": "Início", "badges": ["1"]},
+        )
+        self.assertEqual(started.status_code, 200, started.text)
+
+        no_csrf = self.client.post(
+            "/api/v1/operator/team", json={"resource": "1303", "badge": "2", "action": "add"}
+        )
+        self.assertEqual(no_csrf.status_code, 403)
+        added = self.client.post(
+            "/api/v1/operator/team",
+            headers=self.csrf(),
+            json={"resource": "1303", "badge": "2", "action": "add"},
+        )
+        self.assertEqual(added.status_code, 200, added.text)
+        workbench = self.client.get("/api/v1/operator/workbench", params={"resource": "1303"})
+        self.assertEqual(sorted(p["cracha"] for p in workbench.json()["team"]), ["1", "2"])
+
+        removed = self.client.post(
+            "/api/v1/operator/team",
+            headers=self.csrf(),
+            json={"resource": "1303", "badge": "1", "action": "remove"},
+        )
+        self.assertEqual(removed.status_code, 200, removed.text)
+        last = self.client.post(
+            "/api/v1/operator/team",
+            headers=self.csrf(),
+            json={"resource": "1303", "badge": "2", "action": "remove"},
+        )
+        self.assertEqual(last.status_code, 409, last.text)
+        self.assertEqual(last.json()["code"], "equipe_vazia")
+        other = self.client.post(
+            "/api/v1/operator/team",
+            headers=self.csrf(),
+            json={"resource": "Estação 1", "badge": "2", "action": "add"},
+        )
+        self.assertEqual(other.status_code, 403)
 
     def test_rotas_gerenciais_consumem_facade_e_preservam_ausencia_real_de_dados(self):
         self.login_manager()

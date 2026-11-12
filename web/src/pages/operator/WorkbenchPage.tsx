@@ -42,6 +42,7 @@ type DialogState =
   | { kind: "interrupt" }
   | { kind: "activity"; action: "Início" | "Finalizado" }
   | { kind: "authorization"; action: string; code: string; details?: Record<string, unknown> }
+  | { kind: "startBadges"; action: string; extra: Record<string, unknown> }
   | { kind: "list"; source: "production" | "queue" | "history" }
   | { kind: "route"; operationKey: string }
   | { kind: "gate" }
@@ -54,11 +55,13 @@ type DialogState =
  *  Setup. Depois da primeira peça aprovada, Iniciar e Finalizar seguem o fluxo
  *  normal do setor e não passam por aqui. */
 const GATE_CODES = ["primeira_peca_gate_obrigatorio", "primeira_peca_bloqueada"];
+// Ações que põem gente para trabalhar na OP: pedem crachá (12/11/2026).
+const START_ACTIONS = ["Início", "Setup", "Retrabalho"];
 
 interface OperationsSync { source?: string; pending?: boolean; remote_available?: boolean; status?: string; message?: string; found?: boolean }
 interface OperationsResponse { items: OperatorOperation[]; sync?: OperationsSync }
 interface ResourceState { categoria?: string; motivo?: string; op?: string | null; data_inicio?: string | null }
-interface WorkbenchResponse { sector: string; resource: string; resource_state?: ResourceState | null; queue: OperatorCard[]; production: OperatorCard[]; filtro?: { subconjunto_id: number; subconjunto: string; produto: string | null } }
+interface WorkbenchResponse { sector: string; resource: string; resource_state?: ResourceState | null; queue: OperatorCard[]; production: OperatorCard[]; team?: OperatorBadge[]; filtro?: { subconjunto_id: number; subconjunto: string; produto: string | null } }
 interface HistoryResponse { sector: string; resource: string; items: OperatorCard[]; page: number; page_size: number; has_more: boolean }
 interface OperatorBadge { cracha: string; nome: string; ativo?: boolean }
 interface OperationContext {
@@ -179,6 +182,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // Quem diz se o posto aceita outra OP é o backend; sem resposta, a tela não bloqueia.
   const stations = useApiQuery<{ items: OperatorStation[] }>("/api/v1/operator/stations");
   const operators = useApiQuery<{ items: OperatorBadge[] }>("/api/v1/operator/operators");
+  // Quem está trabalhando no recurso agora (card "Pessoas no recurso"). Cada
+  // pessoa conta o próprio tempo; o tempo da OP não é dividido.
+  const team = cards.data?.team ?? [];
+  // Crachás da última tentativa: a autorização reenvia a mesma equipe.
+  const lastBadges = useRef<string[]>([]);
   // Desenho da peça: o backend resolve o arquivo na rede e devolve só o
   // metadado. O operador nunca escolhe pasta e nunca vê caminho de rede.
   const drawing = useApiQuery<OperatorDrawing>(
@@ -728,6 +736,12 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         return false;
       }
     }
+    // Início, Setup e Retrabalho levam quem já está no card; sem ninguém, o
+    // backend recusa e a tela pede os crachás (cracha_obrigatorio_inicio).
+    const teamBadges = !withoutOp && !("badges" in extra) && START_ACTIONS.includes(action) && team.length
+      ? { badges: team.map((item) => item.cracha) }
+      : {};
+    lastBadges.current = (extra.badges as string[] | undefined) ?? teamBadges.badges ?? [];
     setSubmitting(true);
     setDialogError("");
     try {
@@ -737,6 +751,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         op: withoutOp ? null : String(appointmentForStop?.op ?? loadedOp),
         operation_id: withoutOp ? null : appointmentForStop?.catalogo_operacao_id ?? selected?.id ?? selected?.catalogo_operacao_id,
         operation_number: withoutOp ? null : appointmentForStop?.numero_operacao ?? appointmentForStop?.operation ?? selected?.numero_operacao ?? selected?.codigo,
+        ...teamBadges,
         ...extra,
       });
       // Sucesso não vira faixa: a faixa de estado do posto já mostra o resultado.
@@ -755,7 +770,9 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       }
       return true;
     } catch (reason) {
-      if (reason instanceof ApiError && ["confirmacao_recurso_obrigatoria", "confirmacao_etapa_anterior_obrigatoria"].includes(reason.code)) {
+      if (reason instanceof ApiError && reason.code === "cracha_obrigatorio_inicio") {
+        setDialog({ kind: "startBadges", action, extra });
+      } else if (reason instanceof ApiError && ["confirmacao_recurso_obrigatoria", "confirmacao_etapa_anterior_obrigatoria"].includes(reason.code)) {
         setDialog({ kind: "authorization", action, code: reason.code, details: reason.details as Record<string, unknown> | undefined });
       } else {
         // O backend é a autoridade do portão. A recusa da finalização já é a
@@ -865,6 +882,13 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       )}
         </div>
         <aside className="operator-workbench__aside" aria-label="Contexto da peça">
+          <TeamCard
+            resource={resource}
+            team={team}
+            active={activeCards.length > 0}
+            operators={operators.data?.items ?? []}
+            onChanged={() => { cards.reload(); historyQuery.reload(); }}
+          />
           <DrawingCard
             op={loadedOp}
             loading={drawing.loading}
@@ -895,8 +919,10 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       ) : null}
       {dialog?.kind === "stop" ? <StopDialog context={stopContext} reasons={reasons.data?.items ?? []} cards={stoppableCards} initial={activeCard && stoppableCards.includes(activeCard) ? activeCard : stoppableCards[0]} onCancel={() => setDialog(null)} onConfirm={(code, comment, targets) => stopCards(targets, { stop_reason_code: code, comment })} /> : null}
       {dialog?.kind === "firstPiece" ? <FirstPieceDialog context={context} gate={firstPiece} busy={submitting} onCancel={() => setDialog(null)} onConfirm={(result, note) => confirmFirstPiece(result, note)} /> : null}
-      {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} sector={sector} error={dialogError} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizar Retrabalho", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
-      {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} error={dialogError} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(good, scrap, badges, scrapBadge) => execute("Finalizado", { good, scrap, badges, scrap_authorization_badge: scrapBadge || null })} /> : null}
+      {/* Finalização sem crachá (12/11/2026): vale quem está no card do recurso. */}
+      {dialog?.kind === "finishRework" ? <FinishReworkDialog context={context} sector={sector} error={dialogError} team={team} onCancel={() => setDialog(null)} onConfirm={(good, scrap, scrapBadge) => execute("Finalizar Retrabalho", { good, scrap, scrap_authorization_badge: scrapBadge || null })} /> : null}
+      {dialog?.kind === "finish" ? <FinishDialog context={context} sector={sector} error={dialogError} team={team} onCancel={() => setDialog(null)} onConfirm={(good, scrap, scrapBadge) => execute("Finalizado", { good, scrap, scrap_authorization_badge: scrapBadge || null })} /> : null}
+      {dialog?.kind === "startBadges" ? <StartBadgesDialog action={dialog.action} context={context} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(badges) => { const { action, extra } = dialog; return execute(action, { ...extra, badges }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then((ok) => { if (ok) afterSetup(action); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "setupTool" ? (
         <OperatorDialog title="Setup Ferramental" context={<SetupContextLine context={context} />} onCancel={() => setDialog(null)}>
@@ -913,7 +939,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       ) : null}
       {dialog?.kind === "interrupt" ? <OperatorDialog title="Interromper OP" size="compact" context={<SetupContextLine context={context} />} onCancel={() => setDialog(null)}><p>A OP volta para a fila sem lançar quantidade e sem movimentar o Protheus. O tempo até agora fica registrado e soma com o da próxima vez.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><AsyncButton pendingLabel="Interrompendo…" className="button button--primary" disabled={submitting} onClick={() => execute("Interromper")}>Interromper</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "activity" ? <OperatorDialog title="Atividade sem OP" size="compact" onCancel={() => setDialog(null)}><p>{dialog.action === "Início" ? "Iniciar uma atividade sem OP neste posto?" : "Finalizar a atividade sem OP em andamento?"}</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Não</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={submitting} onClick={() => execute(dialog.action)}>Sim</AsyncButton></div></OperatorDialog> : null}
-      {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} code={dialog.code} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => { const action = dialog.action; return execute(action, { badges: badge ? [badge] : [], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
+      {dialog?.kind === "authorization" ? <AuthorizationDialog context={context} code={dialog.code} details={dialog.details} onCancel={() => setDialog(null)} onConfirm={(badge) => { const action = dialog.action; return execute(action, { badges: [...new Set([...lastBadges.current, ...(badge ? [badge] : [])])], confirm_resource_divergence: dialog.code === "confirmacao_recurso_obrigatoria" || Boolean(dialog.details?.confirmar_recurso_divergente), confirm_previous_step: dialog.code === "confirmacao_etapa_anterior_obrigatoria" }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
       {dialog?.kind === "list" ? <CardListDialog title={{ production: "Produção", queue: "Fila de Ordem", history: "Histórico" }[dialog.source]} items={dialog.source === "history" ? historyQuery.data?.items ?? [] : cards.data?.[dialog.source] ?? []} hasMore={dialog.source === "history" && Boolean(historyQuery.data?.has_more)} onCancel={() => setDialog(null)} onSelect={(item) => { selectCard(item); setDialog(null); }} /> : null}
       {dialog?.kind === "gate" ? (
         <SetupQualityDialog
@@ -1406,12 +1432,9 @@ function CardListDialog({ title, items, hasMore, onCancel, onSelect }: { title: 
   return <OperatorDialog title={title} size="wide" onCancel={onCancel}>{items.length ? <div className="operator-dialog-card-list">{items.map((item, index) => <OperatorCardView key={`${item.id ?? item.op}-${index}`} item={item} onSelect={onSelect} />)}</div> : <EmptyState title={`Nenhum item em ${title.toLocaleLowerCase("pt-BR")}`} />}{hasMore ? <p className="operator-help">Exibindo os 100 registros mais recentes. Use os filtros dos relatórios para consultas históricas maiores.</p> : null}</OperatorDialog>;
 }
 
-function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }: { context: OperationContext; sector: string; error: string; operators: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, badges: string[], scrapBadge: string) => unknown }) {
+function FinishDialog({ context, sector, error, team, onCancel, onConfirm }: { context: OperationContext; sector: string; error: string; team: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, scrapBadge: string) => unknown }) {
   const [good, setGood] = useState("");
   const [scrap, setScrap] = useState("0");
-  const [badge, setBadge] = useState("");
-  const [badges, setBadges] = useState<string[]>([]);
-  const [badgeError, setBadgeError] = useState("");
   // Refugo é decisão de responsável: o crachá dele autoriza o descarte, com a
   // mesma regra do retrabalho da primeira peça. Quem valida é o backend.
   const [scrapBadge, setScrapBadge] = useState("");
@@ -1423,22 +1446,10 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
   const balanceExhausted = context.planned > 0 && context.balance <= 0;
   const missing = aboveBalance
     ? "Reduza a quantidade para no máximo o saldo da OP."
-    : !badges.length
-    ? "Informe o crachá do operador e tecle Tab, Enter ou toque em +."
+    : !team.length
+    ? "Ninguém no recurso. Adicione o crachá no card Pessoas no recurso."
     : total <= 0 && !balanceExhausted ? "Informe a quantidade de peças boas ou de refugo."
       : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
-  function addBadge() {
-    const normalized = badge.trim();
-    if (!normalized) return;
-    const registered = operators.find((item) => item.cracha === normalized && item.ativo !== false);
-    if (!registered) {
-      setBadgeError("Crachá não cadastrado ou inativo.");
-      return;
-    }
-    setBadges((current) => current.includes(normalized) ? current : [...current, normalized]);
-    setBadge("");
-    setBadgeError("");
-  }
   return <OperatorDialog title="Finalizar produção" size="wide" context={<ContextLine {...context} />} onCancel={onCancel}>
     <div className="operator-finish-summary">
       <div><small>Produto</small><strong>{context.product || "—"}</strong></div>
@@ -1463,16 +1474,9 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
         defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado na finalização; é necessária autorização para o descarte.`)}
       />
     </> : null}
-    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
-    {badgeError ? <p className="form-error">{badgeError}</p> : null}
-    <div className="operator-badge-list" aria-label="Operadores adicionados">
-      {badges.length ? badges.map((item) => {
-        const operator = operators.find((candidate) => candidate.cracha === item);
-        return <div key={item}><span><strong>{operator?.nome ?? item}</strong><small>Crachá {item}</small></span><button type="button" aria-label={`Remover ${operator?.nome ?? item}`} onClick={() => setBadges((current) => current.filter((value) => value !== item))}>×</button></div>;
-      }) : <p>Nenhum operador adicionado.</p>}
-    </div>
+    <p className="operator-help operator-team-summary">Quem trabalhou: {team.length ? team.map((item) => `${item.nome} (${item.cracha})`).join(", ") : "ninguém no recurso"}.</p>
     {error ? <Notice tone="error">{error}</Notice> : null}
-    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar finalização</AsyncButton></div>
+    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), scrapBadge.trim())}>Confirmar finalização</AsyncButton></div>
   </OperatorDialog>;
 }
 
@@ -1481,33 +1485,18 @@ function FinishDialog({ context, sector, error, operators, onCancel, onConfirm }
  * finaliza a OP). Campo vazio vale 0; 0/0 só devolve a OP à produção. As peças
  * lançadas aqui entram como recuperadas — quem marca isso é o backend.
  */
-function FinishReworkDialog({ context, sector, error, operators, onCancel, onConfirm }: { context: OperationContext; sector: string; error: string; operators: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, badges: string[], scrapBadge: string) => unknown }) {
+function FinishReworkDialog({ context, sector, error, team, onCancel, onConfirm }: { context: OperationContext; sector: string; error: string; team: OperatorBadge[]; onCancel: () => void; onConfirm: (good: number, scrap: number, scrapBadge: string) => unknown }) {
   const [good, setGood] = useState("");
   const [scrap, setScrap] = useState("");
-  const [badge, setBadge] = useState("");
-  const [badges, setBadges] = useState<string[]>([]);
-  const [badgeError, setBadgeError] = useState("");
   const [scrapBadge, setScrapBadge] = useState("");
   const scrapRequiresApproval = Number(scrap || 0) > 0;
   const total = Number(good || 0) + Number(scrap || 0);
   const aboveBalance = context.planned > 0 && total > context.balance;
   const missing = aboveBalance
     ? "Reduza a quantidade para no máximo o saldo da OP."
-    : !badges.length
-    ? "Informe o crachá do operador e tecle Tab, Enter ou toque em +."
+    : !team.length
+    ? "Ninguém no recurso. Adicione o crachá no card Pessoas no recurso."
     : scrapRequiresApproval && !scrapBadge.trim() ? "Informe o crachá do responsável que autoriza o refugo." : "";
-  function addBadge() {
-    const normalized = badge.trim();
-    if (!normalized) return;
-    const registered = operators.find((item) => item.cracha === normalized && item.ativo !== false);
-    if (!registered) {
-      setBadgeError("Crachá não cadastrado ou inativo.");
-      return;
-    }
-    setBadges((current) => current.includes(normalized) ? current : [...current, normalized]);
-    setBadge("");
-    setBadgeError("");
-  }
   return <OperatorDialog title="Finalizar retrabalho" context={<ContextLine {...context} />} onCancel={onCancel}>
     <p className="operator-help">Das peças em retrabalho, quantas ficaram boas e quantas vão para refugo? Campo vazio vale 0. Depois disso a OP volta para Em processo.</p>
     <div className="operator-quantity-grid"><label>Peças boas (recuperadas)<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Peças para refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
@@ -1523,16 +1512,76 @@ function FinishReworkDialog({ context, sector, error, operators, onCancel, onCon
         defaultComment={responsibleCallComment(context, `Refugo de ${Number(scrap || 0)} peça(s) informado ao finalizar o retrabalho; é necessária autorização para o descarte.`)}
       />
     </> : null}
-    <label>Crachá do operador<div className="operator-badge-entry"><input value={badge} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); addBadge(); } }} /><button type="button" aria-label="Adicionar operador" onClick={addBadge}>+</button></div></label>
-    {badgeError ? <p className="form-error">{badgeError}</p> : null}
-    <div className="operator-badge-list" aria-label="Operadores adicionados">
-      {badges.length ? badges.map((item) => {
-        const operator = operators.find((candidate) => candidate.cracha === item);
-        return <div key={item}><span><strong>{operator?.nome ?? item}</strong><small>Crachá {item}</small></span><button type="button" aria-label={`Remover ${operator?.nome ?? item}`} onClick={() => setBadges((current) => current.filter((value) => value !== item))}>×</button></div>;
-      }) : <p>Nenhum operador adicionado.</p>}
-    </div>
+    <p className="operator-help operator-team-summary">Quem trabalhou: {team.length ? team.map((item) => `${item.nome} (${item.cracha})`).join(", ") : "ninguém no recurso"}.</p>
     {error ? <Notice tone="error">{error}</Notice> : null}
-    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), badges, scrapBadge.trim())}>Confirmar</AsyncButton></div>
+    <div className="operator-dialog__actions">{missing ? <small className="disabled-reason">{missing}</small> : null}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={Boolean(missing)} onClick={() => onConfirm(Number(good || 0), Number(scrap || 0), scrapBadge.trim())}>Confirmar</AsyncButton></div>
+  </OperatorDialog>;
+}
+
+/** Campo de crachá com "+": valida no cadastro antes de aceitar. */
+function BadgeInput({ operators, onAdd, label = "Crachá", busy = false }: { operators: OperatorBadge[]; onAdd: (badge: string) => unknown; label?: string; busy?: boolean }) {
+  const [badge, setBadge] = useState("");
+  const [error, setError] = useState("");
+  async function add() {
+    const normalized = badge.trim();
+    if (!normalized) return;
+    if (!operators.some((item) => item.cracha === normalized && item.ativo !== false)) {
+      setError("Crachá não cadastrado ou inativo.");
+      return;
+    }
+    setError("");
+    if ((await onAdd(normalized)) !== false) setBadge("");
+  }
+  return <>
+    <label>{label}<div className="operator-badge-entry"><input value={badge} inputMode="numeric" disabled={busy} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); void add(); } }} /><button type="button" aria-label="Adicionar pessoa" disabled={busy} onClick={() => void add()}>+</button></div></label>
+    {error ? <p className="form-error">{error}</p> : null}
+  </>;
+}
+
+function BadgeList({ people, emptyText, onRemove, busy = false }: { people: OperatorBadge[]; emptyText: string; onRemove: (badge: string) => unknown; busy?: boolean }) {
+  return <div className="operator-badge-list" aria-label="Pessoas no recurso">
+    {people.length ? people.map((item) => <div key={item.cracha}><span><strong>{item.nome}</strong><small>Crachá {item.cracha}</small></span><button type="button" aria-label={`Remover ${item.nome}`} disabled={busy} onClick={() => void onRemove(item.cracha)}>×</button></div>) : <p>{emptyText}</p>}
+  </div>;
+}
+
+/**
+ * Card "Pessoas no recurso": quem está trabalhando agora. "+" põe mais uma
+ * pessoa e "×" tira; o tempo de cada uma conta separado, sem dividir o da OP.
+ */
+function TeamCard({ resource, team, active, operators, onChanged }: { resource: string; team: OperatorBadge[]; active: boolean; operators: OperatorBadge[]; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function change(badge: string, action: "add" | "remove") {
+    setBusy(true);
+    setError("");
+    try {
+      await api.post("/api/v1/operator/team", { resource, badge, action });
+      onChanged();
+      return true;
+    } catch (reason) {
+      setError(apiErrorMessage(reason));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <section className="operator-team-card" aria-label="Pessoas no recurso">
+    <header><h2>Pessoas no recurso</h2><span>{team.length}</span></header>
+    <BadgeList people={team} busy={busy} emptyText={active ? "Ninguém informado." : "O crachá é pedido ao iniciar."} onRemove={(badge) => change(badge, "remove")} />
+    {active ? <BadgeInput operators={operators} busy={busy} label="Adicionar crachá" onAdd={(badge) => change(badge, "add")} /> : null}
+    {error ? <Notice tone="error">{error}</Notice> : null}
+  </section>;
+}
+
+/** Início, Setup ou Retrabalho sem ninguém no recurso: pede os crachás. */
+function StartBadgesDialog({ action, context, operators, onCancel, onConfirm }: { action: string; context: OperationContext; operators: OperatorBadge[]; onCancel: () => void; onConfirm: (badges: string[]) => unknown }) {
+  const [badges, setBadges] = useState<string[]>([]);
+  const people = badges.map((cracha) => ({ cracha, nome: operators.find((item) => item.cracha === cracha)?.nome ?? cracha }));
+  return <OperatorDialog title={`Quem vai trabalhar — ${action}`} size="compact" context={<ContextLine {...context} />} onCancel={onCancel}>
+    <p className="operator-help">Informe o crachá de cada pessoa que vai trabalhar neste recurso. Cada uma conta o próprio tempo.</p>
+    <BadgeInput operators={operators} onAdd={(badge) => setBadges((current) => current.includes(badge) ? current : [...current, badge])} />
+    <BadgeList people={people} emptyText="Nenhum crachá adicionado." onRemove={(badge) => setBadges((current) => current.filter((item) => item !== badge))} />
+    <div className="operator-dialog__actions">{badges.length ? null : <small className="disabled-reason">Adicione ao menos um crachá.</small>}<button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button button--primary" disabled={!badges.length} onClick={() => onConfirm(badges)}>Confirmar</AsyncButton></div>
   </OperatorDialog>;
 }
 

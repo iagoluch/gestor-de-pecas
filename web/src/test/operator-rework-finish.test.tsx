@@ -32,7 +32,7 @@ function mockWorkbench(status: string) {
     if (path.includes("/operator/stop-reasons")) return json({ items: [] });
     if (path.includes("/operator/operators")) return json({ items: [{ id: 1, cracha: "123", nome: "Ana", ativo: true }] });
     if (path.includes("/operator/history")) return json({ items: [], has_more: false });
-    if (path.includes("/operator/workbench")) return json({ sector: "Dobra", resource: "1303", queue: [], production: [{ id: 10, op: "OP-RET", status, operation: "10 - DOBRA", numero_operacao: "10", product: "P1", qty: 5, good: 0, scrap: 0, attended: 0, balance: 5 }] });
+    if (path.includes("/operator/workbench")) return json({ sector: "Dobra", resource: "1303", queue: [], team: [{ cracha: "123", nome: "Ana" }], production: [{ id: 10, op: "OP-RET", status, operation: "10 - DOBRA", numero_operacao: "10", product: "P1", qty: 5, good: 0, scrap: 0, attended: 0, balance: 5 }] });
     if (path.includes("/operator/drawings")) return json({ available: false, message: "Nenhum desenho disponível." });
     if (path.includes("/operator/operations/OP-RET")) return json({ items: [{ id: 10, numero_operacao: "10", descricao_operacao: "DOBRA", visual_status: "current", visual_current: true, actionable: true, selectable: true, requires_confirmation: false, quantidade_planejada: 5, pode_finalizar: true, exige_gate_primeira_peca: false, primeira_peca: gateNaoAplicavel }] });
     if (path.includes("/operator/actions") && method === "POST") return json({ ok: true, message: "Retrabalho finalizado. Produção retomada.", data: { status: "Em processo" } });
@@ -53,12 +53,6 @@ async function abrirOp() {
 function postedAction(fetchMock: ReturnType<typeof mockWorkbench>) {
   const call = fetchMock.mock.calls.find(([path, init]) => String(path).includes("/operator/actions") && init?.method === "POST");
   return call ? JSON.parse(String(call[1]?.body)) : undefined;
-}
-
-async function preencherCracha() {
-  fireEvent.change(screen.getByLabelText("Crachá do operador"), { target: { value: "123" } });
-  // Tab no campo preenchido adiciona o crachá, sem precisar clicar no +.
-  fireEvent.keyDown(screen.getByLabelText("Crachá do operador"), { key: "Tab" });
 }
 
 async function abrirPopup(fetchMock: ReturnType<typeof mockWorkbench>) {
@@ -87,16 +81,16 @@ describe("Finalizar Ret. no posto do operador", () => {
     expect(screen.queryByRole("button", { name: "Retrabalho" })).not.toBeInTheDocument();
   });
 
-  it("exige crachá; só refugo pede o responsável e envia boas 0", async () => {
+  it("usa quem está no card; só refugo pede o responsável e envia boas 0", async () => {
     const fetchMock = mockWorkbench("Retrabalho");
     await abrirPopup(fetchMock);
     expect(screen.getByLabelText("Peças boas (recuperadas)")).toHaveValue(null);
     expect(screen.getByLabelText("Peças para refugo")).toHaveValue(null);
-    expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled();
-    expect(screen.getByText("Informe o crachá do operador e tecle Tab, Enter ou toque em +.")).toBeInTheDocument();
+    // Finalização sem crachá (12/11/2026): vale quem está no card do recurso.
+    expect(screen.getByText("Quem trabalhou: Ana (123).")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Crachá do operador")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Peças para refugo"), { target: { value: "1" } });
-    await preencherCracha();
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled();
     expect(screen.getByText("Informe o crachá do responsável que autoriza o refugo.")).toBeInTheDocument();
 
@@ -106,31 +100,31 @@ describe("Finalizar Ret. no posto do operador", () => {
     fireEvent.click(confirmar);
 
     await waitFor(() => expect(postedAction(fetchMock)).toBeDefined());
-    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 0, scrap: 1, badges: ["123"], scrap_authorization_badge: "123" });
+    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 0, scrap: 1, scrap_authorization_badge: "123" });
   });
 
   it("só boas envia refugo 0 e sem crachá de responsável", async () => {
     const fetchMock = mockWorkbench("Retrabalho");
     await abrirPopup(fetchMock);
     fireEvent.change(screen.getByLabelText("Peças boas (recuperadas)"), { target: { value: "2" } });
-    await preencherCracha();
     const confirmar = screen.getByRole("button", { name: "Confirmar" });
     await waitFor(() => expect(confirmar).toBeEnabled());
     fireEvent.click(confirmar);
 
     await waitFor(() => expect(postedAction(fetchMock)).toBeDefined());
-    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 2, scrap: 0, badges: ["123"] });
+    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 2, scrap: 0 });
+    expect(postedAction(fetchMock).badges).toBeUndefined();
   });
 
-  it("campos vazios (0/0) só encerram o retrabalho, mantendo o crachá", async () => {
+  it("campos vazios (0/0) só encerram o retrabalho", async () => {
     const fetchMock = mockWorkbench("Retrabalho");
     await abrirPopup(fetchMock);
-    await preencherCracha();
     const confirmar = screen.getByRole("button", { name: "Confirmar" });
     await waitFor(() => expect(confirmar).toBeEnabled());
     fireEvent.click(confirmar);
 
     await waitFor(() => expect(postedAction(fetchMock)).toBeDefined());
-    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 0, scrap: 0, badges: ["123"] });
+    expect(postedAction(fetchMock)).toMatchObject({ action: "Finalizar Retrabalho", good: 0, scrap: 0 });
+    expect(postedAction(fetchMock).badges).toBeUndefined();
   });
 });

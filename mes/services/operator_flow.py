@@ -942,6 +942,68 @@ class OperatorFlowService:
             return None
         return {**ocupantes[0], **self._resumo_ocupacao(ocupantes)}
 
+    def equipe_recurso(self, setor, recurso):
+        """Pessoas trabalhando agora no recurso (card do posto)."""
+
+        return self._participacoes.equipe(self._ocupantes_do_recurso(setor, recurso))
+
+    def alterar_equipe(self, *, setor, recurso, cracha, entrar):
+        """Põe ou tira uma pessoa do recurso sem mexer no estado da OP.
+
+        Cada pessoa conta o próprio tempo; o tempo da OP não é dividido.
+        """
+
+        cracha = str(cracha or "").strip()
+        ocupantes = self._ocupantes_do_recurso(setor, recurso)
+        if not ocupantes:
+            return OperatorFlowResult(
+                False,
+                "Não há apontamento em andamento neste recurso.",
+                "recurso_sem_apontamento",
+            )
+        equipe = self._participacoes.equipe(ocupantes)
+        na_equipe = any(item["cracha"].casefold() == cracha.casefold() for item in equipe)
+        if entrar:
+            finder = getattr(self.db, "buscar_operadores_apontamento", None)
+            if not cracha or not callable(finder) or not list(finder([cracha]) or []):
+                return OperatorFlowResult(
+                    False, "Crachá não cadastrado ou inativo.", "cracha_invalido"
+                )
+            self._participacoes.entrar(
+                apontamentos=ocupantes,
+                setor=setor,
+                recurso=recurso,
+                cracha=cracha,
+                instante=self._now(),
+            )
+        else:
+            if not na_equipe:
+                return OperatorFlowResult(
+                    False, "Este crachá não está no recurso.", "cracha_fora_da_equipe"
+                )
+            # Sem ninguém numa execução a OP não teria como ser finalizada:
+            # vale para cada OP do recurso, não só para o card somado.
+            if any(
+                all(
+                    item["cracha"].casefold() == cracha.casefold()
+                    for item in self._participacoes.equipe([apontamento])
+                )
+                for apontamento in ocupantes
+            ):
+                return OperatorFlowResult(
+                    False,
+                    "O recurso precisa de ao menos uma pessoa. Adicione outra antes de remover.",
+                    "equipe_vazia",
+                )
+            self._participacoes.sair(
+                apontamentos=ocupantes, cracha=cracha, instante=self._now()
+            )
+        return OperatorFlowResult(
+            True,
+            "Pessoa adicionada." if entrar else "Pessoa removida.",
+            data={"team": self.equipe_recurso(setor, recurso)},
+        )
+
     def _recurso_bloqueia(self, setor, recurso, requested_action):
         """O recurso ocupado impede esta ação de uma OP que ainda não o ocupa?
 
@@ -1013,6 +1075,7 @@ class OperatorFlowService:
         confirmar_etapa_anterior_pendente=False,
         recurso_exclusivo=False,
         cracha_refugo=None,
+        exigir_cracha_inicio=False,
     ):
         try:
             requested_action = OperatorAction(action)
@@ -1199,6 +1262,26 @@ class OperatorFlowService:
                 dict(conflito),
             )
         target = resolve_operator_action(requested_action, OperatorState.QUEUED)
+        # Manufatura 12/11/2026: todo início de apontamento leva o crachá de
+        # quem vai trabalhar; é ele que abre o tempo-pessoa no card do posto.
+        # Só a bancada do operador liga a exigência (a inspeção da Qualidade
+        # segue pedindo o crachá na conclusão).
+        if (
+            exigir_cracha_inicio
+            and not crachas
+            and target in {OperatorState.PRODUCTION, OperatorState.SETUP, OperatorState.REWORK}
+            and (
+                atual is None
+                or operator_state_from_status(atual.get("status")) == OperatorState.QUEUED
+                # OP já aberta sem ninguém (aberta antes desta regra): também pede.
+                or not self._participacoes.equipe([atual])
+            )
+        ):
+            return OperatorFlowResult(
+                False,
+                "Informe o crachá de quem vai trabalhar neste recurso.",
+                "cracha_obrigatorio_inicio",
+            )
         if atual is None and target in {
             OperatorState.PRODUCTION,
             OperatorState.STOPPED,
@@ -1495,9 +1578,12 @@ class OperatorFlowService:
         # (decisão da manufatura, 10/11/2026 — revoga a soma do patch de 09/11).
         if target == OperatorState.FINISHED or ending_rework:
             if not crachas:
+                # A finalização não pede crachá: vale quem está no card do posto.
+                crachas = [item["cracha"] for item in self._participacoes.equipe([atual])]
+            if not crachas:
                 return OperatorFlowResult(
                     False,
-                    "Informe ao menos um crachá de operador.",
+                    "Adicione o crachá de quem trabalhou no card do recurso.",
                     "cracha_obrigatorio",
                 )
             # O tempo bruto do Gestor é sempre gravado normalmente, mesmo

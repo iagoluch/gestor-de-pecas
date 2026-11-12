@@ -17,7 +17,7 @@ from backend.api.dependencies.clock import request_now_func
 from backend.api.dependencies.operator import sector_for_user, validate_resource
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
-from backend.api.schemas.operator import FirstPieceRequest, OperatorActionRequest
+from backend.api.schemas.operator import FirstPieceRequest, OperatorActionRequest, OperatorTeamRequest
 from mes.domain.first_piece import sector_has_setup
 from mes.services.drawings import DrawingLookupService, parse_drawing_roots
 from mes.services.first_piece import FirstPieceService
@@ -311,8 +311,30 @@ def workbench(
         "sector": sector.name,
         "resource": resource,
         "resource_state": service.estado_recurso(resource),
+        "team": service.equipe_recurso(sector.name, resource),
         **cards,
     }
+
+
+@router.post("/team", dependencies=[Depends(require_csrf)])
+def change_team(
+    payload: OperatorTeamRequest,
+    request: Request,
+    user: SessionUser = Depends(require_operator_user),
+    database=Depends(get_database),
+):
+    sector, resource = validate_resource(user, payload.resource)
+    service = _service(database, user, request)
+    response = _raise_result(
+        service.alterar_equipe(
+            setor=sector.name,
+            recurso=resource,
+            cracha=payload.badge,
+            entrar=payload.action == "add",
+        )
+    )
+    request.app.state.realtime.publish("operator_team")
+    return response
 
 
 @router.get("/history")
@@ -690,6 +712,7 @@ def execute_action(
         confirmar_etapa_anterior_pendente=payload.confirm_previous_step,
         cracha_refugo=payload.scrap_authorization_badge,
         recurso_exclusivo=True,
+        exigir_cracha_inicio=True,
     )
     response = _raise_result(result)
     if payload.action == "Parada":

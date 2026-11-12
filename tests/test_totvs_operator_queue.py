@@ -1045,10 +1045,8 @@ class TotvsOperatorQueuePostgresTests(unittest.TestCase):
         excedente = executar("Finalizado", pecas_boas=11, operadores_cracha=["9001"])
         self.assertFalse(excedente.ok)
         self.assertEqual(excedente.code, "quantidade_inconsistente")
-        # Finalização exige crachá.
-        sem_cracha = executar("Finalizado", pecas_boas=9)
-        self.assertFalse(sem_cracha.ok)
-        self.assertEqual(sem_cracha.code, "cracha_obrigatorio")
+        # Finalização sem crachá usa quem está no card (12/11/2026); o caso
+        # está coberto em test_operator_flow (equipe do recurso).
 
         # Wave 4: boas + refugo consomem o planejado. 6 boas + 2 refugos
         # atendem 8 de 10 e mantêm a OP aberta com saldo de 2; a parcial

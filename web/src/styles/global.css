@@ -1101,6 +1101,14 @@ button.operator-topbar__machine:hover strong, button.operator-topbar__machine:fo
 .operator-badge-list span { display: grid; gap: 2px; }
 .operator-badge-list small { color: var(--muted); }
 .operator-badge-list button { width: 34px; height: 34px; border: 1px solid var(--danger); border-radius: var(--radius-control); color: var(--danger); background: var(--surface); font-size: 22px; }
+/* Card "Pessoas no recurso" (12/11/2026): quem trabalha agora no posto. */
+.operator-team-card { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.operator-team-card > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.operator-team-card h2 { margin: 0; font-size: var(--text-md, 1rem); }
+.operator-team-card > header span { min-width: 28px; padding: 2px 8px; border-radius: 999px; background: var(--surface-alt); font-weight: 700; text-align: center; }
+.operator-team-card .operator-badge-list { min-height: 0; }
+.operator-team-card label { display: grid; gap: 6px; font-size: var(--text-sm); font-weight: 600; }
+.operator-team-summary { margin: 4px 0; }
 
 .cutting-page, .highlight-page { padding: 24px 30px 30px; }
 .cutting-search, .highlight-search { display: flex; align-items: end; justify-content: center; gap: 10px; }

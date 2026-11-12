@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 
-from mes.domain import OperatorState
+from mes.domain import OperatorState, operator_state_from_status
 
 
 #: Estados em que existe alguém trabalhando na OP. Parada não conta tempo-pessoa
@@ -143,6 +143,59 @@ class OperatorParticipationService:
             )
             principal_definido = True
         return list(lister(apontamento_id) or []) if callable(lister) else []
+
+    # ------------------------------------------------------------------
+    def equipe(self, apontamentos):
+        """Quem está no recurso agora: participações abertas, sem repetir pessoa."""
+
+        lister = getattr(self.db, "listar_participacoes_apontamento", None)
+        if not callable(lister):
+            return []
+        equipe = {}
+        for apontamento in apontamentos or ():
+            for row in lister(apontamento["id"], somente_abertas=True) or ():
+                cracha = str(row.get("cracha_resolvido") or row.get("cracha") or "").strip()
+                if cracha and cracha.casefold() not in equipe:
+                    equipe[cracha.casefold()] = {
+                        "cracha": cracha,
+                        "nome": row.get("nome_resolvido") or row.get("nome") or cracha,
+                    }
+        return list(equipe.values())
+
+    def entrar(self, *, apontamentos, setor, recurso, cracha, instante):
+        """Mais uma pessoa no recurso: o tempo dela conta a partir de agora,
+        em cada execução aberta, sem dividir o de ninguém."""
+
+        opener = getattr(self.db, "iniciar_participacao_operador", None)
+        pessoas = self._resolver_pessoas([cracha])
+        if not callable(opener) or not pessoas:
+            return
+        pessoa = pessoas[0]
+        for apontamento in apontamentos:
+            estado = operator_state_from_status(apontamento.get("status"))
+            opener(
+                recurso,
+                operador_id=pessoa["operador_id"],
+                cracha=pessoa["cracha"],
+                nome=pessoa["nome"],
+                tipo_setor=setor,
+                op=apontamento.get("op"),
+                numero_operacao=apontamento.get("numero_operacao"),
+                data_inicio=instante,
+                apontamento_id=apontamento["id"],
+                tipo_participacao=getattr(estado, "value", None),
+                operador_principal=False,
+                referencia_origem=f"apontamento:{apontamento['id']}",
+            )
+
+    def sair(self, *, apontamentos, cracha, instante):
+        """A pessoa deixou o recurso: o tempo dela para aqui; o da OP segue."""
+
+        closer = getattr(self.db, "finalizar_participacoes_apontamento", None)
+        if not callable(closer):
+            return
+        for apontamento in apontamentos:
+            closer(apontamento["id"], data_fim=instante, crachas=[cracha])
 
     # ------------------------------------------------------------------
     def resumo(self, apontamento_id, *, agora=None):
