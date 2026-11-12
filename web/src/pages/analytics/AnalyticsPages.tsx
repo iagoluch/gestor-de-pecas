@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { BarList } from "../../components/BarList";
 import { DataTable } from "../../components/DataTable";
@@ -405,17 +405,77 @@ export function AnalyticsOeePage() {
   );
 }
 
+const HOURS_TITLE = "Análises — Horas & Utilização";
+
 export function AnalyticsHoursPage() {
+  const [view, setView] = useState<"machines" | "people">("machines");
+  const toggle = (
+    <div className="segment-toggle" role="tablist" aria-label="Visão de horas">
+      <button type="button" role="tab" aria-selected={view === "machines"} className={`segment-toggle__btn${view === "machines" ? " segment-toggle__btn--active" : ""}`} onClick={() => setView("machines")}>Máquinas</button>
+      <button type="button" role="tab" aria-selected={view === "people"} className={`segment-toggle__btn${view === "people" ? " segment-toggle__btn--active" : ""}`} onClick={() => setView("people")}>Funcionários</button>
+    </div>
+  );
+  return view === "machines" ? <HoursMachinesView toggle={toggle} /> : <HoursPeopleView toggle={toggle} />;
+}
+
+interface PersonHours {
+  cracha: string;
+  nome: string;
+  segundos: number;
+  recursos: Array<{ recurso: string; segundos: number }>;
+  ops: number;
+  trabalhando_agora: boolean;
+}
+
+function HoursPeopleView({ toggle }: { toggle: ReactNode }) {
+  const filters = useManagementFilters();
+  const query = useApiQuery<{ pessoas: PersonHours[]; total_segundos: number }>(`/api/v1/analytics/people-hours?${filters.query}`);
+  const subtitle = "Hora-homem: quanto tempo cada crachá trabalhou. Cada pessoa conta o próprio tempo, sem dividir o tempo da OP.";
+  if (query.loading) return <LoadingPage title={HOURS_TITLE} subtitle={subtitle} />;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={HOURS_TITLE} subtitle={subtitle}>{toggle}<ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  const people = query.data?.pessoas ?? [];
+  const top = people[0];
+  return (
+    <PageFrame staleError={query.error} sectionId="analytics" title={HOURS_TITLE} subtitle={subtitle}>
+      {toggle}
+      <div className="metric-grid metric-grid--four">
+        <MetricCard label="Hora-homem total" value={formatHours(query.data?.total_segundos)} detail="Soma do tempo de todas as pessoas" accent="teal" />
+        <MetricCard label="Pessoas que trabalharam" value={formatNumber(people.length)} availability={people.length ? "disponivel" : "sem_registros"} />
+        <MetricCard label="Média por pessoa" value={people.length ? formatHours((query.data?.total_segundos ?? 0) / people.length) : "—"} />
+        <MetricCard label="Quem mais trabalhou" value={top ? top.nome : "Ninguém"} detail={top ? formatHours(top.segundos) : undefined} availability={top ? "disponivel" : "sem_registros"} accent="warning" />
+      </div>
+      <SectionCard title="Horas por funcionário" className="section-card--table content-section">
+        {people.length ? (
+          <DataTable
+            rows={people}
+            rowKey={(row) => row.cracha}
+            columns={[
+              { key: "name", label: "Funcionário", sortValue: (row) => row.nome, render: (row) => row.nome },
+              { key: "badge", label: "Crachá", sortValue: (row) => row.cracha, render: (row) => row.cracha },
+              { key: "hours", label: "Horas", sortValue: (row) => row.segundos, render: (row) => formatHours(row.segundos) },
+              { key: "resources", label: "Máquinas", render: (row) => row.recursos.map((item) => `${displayName(item.recurso)} (${formatHours(item.segundos)})`).join(", ") },
+              { key: "ops", label: "OPs", sortValue: (row) => row.ops, render: (row) => formatNumber(row.ops) },
+              { key: "now", label: "Agora", render: (row) => (row.trabalhando_agora ? <StatusBadge value="Trabalhando" /> : "—") },
+            ]}
+          />
+        ) : <EmptyState />}
+      </SectionCard>
+    </PageFrame>
+  );
+}
+
+function HoursMachinesView({ toggle }: { toggle: ReactNode }) {
   const filters = useManagementFilters();
   const query = useApiQuery<TimeBreakdown>(`/api/v1/analytics/hours-utilization?${filters.query}`);
-  const title = "Análises — Horas & Utilização";
+  const title = HOURS_TITLE;
   const subtitle = "Tempo registrado consolidado, sem multiplicar a máquina por OPs simultâneas, e o Tempo MES por categoria, setor e recurso.";
   if (query.loading) return <LoadingPage title={title} subtitle={subtitle} />;
-  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}><ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
+  if (query.error && !query.data) return <PageFrame sectionId="analytics" title={title} subtitle={subtitle}>{toggle}<ErrorState error={query.error} onRetry={query.reload} /></PageFrame>;
   const data = query.data;
   const resources = (data?.by_resource ?? []).map((row) => ({ label: String(row.recurso), value: Number(row.producao ?? 0), detail: formatHours(Number(row.producao ?? 0)) }));
   return (
     <PageFrame staleError={query.error} sectionId="analytics" title={title} subtitle={subtitle}>
+      {toggle}
       <div className="metric-grid metric-grid--four">
         <MetricCard label="Tempo registrado" value={formatHours(data?.physical_seconds)} detail={formatRecordedTimeDetail(data?.physical_seconds, data?.by_resource?.length ?? 0)} />
         <MetricCard label="Tempo atribuído bruto" value={formatHours(data?.raw_attributed_timeline_seconds)} detail={formatAveragePerResource(data?.raw_attributed_timeline_seconds, data?.by_resource?.length ?? 0)} accent="teal" />

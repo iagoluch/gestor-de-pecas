@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime
 
+from fastapi import APIRouter, Depends, Request
+
+from backend.api.database import get_database
 from backend.api.dependencies.bulkhead import management_read_slot
+from backend.api.dependencies.clock import request_now_func
 from backend.api.dependencies.auth import require_management_user
 from backend.api.dependencies.facade import get_frontend_facade
 from backend.api.dependencies.filters import analytics_filter
 from backend.api.errors import AppError
 from backend.api.schemas.auth import SessionUser
 from mes.contracts import AnalyticsFilter
+from mes.services.person_hours import horas_por_pessoa
 
 
 router = APIRouter(prefix="/analytics", tags=["Análises"], dependencies=[Depends(management_read_slot)])
@@ -19,6 +24,21 @@ def all_analytics(
     facade=Depends(get_frontend_facade),
 ):
     return facade.analises(filters)
+
+
+@router.get("/people-hours")
+def people_hours(
+    request: Request,
+    filters: AnalyticsFilter = Depends(analytics_filter),
+    _user: SessionUser = Depends(require_management_user),
+    database=Depends(get_database),
+):
+    rows = database.listar_participacoes_operador_periodo(
+        filters.inicio, filters.fim, recurso=filters.recurso, setor=filters.setor,
+        op=filters.op, cracha=filters.operador,
+    )
+    now_func = request_now_func(request)
+    return horas_por_pessoa(rows, filters.inicio, filters.fim, now_func() if now_func else datetime.now())
 
 
 @router.get("/{analysis_type}")
