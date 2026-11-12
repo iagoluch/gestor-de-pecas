@@ -5765,10 +5765,69 @@ class Database(
         with self.connection() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id, apontamento_id, estado, data_hora
+                SELECT id, apontamento_id, estado, operador, data_hora
                 FROM eventos_apontamento_operador
                 WHERE apontamento_id = ANY(%s)
                 ORDER BY apontamento_id, data_hora, id
+                """,
+                (ids,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def listar_inspecoes_primeira_peca(self, apontamento_ids, inicio, fim):
+        """Aprovações/reprovações da primeira peça no período, por apontamento.
+
+        Cada decisão fica no log de alterações (entidade ``primeira_peca``);
+        decisões anteriores a esse log saem da própria tabela da 1ª peça.
+        """
+
+        ids = sorted({str(int(item)) for item in apontamento_ids or [] if item is not None})
+        if not ids:
+            return []
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT (a.depois->>'apontamento_id')::bigint AS apontamento_id,
+                       a.depois->>'resultado' AS resultado, a.usuario_nome AS operador,
+                       a.quando AS data_hora, a.depois->>'observacao' AS observacao
+                FROM auditoria_alteracoes a
+                WHERE a.entidade = 'primeira_peca'
+                  AND a.depois->>'apontamento_id' = ANY(%s)
+                  AND a.quando >= %s AND a.quando < %s
+                UNION ALL
+                SELECT q.apontamento_id, q.resultado, q.inspecionada_por, q.inspecionada_em, q.observacao
+                FROM qualidade_primeira_peca q
+                WHERE q.apontamento_id::text = ANY(%s)
+                  AND q.resultado IS NOT NULL
+                  AND q.inspecionada_em >= %s AND q.inspecionada_em < %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM auditoria_alteracoes a
+                      WHERE a.entidade = 'primeira_peca' AND a.depois->>'primeira_peca_id' = q.id::text
+                  )
+                ORDER BY data_hora
+                """,
+                (ids, inicio, fim, ids, inicio, fim),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def listar_eventos_apontamento_operador_por_ids(self, evento_ids):
+        """Clique do operador (com OP e operação) pelo id do evento.
+
+        Explica o estado automático que um clique provocou: o "Recurso sem
+        demanda" gravado depois de Finalizar ou Interromper a última OP.
+        """
+
+        ids = sorted({int(item) for item in evento_ids or [] if item is not None})
+        if not ids:
+            return []
+        with self.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT ev.id, ev.estado, ev.operador, ev.data_hora,
+                       a.op, a.numero_operacao
+                FROM eventos_apontamento_operador ev
+                JOIN apontamentos_operacionais a ON a.id = ev.apontamento_id
+                WHERE ev.id = ANY(%s)
                 """,
                 (ids,),
             )

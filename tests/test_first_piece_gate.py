@@ -163,6 +163,21 @@ class FirstPieceServiceTests(unittest.TestCase):
         self.assertEqual(len(db.first_pieces), 1)
         self.assertEqual(db.first_pieces[0]["quantidade_planejada"], 10)
 
+    def test_cada_decisao_da_primeira_peca_fica_no_log(self):
+        db, servico = self._servico()
+        gravadas = []
+        db.registrar_auditoria = lambda **dados: gravadas.append(dados) or True
+        self._ciclo_ate_producao(servico)
+        servico.marcar_setup(op="OP-PP", operacao=self.OPERACAO)
+        for resultado in ("RETRABALHO", "CONFORME"):
+            self.assertTrue(servico.inspecionar(
+                op="OP-PP", setor="Dobra", recurso="Gasparini", operacao=self.OPERACAO, resultado=resultado,
+            ).ok)
+        # A tabela da 1ª peça guarda só a última; o log guarda as duas.
+        self.assertEqual([item["depois"]["resultado"] for item in gravadas], ["RETRABALHO", "CONFORME"])
+        self.assertEqual({item["entidade"] for item in gravadas}, {"primeira_peca"})
+        self.assertEqual(gravadas[0]["usuario_nome"], "OPERADOR PP")
+
     def test_op_unitaria_segue_a_mesma_regra(self):
         db, servico = self._servico()
         operacao = {**self.OPERACAO, "id": 78, "quantidade": 1}

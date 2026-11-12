@@ -45,6 +45,23 @@ describe("Auditoria > Eventos de Status", () => {
     expect(screen.getByText("Sem chapa")).toBeInTheDocument();
   });
 
+  it("sem demanda automático mostra Sistema como colaborador e o porquê", async () => {
+    renderWith(<AuditStatusEventsPage />, {
+      "/audit/status-events": {
+        summary: { eventos: 1, recursos: 1, paradas_nao_planejadas: 0, em_aberto: 1 },
+        page: { page: 1, page_size: 200, total: 1 },
+        items: [{
+          id: 8, recurso: "DOBRA1", categoria: "fila", inicio: "2026-11-10T09:00:00", fim: null, em_aberto: true,
+          operador: "ANA", autor: "Sistema", automatico: true, motivo: "Recurso sem demanda",
+          causa: "Recurso ficou sem OP ativa depois que ANA interrompeu a OP OP7", comentario: null, op: null,
+        }],
+      },
+    });
+    expect(await screen.findByText("Sistema")).toBeInTheDocument();
+    expect(screen.queryByText("ANA")).not.toBeInTheDocument();
+    expect(screen.getByText("Recurso sem demanda — Recurso ficou sem OP ativa depois que ANA interrompeu a OP OP7")).toBeInTheDocument();
+  });
+
   it("filtros na barra de cima e recurso escolhido digitando vai para o servidor", async () => {
     renderWith(<AuditStatusEventsPage />, {
       "/audit/status-events": {
@@ -83,5 +100,20 @@ describe("Auditoria > Eventos de Produção", () => {
     expect(screen.getByText("Quantidade sem evento")).toBeInTheDocument();
     expect(screen.getByText("1 quantidade(s) sem evento")).toBeInTheDocument();
     expect(screen.getByText("P-100")).toBeInTheDocument();
+  });
+
+  it("primeira peça aprovada e reprovada aparecem com quem decidiu", async () => {
+    renderWith(<AuditProductionEventsPage />, {
+      "/audit/production-events": {
+        summary: { eventos: 2, quantidade_boa: 0, quantidade_refugo: 0, quantidade_retrabalho: 0, quantidade_sem_evento: 0 },
+        page: { page: 1, page_size: 200, total: 2 },
+        items: [
+          { apontamento_id: 1, op: "OP1", colaborador: "ANA", atividade: "primeira_peca", resultado_primeira_peca: "RETRABALHO", inicio: "2026-11-10T08:00:00", fim: "2026-11-10T08:00:00" },
+          { apontamento_id: 1, op: "OP1", colaborador: "BIA", atividade: "primeira_peca", resultado_primeira_peca: "CONFORME", inicio: "2026-11-10T08:30:00", fim: "2026-11-10T08:30:00" },
+        ],
+      },
+    });
+    expect(await screen.findByText("1ª peça aprovada")).toBeInTheDocument();
+    expect(screen.getByText("1ª peça reprovada (retrabalho)")).toBeInTheDocument();
   });
 });

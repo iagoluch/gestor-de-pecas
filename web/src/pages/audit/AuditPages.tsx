@@ -87,6 +87,11 @@ export interface StatusEvent {
   em_aberto: boolean;
   duracao_segundos?: number | null;
   operador?: string | null;
+  /** Quem mudou o estado: "Sistema" quando automático, senão o operador. */
+  autor?: string | null;
+  automatico?: boolean;
+  /** Por que o sistema mudou o estado sozinho (só nos automáticos). */
+  causa?: string | null;
   motivo?: string | null;
   comentario?: string | null;
   op?: string | null;
@@ -94,6 +99,7 @@ export interface StatusEvent {
 }
 
 export interface ProductionEvent {
+  resultado_primeira_peca?: string | null;
   apontamento_id?: number | null;
   op?: string | null;
   tarefa?: string | null;
@@ -150,11 +156,28 @@ export const STATUS_COLUMNS: TableColumn<StatusEvent>[] = [
   { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
   { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.em_aberto ? "Em aberto" : formatDateTime(row.fim)) },
   { key: "duration", label: "Duração no período", sortValue: (row) => row.duracao_segundos, render: (row) => formatHours(row.duracao_segundos) },
-  { key: "operator", label: "Colaborador", render: (row) => displayName(row.operador) },
-  { key: "reason", label: "Motivo / observação", render: (row) => displayText([row.motivo, row.comentario].filter(Boolean).join(" — ") || null) },
+  { key: "operator", label: "Colaborador", render: (row) => displayName(row.autor ?? row.operador) },
+  { key: "reason", label: "Motivo / observação", render: (row) => displayText([row.motivo, row.causa, row.comentario].filter(Boolean).join(" — ") || null) },
 ];
 
 export const statusRowClass = (row: StatusEvent) => `status-row status-row--${statusClassKey(row)}`;
+
+const FIRST_PIECE_LABELS: Record<string, string> = {
+  CONFORME: "1ª peça aprovada",
+  RETRABALHO: "1ª peça reprovada (retrabalho)",
+  REFUGO: "1ª peça reprovada (refugo)",
+};
+
+function productionActivity(row: ProductionEvent) {
+  if (row.inconsistencia === "quantidade_sem_evento") return <span className="status-badge status-badge--warning">Quantidade sem evento</span>;
+  if (row.atividade === "interrupcao") return <span className="status-badge status-badge--warning">OP interrompida</span>;
+  if (row.atividade === "primeira_peca") {
+    const aprovada = row.resultado_primeira_peca === "CONFORME";
+    const label = FIRST_PIECE_LABELS[row.resultado_primeira_peca ?? ""] ?? "1ª peça inspecionada";
+    return <span className={`status-badge status-badge--${aprovada ? "success" : "danger"}`}>{label}</span>;
+  }
+  return humanize(row.atividade);
+}
 
 export const PRODUCTION_COLUMNS: TableColumn<ProductionEvent>[] = [
   { key: "op", label: "OP", render: (row) => (row.tarefa ? `Tarefa ${row.tarefa}${row.plano ? ` · Plano ${row.plano}` : ""}` : opLink(row.op)) },
@@ -163,7 +186,7 @@ export const PRODUCTION_COLUMNS: TableColumn<ProductionEvent>[] = [
   { key: "sector", label: "Setor", render: (row) => displayName(row.setor) },
   { key: "resource", label: "Recurso", render: (row) => displayName(row.recurso) },
   { key: "operator", label: "Colaborador", render: (row) => displayName(row.colaborador) },
-  { key: "activity", label: "Atividade", render: (row) => (row.inconsistencia === "quantidade_sem_evento" ? <span className="status-badge status-badge--warning">Quantidade sem evento</span> : humanize(row.atividade)) },
+  { key: "activity", label: "Atividade", render: productionActivity },
   { key: "start", label: "Início", sortValue: (row) => row.inicio, render: (row) => formatDateTime(row.inicio) },
   { key: "end", label: "Fim", sortValue: (row) => row.fim, render: (row) => (row.inicio && !row.fim ? "Em andamento" : formatDateTime(row.fim)) },
   { key: "real", label: "Tempo real", sortValue: (row) => row.tempo_real_segundos, render: (row) => formatHours(row.tempo_real_segundos) },

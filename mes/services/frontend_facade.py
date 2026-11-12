@@ -1294,7 +1294,13 @@ class FrontendBackendFacade:
             for row in catalog or []
             if str(row.get("codigo") or "").strip()
         }
-        return event_log.status_events(states, operador=filters.operador, nomes=nomes, **table)
+        trigger_loader = getattr(self.db, "listar_eventos_apontamento_operador_por_ids", None)
+        trigger_ids = [event_log.trigger_event_id(row) for row in states if row.get("automatico")]
+        gatilhos = {
+            event["id"]: event
+            for event in (trigger_loader(trigger_ids) if callable(trigger_loader) and any(trigger_ids) else [])
+        }
+        return event_log.status_events(states, operador=filters.operador, nomes=nomes, gatilhos=gatilhos, **table)
 
     def eventos_producao(self, filters: AnalyticsFilter):
         common = {
@@ -1331,7 +1337,15 @@ class FrontendBackendFacade:
         operator_events = (
             events_loader([fact.get("id") for fact in facts]) if callable(events_loader) and facts else []
         )
-        return event_log.production_events(facts, states, quantities, cuts, operator_events)
+        inspections_loader = getattr(self.db, "listar_inspecoes_primeira_peca", None)
+        first_pieces = (
+            inspections_loader([fact.get("id") for fact in facts], filters.inicio, filters.fim)
+            if callable(inspections_loader) and facts else []
+        )
+        return event_log.production_events(
+            facts, states, quantities, cuts, operator_events, periodo=(filters.inicio, filters.fim),
+            primeiras_pecas=first_pieces,
+        )
 
     def rastreabilidade(self, op: str):
         return self.traceability.trace_op(op)

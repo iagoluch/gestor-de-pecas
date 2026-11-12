@@ -45,21 +45,79 @@ def _status_class(category: str, classification) -> str:
     return category
 
 
-def status_events(states, *, operador=None, recurso=None, status=None, classe=None, op=None, em_aberto=False, nomes=None):
+SYSTEM_AUTHOR = "Sistema"
+#: Atividade da linha de Eventos de Produção que registra o "Interromper OP".
+INTERRUPTION_ACTIVITY = "interrupcao"
+FIRST_PIECE_ACTIVITY = "primeira_peca"
+
+#: Por que o sistema mudou o estado sozinho, pela origem gravada.
+_AUTOMATIC_CAUSES = {
+    "retorno_turno_sem_demanda": "Início do turno sem OP em andamento no recurso",
+    "sincronizacao_recurso_sem_demanda": "Conferência automática: nenhuma OP ativa no recurso",
+    "intervalo_programado_fim": "Fim do intervalo programado, sem OP ativa no recurso",
+    "intervalo_programado_inicio": "Início do intervalo programado do turno",
+    "fim_turno_automatico_ocioso": "Fim do turno com o recurso sem OP",
+    "fim_turno_automatico": "Fim do turno: a OP em andamento foi pausada",
+    "fim_turno_automatico_corte": "Fim do turno: o corte em andamento foi pausado",
+    "corte_nesting_fim": "Fim do plano de corte, sem outro plano ativo",
+}
+
+#: O clique do operador que deixou o recurso sem OP ativa.
+_TRIGGER_ACTIONS = {
+    "fila": "interrompeu",
+    "finalizado": "finalizou",
+    "parcial": "finalizou parcialmente",
+}
+
+
+def trigger_event_id(row):
+    ref = str(row.get("referencia_origem") or "")
+    if ref.startswith("evento_apontamento:"):
+        try:
+            return int(ref.split(":", 1)[1])
+        except ValueError:
+            return None
+    return None
+
+
+def _automatic_cause(row, trigger):
+    if trigger:
+        action = _TRIGGER_ACTIONS.get(str(trigger.get("estado") or ""), "apontou")
+        op = " ".join(
+            part for part in (
+                f"a OP {trigger['op']}" if trigger.get("op") else "a OP",
+                f"(op. {trigger['numero_operacao']})" if trigger.get("numero_operacao") else "",
+            ) if part
+        )
+        who = trigger.get("operador") or "o operador"
+        return f"Recurso ficou sem OP ativa depois que {who} {action} {op}"
+    return _AUTOMATIC_CAUSES.get(str(row.get("origem") or ""), "Mudança automática do sistema")
+
+
+def status_events(states, *, operador=None, recurso=None, status=None, classe=None, op=None, em_aberto=False, nomes=None, gatilhos=None):
     """Projeção dos estados físicos do período, um por linha.
 
     ``opcoes`` lista os recursos, status e classes do período inteiro (antes
     dos filtros da tabela), para a tela montar as listas de escolha.
     ``nomes`` (código em minúsculas -> nome do catálogo) dá o nome líquido do
     recurso; ``recurso`` segue sendo o código, que é a identidade do filtro.
+
+    Estado automático (``automatico``) tem o Sistema como ``autor``, mesmo
+    quando o banco guarda o nome de quem clicou: o operador não escolhe o
+    "Recurso sem demanda", o sistema decide. ``causa`` explica o porquê;
+    ``gatilhos`` (id do evento do operador -> evento) diz qual clique o
+    provocou. O filtro de colaborador vale para o ``autor``.
     """
 
     nomes = nomes or {}
+    gatilhos = gatilhos or {}
 
     alvo = str(operador or "").strip().casefold()
     all_items = []
     for row in states or []:
-        if alvo and alvo not in str(row.get("operador") or "").casefold():
+        automatic = bool(row.get("automatico"))
+        author = SYSTEM_AUTHOR if automatic else row.get("operador")
+        if alvo and alvo not in str(author or "").casefold():
             continue
         category = physical_state_category(row)
         classification = _value(classify_state_row(row))
@@ -78,6 +136,9 @@ def status_events(states, *, operador=None, recurso=None, status=None, classe=No
             "em_aberto": row.get("data_fim") is None,
             "duracao_segundos": row.get("segundos_periodo"),
             "operador": row.get("operador"),
+            "autor": author,
+            "automatico": automatic,
+            "causa": _automatic_cause(row, gatilhos.get(trigger_event_id(row))) if automatic else None,
             "motivo": row.get("motivo"),
             "comentario": row.get("comentario"),
             "op": row.get("op"),
@@ -269,10 +330,24 @@ def _sum_quantities(events):
     return total
 
 
-def production_events(facts, states, quantities, cuts=(), operator_events=None):
+def production_events(facts, states, quantities, cuts=(), operator_events=None, periodo=None, primeiras_pecas=None):
     facts = list(facts or [])
     work = _work_by_appointment(states, facts, operator_events)
     assigned, orphans = _assign_quantities(facts, quantities)
+    interruptions = defaultdict(list)
+    for event in operator_events or []:
+        # Voltar para a fila só acontece por "Interromper OP" (operator_state_machine).
+        if str(event.get("estado") or "") != "fila":
+            continue
+        # Os cliques vêm com o histórico todo da OP; a interrupção só entra no
+        # período consultado.
+        moment = event.get("data_hora")
+        if periodo and isinstance(moment, datetime) and not (periodo[0] <= moment < periodo[1]):
+            continue
+        interruptions[event.get("apontamento_id")].append(event)
+    inspections = defaultdict(list)
+    for inspection in primeiras_pecas or []:
+        inspections[inspection.get("apontamento_id")].append(inspection)
     items = []
 
     for fact in facts:
@@ -326,6 +401,36 @@ def production_events(facts, states, quantities, cuts=(), operator_events=None):
                 "inconsistencia": None,
             })
         items.extend(rows)
+        # "Interromper OP" do operador vira um evento próprio: sem tempo e sem
+        # quantidade (a OP só voltou para a fila), mas com quem e quando.
+        for event in interruptions.get(fact.get("id"), []):
+            items.append({
+                **base,
+                "colaborador": event.get("operador") or base["colaborador"],
+                "atividade": INTERRUPTION_ACTIVITY,
+                "inicio": event.get("data_hora"),
+                "fim": event.get("data_hora"),
+                "tempo_real_segundos": None,
+                "quantidade_boa": None,
+                "quantidade_refugo": None,
+                "quantidade_retrabalho": None,
+                "inconsistencia": None,
+            })
+        # Aprovação/reprovação da primeira peça: quem decidiu, quando e o quê.
+        for inspection in inspections.get(fact.get("id"), []):
+            items.append({
+                **base,
+                "colaborador": inspection.get("operador") or base["colaborador"],
+                "atividade": FIRST_PIECE_ACTIVITY,
+                "resultado_primeira_peca": inspection.get("resultado"),
+                "inicio": inspection.get("data_hora"),
+                "fim": inspection.get("data_hora"),
+                "tempo_real_segundos": None,
+                "quantidade_boa": None,
+                "quantidade_refugo": None,
+                "quantidade_retrabalho": None,
+                "inconsistencia": None,
+            })
 
     for event in orphans:
         totals = _sum_quantities([event])

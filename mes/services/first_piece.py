@@ -371,6 +371,24 @@ class FirstPieceService:
                 "primeira_peca_estado_alterado",
                 "A situação da primeira peça mudou. Atualize o posto e tente novamente.",
             )
+        # Histórico de aprovações/reprovações para o log de produção: uma nova
+        # medida sobrescreve o resultado na tabela da primeira peça.
+        auditar = getattr(self.db, "registrar_auditoria", None)
+        if callable(auditar):
+            auditar(
+                entidade="primeira_peca",
+                chave=atualizada.get("codigo_op") or linha.get("codigo_op") or "",
+                acao="criar",
+                usuario_nome=self.operador,
+                depois={
+                    "primeira_peca_id": atualizada.get("id"),
+                    "codigo_op": atualizada.get("codigo_op"),
+                    "numero_operacao": atualizada.get("numero_operacao"),
+                    "apontamento_id": atualizada.get("apontamento_id"),
+                    "resultado": decisao,
+                    "observacao": atualizada.get("observacao"),
+                },
+            )
         contexto = self._contexto(atualizada)
         if decisao == FIRST_PIECE_REWORK:
             self._alertas.primeira_peca_em_retrabalho(contexto)

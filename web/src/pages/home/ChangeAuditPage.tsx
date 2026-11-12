@@ -25,6 +25,7 @@ const ENTITIES: Record<string, string> = {
   turno: "Turno",
   pausa: "Pausa",
   rnc_decisao: "Decisão de RNC",
+  primeira_peca: "Primeira peça",
   manutencao_sugestao: "Sugestão de manutenção",
   roteiro_etapa: "Etapa do roteiro",
   calendario: "Calendário produtivo",

@@ -25,6 +25,8 @@ CAMPOS_AUDITAVEIS = {
     "custo_pessoa": ("operador_id", "valor_hora"),
     # Decisão sobre RNC (Qualidade): sem dado pessoal além do que já está na RNC.
     "rnc_decisao": ("rnc_id", "rnc_codigo", "decisao", "justificativa"),
+    # Cada decisão sobre a primeira peça (a tabela da 1ª peça só guarda a última).
+    "primeira_peca": ("primeira_peca_id", "codigo_op", "numero_operacao", "apontamento_id", "resultado", "observacao"),
     # Decisão do perfil de Manutenção sobre a sugestão de manutenção (sem R$, sem dado pessoal).
     "manutencao_sugestao": ("sugestao_id", "recurso", "parada_inicio", "status", "nota"),
     # Calendário produtivo (gravação por upsert: só o valor novo é registrado).

@@ -116,6 +116,70 @@ def test_status_events_mostra_nome_liquido_do_recurso_e_filtra_pelo_codigo():
     assert [item["id"] for item in event_log.status_events(rows, nomes=nomes, recurso="Jato")["items"]] == [3, 2]
 
 
+def test_sem_demanda_automatico_tem_sistema_como_autor_e_o_clique_como_causa():
+    rows = [
+        # Manufatura 12/11/2026: o banco guarda quem clicou, mas quem decide o
+        # "Recurso sem demanda" é o sistema.
+        {"id": 1, "recurso": "R1", "categoria": "fila", "data_inicio": dt(9), "data_fim": None,
+         "operador": "Ana", "automatico": True, "motivo": "Recurso sem demanda",
+         "origem": "apontamento_operador", "referencia_origem": "evento_apontamento:550"},
+        {"id": 2, "recurso": "R2", "categoria": "fila", "data_inicio": dt(7), "data_fim": dt(8),
+         "operador": "SISTEMA", "automatico": True, "motivo": "Recurso sem demanda",
+         "origem": "retorno_turno_sem_demanda"},
+        {"id": 3, "recurso": "R1", "categoria": "producao", "data_inicio": dt(8), "data_fim": dt(9),
+         "operador": "Ana", "automatico": False, "origem": "apontamento_operador",
+         "referencia_origem": "evento_apontamento:549"},
+    ]
+    gatilhos = {550: {"id": 550, "estado": "fila", "operador": "Ana", "op": "OP7", "numero_operacao": "20"}}
+    items = {item["id"]: item for item in event_log.status_events(rows, gatilhos=gatilhos)["items"]}
+    assert items[1]["autor"] == "Sistema"
+    assert items[1]["causa"] == "Recurso ficou sem OP ativa depois que Ana interrompeu a OP OP7 (op. 20)"
+    assert items[2]["autor"] == "Sistema"
+    assert items[2]["causa"] == "Início do turno sem OP em andamento no recurso"
+    assert items[3]["autor"] == "Ana" and items[3]["causa"] is None
+    # O filtro de colaborador segue o autor: Ana não "fez" o sem demanda.
+    assert [item["id"] for item in event_log.status_events(rows, operador="ana", gatilhos=gatilhos)["items"]] == [3]
+    assert [item["id"] for item in event_log.status_events(rows, operador="sistema")["items"]] == [1, 2]
+
+
+def test_interromper_op_vira_evento_de_producao_com_quem_e_quando():
+    events = [
+        {"id": 1, "apontamento_id": 1, "estado": "producao", "data_hora": dt(8), "operador": "Ana"},
+        {"id": 2, "apontamento_id": 1, "estado": "fila", "data_hora": dt(9), "operador": "Bruno"},
+    ]
+    result = event_log.production_events([fact(1, end=None)], [], [qty("boa", 4, dt(8, 30))], operator_events=events)
+    interrupts = [item for item in result["items"] if item["atividade"] == "interrupcao"]
+    assert len(interrupts) == 1
+    assert interrupts[0]["colaborador"] == "Bruno" and interrupts[0]["inicio"] == dt(9)
+    assert interrupts[0]["quantidade_boa"] is None and interrupts[0]["tempo_real_segundos"] is None
+    # A quantidade continua só na linha de trabalho, sem contar duas vezes.
+    assert result["summary"]["quantidade_boa"] == 4
+
+
+def test_interrupcao_fora_do_periodo_consultado_nao_aparece():
+    events = [
+        {"id": 1, "apontamento_id": 1, "estado": "fila", "data_hora": dt(7), "operador": "Ana"},
+        {"id": 2, "apontamento_id": 1, "estado": "fila", "data_hora": dt(9), "operador": "Bruno"},
+    ]
+    result = event_log.production_events([fact(1, end=None)], [], [], operator_events=events, periodo=(dt(8), dt(12)))
+    quem = [item["colaborador"] for item in result["items"] if item["atividade"] == "interrupcao"]
+    assert quem == ["Bruno"]
+
+
+def test_primeira_peca_aprovada_e_reprovada_viram_eventos_de_producao():
+    inspecoes = [
+        {"apontamento_id": 1, "resultado": "RETRABALHO", "operador": "Ana", "data_hora": dt(9)},
+        {"apontamento_id": 1, "resultado": "CONFORME", "operador": "Bruno", "data_hora": dt(9, 30)},
+    ]
+    result = event_log.production_events([fact(1, end=None)], [], [qty("boa", 4, dt(10))], primeiras_pecas=inspecoes)
+    linhas = sorted(
+        (item["colaborador"], item["resultado_primeira_peca"], item["inicio"])
+        for item in result["items"] if item["atividade"] == "primeira_peca"
+    )
+    assert linhas == [("Ana", "RETRABALHO", dt(9)), ("Bruno", "CONFORME", dt(9, 30))]
+    assert result["summary"]["quantidade_boa"] == 4
+
+
 def op_event(apontamento_id, estado, moment, id_=0):
     return {"id": id_, "apontamento_id": apontamento_id, "estado": estado, "data_hora": moment}
 
