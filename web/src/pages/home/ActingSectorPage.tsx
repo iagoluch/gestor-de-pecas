@@ -46,28 +46,45 @@ export function ActingSectorPage() {
       {error ? <Notice tone="error">{error}</Notice> : null}
       {query.loading && !query.data ? <LoadingState /> : null}
       {query.data ? (
-        <SectionCard title="Escolha o setor" className="content-section">
-          <div className="operator-resource-grid">
-            {query.data.items.filter((sector) => !SOLDA_SETORES.includes(sector.name)).map((sector) => (
-              <button type="button" key={sector.level} className="operator-resource-card" onClick={() => void enter(sector)}>
-                <strong>{sector.name}</strong>
-                <span className="operator-resource-card__usage">{`${sector.resources.length} recurso(s)`}</span>
-              </button>
-            ))}
-            {SOLDA_SETORES.map((nome) => {
-              // Solda: um cartão por setor abre o mapa Produto -> Subconjunto (não entra direto numa estação).
-              const recursos = query.data!.items.filter((sector) => sector.name === nome).flatMap((sector) => sector.resources);
-              if (!recursos.length) return null;
-              return (
-                <button type="button" key={nome} className="operator-resource-card" onClick={() => navigate(`/inicio/apontamento-por-setor/solda/${encodeURIComponent(nome)}`)}>
-                  <strong>{nome}</strong>
-                  <span className="operator-resource-card__usage">{`${recursos.length} recurso(s) · ver produtos`}</span>
-                </button>
-              );
-            })}
-          </div>
-        </SectionCard>
+        <>
+          <SectionCard title="Setores" action={<span className="acting-sector-hint">Clique no cartão para entrar na tela do operador.</span>} className="content-section">
+            <div className="acting-sector-grid">
+              {query.data.items.filter((sector) => !SOLDA_SETORES.includes(sector.name)).map((sector) => (
+                <SectorCard key={sector.level} name={sector.name} resources={sector.resources} action="Entrar no setor" onClick={() => void enter(sector)} />
+              ))}
+            </div>
+          </SectionCard>
+          <SectionCard title="Solda, Projetos e Protótipo" action={<span className="acting-sector-hint">Clique para abrir o mapa Produto → Subconjunto.</span>} className="content-section">
+            <div className="acting-sector-grid">
+              {SOLDA_SETORES.map((nome) => {
+                // Solda: um cartão por setor abre o mapa Produto -> Subconjunto (não entra direto numa estação).
+                const recursos = query.data!.items.filter((sector) => sector.name === nome).flatMap((sector) => sector.resources);
+                if (!recursos.length) return null;
+                return (
+                  <SectorCard key={nome} name={nome} resources={recursos} action="Ver produtos" onClick={() => navigate(`/inicio/apontamento-por-setor/solda/${encodeURIComponent(nome)}`)} />
+                );
+              })}
+            </div>
+          </SectionCard>
+        </>
       ) : null}
     </PageFrame>
+  );
+}
+
+function SectorCard({ name, resources, action, onClick }: { name: string; resources: string[]; action: string; onClick: () => void }) {
+  return (
+    <button type="button" className="acting-sector-card" onClick={onClick}>
+      <span className="acting-sector-card__head">
+        <strong>{name}</strong>
+        <span className="acting-sector-card__count">{`${resources.length} recurso(s)`}</span>
+      </span>
+      <span className="acting-sector-card__resources">
+        {resources.length
+          ? resources.map((resource) => <span key={resource} className="acting-sector-card__chip">{resource}</span>)
+          : <span className="acting-sector-card__empty">Sem recurso cadastrado</span>}
+      </span>
+      <span className="acting-sector-card__action">{action} →</span>
+    </button>
   );
 }

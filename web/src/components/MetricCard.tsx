@@ -55,7 +55,7 @@ export function MetricCard({
   const stateHint = availability === "disponivel" ? undefined : filterBackendNoise(systemStateSentence(availability) ?? "");
   const content = (
     <>
-      <div className="metric-card__topline">
+      <div className={`metric-card__topline${delta || actionLabel ? "" : " metric-card__topline--single"}`}>
         <span>{label}</span>
         {delta ? <small>{delta}</small> : actionLabel ? <small className="metric-card__action">{actionLabel}</small> : null}
       </div>
