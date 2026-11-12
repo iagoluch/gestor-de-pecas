@@ -5,7 +5,7 @@ ordem: 20
 rotas: /inicio/cadastro
 ---
 
-Tela **IagoDev — Cadastro**: "Login de quem acessa o sistema — a mesma tela que os funcionários usam para entrar." **Só a conta de administração** abre.
+Tela **Admin — Cadastro**: "Login de quem acessa o sistema — a mesma tela que os funcionários usam para entrar." **Só a conta de administração** abre.
 
 ## Cartões
 

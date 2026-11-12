@@ -93,7 +93,7 @@ export function ManagementBadgesPage() {
   const filtros = usePersistentFilters("gestor.filtros.crachas", FILTROS_INICIAIS);
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
-  const title = "IagoDev — Crachás";
+  const title = "Admin — Crachás";
   const subtitle =
     "Crachás do chão de fábrica e quem está autorizado a liberar o retrabalho da primeira peça.";
 

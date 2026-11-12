@@ -61,7 +61,7 @@ function estadoDoAviso(item: Chamada, agora: number): AvisoEstado {
 /**
  * Histórico das chamadas do operador e da gestão — aba "Chamadas da Gestão",
  * destino do sininho. Só leitura e aberta a qualquer conta de gestão; o
- * cadastro de contatos é outra tela, exclusiva do admin (IagoDev).
+ * cadastro de contatos é outra tela, exclusiva do admin (Admin).
  */
 export function ManagementChamadasPage() {
   const historicoQuery = useApiQuery<{ items: Chamada[] }>("/api/v1/chamadas/admin/historico");

@@ -5,7 +5,7 @@ ordem: 17
 rotas: /inicio/turnos
 ---
 
-Tela **IagoDev — Turnos**: "Horários em que o sistema fecha e reabre o apontamento automaticamente." **Só a conta de administração** abre.
+Tela **Admin — Turnos**: "Horários em que o sistema fecha e reabre o apontamento automaticamente." **Só a conta de administração** abre.
 
 ## Cartões
 

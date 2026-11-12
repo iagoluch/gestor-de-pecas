@@ -24,7 +24,7 @@ Cada item é uma **seção**. Clique para abrir a primeira aba dela. As abas da 
 | Diretoria | Diretoria | Diretoria (uma aba só) |
 | Melhoria Contínua | Oportunidades | Oportunidades |
 | Seções por área | Recursos | Recursos |
-| IagoDev | Crachás | Crachás, Cadastro, Chamadas do IagoDev, Turnos, Alterações, Sistema |
+| Admin | Crachás | Crachás, Cadastro, Chamadas do Admin, Turnos, Alterações, Sistema |
 
 Quem vê cada seção está em [Perfis e o que cada um vê](topico:02-perfis-e-acessos).
 

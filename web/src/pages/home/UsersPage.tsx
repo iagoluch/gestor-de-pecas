@@ -98,7 +98,7 @@ export function ManagementUsersPage() {
       .sort((left, right) => left.localeCompare(right, "pt-BR", { numeric: true })),
     [items],
   );
-  const title = "IagoDev — Cadastro";
+  const title = "Admin — Cadastro";
   const subtitle = "Login de quem acessa o sistema — a mesma tela que os funcionários usam para entrar.";
 
   const filtrados = useMemo(() => {

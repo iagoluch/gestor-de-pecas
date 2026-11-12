@@ -5,7 +5,7 @@ ordem: 18
 rotas: /inicio/alteracoes
 ---
 
-Tela **IagoDev — Alterações**: "Quem mudou usuários, níveis, turnos, pausas, decisões de RNC e sugestões de manutenção. Só leitura." **Só a conta de administração** abre.
+Tela **Admin — Alterações**: "Quem mudou usuários, níveis, turnos, pausas, decisões de RNC e sugestões de manutenção. Só leitura." **Só a conta de administração** abre.
 
 ## Filtros
 

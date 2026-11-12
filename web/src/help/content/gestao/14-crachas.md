@@ -5,7 +5,7 @@ ordem: 14
 rotas: /inicio/crachas
 ---
 
-Tela **IagoDev — Crachás**: "Crachás do chão de fábrica e quem está autorizado a liberar o retrabalho da primeira peça." **Só a conta de administração** abre. Outras contas veem "Acesso restrito ao administrador".
+Tela **Admin — Crachás**: "Crachás do chão de fábrica e quem está autorizado a liberar o retrabalho da primeira peça." **Só a conta de administração** abre. Outras contas veem "Acesso restrito ao administrador".
 
 ## Cartões
 

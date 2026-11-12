@@ -82,7 +82,7 @@ export function ManagementShiftsPage() {
     () => [...(query.data?.items ?? [])].sort((left, right) => left.ordem - right.ordem || hora(left.hora_inicio).localeCompare(hora(right.hora_inicio))),
     [query.data],
   );
-  const title = "IagoDev — Turnos";
+  const title = "Admin — Turnos";
   const subtitle = "Horários em que o sistema fecha e reabre o apontamento automaticamente.";
   const expediente = items.find((item) => item.tipo === "expediente" && item.ativo);
   const horasExtras = items.filter((item) => item.tipo === "hora_extra" && item.ativo);

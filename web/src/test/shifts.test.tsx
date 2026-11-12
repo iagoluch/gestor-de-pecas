@@ -42,7 +42,7 @@ beforeEach(() => window.sessionStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
 // O menu "⋯" usa popover nativo; o jsdom o esconde mas não implementa showPopover, daí `hidden: true` nos itens.
-describe("Turnos automáticos — tela IagoDev", () => {
+describe("Turnos automáticos — tela Admin", () => {
   it("lista os turnos configurados com o expediente em destaque", async () => {
     stubFetch();
     renderShifts();

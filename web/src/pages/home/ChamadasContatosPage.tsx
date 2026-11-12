@@ -39,7 +39,7 @@ const FILTROS_INICIAIS = { situacao: "", busca: "" };
 
 /**
  * Cadastro de quem pode ser chamado pelo botão de chamada (operador e
- * gestão). É exclusivo da conta admin (IagoDev); o histórico do que já foi
+ * gestão). É exclusivo da conta admin (Admin); o histórico do que já foi
  * chamado vive na aba "Chamadas da Gestão" (ChamadasPage). A lista fica aqui —
  * nunca no Dev Observatory, que é somente leitura de propósito.
  */
@@ -59,7 +59,7 @@ export function DevChamadasContatosPage() {
   const filtros = usePersistentFilters("gestor.filtros.chamada-contatos", FILTROS_INICIAIS);
 
   const contatos = useMemo(() => contatosQuery.data?.items ?? [], [contatosQuery.data]);
-  const title = "IagoDev — Chamadas do IagoDev";
+  const title = "Admin — Chamadas do Admin";
   const subtitle = "Contatos de quem pode ser chamado pelo botão de chamada.";
 
   const filtrados = useMemo(() => {

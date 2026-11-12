@@ -5,7 +5,7 @@ ordem: 19
 rotas: /inicio/sistema
 ---
 
-Tela **IagoDev — Sistema**: "Ações operacionais do servidor." **Só a conta de administração** abre.
+Tela **Admin — Sistema**: "Ações operacionais do servidor." **Só a conta de administração** abre.
 
 ## Card "Build do frontend"
 

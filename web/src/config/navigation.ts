@@ -166,7 +166,7 @@ export const managementSections: ManagementSection[] = [
       { label: "Visão Geral", path: "/inicio/visao-geral", screen: "home-overview" },
       { label: "IA", path: "/inicio/ia", screen: "home-ai" },
       // Histórico de chamadas visto pela gestão (e pelo sininho). Separado da
-      // aba do IagoDev, que cuida só do cadastro de contatos (admin).
+      // aba do Admin, que cuida só do cadastro de contatos (admin).
       { label: "Chamadas da Gestão", path: "/inicio/chamadas", screen: "home-chamadas" },
     ],
   },
@@ -300,7 +300,7 @@ export const managementSections: ManagementSection[] = [
   ...AREA_SECTIONS,
   {
     id: "dev",
-    label: "IagoDev",
+    label: "Admin",
     icon: assets.navigation.dev,
     defaultPath: "/inicio/crachas",
     adminOnly: true,
@@ -310,12 +310,12 @@ export const managementSections: ManagementSection[] = [
     // usuário, 15/09/2026.
     // O histórico de chamadas da gestão (sininho) saiu daqui e vive na Tela
     // inicial ("Chamadas da Gestão"): esta seção é toda admin-only, então a
-    // gestão comum nunca mais entra no IagoDev para ver chamadas
+    // gestão comum nunca mais entra no Admin para ver chamadas
     // (decisão do usuário, 01/10/2026).
     tabs: [
       { label: "Crachás", path: "/inicio/crachas", screen: "dev-badges", adminOnly: true },
       { label: "Cadastro", path: "/inicio/cadastro", screen: "dev-users", adminOnly: true },
-      { label: "Chamadas do IagoDev", path: "/inicio/chamadas-dev", screen: "dev-chamadas", adminOnly: true },
+      { label: "Chamadas do Admin", path: "/inicio/chamadas-dev", screen: "dev-chamadas", adminOnly: true },
       { label: "Turnos", path: "/inicio/turnos", screen: "dev-turnos", adminOnly: true },
       { label: "Apontamento por setor", path: "/inicio/apontamento-por-setor", screen: "dev-apontamento-setor", adminOnly: true },
       { label: "Alterações", path: "/inicio/alteracoes", screen: "dev-alteracoes", adminOnly: true },

@@ -42,7 +42,7 @@ export function ManagementSystemPage() {
   return (
     <PageFrame
       sectionId="dev"
-      title="IagoDev — Sistema"
+      title="Admin — Sistema"
       subtitle="Ações operacionais do servidor."
       filters={false}
     >

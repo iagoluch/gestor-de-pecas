@@ -24,7 +24,7 @@ Outros níveis, como os operadores por estação e o almoxarifado, usam a tela d
 | Qualidade | admin e qualidade |
 | Diretoria | admin e diretoria |
 | Melhoria Contínua | admin e contas com o nível "melhoria contínua" |
-| IagoDev (Crachás, Cadastro, Chamadas do IagoDev, Turnos, Alterações, Sistema) | só admin |
+| Admin (Crachás, Cadastro, Chamadas do Admin, Turnos, Alterações, Sistema) | só admin |
 | Uma seção por área (Dobra e Corte, Usinagem, Serra, Solda, Pintura, Protótipo, Projetos/Ferramentaria) | contas com a área liberada |
 
 Dentro de cada seção, algumas abas também são restritas. O menu mostra só as abas que o seu nível pode abrir.

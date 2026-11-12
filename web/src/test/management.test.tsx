@@ -113,14 +113,14 @@ describe("contrato gerencial Web", () => {
     expect(managementRoutes).not.toContainEqual(expect.objectContaining({ label: "Metas" }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Pausas", path: "/inicio/pausas", sectionId: "panels" }));
     // Chamadas foi dividida (01/10/2026): o cadastro de contatos fica no
-    // IagoDev (admin, nunca no Dev Observatory, que é somente leitura) e o
+    // Admin (admin, nunca no Dev Observatory, que é somente leitura) e o
     // histórico da gestão vive na Tela inicial, destino do sininho.
-    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas do IagoDev", path: "/inicio/chamadas-dev", sectionId: "dev", adminOnly: true }));
+    expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas do Admin", path: "/inicio/chamadas-dev", sectionId: "dev", adminOnly: true }));
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Chamadas da Gestão", path: "/inicio/chamadas", sectionId: "home" }));
     // Wave 5: a designação do responsável pelo retrabalho da primeira peça é
     // configuração gerencial e vive no cadastro de crachás que já existia.
     // Reorganização 15/09/2026: Crachás e Cadastro viraram exclusivos da
-    // conta admin, agrupados na seção "IagoDev".
+    // conta admin, agrupados na seção "Admin".
     expect(managementRoutes).toContainEqual(expect.objectContaining({ label: "Crachás", path: "/inicio/crachas", sectionId: "dev" }));
     // Cadastro de usuários (14/09/2026): exclusivo da conta admin, mesma
     // tela de login que os funcionários usam.
