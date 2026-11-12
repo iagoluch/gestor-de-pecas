@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, apiErrorMessage } from "../../api/client";
 import { ChamadaButton } from "../../components/ChamadaButton";
@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/DataState
 import { OperatorDialog } from "../../components/OperatorDialog";
 import { StopReasonFields } from "../../components/StopReasonFields";
 import { OperatorActionIcon } from "../../components/OperatorActionIcon";
+import { OperatorNotices, type OperatorNoticeItem } from "../../components/OperatorNotices";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import type {
   FirstPieceGate,
@@ -21,6 +22,7 @@ import { displayName, displayText, formatDateTime } from "../../utils/format";
 import { Notice, type NoticeTone } from "../../components/Notice";
 import { AsyncButton } from "../../components/AsyncButton";
 import { ElapsedTimer, StationStateBanner } from "../../components/StationStateBanner";
+import "../../styles/operator-workbench.css";
 import { operatorActionErrorMessage, STATION_EXCLUSIVE_REASON, stationIsBlocked } from "./stationOccupancy";
 import {
   type DraftDimension,
@@ -113,36 +115,161 @@ function cardKey(item: OperatorCard) {
   return `${String(item.op ?? "").trim()}::${String(item.catalogo_operacao_id ?? item.id ?? item.numero_operacao ?? item.operation ?? "").trim()}`;
 }
 
+/** Pílula do card: um só rótulo, na cor do estado (maquete .pill). */
+function cardPill(item: OperatorCard, partial: boolean, attended: number): [string, string] {
+  const status = displayName(item.status, "Aguardando");
+  const key = String(item.status ?? "").toLowerCase();
+  // Estado ativo (parada, setup, retrabalho) vale mais que o "Parcial".
+  if (key.startsWith("produz")) return ["p-run", status];
+  if (key.startsWith("parad")) return ["p-err", status];
+  if (key.startsWith("setup")) return ["p-part", status];
+  if (key.startsWith("retrab")) return ["p-warn", status];
+  if (key.startsWith("interromp")) return ["p-blk", partial ? `${status} · ${attended}/${String(item.qty ?? 0)}` : status];
+  if (partial) return ["p-part", `Parcial ${attended}/${String(item.qty ?? 0)}`];
+  if (item.finished || key.startsWith("finaliz")) return ["p-done", status];
+  return ["p-wait", status];
+}
+
 function OperatorCardView({ item, onSelect, selected = false }: { item: OperatorCard; onSelect: (item: OperatorCard) => void; selected?: boolean }) {
   // Parcial = já apontou parte e ainda tem saldo; o backend decide os dois números.
   const attended = Number(item.attended ?? 0);
   const partial = !item.finished && attended > 0 && Number(item.balance ?? 0) > 0;
+  const [pillClass, pillText] = cardPill(item, partial, attended);
+  const started = item.data_inicio && item.status !== "Aguardando" ? `Início: ${formatDateTime(String(item.data_inicio))}` : "";
+  const when = [started, item.elapsed].filter(Boolean).join(" · ") || (item.last_updated_at ? `últ. apont. ${formatDateTime(item.last_updated_at)}` : "");
+  const alert = item.motivo_parada || item.stopped_since || item.status_elapsed;
   return (
-    <button type="button" className={`operator-production-card ${partial ? "operator-production-card--partial" : ""} ${selected ? "operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
-      <div><strong className="operator-card-op">{selected ? <span className="operator-card-check" aria-hidden="true">✓ </span> : null}OP: {String(item.op ?? "—")}</strong><span className="operator-card-badges">{partial ? <span className="operator-card-partial" title="OP parcialmente produzida: ainda tem saldo a apontar">Parcial {attended}/{String(item.qty ?? 0)}</span> : null}<span className={`operator-state operator-state--${String(item.status ?? "aguardando").toLowerCase().replace(/ /g, "-")}`}>{displayName(item.status, "Aguardando")}</span></span></div>
-      <dl className="operator-card-key">
-        <div><dt>Operação</dt><dd>{String(item.operation ?? item.numero_operacao ?? "—")}</dd></div>
-        <div><dt>Produto</dt><dd>{String(item.product ?? "—")}</dd></div>
-      </dl>
-      <p className="operator-card-description" title={String(item.description ?? "")}>{String(item.description ?? "—")}</p>
-      <dl className="operator-card-qty">
-        <div><dt>Quantidade</dt><dd>{String(item.qty ?? 0)}</dd></div>
-        <div><dt>Boas</dt><dd>{String(item.good ?? 0)}</dd></div>
-        <div><dt>Refugo</dt><dd>{String(item.scrap ?? 0)}</dd></div>
-      </dl>
-      {item.data_inicio && item.status !== "Aguardando" ? <small>Início: {formatDateTime(String(item.data_inicio))}</small> : null}
-      {item.elapsed ? <small>Tempo: {item.elapsed}</small> : null}
-      {item.last_updated_at ? <small>Última atualização: {formatDateTime(item.last_updated_at)}</small> : null}
-      {item.motivo_parada ? <small className="operator-card-alert">Motivo: {displayText(item.motivo_parada)}</small> : null}
-      {item.stopped_since ? <small className="operator-card-alert">Desde: {formatDateTime(item.stopped_since)}</small> : null}
-      {item.status_elapsed ? <small className="operator-card-alert">Tempo parado: {item.status_elapsed}</small> : null}
+    <button type="button" className={`card operator-production-card${partial ? " operator-production-card--partial" : ""}${selected ? " sel operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
+      <span className="op">OP {String(item.op ?? "—")}</span>
+      <span className={`pill ${pillClass}`}>{pillText}</span>
+      <span className="ln" title={String(item.description ?? "")}><b>{String(item.product ?? "—")}</b> · Op. {String(item.operation ?? item.numero_operacao ?? "—")} · {String(item.description ?? "—")}</span>
+      <span className="qq"><span>Qtd <b>{String(item.qty ?? 0)}</b></span><span>Boas <b className="g">{String(item.good ?? 0)}</b></span><span>Refugo <b className="r">{String(item.scrap ?? 0)}</b></span>{when ? <span className="when">{when}</span> : null}</span>
+      {alert ? (
+        <span className="why">
+          {item.motivo_parada ? <span>Motivo: {displayText(item.motivo_parada)}</span> : null}
+          {item.stopped_since ? <span>Desde: {formatDateTime(item.stopped_since)}</span> : null}
+          {item.status_elapsed ? <span>Tempo parado: {item.status_elapsed}</span> : null}
+        </span>
+      ) : null}
     </button>
   );
 }
 
-function CardSection({ title, items, emptyTitle, onSelect, onMore, selectedKey, className = "" }: { title: string; items: OperatorCard[]; emptyTitle: string; onSelect: (item: OperatorCard) => void; onMore: () => void; selectedKey: string; className?: string }) {
-  return <section className={className}><header><h2>{title}</h2><div className="operator-card-heading-actions"><span>{items.length}</span><button type="button" onClick={onMore}>Ver mais</button></div></header><div className="operator-card-list">{items.length ? items.slice(0, 2).map((item) => <OperatorCardView key={cardKey(item)} item={item} selected={cardKey(item) === selectedKey} onSelect={onSelect} />) : <EmptyState title={emptyTitle} />}</div></section>;
+function CardSection({ title, items, emptyTitle, onSelect, onMore, selectedKey, className = "", limit = 5 }: { title: string; items: OperatorCard[]; emptyTitle: string; onSelect: (item: OperatorCard) => void; onMore: () => void; selectedKey: string; className?: string; limit?: number }) {
+  return <section className={`wb2-cardsec ${className}`}><h2 className="visually-hidden">{title}</h2><div className="cards operator-card-list">{items.length ? items.slice(0, limit).map((item) => <OperatorCardView key={cardKey(item)} item={item} selected={cardKey(item) === selectedKey} onSelect={onSelect} />) : <EmptyState title={emptyTitle} />}</div><button type="button" className="more" onClick={onMore}>Ver todas ({items.length}) →</button></section>;
 }
+
+/** Cor do estado de uma OP ativa no posto (telha e faixa da OP na tela). */
+function runTone(item?: OperatorCard) {
+  const key = String(item?.status ?? "").toLowerCase();
+  if (key.startsWith("parad")) return "t-err";
+  if (key.startsWith("setup")) return "t-setup";
+  if (key.startsWith("retrab")) return "t-warn";
+  return "t-run";
+}
+
+const RUN_PHRASE: Record<string, string> = { "t-run": "ESTA OP ESTÁ RODANDO AGORA", "t-err": "ESTA OP ESTÁ PARADA", "t-setup": "ESTA OP ESTÁ EM SETUP", "t-warn": "ESTA OP ESTÁ EM RETRABALHO" };
+
+/** Faixa "No posto agora" (maquete .run): uma telha por OP em produção. */
+function RunningStrip({ items, selectedKey, onSelect, onMore }: { items: OperatorCard[]; selectedKey: string; onSelect: (item: OperatorCard) => void; onMore: () => void }) {
+  const ops = new Set(items.map((item) => String(item.op ?? ""))).size;
+  return (
+    <section className="run" aria-label="No posto agora">
+      <div className="runl">No posto agora<b>{ops} {ops === 1 ? "OP" : "OPs"}</b>{items.length > 4 ? <button type="button" className="runmore" onClick={onMore}>Ver todas ({items.length})</button> : null}</div>
+      {items.slice(0, 4).map((item) => {
+        const focus = cardKey(item) === selectedKey;
+        return (
+          <button key={cardKey(item)} type="button" className={`tile${focus ? " focus" : ""}`} aria-pressed={focus} onClick={() => onSelect(item)}>
+            <span className="op">{String(item.op ?? "—")}</span>
+            <span className="d">Op. {String(item.operation ?? item.numero_operacao ?? "—")} · {String(item.description ?? item.product ?? "—")}</span>
+            <span className="q">Boas <b>{String(item.good ?? 0)}</b> de {String(item.qty ?? 0)} · Refugo <b>{String(item.scrap ?? 0)}</b></span>
+            <span className="t">tempo na OP<b>{item.elapsed || "—"}</b></span>
+            <span className={`st ${runTone(item)}`}>{displayName(item.status, "—")}{item.status_elapsed ? ` · ${item.status_elapsed}` : ""}</span>
+            {focus ? <span className="fx">Na tela</span> : null}
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+/** Painel da OP em foco: os quatro dados que o operador lê de longe. Só mostra
+ *  números que já vêm do roteiro/card; nada é recalculado aqui. */
+function OpPanel({ context, card, running }: { context: OperationContext; card?: OperatorCard; running: OperatorCard[] }) {
+  const pct = (value: number) => (context.planned > 0 ? Math.min(100, (value / context.planned) * 100) : 0);
+  const started = card?.data_inicio && card.status !== "Aguardando" ? formatDateTime(String(card.data_inicio)) : "";
+  // Faixa de cima: diz sem rodeio se a OP na tela é a que está rodando no recurso.
+  const runningCard = card ? running.find((item) => cardKey(item) === cardKey(card)) : undefined;
+  const isRunning = Boolean(runningCard);
+  const tone = runningCard ? runTone(runningCard) : running.length ? "t-other" : "t-idle";
+  const others = [...new Set(running.map((item) => String(item.op ?? "")))].join(", ");
+  const phrase = isRunning
+    ? RUN_PHRASE[tone]
+    : running.length ? `ESTA OP NÃO ESTÁ RODANDO · rodando agora: OP ${others}` : `OP CARREGADA · ${displayName(card?.status, "Aguardando início")}`;
+  return (
+    <section className={`panel hero ${tone}`} aria-label="OP na tela">
+      <div className="hs"><i aria-hidden="true" />{phrase}</div>
+      <div className="hc">
+        <small>OP</small>
+        <div className="big">{context.op}</div>
+        <span>Operação <b>{context.operation || "—"}</b></span>
+      </div>
+      <div className="hc">
+        <small>Peça</small>
+        <div className="mid">{context.product || "—"}</div>
+        <div className="desc" title={context.description}>{context.description || "—"}</div>
+      </div>
+      <div className="hc">
+        <small>Quantidade</small>
+        <div className="big">{context.planned}<i> pç</i></div>
+        <span>Boas <b className="ok">{context.registeredGood}</b> · Refugo <b className="err">{context.registeredScrap}</b> · Falta <b>{context.balance}</b></span>
+        <div className="bar" aria-hidden="true"><i className="g" style={{ width: `${pct(context.registeredGood)}%` }} /><i className="r" style={{ width: `${pct(context.registeredScrap)}%` }} /></div>
+      </div>
+      <div className="hc">
+        <small>Tempo na OP</small>
+        <div className="big">{card?.elapsed || "—"}</div>
+        <span>{started ? `desde ${started}` : displayName(card?.status, "Aguardando")}</span>
+      </div>
+    </section>
+  );
+}
+
+function HeroEmpty({ running }: { running: OperatorCard[] }) {
+  if (running.length) {
+    const codes = [...new Set(running.map((item) => String(item.op ?? "—")))];
+    const ops = codes.map((op) => `OP ${op}`).join(", ");
+    return (
+      <section className="panel hero-empty hero-empty--running" aria-label="OP em foco">
+        <div><b>{codes.length === 1 ? "1 OP está rodando neste recurso" : `${codes.length} OPs estão rodando neste recurso`}</b><span>{ops} · toque nela em “No posto agora”, logo acima, para ver e apontar.</span></div>
+      </section>
+    );
+  }
+  return (
+    <section className="panel hero-empty" aria-label="OP em foco">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>
+      <div><b>Nenhuma OP carregada</b><span>Leia a OP no campo acima ou toque numa OP da fila ao lado.</span></div>
+    </section>
+  );
+}
+
+const MSG_ICON: Record<string, ReactNode> = {
+  info: <><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5M12 8h.01" /></>,
+  ok: <><circle cx="12" cy="12" r="9.5" /><path d="m8 12.5 2.8 2.8L16.5 9.5" /></>,
+  warn: <><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></>,
+  err: <><circle cx="12" cy="12" r="9.5" /><path d="m15 9-6 6M9 9l6 6" /></>,
+};
+
+/** Faixa de aviso da maquete (.msg): ícone + texto, na cor do tom. */
+function Msg({ tone, children }: { tone: "info" | "ok" | "warn" | "err"; children: ReactNode }) {
+  return (
+    <div className={`msg m-${tone}`} role={tone === "err" ? "alert" : "status"}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MSG_ICON[tone]}</svg>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+const NOTICE_TONE: Record<string, "info" | "ok" | "warn" | "err"> = { info: "info", success: "ok", error: "err", stale: "warn" };
 
 export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: string; resource: string; hasSetup?: boolean }) {
   const [op, setOp] = useState("");
@@ -154,6 +281,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   const setMessage = (text: string, tone: NoticeTone = "success") => setFeedback({ text, tone });
   const [submitting, setSubmitting] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [asideTab, setAsideTab] = useState<"queue" | "history">("queue");
   // A recusa do backend aparece dentro da janela de finalização (a faixa da
   // página fica atrás dela); ao abrir, descarta o aviso de uma ação anterior.
   const finishDialogOpen = dialog?.kind === "finish" || dialog?.kind === "finishRework";
@@ -161,6 +289,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // reescrita pelas atualizações da rota (SSE) e fica escondida atrás do modal.
   const [dialogError, setDialogError] = useState("");
   useEffect(() => { setDialogError(""); }, [finishDialogOpen]);
+  // Popups do apontamento no visual da maquete: o portal fica fora da tela, então a marca vai no body.
+  useEffect(() => { document.body.classList.add("wb2-dialogs"); return () => document.body.classList.remove("wb2-dialogs"); }, []);
   // Busca sob demanda: a OP digitada pode existir só no TOTVS. O operador não
   // abre o PCPA109 e não precisa saber se ela já foi sincronizada antes.
   const [remoteSearch, setRemoteSearch] = useState<"idle" | "searching">("idle");
@@ -800,20 +930,54 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
 
   const cardsGate = cards.loading && !cards.data ? <LoadingState label="Atualizando produção e fila…" /> : cards.error && !cards.data ? <ErrorState error={cards.error} onRetry={cards.reload} /> : null;
 
+  const productionCards = cards.data?.production ?? [];
+  const showStrip = productionCards.length > 1 || (productionCards.length === 1 && cardKey(productionCards[0]) !== selectedKey);
+  const notices: OperatorNoticeItem[] = [];
+  if (operations.loading && loadedOp) notices.push({ key: "loading", tone: "info", text: "Carregando roteiro…" });
+  if (remoteSearch === "searching") notices.push({ key: "remote", tone: "info", text: "Buscando OP no TOTVS..." });
+  if (cards.error && cards.data) notices.push({ key: "stale", tone: "warn", text: "Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados." });
+  if (stoppedWithoutOp) notices.push({ key: "stopped", tone: "err", text: `Recurso parado${resourceState?.motivo ? ` — ${displayText(resourceState.motivo)}` : ""}. Retome para voltar a apontar.` });
+  if (canPoint && occupiedBy) notices.push({ key: "occupied", tone: "info", text: `${STATION_EXCLUSIVE_REASON} OP ${String(occupiedBy.op ?? "")} (${String(occupiedBy.status ?? "")}).` });
+  if (canPoint && gateRequired) notices.push({ key: "gate", tone: "warn", text: firstPiece?.bloqueio_ativo ? String(firstPiece.message ?? "") : "Aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada." });
+  if (feedback.text) notices.push({ key: "feedback", tone: NOTICE_TONE[feedback.tone ?? "info"] ?? "info", text: feedback.text });
+  const routeItems = operations.data?.items ?? [];
+
   return (
-    <section className="operator-workbench">
-      <div className="operator-workbench__top">
-        <div className="operator-workbench__main">
-      <StationStateBanner state={resourceState} timer opCount={new Set((cards.data?.production ?? []).map((item) => String(item.op ?? ""))).size} />
-      <form className="operator-op-form" onSubmit={loadOperations}>
-        <label>Código da OP<input value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Digite ou escaneie a OP" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
-        <button type="submit">Carregar roteiro</button>
+    <section className="operator-workbench operator-workbench--v2 wb2">
+      <div className="operator-workbench__top wb2-main">
+        <div className="operator-workbench__main wb2-col">
+      <StationStateBanner state={resourceState} timer inlineReason opCount={new Set(productionCards.map((item) => String(item.op ?? ""))).size} />
+      <form className="scanbar operator-op-form" onSubmit={loadOperations}>
+        <div className="slab" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10.5 8v8M14 8v8M17 8v8" /></svg>
+          <span>Leia a OP<small>leitor ou teclado</small></span>
+        </div>
+        <label className="inpw"><span className="visually-hidden">Código da OP</span><input className={`inp${opFieldError ? " bad" : ""}`} value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Aponte o leitor para a etiqueta da OP ou digite o código" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
+        <button type="submit" className="btn-p">Carregar roteiro</button>
+      </form>
+      {cardsGate ?? (showStrip ? <RunningStrip items={productionCards} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} /> : null)}
+      {context.op ? <OpPanel context={context} card={selectedCard} running={activeCards} /> : <HeroEmpty running={activeCards} />}
+      <div className={`acts operator-actions${showSetup ? "" : " acts--4"}`} aria-label="Ações operacionais">
+        {/* Ordem pedida pela manufatura (09/11/2026): Início, Setup, Parada, Retrabalho, Finalizar. */}
+        <button type="button" className="ab a-start operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
+        {showSetup ? <button type="button" className="ab a-setup operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
+        <button type="button" className="ab a-stop operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
+        <button type="button" className="ab a-rework operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
+        <button type="button" className="ab a-finish operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : inRework ? "Encerre o retrabalho primeiro (Finalizar Ret.)." : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {/* 10/11/2026: a OP volta para a fila sem lançar quantidade nem mexer no
             Protheus. Retrabalho fica de fora: ele sai pelo Finalizar Ret. */}
-        <button type="button" className="operator-op-form__interrupt" disabled={submitting || !canInterrupt} onClick={() => setDialog({ kind: "interrupt" })}>Interromper OP</button>
-      </form>
-      {(operations.data?.items?.length ?? 0) > 0 ? (
-        <ol className="operator-route" aria-label="Roteiro completo da OP">
+        <button type="button" className="ab a-int operator-action operator-action--interrupt" disabled={submitting || !canInterrupt} onClick={() => setDialog({ kind: "interrupt" })}><span>Interromper OP</span></button>
+      </div>
+      {operations.error && operations.error.status !== 404 ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
+      <OperatorNotices items={notices} />
+      <section className="panel routep" aria-label="Roteiro da OP">
+        <div className="ph">
+          <h2>Roteiro da OP{loadedOp ? <small> · {loadedOp}</small> : null}</h2>
+          {loadedOp ? <DrawingCard op={loadedOp} loading={drawing.loading} data={drawing.data} onOpen={() => setDialog({ kind: "drawing" })} /> : <span className="pdf no">Sem desenho</span>}
+        </div>
+        <div className="rbody">
+          {routeItems.length > 0 ? (
+        <ol className="route operator-route" aria-label="Roteiro completo da OP">
           {(operations.data?.items ?? []).map((item, index) => {
             if (item.inspecao_auto_concluida) return null;
             const selectable = isSelectable(item);
@@ -821,7 +985,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
             return (
               <li
                 key={`route-${item.id ?? item.numero_operacao}-${index}`}
-                className={`operator-route__item operator-route__item--${item.visual_status ?? "pending"}${chosen ? " operator-route__item--selected" : ""}`}
+                className={`step ${item.visual_status === "done" ? "done" : item.visual_status === "current" ? "cur" : ""} operator-route__item operator-route__item--${item.visual_status ?? "pending"}${chosen ? " sel operator-route__item--selected" : ""}`}
                 aria-current={item.visual_current ? "step" : undefined}
               >
                 <button
@@ -832,56 +996,19 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
                   title={`${operationLabel(item)} — ${routeStateLabel(item)}`}
                   onClick={() => selectRouteStep(index)}
                 >
-                  <strong>{operationLabel(item)}</strong>
-                  <span>{routeStateLabel(item)}</span>
+                  <span className="dot" aria-hidden="true">{item.visual_status === "done" ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg> : String(item.numero_operacao ?? item.codigo ?? index + 1)}</span>
+                  <span className="nm">{[item.numero_operacao ?? item.codigo, item.descricao_operacao ?? item.recurso_nome].filter(Boolean).join(" · ")}</span>
+                  <span className="sl">{item.visual_status === "done" ? "Concluída" : item.visual_status === "current" ? "Você está aqui" : "Próxima"}</span>
                 </button>
               </li>
             );
           })}
         </ol>
-      ) : null}
-      {operations.loading && loadedOp ? <LoadingState label="Carregando roteiro…" /> : null}
-      {remoteSearch === "searching" ? <LoadingState label="Buscando OP no TOTVS..." /> : null}
-      {operations.error && operations.error.status !== 404 ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
-      {stoppedWithoutOp ? (
-        <Notice tone="error">
-          Recurso parado{resourceState?.motivo ? ` — ${displayText(resourceState.motivo)}` : ""}. Retome para voltar a apontar.
-        </Notice>
-      ) : null}
-      {/* Wave 6B — a primeira peça deixou de ser card e virou o popup do
-          Iniciar. O Setup continua sendo botão: ele aponta o tempo de
-          preparação da máquina, que é quando a primeira peça é fabricada. */}
-      <div className="operator-actions" aria-label="Ações operacionais">
-        {/* Ordem pedida pela manufatura (09/11/2026): Início, Setup, Parada, Retrabalho, Finalizar. */}
-        <button type="button" className="operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
-        {showSetup ? <button type="button" className="operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
-        <button type="button" className="operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
-        <button type="button" className="operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
-        <button type="button" className="operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : inRework ? "Encerre o retrabalho primeiro (Finalizar Ret.)." : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
-      </div>
-      {canPoint && occupiedBy ? (
-        <Notice>
-          {STATION_EXCLUSIVE_REASON} OP {String(occupiedBy.op ?? "")} ({String(occupiedBy.status ?? "")}).
-        </Notice>
-      ) : null}
-      {canPoint && gateRequired ? (
-        <p className="operator-help operator-gate-notice">
-          {firstPiece?.bloqueio_ativo
-            ? firstPiece.message
-            : `Aponte o Setup para conferir a primeira peça: o lote só é liberado — e a operação só pode ser finalizada — depois que ela for aprovada.`}
-        </p>
-      ) : null}
-      {feedback.text ? <Notice tone={feedback.tone}>{feedback.text}</Notice> : null}
-      {cardsGate ?? (
-        <>
-          {cards.error ? <Notice tone="stale">Atualização temporariamente indisponível. Os dados exibidos podem estar desatualizados.</Notice> : null}
-          <div className="operator-card-columns">
-            <CardSection title="Produção" items={cards.data?.production ?? []} emptyTitle="Nenhuma OP em produção" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} />
-          </div>
-        </>
-      )}
+          ) : <p className="rempty">O roteiro aparece aqui depois de ler a OP.</p>}
         </div>
-        <aside className="operator-workbench__aside" aria-label="Contexto da peça">
+      </section>
+        </div>
+        <aside className="operator-workbench__aside wb2-col" aria-label="Contexto da peça">
           <TeamCard
             resource={resource}
             team={team}
@@ -889,21 +1016,20 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
             operators={operators.data?.items ?? []}
             onChanged={() => { cards.reload(); historyQuery.reload(); }}
           />
-          <DrawingCard
-            op={loadedOp}
-            loading={drawing.loading}
-            data={drawing.data}
-            onOpen={() => setDialog({ kind: "drawing" })}
-          />
           {filtro ? (
             <div className="operator-queue-filter" role="status">
               <span>Filtrando: <strong>{filtro.produto ? `${filtro.produto} › ` : ""}{filtro.subconjunto}</strong></span>
               <button type="button" className="button" onClick={() => setSearchParams({})}>Ver fila inteira</button>
             </div>
           ) : null}
-          <div className="operator-card-columns">
-            {cardsGate ? null : <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />}
-            <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : historyQuery.error && !historyQuery.data ? "Não foi possível carregar o histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
+          <div className="panel lists">
+            <div className="tabs" role="tablist" aria-label="Fila e histórico">
+              {cardsGate ? null : <button type="button" role="tab" className={`tab${asideTab === "queue" ? " on" : ""}`} aria-selected={asideTab === "queue"} onClick={() => setAsideTab("queue")}>Fila de ordens <span className="count">{(cards.data?.queue ?? []).length}</span></button>}
+              <button type="button" role="tab" className={`tab${asideTab === "history" || cardsGate ? " on" : ""}`} aria-selected={asideTab === "history" || Boolean(cardsGate)} onClick={() => setAsideTab("history")}>Histórico <span className="count">{(historyQuery.data?.items ?? []).length}</span></button>
+            </div>
+            {cardsGate || asideTab === "history"
+              ? <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : historyQuery.error && !historyQuery.data ? "Não foi possível carregar o histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
+              : <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />}
           </div>
         </aside>
       </div>
@@ -925,15 +1051,20 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
       {dialog?.kind === "startBadges" ? <StartBadgesDialog action={dialog.action} context={context} operators={operators.data?.items ?? []} onCancel={() => setDialog(null)} onConfirm={(badges) => { const { action, extra } = dialog; return execute(action, { ...extra, badges }).then((ok) => { if (ok) afterSetup(action); return ok; }); }} /> : null}
       {dialog?.kind === "confirm" ? <OperatorDialog title={`Confirmar ${dialog.action}`} context={<ContextLine {...context} />} onCancel={() => setDialog(null)}><p>Confirme o registro de {dialog.action.toLowerCase()} para a operação selecionada.</p><div className="operator-dialog__actions"><button type="button" onClick={() => setDialog(null)}>Cancelar</button><AsyncButton className="button button--primary" pendingLabel="Enviando…" onClick={() => { const action = dialog.action; return execute(action).then((ok) => { if (ok) afterSetup(action); }); }}>Confirmar</AsyncButton></div></OperatorDialog> : null}
       {dialog?.kind === "setupTool" ? (
-        <OperatorDialog title="Setup Ferramental" context={<SetupContextLine context={context} />} onCancel={() => setDialog(null)}>
+        <OperatorDialog title="Prepare a máquina para esta OP" kicker={`Setup Ferramental · ${context.resource}`} tone="setup" context={<SetupContextLine context={context} />} onCancel={() => setDialog(null)}>
           <div className="operator-setup-tool">
             <small>Tempo de setup</small>
             <ElapsedTimer since={dialog.since} />
+            <span>contando desde {formatDateTime(dialog.since)}</span>
           </div>
-          <p className="operator-help">Prepare a máquina. Prosseguir abre as cotas; Cancelar interrompe a OP e ela volta para a fila sem lançar quantidade.</p>
+          <ol className="operator-setup-steps" aria-label="Etapas do setup">
+            <li className="on"><i>1</i><b>Prepare a máquina</b></li>
+            <li><i>2</i><b>Meça a 1ª peça</b></li>
+            <li><i>3</i><b>Lote liberado</b></li>
+          </ol>
           <div className="operator-dialog__actions">
-            <AsyncButton pendingLabel="Interrompendo…" disabled={submitting} onClick={() => execute("Interromper")}>Cancelar</AsyncButton>
-            <button type="button" className="button button--primary" disabled={submitting} onClick={proceedSetup}>Prosseguir</button>
+            <AsyncButton pendingLabel="Interrompendo…" disabled={submitting} onClick={() => execute("Interromper")}>Cancelar<small>a OP volta para a fila</small></AsyncButton>
+            <button type="button" className="button button--primary operator-setup-go" disabled={submitting} onClick={proceedSetup}>Prosseguir para as cotas</button>
           </div>
         </OperatorDialog>
       ) : null}
@@ -1333,13 +1464,14 @@ function DrawingCard({ op, loading, data, onOpen }: { op: string; loading: boole
     <div className="operator-drawing-card" aria-label="Desenho da peça">
       <button
         type="button"
-        className={`operator-drawing-button${disponivel ? " is-available" : ""}`}
+        className={`pdf operator-drawing-button${disponivel ? " is-available" : " no"}`}
         disabled={!disponivel}
         title={disponivel ? `Abrir PDF${data?.filename ? ` — ${data.filename}` : ""}` : (data?.message ?? "Nenhum PDF disponível para esta peça.")}
         onClick={onOpen}
       >
         {/* O texto visível é o nome acessível (OP-16): o estado aparece escrito, não só na cor. */}
-        {disponivel ? <><span>PDF</span><span aria-hidden="true">↗</span></> : <span>Sem PDF</span>}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></svg>
+        <span>{disponivel ? "Ver desenho (PDF)" : "Sem desenho"}</span>
       </button>
       {!op || (loading && !data) ? <span className="operator-drawing-hint">{!op ? "Informe a OP para ver o PDF." : "Procurando o PDF…"}</span> : null}
     </div>
@@ -1398,7 +1530,7 @@ function InspectionSteps({ atual, completas, total }: { atual: 1 | 2; completas:
 }
 
 function SetupContextLine({ context, lote }: { context: OperationContext; lote?: string }) {
-  return <div className="operator-context-line">{lote ? <span><small>Lote</small><strong>{lote}</strong></span> : null}<span><small>OP</small><strong>{context.op || "—"}</strong></span><span><small>Produto</small><strong>{context.product || "—"}</strong></span><span><small>Quantidade</small><strong>{context.planned || "—"}</strong></span><span><small>Recurso</small><strong>{context.resource}</strong></span></div>;
+  return <div className="operator-context-line">{lote ? <span><small>Lote</small><strong>{lote}</strong></span> : null}<span><small>OP</small><strong>{context.op || "—"}</strong></span><span className="wide"><small>Peça</small><strong>{context.product || "—"}</strong>{context.description ? <em>{context.description}</em> : null}</span><span><small>Qtd</small><strong>{context.planned || "—"} pç</strong></span><span><small>Operação</small><strong>{context.operation || "—"}</strong></span></div>;
 }
 
 function ContextLine({ op, operation, resource }: Pick<OperationContext, "op" | "operation" | "resource">) {
@@ -1495,7 +1627,7 @@ function FinishReworkDialog({ context, error, team, onCancel, onConfirm }: { con
 }
 
 /** Campo de crachá com "+": valida no cadastro antes de aceitar. */
-function BadgeInput({ operators, onAdd, label = "Crachá", busy = false }: { operators: OperatorBadge[]; onAdd: (badge: string) => unknown; label?: string; busy?: boolean }) {
+function BadgeInput({ operators, onAdd, label = "Crachá", busy = false, pill = false }: { operators: OperatorBadge[]; onAdd: (badge: string) => unknown; label?: string; busy?: boolean; pill?: boolean }) {
   const [badge, setBadge] = useState("");
   const [error, setError] = useState("");
   async function add() {
@@ -1508,6 +1640,16 @@ function BadgeInput({ operators, onAdd, label = "Crachá", busy = false }: { ope
     setError("");
     if ((await onAdd(normalized)) !== false) setBadge("");
   }
+  const keys = (event: KeyboardEvent<HTMLInputElement>) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); void add(); } };
+  if (pill) return <>
+    <label className="addb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="11" r="2.2" /><path d="M5.8 16.2a3.4 3.4 0 0 1 6.4 0M14 10h4M14 13.5h3" /></svg>
+      <span className="visually-hidden">{label}</span>
+      <input value={badge} inputMode="numeric" disabled={busy} placeholder="Passe o crachá para entrar" onChange={(event) => setBadge(event.target.value)} onKeyDown={keys} />
+      <button type="button" aria-label="Adicionar pessoa" disabled={busy || !badge.trim()} onClick={() => void add()}>+</button>
+    </label>
+    {error ? <p className="form-error">{error}</p> : null}
+  </>;
   return <>
     <label>{label}<div className="operator-badge-entry"><input value={badge} inputMode="numeric" disabled={busy} onChange={(event) => setBadge(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey && badge.trim())) { event.preventDefault(); void add(); } }} /><button type="button" aria-label="Adicionar pessoa" disabled={busy} onClick={() => void add()}>+</button></div></label>
     {error ? <p className="form-error">{error}</p> : null}
@@ -1541,11 +1683,19 @@ function TeamCard({ resource, team, active, operators, onChanged }: { resource: 
       setBusy(false);
     }
   }
-  return <section className="operator-team-card" aria-label="Pessoas no recurso">
-    <header><h2>Pessoas no recurso</h2><span>{team.length}</span></header>
-    <BadgeList people={team} busy={busy} emptyText={active ? "Ninguém informado." : "O crachá é pedido ao iniciar."} onRemove={(badge) => change(badge, "remove")} />
-    {active ? <BadgeInput operators={operators} busy={busy} label="Adicionar crachá" onAdd={(badge) => change(badge, "add")} /> : null}
-    {error ? <Notice tone="error">{error}</Notice> : null}
+  return <section className="panel operator-team-card" aria-label="Pessoas no recurso">
+    <div className="ph"><h2>Pessoas no recurso</h2><span className="count">{team.length}</span></div>
+    <div className="pl">
+      {team.map((item) => (
+        <div className="chip" key={item.cracha}>
+          <span className="av" aria-hidden="true">{String(item.nome ?? "?").trim().charAt(0).toUpperCase()}</span>
+          <span><strong>{item.nome}</strong><small>crachá {item.cracha}</small></span>
+          <button type="button" className="x" aria-label={`Remover ${item.nome}`} disabled={busy} onClick={() => void change(item.cracha, "remove")}>✕</button>
+        </div>
+      ))}
+      {active ? <BadgeInput operators={operators} busy={busy} label="Adicionar crachá" pill onAdd={(badge) => change(badge, "add")} /> : team.length ? null : <p className="addb addb--idle">O crachá é pedido ao iniciar.</p>}
+    </div>
+    {error ? <div className="pl"><Msg tone="err">{error}</Msg></div> : null}
   </section>;
 }
 

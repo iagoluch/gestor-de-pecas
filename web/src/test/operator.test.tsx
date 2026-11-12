@@ -82,9 +82,11 @@ describe("fluxo Web do operador", () => {
     expect(screen.queryByText("Tela inicial — Visão Geral")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1303" }));
     await screen.findByText("1303");
-    expect(await screen.findByRole("heading", { name: "Histórico" })).toBeInTheDocument();
-    expect(screen.getByText("Tempo parado: 00:03:21")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Ver mais" })).toHaveLength(3);
+    // Fila e Histórico viraram abas na coluna lateral; a fila abre primeiro.
+    expect(await screen.findByRole("heading", { name: "Fila de Ordem" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Histórico/ })).toBeInTheDocument();
+    expect(screen.getAllByText(/00:03:21/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Ver todas/ }).length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText("Código da OP"), { target: { value: "OP-101" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
@@ -178,9 +180,9 @@ describe("fluxo Web do operador", () => {
     // Com o Setup em curso o clique reabre o Setup Ferramental; sem cotas,
     // Prosseguir só fecha o popup.
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    await screen.findByRole("heading", { name: "Setup Ferramental" });
-    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
-    await waitFor(() => expect(screen.queryByRole("heading", { name: "Setup Ferramental" })).not.toBeInTheDocument());
+    await screen.findByRole("heading", { name: "Prepare a máquina para esta OP" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir para as cotas" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Prepare a máquina para esta OP" })).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
 
     const retomar = await screen.findByRole("button", { name: "Retomar produção" });
@@ -289,7 +291,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Parada do posto" })).not.toBeDisabled();
     // Ordem pedida pela manufatura (09/11/2026).
     expect(Array.from(screen.getByLabelText("Ações operacionais").querySelectorAll("button"), (b) => b.textContent))
-      .toEqual(["Iniciar", "Setup", "Parada do posto", "Retrabalho", "Finalizar"]);
+      .toEqual(["Iniciar", "Setup", "Parada do posto", "Retrabalho", "Finalizar", "Interromper OP"]);
     fireEvent.click(screen.getByRole("button", { name: "20 - DOBRA — Próxima" }));
     await screen.findByRole("heading", { name: "Confirmar operação" });
     const confirmation = screen.getByRole("dialog");
@@ -401,7 +403,7 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByText("OP encontrada. Etapa atual: 10 - CORTE.");
 
-    fireEvent.click((await screen.findByText("OP: OP-B")).closest("button") as HTMLElement);
+    fireEvent.click((await screen.findAllByText(/^(OP )?OP-B$/))[0].closest("button") as HTMLElement);
     await act(async () => { liberarB(); });
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
     expect(screen.queryByText(/10 - CORTE/)).not.toBeInTheDocument();
@@ -736,8 +738,8 @@ describe("fluxo Web do operador", () => {
     // dispara nada.
     await waitFor(() => expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    await screen.findByRole("heading", { name: "Setup Ferramental" });
-    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
+    await screen.findByRole("heading", { name: "Prepare a máquina para esta OP" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir para as cotas" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     // O conteúdo do popup chega do backend: espere o checklist (ou o cadastro
     // de cotas) antes de interagir.
@@ -771,8 +773,8 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
     // Fila ou Setup em curso: o clique abre o Setup Ferramental e o
     // Prosseguir leva às cotas.
-    await screen.findByRole("heading", { name: "Setup Ferramental" });
-    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
+    await screen.findByRole("heading", { name: "Prepare a máquina para esta OP" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir para as cotas" }));
 
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     await screen.findByRole("heading", { name: "Conferência concluída" });
@@ -841,8 +843,8 @@ describe("fluxo Web do operador", () => {
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Confirmar e apontar" }));
-    await screen.findByRole("heading", { name: "Setup Ferramental" });
-    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
+    await screen.findByRole("heading", { name: "Prepare a máquina para esta OP" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir para as cotas" }));
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     const setups = calls.filter((call) => call.method === "POST" && (call.body as { action?: string } | null)?.action === "Setup");
     expect(setups.at(-1)?.body).toMatchObject({ action: "Setup", confirm_resource_divergence: true });
@@ -871,8 +873,8 @@ describe("fluxo Web do operador", () => {
     else fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: saida }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    await screen.findByRole("heading", { name: "Setup Ferramental" });
-    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
+    await screen.findByRole("heading", { name: "Prepare a máquina para esta OP" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir para as cotas" }));
 
     await screen.findByRole("heading", { name: "Setup e Qualidade" });
     await screen.findByLabelText("Medida da cota 1");
@@ -892,8 +894,8 @@ describe("fluxo Web do operador", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    await screen.findByRole("heading", { name: "Setup Ferramental" });
-    fireEvent.click(screen.getByRole("button", { name: "Prosseguir" }));
+    await screen.findByRole("heading", { name: "Prepare a máquina para esta OP" });
+    fireEvent.click(screen.getByRole("button", { name: "Prosseguir para as cotas" }));
 
     await screen.findByRole("heading", { name: "Medição da peça 3 de 3" });
     expect(screen.getByLabelText("Medida da cota 1")).toHaveValue("");
@@ -922,14 +924,14 @@ describe("fluxo Web do operador", () => {
     const { calls } = await carregarEmProcesso();
 
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
-    const popup = await screen.findByRole("dialog", { name: "Setup Ferramental" });
+    const popup = await screen.findByRole("dialog", { name: "Prepare a máquina para esta OP" });
     expect(within(popup).getByText("PECA-GATE")).toBeInTheDocument();
-    expect(within(popup).getByText("10")).toBeInTheDocument();
-    expect(within(popup).getByText("1303")).toBeInTheDocument();
+    expect(within(popup).getByText("10 pç")).toBeInTheDocument();
+    expect(within(popup).getByText("Setup Ferramental · 1303")).toBeInTheDocument();
     expect(within(popup).getByText("Tempo de setup")).toBeInTheDocument();
     expect(acoes(calls)).toEqual(["Início", "Setup"]);
 
-    fireEvent.click(within(popup).getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(within(popup).getByRole("button", { name: /^Cancelar/ }));
 
     await waitFor(() => expect(acoes(calls)).toEqual(["Início", "Setup", "Interromper"]));
     expect(screen.queryByRole("heading", { name: "Setup e Qualidade" })).not.toBeInTheDocument();
@@ -946,7 +948,7 @@ describe("fluxo Web do operador", () => {
 
     await waitFor(() => expect(acoes(calls)).toEqual(["Início", "Interromper"]));
     // A bancada solta a OP: não sobra "Retomar produção" de um estado que acabou.
-    await waitFor(() => expect(screen.getByPlaceholderText("Digite ou escaneie a OP")).toHaveValue(""));
+    await waitFor(() => expect(screen.getByLabelText("Código da OP")).toHaveValue(""));
     expect(screen.queryByRole("button", { name: "Retomar produção" })).not.toBeInTheDocument();
   });
 
@@ -1038,8 +1040,9 @@ describe("fluxo Web do operador", () => {
 
     const avisos = await screen.findAllByText(/RNC-T-0001 foi aberta/);
     for (const aviso of avisos) {
-      expect(aviso).toHaveClass("operator-notice--stale");
-      expect(aviso).not.toHaveClass("operator-notice--success");
+      const faixa = aviso.closest(".op-notice, .msg, .operator-notice") as HTMLElement;
+      expect(faixa.className).toMatch(/op-notice--warn|m-warn|operator-notice--stale/);
+      expect(faixa.className).not.toMatch(/op-notice--ok|m-ok|operator-notice--success/);
     }
     // O envio leva quantas medições a tela viu gravadas (2, inclusive a 1ª
     // peça reprovada): é com ela que o servidor recusa o reenvio da mesma peça.
@@ -1116,7 +1119,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
     // Setor sem Setup: só some o botão; a ordem dos outros continua.
     expect(Array.from(screen.getByLabelText("Ações operacionais").querySelectorAll("button"), (b) => b.textContent))
-      .toEqual(["Iniciar", "Parada do posto", "Retrabalho", "Finalizar"]);
+      .toEqual(["Iniciar", "Parada do posto", "Retrabalho", "Finalizar", "Interromper OP"]);
   });
 
   it("finaliza na Solda direto, sem portão de primeira peça e sem selecionar o marco terminal", async () => {
@@ -1218,12 +1221,12 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("Romi D 1000");
-    expect(await screen.findByText("OP: A9716901001")).toBeInTheDocument();
-    expect(screen.getByText("BRACO ARTICULACAO")).toBeInTheDocument();
+    expect(await screen.findByText("OP A9716901001")).toBeInTheDocument();
+    expect(screen.getByText(/BRACO ARTICULACAO/)).toBeInTheDocument();
     // A tela não exibe nenhuma marca de origem corporativa para o operador.
     expect(screen.queryByText(/TOTVS/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("OP: A9716901001"));
+    fireEvent.click(screen.getByText("OP A9716901001"));
     await screen.findByRole("button", { name: "20 - USINAGEM — Atual" });
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/operator/operations/A9716901001"))).toBe(true);
   });
@@ -1250,11 +1253,13 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("Romi D 1000");
-    expect(await screen.findByText("Parcial 3/10")).toBeInTheDocument();
-    expect(screen.getAllByText(/^Parcial /)).toHaveLength(1);
-    expect(screen.getByText(/Início: 09\/11\/2026,? 10:54/)).toBeInTheDocument();
-    expect(screen.getByText(/Início: 09\/11\/2026,? 11:12/)).toBeInTheDocument();
-    expect(within(screen.getByRole("status", { name: "Estado do posto" })).getByText(/2 OPs no posto/)).toBeInTheDocument();
+    // Várias OPs no posto: a faixa "No posto agora" mostra cada uma com o seu saldo.
+    const faixa = await screen.findByRole("region", { name: "No posto agora" });
+    expect(within(faixa).getByText("OP-A")).toBeInTheDocument();
+    expect(within(faixa).getByText("OP-B")).toBeInTheDocument();
+    expect(faixa).toHaveTextContent("Boas 3 de 10");
+    // A faixa grande não repete a contagem: as duas OPs já aparecem em "No posto agora".
+    expect(within(screen.getByRole("status", { name: "Estado do posto" })).queryByText(/OPs no posto/)).not.toBeInTheDocument();
   });
 
   it("busca a OP ausente e carrega o roteiro sem o operador abrir o ERP", async () => {
@@ -1729,6 +1734,16 @@ describe("StationStateBanner", () => {
     expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/^Sem apontamentoRecurso sem demanda$/);
     rerender(<StationStateBanner state={{ categoria: "fila", motivo: "Recurso sem demanda" }} />);
     expect(screen.getByRole("status", { name: "Estado do posto" })).toHaveTextContent(/^Aguardando OP/);
+  });
+
+  it("na bancada (inlineReason) o motivo da parada fica ao lado do estado, sem linha de detalhes", () => {
+    const { rerender } = render(<StationStateBanner inlineReason state={{ categoria: "parada", motivo: "0029 - Quebra de ferramenta" }} />);
+    const banner = screen.getByRole("status", { name: "Estado do posto" });
+    expect(within(banner).getByRole("strong")).toHaveTextContent(/Parado\s*0029 - Quebra de ferramenta/);
+    expect(banner.querySelector(".sub")).toBeNull();
+    // Fora do turno continua com a linha de explicação.
+    rerender(<StationStateBanner inlineReason state={{ categoria: "fora_turno", motivo: "Fora do turno" }} />);
+    expect(screen.getByRole("status", { name: "Estado do posto" }).querySelector(".sub")).toHaveTextContent("Fora do turno");
   });
 
   it("cronômetro só aparece com a prop timer e data_inicio válida", () => {

@@ -1,0 +1,22 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "src/styles/operator-workbench.css"
+        ],
+        "createdAt": "2026-11-12T19:03:24.807Z",
+        "reason": "Claude: L68 é o sublinhado da aba selecionada (border-bottom 3px) num botão sem border-radius; falso positivo"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-11-12T19:42:31.308Z"
+      }
+    ]
+  }
+}

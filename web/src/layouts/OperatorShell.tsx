@@ -2,6 +2,8 @@ import type { PropsWithChildren } from "react";
 import { leaveActingSector } from "../api/client";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { ChamadaButton } from "../components/ChamadaButton";
+import { NOTICE_SLOT_ID } from "../components/OperatorNotices";
+import "../styles/operator-topbar-call.css";
 import { ChamadaRecebida } from "../components/ChamadaRecebida";
 import { LogoutButton } from "../components/LogoutButton";
 import { SystemClock } from "../components/SystemClock";
@@ -65,6 +67,8 @@ export function OperatorShell({
           )
         ) : null}
         <div className="operator-topbar__actions">
+          <span id={NOTICE_SLOT_ID} className="operator-topbar__notices" />
+          {calls && !acting ? <ChamadaButton sector={sector} resource={resource} inline /> : null}
           <HelpButton manual="operador" />
           <ThemeToggle compact />
           <LogoutButton compact />
@@ -103,7 +107,6 @@ export function OperatorShell({
       <main className="operator-main">
         <div className="operator-content">{children}</div>
       </main>
-      {calls && !acting ? <ChamadaButton sector={sector} resource={resource} /> : null}
       {/* No "Apontamento por setor" do Admin quem está logado é a gestão: ela também recebe os chamados. */}
       {calls ? <ChamadaRecebida /> : null}
     </div>

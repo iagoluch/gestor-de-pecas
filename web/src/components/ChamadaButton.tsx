@@ -379,13 +379,12 @@ export function ChamadaButton({
 function ChamadaIcon() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-      <path
-        d="M9 18a3 3 0 0 0 6 0M4.5 9.5a7.5 7.5 0 0 1 15 0c0 4 1.5 5 1.5 5h-18s1.5-1 1.5-5Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {/* Telefone de mesa com fio: fone em cima, corpo com disco. */}
+      <g stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.5 8.5C2.5 6 6.8 4 12 4s9.5 2 9.5 4.5v1a1 1 0 0 1-1 1h-2.6a1 1 0 0 1-1-1V8.2A12 12 0 0 0 12 7.5a12 12 0 0 0-4.9.7v1.3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1Z" />
+        <path d="M8 10.5 5.2 18.8a1 1 0 0 0 1 1.2h11.6a1 1 0 0 0 1-1.2L16 10.5" />
+        <circle cx="12" cy="15.5" r="2.2" />
+      </g>
     </svg>
   );
 }
