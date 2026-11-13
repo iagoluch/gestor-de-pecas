@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposta Gestão</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="ui.js"></script>
+<script src="screens.js"></script>
+<script>
+  const q = new URLSearchParams(location.search);
+  const conta = q.get("conta") || "gestor";
+  const tela = q.get("tela") || "home-overview";
+  const root = document.getElementById("root");
+  if (tela === "capa") root.innerHTML = SCREENS.capa(conta);
+  else root.innerHTML = shell(conta, tela, SCREENS[tela](conta));
+  document.title = "Proposta Gestão";
+</script>
+</body>
+</html>

@@ -1,0 +1,2268 @@
+[
+ {
+  "nivel": "admin",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/manufatura",
+    "arquivo": "09_manufatura.png",
+    "titulo": "Manufatura · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/cotas",
+    "arquivo": "10_qualidade_cotas.png",
+    "titulo": "Qualidade — Cotas padrão · Gestor de Peças"
+   },
+   {
+    "rota": "/diretoria",
+    "arquivo": "11_diretoria.png",
+    "titulo": "Diretoria · Gestor de Peças"
+   },
+   {
+    "rota": "/melhoria-continua",
+    "arquivo": "12_melhoria-continua.png",
+    "titulo": "Melhoria Contínua — Oportunidades · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/crachas",
+    "arquivo": "13_inicio_crachas.png",
+    "titulo": "Admin — Crachás · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "14_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "15_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "16_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "17_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "18_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "19_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "20_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "21_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "22_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "23_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/spc",
+    "arquivo": "24_qualidade_spc.png",
+    "titulo": "Qualidade — SPC · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/rnc",
+    "arquivo": "25_qualidade_rnc.png",
+    "titulo": "Qualidade — Decisão de RNC · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/cadastro",
+    "arquivo": "26_inicio_cadastro.png",
+    "titulo": "Admin — Cadastro · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas-dev",
+    "arquivo": "27_inicio_chamadas-dev.png",
+    "titulo": "Admin — Chamadas do Admin · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/turnos",
+    "arquivo": "28_inicio_turnos.png",
+    "titulo": "Admin — Turnos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/apontamento-por-setor",
+    "arquivo": "29_inicio_apontamento-por-setor.png",
+    "titulo": "Admin — Apontamento por setor · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/alteracoes",
+    "arquivo": "30_inicio_alteracoes.png",
+    "titulo": "Admin — Alterações · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/envios-protheus",
+    "arquivo": "31_inicio_envios-protheus.png",
+    "titulo": "Admin — Envios ao Protheus · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/sistema",
+    "arquivo": "32_inicio_sistema.png",
+    "titulo": "Admin — Sistema · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "almoxarifado",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "andon",
+  "inicio": "/andon",
+  "telas": [
+   {
+    "rota": "/andon",
+    "arquivo": "01_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "controladoria",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "09_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "10_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "11_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "12_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "13_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "14_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "15_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "16_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "17_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "18_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "desenvolvedor",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/manufatura",
+    "arquivo": "09_manufatura.png",
+    "titulo": "Manufatura · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/cotas",
+    "arquivo": "10_qualidade_cotas.png",
+    "titulo": "Qualidade — Cotas padrão · Gestor de Peças"
+   },
+   {
+    "rota": "/diretoria",
+    "arquivo": "11_diretoria.png",
+    "titulo": "Diretoria · Gestor de Peças"
+   },
+   {
+    "rota": "/melhoria-continua",
+    "arquivo": "12_melhoria-continua.png",
+    "titulo": "Melhoria Contínua — Oportunidades · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/crachas",
+    "arquivo": "13_inicio_crachas.png",
+    "titulo": "Admin — Crachás · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "14_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "15_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "16_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "17_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "18_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "19_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "20_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "21_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "22_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "23_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/spc",
+    "arquivo": "24_qualidade_spc.png",
+    "titulo": "Qualidade — SPC · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/rnc",
+    "arquivo": "25_qualidade_rnc.png",
+    "titulo": "Qualidade — Decisão de RNC · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/cadastro",
+    "arquivo": "26_inicio_cadastro.png",
+    "titulo": "Admin — Cadastro · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas-dev",
+    "arquivo": "27_inicio_chamadas-dev.png",
+    "titulo": "Admin — Chamadas do Admin · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/turnos",
+    "arquivo": "28_inicio_turnos.png",
+    "titulo": "Admin — Turnos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/apontamento-por-setor",
+    "arquivo": "29_inicio_apontamento-por-setor.png",
+    "titulo": "Admin — Apontamento por setor · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/alteracoes",
+    "arquivo": "30_inicio_alteracoes.png",
+    "titulo": "Admin — Alterações · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/envios-protheus",
+    "arquivo": "31_inicio_envios-protheus.png",
+    "titulo": "Admin — Envios ao Protheus · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/sistema",
+    "arquivo": "32_inicio_sistema.png",
+    "titulo": "Admin — Sistema · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "diretoria",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/diretoria",
+    "arquivo": "09_diretoria.png",
+    "titulo": "Diretoria · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao1aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 1 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao1alu",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Alumínio - Alumínio 1 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao2aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 2 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao2alu",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Alumínio - Alumínio 2 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao3aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 3 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao3alu",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Alumínio - Alumínio 3 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao4aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 4 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao4alu",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Alumínio - Alumínio 4 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao5aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 5 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao6aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 6 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao7aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 7 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao8aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 8 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "estacao9aco",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Aço - Estação 9 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "gerente_industrial",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "09_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "10_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "11_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "12_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "13_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "14_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "15_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "16_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "17_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "18_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "gestor",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "09_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "10_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "11_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "12_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "13_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "14_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "15_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "16_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "17_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "18_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "lider_dobra_corte",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/dobra-corte",
+    "arquivo": "09_areas_dobra-corte.png",
+    "titulo": "Dobra e Corte — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "lider_pintura",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/pintura",
+    "arquivo": "09_areas_pintura.png",
+    "titulo": "Pintura — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "lider_serra",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/serra",
+    "arquivo": "09_areas_serra.png",
+    "titulo": "Serra — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "lider_usinagem",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/usinagem",
+    "arquivo": "09_areas_usinagem.png",
+    "titulo": "Usinagem — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "manufatura",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/manufatura",
+    "arquivo": "09_manufatura.png",
+    "titulo": "Manufatura · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "melhoria_continua",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/melhoria-continua",
+    "arquivo": "09_melhoria-continua.png",
+    "titulo": "Melhoria Contínua — Oportunidades · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_corte",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Corte · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_destaque",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Destaque · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_dobra",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Dobra · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_montagem",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Montagem · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_pintura",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Pintura · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_serra",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Serra · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "operador_usinagem",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Usinagem · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "pcp",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "09_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "10_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "11_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "12_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "13_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "14_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "15_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "16_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "17_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "18_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "projetos",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Proj. Ferramentaria · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "projetos_adm",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "09_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "10_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "11_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "12_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "13_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "14_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "15_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "16_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "17_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "18_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "prototipo",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Posto do operador · Protótipo · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "qualidade",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/cotas",
+    "arquivo": "09_qualidade_cotas.png",
+    "titulo": "Qualidade — Cotas padrão · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/spc",
+    "arquivo": "20_qualidade_spc.png",
+    "titulo": "Qualidade — SPC · Gestor de Peças"
+   },
+   {
+    "rota": "/qualidade/rnc",
+    "arquivo": "21_qualidade_rnc.png",
+    "titulo": "Qualidade — Decisão de RNC · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "robo1",
+  "inicio": "/operador",
+  "telas": [
+   {
+    "rota": "/operador",
+    "arquivo": "01_operador.png",
+    "titulo": "Estação Solda Robô - Robô 1 · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "supervisor_almoxarifado_solda_pintura",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/solda",
+    "arquivo": "09_areas_solda.png",
+    "titulo": "Solda — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/pintura",
+    "arquivo": "10_areas_pintura.png",
+    "titulo": "Pintura — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "11_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "12_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "13_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "14_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "15_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "16_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "17_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "18_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "19_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "20_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "supervisor_caldeiraria",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/dobra-corte",
+    "arquivo": "09_areas_dobra-corte.png",
+    "titulo": "Dobra e Corte — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/usinagem",
+    "arquivo": "10_areas_usinagem.png",
+    "titulo": "Usinagem — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/serra",
+    "arquivo": "11_areas_serra.png",
+    "titulo": "Serra — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "12_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "13_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "14_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "15_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "16_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "17_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "18_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "19_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "20_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "21_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ },
+ {
+  "nivel": "supervisor_prototipo",
+  "inicio": "/inicio/visao-geral",
+  "telas": [
+   {
+    "rota": "/inicio/visao-geral",
+    "arquivo": "01_inicio_visao-geral.png",
+    "titulo": "Tela inicial — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/andon",
+    "arquivo": "02_andon.png",
+    "titulo": "Painéis Operacionais — Andon · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/visao-geral",
+    "arquivo": "03_consulta-operacional_visao-geral.png",
+    "titulo": "Consulta Operacional — Visão Geral · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/ordens",
+    "arquivo": "04_producao_ordens.png",
+    "titulo": "Produção — Consulta de OP · Gestor de Peças"
+   },
+   {
+    "rota": "/analises/horas-utilizacao",
+    "arquivo": "05_analises_horas-utilizacao.png",
+    "titulo": "Análises — Horas & Utilização · Gestor de Peças"
+   },
+   {
+    "rota": "/auditoria/analitica",
+    "arquivo": "06_auditoria_analitica.png",
+    "titulo": "Auditoria — Auditoria analítica · Gestor de Peças"
+   },
+   {
+    "rota": "/relatorios",
+    "arquivo": "07_relatorios.png",
+    "titulo": "Relatórios — Relatórios · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/op-produto",
+    "arquivo": "08_rastreabilidade_op-produto.png",
+    "titulo": "Rastreabilidade — OP / Produto · Gestor de Peças"
+   },
+   {
+    "rota": "/areas/prototipo",
+    "arquivo": "09_areas_prototipo.png",
+    "titulo": "Protótipo — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/ia",
+    "arquivo": "10_inicio_ia.png",
+    "titulo": "Tela inicial — IA · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/chamadas",
+    "arquivo": "11_inicio_chamadas.png",
+    "titulo": "Tela inicial — Chamadas da Gestão · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/recursos",
+    "arquivo": "12_consulta-operacional_recursos.png",
+    "titulo": "Consulta Operacional — Recursos · Gestor de Peças"
+   },
+   {
+    "rota": "/mapa-fabrica",
+    "arquivo": "13_mapa-fabrica.png",
+    "titulo": "Painéis Operacionais — Mapa da fábrica · Gestor de Peças"
+   },
+   {
+    "rota": "/inicio/pausas",
+    "arquivo": "14_inicio_pausas.png",
+    "titulo": "Painéis Operacionais — Pausas · Gestor de Peças"
+   },
+   {
+    "rota": "/consulta-operacional/ops-em-andamento",
+    "arquivo": "15_consulta-operacional_ops-em-andamento.png",
+    "titulo": "Consulta Operacional — OPs em andamento · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/execucao",
+    "arquivo": "16_producao_execucao.png",
+    "titulo": "Produção — Execução das OPs · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/realizada",
+    "arquivo": "17_producao_realizada.png",
+    "titulo": "Produção — Produção realizada · Gestor de Peças"
+   },
+   {
+    "rota": "/producao/planejado-realizado",
+    "arquivo": "18_producao_planejado-realizado.png",
+    "titulo": "Produção — Planejado × Realizado · Gestor de Peças"
+   },
+   {
+    "rota": "/rastreabilidade/lote-material-nesting",
+    "arquivo": "19_rastreabilidade_lote-material-nesting.png",
+    "titulo": "Rastreabilidade — Lote / Material / Nesting · Gestor de Peças"
+   }
+  ],
+  "erros_js": []
+ }
+]
