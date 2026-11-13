@@ -11,7 +11,14 @@ from statistics import mean, median, pstdev
 
 from mes.analytics.physical_time import PhysicalInputSegment, consolidate_physical_time
 from mes.analytics.resource_state import build_physical_state_inputs
-from mes.analytics.rateio import canonical_resource_key, split_concurrent_production
+from mes.analytics.rateio import (
+    REASON_PENDING,
+    REASON_SHARED,
+    allocate_by_badge,
+    canonical_resource_key,
+    participation_rows,
+    production_spans,
+)
 from mes.analytics.timeline import build_operator_timeline
 from mes.contracts import AnalyticsFilter
 from mes.domain import DataAvailability, EventCategory, ManufacturingRules
@@ -270,7 +277,7 @@ class IndustrialAnalyticsService:
             return self._cache[cache_key]
         rows = []
         rateio = self._rateio_allocation_map(filters)
-        concurrent = self._concurrent_production_seconds(filters)
+        allocation = self._badge_allocation(filters)
         for fact in self._facts(filters):
             timeline = self._timeline(fact, filters)
             if timeline is None:
@@ -290,7 +297,7 @@ class IndustrialAnalyticsService:
                 str(fact.get("numero_operacao") or "").strip(),
             )
             production_seconds, time_source = self._production_seconds(
-                fact, timeline, key, rateio, concurrent
+                fact, timeline, key, rateio, allocation
             )
             real_per_piece = (
                 production_seconds / good
@@ -318,6 +325,14 @@ class IndustrialAnalyticsService:
                 "tempo_padrao_estimado_segundos": expected,
                 "tempo_producao_real_segundos": production_seconds,
                 "fonte_tempo_producao": time_source,
+                # HH (homem-hora) do motor por crachá; HM pendente = produção
+                # sem crachá vinculado, que não vira HM nem HH (C18).
+                "hh_segundos": (
+                    allocation.hh.get(fact.get("id"))
+                    if time_source != "rateio" and timeline.has_event_data
+                    else None
+                ),
+                "tempo_pendente_segundos": allocation.pending.get(fact.get("id"), 0.0),
                 "tempo_real_por_peca_segundos": real_per_piece,
                 "desvio_segundos": deviation,
                 "desvio_percentual": (
@@ -329,12 +344,14 @@ class IndustrialAnalyticsService:
         return payload
 
     @staticmethod
-    def _production_seconds(fact, timeline, key, rateio, concurrent):
-        """Tempo de produção do apontamento e a origem dele.
+    def _production_seconds(fact, timeline, key, rateio, allocation):
+        """Tempo de produção (HM operacional) do apontamento e a origem dele.
 
-        Origens: ``rateio`` (sessão de rateio), ``timeline_op``,
-        ``timeline_op_rateio_igualitario`` (dividido entre OPs simultâneas) e
-        ``dados_insuficientes``.
+        Regra: Metodologia de Tempos e Rateios V2 (motor por crachá). Origens:
+        ``rateio`` (sessão manual), ``timeline_op`` (tempo integral da OP),
+        ``rateio_cracha`` (crachá dividido entre OPs), ``rateio_cracha_regra_proposta``
+        (vínculo misto, C13/C14), ``conflito_cracha_recursos`` (C19),
+        ``pendente_sem_cracha`` (C18, sem HM) e ``dados_insuficientes``.
         """
 
         if key in rateio:
@@ -342,12 +359,18 @@ class IndustrialAnalyticsService:
         if not timeline.has_event_data:
             return None, "dados_insuficientes"
         production_seconds = timeline.seconds(EventCategory.PRODUCTION)
-        # OPs simultâneas no mesmo recurso dividem o tempo (igualitário):
-        # a soma por OP não pode passar do tempo físico do recurso.
-        divided = concurrent.get(fact.get("id"))
-        if divided is not None and divided < production_seconds - 0.5:
-            return divided, "timeline_op_rateio_igualitario"
-        return production_seconds, "timeline_op"
+        fact_id = fact.get("id")
+        if fact_id not in allocation.hm:
+            return production_seconds, "timeline_op"
+        # O HM do motor vale sempre (inclusive o trecho com crachá de uma OP
+        # parcialmente pendente); a tolerância só escolhe o rótulo.
+        hm = allocation.hm[fact_id]
+        flag = allocation.flag(fact_id)
+        if flag == REASON_PENDING and hm <= 0:
+            return None, flag
+        if flag:
+            return hm, flag
+        return hm, REASON_SHARED if hm < production_seconds - 0.5 else "timeline_op"
 
     def standard_time_samples(self, filters: AnalyticsFilter) -> list[dict]:
         """Execuções elegíveis para estimar o tempo padrão (segundos/peça).
@@ -360,7 +383,7 @@ class IndustrialAnalyticsService:
         """
 
         rateio = self._rateio_allocation_map(filters)
-        concurrent = self._concurrent_production_seconds(filters)
+        allocation = self._badge_allocation(filters)
         samples = []
         for fact in self._facts(filters):
             if str(fact.get("status") or "").strip().casefold() != "finalizado":
@@ -380,7 +403,7 @@ class IndustrialAnalyticsService:
                 str(fact.get("op") or "").strip().casefold(),
                 str(fact.get("numero_operacao") or "").strip(),
             )
-            seconds, source = self._production_seconds(fact, timeline, key, rateio, concurrent)
+            seconds, source = self._production_seconds(fact, timeline, key, rateio, allocation)
             if source != "timeline_op" or not seconds or seconds <= 0:
                 continue
             samples.append({
@@ -997,39 +1020,94 @@ class IndustrialAnalyticsService:
         self._cache[cache_key] = payload
         return payload
 
-    def _concurrent_production_seconds(self, filters):
-        """Tempo de produção por apontamento já dividido entre OPs simultâneas.
+    def _badge_allocation(self, filters):
+        """HM/HH por apontamento pelo motor de rateio por crachá.
 
-        Deriva dos próprios apontamentos, sem tabela de rateio. As OPs que
-        dividem o recurso podem estar fora do filtro (ex.: consulta de uma só
-        OP), então a divisão olha todo o recorte de setor/recurso/período.
-
-        O filtro de recurso é comparado pela identidade canônica, não pela
-        string: o consumidor filtra por ``LASER1`` mas apontamentos gravados
-        com o apelido do posto ("Laser Ensis 3015") dividem o mesmo recurso
-        físico. Filtrar por texto no SQL os deixaria de fora e a soma por OP
-        passaria do tempo físico.
+        Deriva dos próprios apontamentos e de ``participacoes_operador``, sem
+        tabela de rateio. As OPs que dividem um crachá podem estar fora do
+        filtro (consulta de uma só OP ou de um só recurso), então o motor olha
+        todo o setor no período. Crachá em outro setor no mesmo instante fica
+        fora do recorte (limitação conhecida do conflito C19).
         """
 
-        cache_key = ("concurrent_production", filters)
+        cache_key = ("badge_allocation", filters)
         if cache_key in self._cache:
             return self._cache[cache_key]
         wide = replace(
             filters, op=None, operacao=None, produto=None, operador=None, recurso=None
         )
-        wanted = canonical_resource_key(filters.recurso) if filters.recurso else None
-        items = []
+        executions = []
         for fact in self._facts(wide):
-            resource = canonical_resource_key(fact.get("maquina"))
-            if wanted is not None and resource != wanted:
-                continue
             timeline = self._timeline(fact, wide)
             if timeline is None or not timeline.has_event_data:
                 continue
-            items.append((fact.get("id"), resource, timeline))
-        payload = split_concurrent_production(items)
+            executions.append((fact.get("id"), fact.get("maquina"), production_spans(timeline)))
+        loader = getattr(self.db, "listar_participacoes_operador_periodo", None)
+        rows = loader(wide.inicio, wide.fim, setor=wide.setor) if callable(loader) else []
+        payload = allocate_by_badge(executions, participation_rows(rows))
         self._cache[cache_key] = payload
         return payload
+
+    def badge_allocation_trail(self, filters: AnalyticsFilter) -> dict:
+        """Trilha de auditoria do rateio por crachá (HM, HH, relógio e alertas).
+
+        Mostra as execuções do filtro; o cálculo considera o setor inteiro, como
+        nas telas, para a fração de um crachá compartilhado sair igual.
+        """
+
+        allocation = self._badge_allocation(filters)
+        facts = {
+            fact.get("id"): fact for fact in self._facts(filters)
+            if fact.get("id") in allocation.hm
+        }
+        badge_filter = str(filters.operador or "").strip().upper()
+
+        def label(key):
+            fact = facts[key]
+            return {"apontamento_id": key, "op": fact.get("op"),
+                    "operacao": fact.get("numero_operacao"), "recurso": fact.get("maquina")}
+
+        items = [
+            {**label(key), "setor": facts[key].get("tipo_setor"),
+             "hm_segundos": round(allocation.hm[key], 1),
+             "hh_segundos": round(allocation.hh[key], 1),
+             "pendente_segundos": round(allocation.pending.get(key, 0.0), 1),
+             "alerta": allocation.flag(key)}
+            for key in sorted(facts, key=str)
+        ]
+        badges = [
+            {"cracha": badge,
+             "hh_segundos": round(sum(per_key[key] for key in shown), 1),
+             "ops": [{**label(key), "hh_segundos": round(per_key[key], 1)} for key in shown]}
+            for badge, per_key in sorted(allocation.hh_by_badge.items())
+            if (shown := sorted((key for key in per_key if key in facts), key=str))
+            and (not badge_filter or badge == badge_filter)
+        ]
+        hm_by_resource = defaultdict(float)
+        for key in facts:
+            hm_by_resource[canonical_resource_key(facts[key].get("maquina"))] += allocation.hm[key]
+        return {
+            "periodo": filters.to_dict(),
+            "metodo": "Metodologia de Tempos e Rateios V2 (Manufatura, 13/11/2026)",
+            "items": items,
+            "crachas": badges,
+            "recursos": [
+                {"recurso": resource, "hm_segundos": round(hm, 1),
+                 "relogio_segundos": round(allocation.clock.get(resource, 0.0), 1)}
+                for resource, hm in sorted(hm_by_resource.items())
+            ],
+            "trilha": [
+                {**label(item.key), "inicio": item.start.isoformat(), "fim": item.end.isoformat(),
+                 "segundos": round(item.seconds, 1),
+                 "crachas": [{"cracha": badge, "fracao": round(fraction, 4)}
+                             for badge, fraction in item.badges],
+                 "hm_segundos": round(item.hm_seconds, 1), "hh_segundos": round(item.hh_seconds, 1),
+                 "regra": item.reason}
+                for item in allocation.trail
+                if item.key in facts
+                and (not badge_filter or any(badge == badge_filter for badge, _ in item.badges))
+            ],
+        }
 
     def _rateio_allocation_map(self, filters):
         cache_key = ("rateio", filters)

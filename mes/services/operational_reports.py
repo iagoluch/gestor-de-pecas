@@ -4,7 +4,13 @@ from datetime import datetime, timedelta
 import logging
 
 from app.core.formatting import format_datetime_text, parse_datetime_text
-from mes.analytics.rateio import canonical_resource_key, split_concurrent_production
+from mes.analytics.rateio import (
+    REASON_SHARED,
+    allocate_by_badge,
+    canonical_resource_key,
+    participation_rows,
+    production_spans,
+)
 from mes.analytics.timeline import build_operator_timeline
 from mes.domain import EventCategory
 
@@ -193,20 +199,27 @@ class OperationalReportService:
                 start=max(data_inicio, inicio),
                 end=min(data_fim or agora_periodo, fim),
             )
-        producao_dividida = split_concurrent_production(
+        # Motor por crachá (Metodologia de Tempos e Rateios V2): HM da OP só é
+        # dividido quando o MESMO crachá atende várias OPs ao mesmo tempo.
+        participacoes_loader = getattr(self.db, "listar_participacoes_operador_periodo", None)
+        participacoes = participation_rows(
+            participacoes_loader(inicio, fim, setor=tipo_setor)
+            if callable(participacoes_loader)
+            else ()
+        )
+        alocacao = allocate_by_badge(
             (
-                id(item),
-                canonical_resource_key(item.get("maquina")),
-                timeline,
-            )
-            for item in apontamentos
-            if (timeline := timelines.get(id(item))) is not None
-            and timeline.has_event_data
+                (item.get("id"), item.get("maquina"), production_spans(timeline))
+                for item in apontamentos
+                if (timeline := timelines.get(id(item))) is not None
+                and timeline.has_event_data
+            ),
+            participacoes,
         )
         producao_dividida = self._arredondar_conservando_soma(
-            producao_dividida,
+            alocacao.hm,
             {
-                id(item): canonical_resource_key(item.get("maquina"))
+                item.get("id"): canonical_resource_key(item.get("maquina"))
                 for item in apontamentos
             },
         )
@@ -248,12 +261,14 @@ class OperationalReportService:
                 segundos = int(timeline.seconds(EventCategory.PRODUCTION))
                 segundos_corridos = segundos
                 fonte_tempo = "timeline_op"
-                dividido = producao_dividida.get(id(item))
-                if dividido is not None and dividido < segundos:
-                    # OPs simultâneas no mesmo recurso dividem o tempo
-                    # (igualitário); a soma por OP não passa do tempo físico.
-                    segundos = dividido
-                    fonte_tempo = "timeline_op_rateio_igualitario"
+                hm = alocacao.hm.get(item.get("id"))
+                if hm is not None:
+                    # HM do motor por crachá (arredondado conservando a soma do
+                    # recurso). Trecho sem crachá não vira tempo (C18).
+                    segundos = producao_dividida[item.get("id")]
+                    alerta = alocacao.flag(item.get("id"))
+                    if alerta or hm < timeline.seconds(EventCategory.PRODUCTION) - 0.5:
+                        fonte_tempo = alerta or REASON_SHARED
                 producao_seg = segundos
                 parada_seg = int(timeline.seconds(EventCategory.DOWNTIME))
                 setup_seg = int(timeline.seconds(EventCategory.SETUP))

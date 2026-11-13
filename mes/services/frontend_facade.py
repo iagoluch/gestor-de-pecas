@@ -1181,6 +1181,8 @@ class FrontendBackendFacade:
             return self.analytics.quality(filters)
         if key == "tempo_padrao_x_real":
             return self.analytics.standard_vs_actual(filters)
+        if key == "rateio_cracha":
+            return self.analytics.badge_allocation_trail(filters)
         if key == "cronoanalise":
             return self.analytics.chronoanalysis(filters)
         if key == "capacidade":

@@ -55,6 +55,7 @@ def analysis(
         "setups": "setup",
         "quality": "qualidade",
         "standard-vs-actual": "tempo_padrao_x_real",
+        "badge-allocation": "rateio_cracha",
         "chronoanalysis": "cronoanalise",
         "capacity": "capacidade",
         "reliability": "confiabilidade",

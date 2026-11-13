@@ -99,6 +99,10 @@ const STATE_ALIASES: Record<string, SystemStateKey> = {
 const INTERNAL_TERMS: Record<string, string> = {
   timeline_op: "Linha do tempo da OP",
   rateio: "Rateio de tempo",
+  rateio_cracha: "Dividido entre OPs do mesmo crachá",
+  rateio_cracha_regra_proposta: "Dividido pelo crachá (regra proposta)",
+  conflito_cracha_recursos: "Crachá em dois recursos (conferir)",
+  pendente_sem_cracha: "Pendente: produção sem crachá",
   tempo_real_operacao: "Tempo real da operação",
   management_insights: "Leitura gerencial",
   eventos_estado_recurso: "Estado físico do recurso",

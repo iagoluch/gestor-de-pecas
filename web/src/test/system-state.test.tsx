@@ -37,6 +37,7 @@ describe("camada central de humanização de estados", () => {
     expect(availabilityLabel.dados_insuficientes).toBe("Dados insuficientes");
     expect(humanize("sem_registros")).toBe("Sem registros");
     expect(humanize("timeline_op")).toBe("Linha do tempo da OP");
+    expect(humanize("pendente_sem_cracha")).toBe("Pendente: produção sem crachá");
     expect(humanize("parada_por_falta_de_material")).toBe("Parada Por Falta De Material");
   });
 

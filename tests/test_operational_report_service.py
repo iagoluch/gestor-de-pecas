@@ -101,6 +101,9 @@ class FakeReportDb:
     def listar_apontamentos_operacionais_periodo(self, tipo_setor, inicio, fim):
         return [item for item in self.apontamentos if item["tipo_setor"] == tipo_setor]
 
+    def listar_participacoes_operador_periodo(self, inicio, fim, *, setor=None):
+        return list(getattr(self, "participacoes", []))
+
     def buscar_movimentacoes_periodo(self, inicio, fim):
         return [
             row for row in self.history
@@ -246,9 +249,15 @@ class OperationalReportServiceTests(unittest.TestCase):
         self.assertEqual(resultado["ops"][0]["status_processo"], "Em processo")
 
     def test_divisao_conserva_a_soma_e_nao_atenua_o_alarme_de_op_aberta(self):
-        # A6: duas OPs abertas há 9h no mesmo recurso. O tempo produtivo é
-        # dividido (soma = 9h físicas), mas o alarme usa o tempo corrido da OP.
+        # A6: o mesmo crachá em duas OPs abertas há 9h no mesmo recurso. O
+        # tempo produtivo é dividido (soma = 9h físicas), mas o alarme usa o
+        # tempo corrido da OP.
         db = FakeReportDb()
+        db.participacoes = [
+            {"apontamento_id": ident, "cracha": "C1",
+             "data_inicio": datetime(2026, 7, 1, 3, 0), "data_fim": None}
+            for ident in (10, 11)
+        ]
         for ident, op in ((10, "OP-S1"), (11, "OP-S2")):
             db.apontamentos.append(
                 {
@@ -271,9 +280,36 @@ class OperationalReportServiceTests(unittest.TestCase):
             sum(row["tempo_produtivo_seg"] for row in linhas.values()), 9 * 3600
         )
         for linha in linhas.values():
-            self.assertEqual(linha["fonte_tempo_produtivo"], "timeline_op_rateio_igualitario")
+            self.assertEqual(linha["fonte_tempo_produtivo"], "rateio_cracha")
             self.assertEqual(linha["tempo_aberto_seg"], 9 * 3600)
             self.assertEqual(linha["status_tempo"], "Atrasado")
+
+    def test_trecho_sem_cracha_fica_pendente_sem_apagar_o_trecho_com_cracha(self):
+        # C18 parcial: OP aberta há 9h, crachá só nas últimas 4h30. O trecho
+        # com crachá conta; o trecho sem crachá fica pendente (não vira tempo).
+        db = FakeReportDb()
+        db.participacoes = [
+            {"apontamento_id": 10, "cracha": "C1",
+             "data_inicio": datetime(2026, 7, 1, 7, 30), "data_fim": None}
+        ]
+        db.apontamentos.append(
+            {
+                "id": 10, "op": "OP-S1", "peca": "Perfil", "tarefa_id": 1,
+                "tipo_setor": "Serra", "maquina": "SFG-330", "status": "Em processo",
+                "data_inicio": "2026-07-01 03:00:00", "data_fim": None,
+                "setor_destino": None,
+                "eventos": [
+                    {"id": 10, "estado": "producao", "data_hora": datetime(2026, 7, 1, 3, 0)},
+                ],
+            }
+        )
+        resultado = self._service(db).calcular_relatorio_tempos_mes(
+            datetime(2026, 7, 1, 0, 0, 0), datetime(2026, 7, 1, 23, 59, 59), "Serra"
+        )
+
+        linha = resultado["ops"][0]
+        self.assertEqual(linha["tempo_produtivo_seg"], int(4.5 * 3600))
+        self.assertEqual(linha["fonte_tempo_produtivo"], "pendente_sem_cracha")
 
     def test_arredondamento_por_maior_resto_conserva_a_soma_por_recurso(self):
         valores = {1: 1200.4, 2: 1200.4, 3: 1200.2, 4: 50.0}

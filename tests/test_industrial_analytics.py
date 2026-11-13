@@ -325,6 +325,16 @@ class _ManagementRepo:
     def listar_inconsistencias_dados(self, **_kwargs):
         return []
 
+    # Um crachá exclusivo por apontamento, do início ao fim (tempo integral).
+    BADGE = None
+
+    def listar_participacoes_operador_periodo(self, *_args, **_kwargs):
+        return [
+            {"apontamento_id": fact["id"], "cracha": self.BADGE or f"C{fact['id']}",
+             "data_inicio": fact["data_inicio"], "data_fim": None}
+            for fact in self.listar_fatos_operacionais_periodo()
+        ]
+
 
 class ManagementTests(unittest.TestCase):
     def test_overview_expoe_oee_canonico_quando_os_dados_sao_suficientes(self):
@@ -888,6 +898,8 @@ class _ApelidoRepo(_ConcurrentManagementRepo):
     def listar_rateios_tempo_periodo(self, *_args, **_kwargs):
         return []
 
+    BADGE = "C1"  # o mesmo crachá atende as duas OPs
+
 
 class ConcurrentPorIdentidadeCanonicaTests(unittest.TestCase):
     def test_filtro_por_codigo_inclui_op_gravada_com_apelido_no_rateio(self):
@@ -899,12 +911,32 @@ class ConcurrentPorIdentidadeCanonicaTests(unittest.TestCase):
         result = IndustrialAnalyticsService(_ApelidoRepo()).standard_vs_actual(filters)
 
         # O filtro continua por texto (só a OP gravada como LASER1 é listada),
-        # mas ela divide o recurso físico com a OP do apelido: 3600 / 2.
+        # mas o crachá dela também atende a OP do apelido: 3600 / 2.
         self.assertEqual([row["op"] for row in result["items"]], ["OP1"])
         self.assertEqual(result["items"][0]["tempo_producao_real_segundos"], 1800)
         self.assertEqual(
-            result["items"][0]["fonte_tempo_producao"], "timeline_op_rateio_igualitario"
+            result["items"][0]["fonte_tempo_producao"], "rateio_cracha"
         )
+
+    def test_trilha_mostra_hm_hh_relogio_e_fracao_do_cracha(self):
+        filters = AnalyticsFilter(datetime(2026, 8, 19, 0, 0), datetime(2026, 8, 19, 23, 59))
+        trail = IndustrialAnalyticsService(_ApelidoRepo()).badge_allocation_trail(filters)
+
+        self.assertEqual([item["hm_segundos"] for item in trail["items"]], [1800.0, 1800.0])
+        self.assertEqual(trail["recursos"], [
+            {"recurso": "LASER1", "hm_segundos": 3600.0, "relogio_segundos": 3600.0},
+        ])
+        self.assertEqual(trail["crachas"][0]["cracha"], "C1")
+        self.assertEqual(trail["crachas"][0]["hh_segundos"], 3600.0)
+        self.assertEqual({line["regra"] for line in trail["trilha"]}, {"rateio_cracha"})
+        self.assertEqual(trail["trilha"][0]["crachas"], [{"cracha": "C1", "fracao": 0.5}])
+
+        # Filtro estreito mostra só a OP dele, mas a fração vem do setor inteiro.
+        by_resource = IndustrialAnalyticsService(_ApelidoRepo()).badge_allocation_trail(
+            AnalyticsFilter(filters.inicio, filters.fim, recurso="LASER1")
+        )
+        self.assertEqual([item["op"] for item in by_resource["items"]], ["OP1"])
+        self.assertEqual(by_resource["items"][0]["hm_segundos"], 1800.0)
 
 
 class _ConcurrentDowntimeRepo(_ConcurrentManagementRepo):

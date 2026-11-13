@@ -162,6 +162,13 @@ class _MemoryDb:
     def listar_inconsistencias_dados(self, **_k):
         return []
 
+    def listar_participacoes_operador_periodo(self, inicio, fim, **_k):
+        # Um crachá exclusivo por execução: tempo integral (sem rateio).
+        return [
+            {"apontamento_id": f["id"], "cracha": f"C{f['id']}",
+             "data_inicio": f["data_inicio"], "data_fim": None}
+            for f in self.facts
+        ]
 
 def _fact(idx, *, seconds, good=10, day_offset=1, setor="Dobra", status="Finalizado",
           produto="PROD1", operacao="20", recurso="DOBRA1"):
@@ -449,6 +456,7 @@ class StandardTimeApiTests(unittest.TestCase):
             "registrar_evento_sistema", "ultimo_evento_sistema",
             "listar_fatos_operacionais_periodo", "possui_calendario_produtivo",
             "listar_tempos_nesting_corte", "listar_inconsistencias_dados",
+            "listar_participacoes_operador_periodo",
         ):
             setattr(self.db, name, getattr(self.memory, name))
         self.app = create_app(settings=_settings(), database_factory=lambda: self.db)
