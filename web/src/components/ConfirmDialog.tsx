@@ -32,7 +32,7 @@ export function ConfirmDialog({
       <div className="confirm-dialog__message">{message}</div>
       <div className="operator-dialog__actions">
         <button type="button" onClick={onCancel}>{cancelLabel}</button>
-        <AsyncButton className={tone === "danger" ? "operator-danger" : "button button--primary"} pendingLabel="Aguarde…" onClick={onConfirm}>
+        <AsyncButton className={tone === "danger" ? "operator-danger" : "button button--primary"} data-enter={tone === "danger" ? "off" : undefined} pendingLabel="Aguarde…" onClick={onConfirm}>
           {confirmLabel}
         </AsyncButton>
       </div>

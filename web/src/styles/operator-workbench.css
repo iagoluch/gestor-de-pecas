@@ -376,6 +376,18 @@ body.wb2-dialogs .operator-dialog .operator-dialog__actions > .button.operator-s
   .wb2 .step .nm { margin-top: clamp(3px, 0.9vh, 10px); font-size: clamp(14px, 1.7vh, 18px); }
   .wb2 .step.cur .nm { font-size: clamp(15px, 1.85vh, 20px); }
   .wb2 .step .sl { font-size: clamp(12px, 1.3vh, 14px); }
+  /* 13/11/2026: em tela alta o roteiro sobrava vazio; bolinhas e textos
+     crescem com a altura do próprio card (cq*), limitados pela largura. */
+  @supports (container-type: size) {
+    .wb2 .rbody { container-type: size; min-height: 0; }
+    .wb2 .step { --dot: clamp(30px, min(36cqh, 11cqw), 110px); }
+    .wb2 .step .dot { font-size: clamp(13px, calc(var(--dot) * 0.34), 30px); }
+    .wb2 .step.done .dot svg { width: 50%; height: 50%; }
+    .wb2 .step::after { height: clamp(4px, calc(var(--dot) / 12), 7px); }
+    .wb2 .step .nm { font-size: clamp(14px, min(9cqh, 2.4cqw), 30px); }
+    .wb2 .step.cur .nm { font-size: clamp(15px, min(10cqh, 2.7cqw), 34px); }
+    .wb2 .step .sl { font-size: clamp(12px, min(6.5cqh, 1.8cqw), 21px); }
+  }
 }
 
 /* Coluna da direita: painéis ocupam a largura toda; lista vazia preenche o painel
@@ -386,3 +398,34 @@ body.wb2-dialogs .operator-dialog .operator-dialog__actions > .button.operator-s
 /* 13/11/2026: motivo de parada longo quebra em até 2 linhas, sem reticências. */
 .operator-workbench.wb2 .wb2-status .st:has(.why--long) { align-items: center; }
 .operator-workbench.wb2 .wb2-status .why.why--long { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: clamp(18px, 2.9vh, 32px); line-height: 1.1; white-space: normal; overflow-wrap: anywhere; }
+
+/* 13/11/2026: painel da OP centralizado; valores em 1 linha (FitLine encolhe a
+   fonte quando o texto é longo, em vez de quebrar). */
+.wb2 .hero .hc { justify-content: center; align-items: center; text-align: center; }
+.wb2 .hero .hc .fit { max-width: 100%; overflow: hidden; white-space: nowrap; overflow-wrap: normal; }
+.wb2 .hero .hc .big i { font-size: .58em; }
+.wb2 .hero .hc .desc { max-width: 100%; }
+.wb2 .hero .hc .bar { align-self: stretch; }
+.wb2 .hero .hc .fit { display: block; }
+@media (min-width: 1181px) { .wb2 .hero { grid-template-columns: 1.3fr 1.45fr 1.2fr 1.1fr; } }
+.wb2 .hero .hc .big, .wb2 .hero .hc .mid { color: var(--w-text-strong); }
+/* 13/11/2026: painel da OP mais arejado; a altura sai do roteiro. */
+@media (min-width: 1181px) {
+  .wb2 .hero { grid-template-rows: auto minmax(clamp(96px, 16.5vh, 190px), auto); }
+  .wb2 .hero .hc { gap: clamp(3px, 0.9vh, 12px); }
+}
+
+/* 13/11/2026: card da fila mais arejado; código da peça maior e em linha própria. */
+.operator-workbench.wb2 .card.operator-production-card, .operator-dialog .card.operator-production-card { row-gap: 7px; padding: 14px 16px; }
+.card.operator-production-card .ln { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.card.operator-production-card .ln .pc { flex: none; color: var(--w-text-strong); font-size: 19px; letter-spacing: .02em; }
+.card.operator-production-card .ln .opn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card.operator-production-card .ds { grid-column: 1 / -1; min-width: 0; overflow: hidden; color: var(--w-muted); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.card.operator-production-card .qq { gap: 26px; margin-top: 2px; }
+.card.operator-production-card .qq > span:not(.when) b { margin-left: 4px; }
+.card.operator-production-card .qq > span:not(.when) { flex: none; white-space: nowrap; }
+.card.operator-production-card .qq .when { min-width: 0; }
+/* 13/11/2026: botão para tirar a OP da bancada, na faixa de cima do painel. */
+.wb2 .hero .hs .hsx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb2 .hero .hs .hclear { flex: none; min-height: 34px; padding: 4px 14px; border: 1px solid currentColor; border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 14px; letter-spacing: .02em; cursor: pointer; }
+.wb2 .hero .hs .hclear:hover { background: var(--w-surface-hi); color: var(--w-text-strong); }

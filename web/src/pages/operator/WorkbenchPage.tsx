@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, apiErrorMessage } from "../../api/client";
 import { ChamadaButton } from "../../components/ChamadaButton";
@@ -142,7 +142,8 @@ function OperatorCardView({ item, onSelect, selected = false }: { item: Operator
     <button type="button" className={`card operator-production-card${partial ? " operator-production-card--partial" : ""}${selected ? " sel operator-production-card--selected" : ""}`} aria-pressed={selected} onClick={() => onSelect(item)}>
       <span className="op">OP {String(item.op ?? "—")}</span>
       <span className={`pill ${pillClass}`}>{pillText}</span>
-      <span className="ln" title={String(item.description ?? "")}><b>{String(item.product ?? "—")}</b> · Op. {String(item.operation ?? item.numero_operacao ?? "—")} · {String(item.description ?? "—")}</span>
+      <span className="ln"><b className="pc">{String(item.product ?? "—")}</b><span className="opn">Op. {String(item.operation ?? item.numero_operacao ?? "—")}</span></span>
+      <span className="ds" title={String(item.description ?? "")}>{String(item.description ?? "—")}</span>
       <span className="qq"><span>Qtd <b>{String(item.qty ?? 0)}</b></span><span>Boas <b className="g">{String(item.good ?? 0)}</b></span><span>Refugo <b className="r">{String(item.scrap ?? 0)}</b></span>{when ? <span className="when">{when}</span> : null}</span>
       {alert ? (
         <span className="why">
@@ -193,9 +194,32 @@ function RunningStrip({ items, selectedKey, onSelect, onMore }: { items: Operato
   );
 }
 
+/** Valor do painel da OP sempre em 1 linha: se não couber, a fonte encolhe até
+ *  caber (13/11/2026), em vez de quebrar o código da OP ou o tempo ao meio. */
+function FitLine({ className, children }: { className: string; children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.fontSize = "";
+    if (el.scrollWidth > el.clientWidth) {
+      const base = parseFloat(getComputedStyle(el).fontSize);
+      el.style.fontSize = `${Math.max(12, Math.floor(base * (el.clientWidth / el.scrollWidth) * 0.97))}px`;
+    }
+  };
+  useLayoutEffect(fit);
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined" || !ref.current?.parentElement) return;
+    const observer = new ResizeObserver(fit);
+    observer.observe(ref.current.parentElement);
+    return () => observer.disconnect();
+  }, []);
+  return <span ref={ref} className={`${className} fit`}>{children}</span>;
+}
+
 /** Painel da OP em foco: os quatro dados que o operador lê de longe. Só mostra
  *  números que já vêm do roteiro/card; nada é recalculado aqui. */
-function OpPanel({ context, card, running }: { context: OperationContext; card?: OperatorCard; running: OperatorCard[] }) {
+function OpPanel({ context, card, running, onClear }: { context: OperationContext; card?: OperatorCard; running: OperatorCard[]; onClear: () => void }) {
   const pct = (value: number) => (context.planned > 0 ? Math.min(100, (value / context.planned) * 100) : 0);
   const started = card?.data_inicio && card.status !== "Aguardando" ? formatDateTime(String(card.data_inicio)) : "";
   // Faixa de cima: diz sem rodeio se a OP na tela é a que está rodando no recurso.
@@ -208,27 +232,27 @@ function OpPanel({ context, card, running }: { context: OperationContext; card?:
     : running.length ? `ESTA OP NÃO ESTÁ RODANDO · rodando agora: OP ${others}` : `OP CARREGADA · ${displayName(card?.status, "Aguardando início")}`;
   return (
     <section className={`panel hero ${tone}`} aria-label="OP na tela">
-      <div className="hs"><i aria-hidden="true" />{phrase}</div>
+      <div className="hs"><i aria-hidden="true" /><span className="hsx">{phrase}</span><button type="button" className="hclear" onClick={onClear}>Desmarcar OP ✕</button></div>
       <div className="hc">
         <small>OP</small>
-        <div className="big">{context.op}</div>
-        <span>Operação <b>{context.operation || "—"}</b></span>
+        <FitLine className="big">{context.op}</FitLine>
+        <FitLine className="line">Operação <b>{context.operation || "—"}</b></FitLine>
       </div>
       <div className="hc">
         <small>Peça</small>
-        <div className="mid">{context.product || "—"}</div>
+        <FitLine className="mid">{context.product || "—"}</FitLine>
         <div className="desc" title={context.description}>{context.description || "—"}</div>
       </div>
       <div className="hc">
         <small>Quantidade</small>
-        <div className="big">{context.planned}<i> pç</i></div>
-        <span>Boas <b className="ok">{context.registeredGood}</b> · Refugo <b className="err">{context.registeredScrap}</b> · Falta <b>{context.balance}</b></span>
+        <FitLine className="big">{context.planned}<i> pç</i></FitLine>
+        <FitLine className="line">Boas <b className="ok">{context.registeredGood}</b> · Refugo <b className="err">{context.registeredScrap}</b> · Falta <b>{context.balance}</b></FitLine>
         <div className="bar" aria-hidden="true"><i className="g" style={{ width: `${pct(context.registeredGood)}%` }} /><i className="r" style={{ width: `${pct(context.registeredScrap)}%` }} /></div>
       </div>
       <div className="hc">
         <small>Tempo na OP</small>
-        <div className="big">{card?.elapsed || "—"}</div>
-        <span>{started ? `desde ${started}` : displayName(card?.status, "Aguardando")}</span>
+        <FitLine className="big">{card?.elapsed || "—"}</FitLine>
+        <FitLine className="line">{started ? `desde ${started}` : displayName(card?.status, "Aguardando")}</FitLine>
       </div>
     </section>
   );
@@ -625,6 +649,19 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
     setMessage("Produção e fila atualizadas.");
   }
 
+  // Tira a OP da bancada: botão do painel ou novo toque no card já selecionado (13/11/2026).
+  function clearOp() {
+    setOp("");
+    setLoadedOp("");
+    setRouteSelection(null);
+    setGateOperationKey("");
+    setMessage("OP desmarcada.");
+  }
+  function toggleCard(item: OperatorCard) {
+    if (selectedKey && cardKey(item) === selectedKey) { clearOp(); return; }
+    selectCard(item);
+  }
+
   function selectCard(item: OperatorCard) {
     const cardOp = String(item.op ?? "").trim();
     if (!cardOp) return;
@@ -958,18 +995,18 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <label className="inpw"><span className="visually-hidden">Código da OP</span><input className={`inp${opFieldError ? " bad" : ""}`} value={op} onChange={(event) => handleOpChange(event.target.value)} placeholder="Aponte o leitor para a etiqueta da OP ou digite o código" aria-invalid={opFieldError || undefined} autoFocus />{opFieldError ? <small className="field-error">OP não encontrada</small> : null}</label>
         <button type="submit" className="btn-p">Carregar roteiro</button>
       </form>
-      {cardsGate ?? (showStrip ? <RunningStrip items={productionCards} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "production" })} /> : null)}
-      {context.op ? <OpPanel context={context} card={selectedCard} running={activeCards} /> : <HeroEmpty running={activeCards} />}
+      {cardsGate ?? (showStrip ? <RunningStrip items={productionCards} selectedKey={selectedKey} onSelect={toggleCard} onMore={() => setDialog({ kind: "list", source: "production" })} /> : null)}
+      {context.op ? <OpPanel context={context} card={selectedCard} running={activeCards} onClear={clearOp} /> : <HeroEmpty running={activeCards} />}
       <div className={`acts operator-actions${showSetup ? "" : " acts--4"}`} aria-label="Ações operacionais">
         {/* Ordem pedida pela manufatura (09/11/2026): Início, Setup, Parada, Retrabalho, Finalizar. */}
         <button type="button" className="ab a-start operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
         {showSetup ? <button type="button" className="ab a-setup operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
-        <button type="button" className="ab a-stop operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
+        <button type="button" className="ab a-stop operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>Parada</span></button>
         <button type="button" className="ab a-rework operator-action operator-action--rework" disabled={submitting || !canPoint || (resourceStopped && currentStatus !== "Retrabalho")} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
         <button type="button" className="ab a-finish operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : inRework ? "Encerre o retrabalho primeiro (Finalizar Ret.)." : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {/* 10/11/2026: a OP volta para a fila sem lançar quantidade nem mexer no
             Protheus. Retrabalho fica de fora: ele sai pelo Finalizar Ret. */}
-        <button type="button" className="ab a-int operator-action operator-action--interrupt" disabled={submitting || !canInterrupt} onClick={() => setDialog({ kind: "interrupt" })}><span>Interromper OP</span></button>
+        <button type="button" className="ab a-int operator-action operator-action--interrupt" disabled={submitting || !canInterrupt} onClick={() => setDialog({ kind: "interrupt" })}><OperatorActionIcon name="interrupt" /><span>Interromper OP</span></button>
       </div>
       {operations.error && operations.error.status !== 404 ? <ErrorState error={operations.error} onRetry={operations.reload} /> : null}
       <OperatorNotices items={notices} />
@@ -1031,8 +1068,8 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
               <button type="button" role="tab" className={`tab${asideTab === "history" || cardsGate ? " on" : ""}`} aria-selected={asideTab === "history" || Boolean(cardsGate)} onClick={() => setAsideTab("history")}>Histórico <span className="count">{(historyQuery.data?.items ?? []).length}</span></button>
             </div>
             {cardsGate || asideTab === "history"
-              ? <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : historyQuery.error && !historyQuery.data ? "Não foi possível carregar o histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
-              : <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={selectCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />}
+              ? <CardSection className="operator-card-section--history" title="Histórico" items={historyQuery.data?.items ?? []} emptyTitle={historyQuery.loading ? "Carregando histórico" : historyQuery.error && !historyQuery.data ? "Não foi possível carregar o histórico" : "Sem apontamentos recentes"} selectedKey={selectedKey} onSelect={toggleCard} onMore={() => setDialog({ kind: "list", source: "history" })} />
+              : <CardSection title="Fila de Ordem" items={cards.data?.queue ?? []} emptyTitle="Fila vazia" selectedKey={selectedKey} onSelect={toggleCard} onMore={() => setDialog({ kind: "list", source: "queue" })} />}
           </div>
         </aside>
       </div>
@@ -1595,7 +1632,6 @@ function FinishDialog({ context, sector, error, team, onCancel, onConfirm }: { c
       <div><small>Saldo</small><strong>{context.balance}</strong></div>
     </div>
     <div className="operator-quantity-grid"><label>Peças boas<input type="number" min="0" value={good} onChange={(event) => setGood(event.target.value)} /></label><label>Refugo<input type="number" min="0" value={scrap} onChange={(event) => setScrap(event.target.value)} /></label></div>
-    <p className="operator-help">O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado.</p>
     {aboveBalance ? <p className="field-error" role="status">A quantidade informada ({total}) passa do saldo de {context.balance} peça(s).</p> : null}
     {scrapRequiresApproval ? <>
       <label>Crachá do responsável que autoriza o refugo<input value={scrapBadge} onChange={(event) => setScrapBadge(event.target.value)} /></label>

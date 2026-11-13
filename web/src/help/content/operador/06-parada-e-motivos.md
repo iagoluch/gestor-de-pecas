@@ -9,7 +9,7 @@ Use **Parada** sempre que o posto ou uma OP parar de produzir, por qualquer moti
 
 ## Quando o botão Parada funciona
 
-- O botão aparece como **Parada**. Se não há OP ativa, aparece como **Parada do posto**.
+- O botão se chama **Parada**, com ou sem OP ativa.
 - Fica apagado se o posto já está parado e não há OP, ou se todas as OPs ativas já estão paradas.
 
 ## Registrar uma parada
@@ -27,7 +27,7 @@ Motivos em amarelo (cor de aviso) são os **planejados** (parada programada: pau
 
 Alguns motivos não aparecem para o operador: "Fora de turno" (o sistema lança sozinho no fim do turno) e os de falta ou saída antecipada (lançados pela liderança). Há motivos só de certos setores (por exemplo, troca de arame e de gás na Solda, ajuste da dobradeira na Dobra). Motivos que dependem de outro setor (como "Aguardando setor Solda") ficam no fim da lista.
 
-Sem OP carregada e sem nada em andamento, parar o posto também é permitido: o botão passa a se chamar **Parada do posto**.
+Sem OP carregada e sem nada em andamento, parar o posto também é permitido pelo mesmo botão **Parada**.
 
 Com várias OPs marcadas, o sistema registra uma parada por OP, em sequência. Se o sistema recusar uma, as seguintes não são registradas. Leia a mensagem de erro no popup.
 

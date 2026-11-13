@@ -18,7 +18,7 @@ Na tela, a ordem é: Iniciar, Setup, Parada, Retrabalho e Finalizar. Em setor se
 | **Iniciar retrabalho** | Aparece no lugar de Iniciar quando a OP voltou para retrabalho. | OP em retorno de retrabalho. |
 | **Iniciar** (sem OP) | Aparece quando não há OP carregada. Inicia atividade sem OP. | Sem OP. |
 | **Setup** | Registra a preparação da máquina. Só existe em setores com setup. | Veja [Setup e primeira peça](topico:07-setup-e-primeira-peca). |
-| **Parada** (ou **Parada do posto**, se não há OP ativa) | Registra uma parada. | Veja [Parada e motivos](topico:06-parada-e-motivos). |
+| **Parada** | Registra uma parada. | Veja [Parada e motivos](topico:06-parada-e-motivos). |
 | **Retrabalho** / **Finalizar Ret.** | Começa ou encerra retrabalho. | Veja [Retrabalho](topico:08-retrabalho). |
 | **Finalizar** | Encerra a produção e informa as quantidades. | Veja abaixo. |
 

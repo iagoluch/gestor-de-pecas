@@ -43,6 +43,60 @@ describe("primitives da Onda 1", () => {
     await waitFor(() => expect(results).toEqual([false, true]));
   });
 
+  it("Enter confirma o diálogo, mas não ação de risco nem campo que trata o Enter", async () => {
+    const onConfirm = vi.fn();
+    const onScan = vi.fn();
+    const { unmount } = render(
+      <OperatorDialog title="Finalizar" onCancel={() => undefined}>
+        <input aria-label="Boas" />
+        <input aria-label="Crachá" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onScan(); } }} />
+        <div className="operator-dialog__actions"><button type="button">Cancelar</button><button type="button" onClick={onConfirm}>Finalizar</button></div>
+      </OperatorDialog>,
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "Fechar" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByLabelText("Boas"), { key: "Enter" });
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(screen.getByLabelText("Crachá"), { key: "Enter" });
+    expect(onScan).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    unmount();
+
+    const onDelete = vi.fn();
+    const { unmount: unmount2 } = render(
+      <OperatorDialog title="Apagar" onCancel={() => undefined}>
+        <div className="operator-dialog__actions"><button type="button">Cancelar</button><button type="button" data-enter="off" onClick={onDelete}>Apagar</button></div>
+      </OperatorDialog>,
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "Fechar" }), { key: "Enter" });
+    expect(onDelete).not.toHaveBeenCalled();    unmount2();
+
+    const onCancel = vi.fn();
+    render(
+      <OperatorDialog title="Parada" onCancel={onCancel}>
+        <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><button type="button" disabled>Confirmar parada</button></div>
+      </OperatorDialog>,
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "Fechar" }), { key: "Enter" });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("Enter numa opção já escolhida confirma; numa opção nova, só escolhe", () => {
+    const onConfirm = vi.fn();
+    render(
+      <OperatorDialog title="Parada" onCancel={() => undefined}>
+        <div role="listbox" aria-label="Motivos">
+          <button type="button" role="option" aria-selected="false">0043 - TROCA DE EPI</button>
+          <button type="button" role="option" aria-selected="true">0045 - VISITAS</button>
+        </div>
+        <div className="operator-dialog__actions"><button type="button">Cancelar</button><button type="button" onClick={onConfirm}>Confirmar parada</button></div>
+      </OperatorDialog>,
+    );
+    fireEvent.keyDown(screen.getByRole("option", { name: "0043 - TROCA DE EPI" }), { key: "Enter" });
+    expect(onConfirm).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("option", { name: "0045 - VISITAS" }), { key: "Enter" });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
   it("diálogo com autoFocus mantém o campo focado e o foco volta ao botão de origem (AX-02)", () => {
     function Harness() {
       const [open, setOpen] = useState(false);

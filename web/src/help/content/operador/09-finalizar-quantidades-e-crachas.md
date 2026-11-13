@@ -18,8 +18,6 @@ Ao clicar em **Finalizar**, abre o popup **Finalizar produção**.
 | Quantidade atendida | O que já conta como feito. |
 | Saldo | O que ainda falta. |
 
-Texto do popup: "O saldo é reduzido por peças boas + refugo. Retrabalho permanece pendente e não atende o planejado."
-
 ## Campos
 
 | Campo | O que informar |

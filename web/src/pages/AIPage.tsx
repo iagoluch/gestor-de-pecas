@@ -683,7 +683,7 @@ export function AIPage({ embedded = false }: { embedded?: boolean } = {}) {
           </div>
           <div className="operator-dialog__actions">
             <button type="button" onClick={() => setDeleteCandidate(null)} disabled={deletingId !== null}>Cancelar</button>
-            <button type="button" className="button operator-danger" onClick={() => void deleteConversation()} disabled={deletingId !== null}>
+            <button type="button" className="button operator-danger" data-enter="off" onClick={() => void deleteConversation()} disabled={deletingId !== null}>
               {deletingId !== null ? "Excluindo…" : "Excluir conversa"}
             </button>
           </div>

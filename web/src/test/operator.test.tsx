@@ -288,10 +288,10 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Finalizar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Setup" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Parada do posto" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Parada" })).not.toBeDisabled();
     // Ordem pedida pela manufatura (09/11/2026).
     expect(Array.from(screen.getByLabelText("Ações operacionais").querySelectorAll("button"), (b) => b.textContent))
-      .toEqual(["Iniciar", "Setup", "Parada do posto", "Retrabalho", "Finalizar", "Interromper OP"]);
+      .toEqual(["Iniciar", "Setup", "Parada", "Retrabalho", "Finalizar", "Interromper OP"]);
     fireEvent.click(screen.getByRole("button", { name: "20 - DOBRA — Próxima" }));
     await screen.findByRole("heading", { name: "Confirmar operação" });
     const confirmation = screen.getByRole("dialog");
@@ -408,6 +408,12 @@ describe("fluxo Web do operador", () => {
     await screen.findByRole("button", { name: "20 - DOBRA — Atual" });
     expect(screen.queryByText(/10 - CORTE/)).not.toBeInTheDocument();
     expect(screen.getByText("OP OP-B selecionada no card.")).toBeInTheDocument();
+
+    // O botão do painel tira a OP da bancada (a única OP rodando não tem card visível).
+    fireEvent.click(screen.getByRole("button", { name: "Desmarcar OP ✕" }));
+    await screen.findByText("OP desmarcada.");
+    expect(screen.getByLabelText("Código da OP")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "20 - DOBRA — Atual" })).not.toBeInTheDocument();
   });
 
   it("envia a ação contextual Parada como Retomar", async () => {
@@ -485,7 +491,7 @@ describe("fluxo Web do operador", () => {
 
     render(<MemoryRouter initialEntries={["/operador"]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
     await screen.findByText("1303");
-    fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
+    fireEvent.click(screen.getByRole("button", { name: "Parada" }));
     // A busca do motivo filtra a lista pelo texto digitado.
     fireEvent.change(screen.getByLabelText("Buscar motivo"), { target: { value: "quebra" } });
     expect(await screen.findByRole("option", { name: "0029 - Quebra de ferramenta" })).toBeInTheDocument();
@@ -551,13 +557,13 @@ describe("fluxo Web do operador", () => {
     fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "ZZ777" } });
     fireEvent.click(screen.getByRole("button", { name: "Carregar roteiro" }));
     await screen.findByText("OP ZZ777 não encontrada. Confira o código.");
-    fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
+    fireEvent.click(screen.getByRole("button", { name: "Parada" }));
     expect(await screen.findByText("OP não encontrada")).toHaveClass("field-error");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Código da OP/i)).toHaveAttribute("aria-invalid", "true");
     // Apagar o código libera a parada do posto, sem confirmação extra.
     fireEvent.change(screen.getByLabelText(/Código da OP/i), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Parada do posto" }));
+    fireEvent.click(screen.getByRole("button", { name: "Parada" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
@@ -1119,7 +1125,7 @@ describe("fluxo Web do operador", () => {
     expect(screen.getByRole("button", { name: "Retrabalho" })).toBeInTheDocument();
     // Setor sem Setup: só some o botão; a ordem dos outros continua.
     expect(Array.from(screen.getByLabelText("Ações operacionais").querySelectorAll("button"), (b) => b.textContent))
-      .toEqual(["Iniciar", "Parada do posto", "Retrabalho", "Finalizar", "Interromper OP"]);
+      .toEqual(["Iniciar", "Parada", "Retrabalho", "Finalizar", "Interromper OP"]);
   });
 
   it("finaliza na Solda direto, sem portão de primeira peça e sem selecionar o marco terminal", async () => {
