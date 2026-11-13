@@ -50,7 +50,7 @@ export function StopReasonFields({
         ) : <p className="operator-help" role="status">Nenhum motivo corresponde ao filtro informado.</p>}
       </div>
       <label>
-        Comentário{selected?.requer_comentario ? " (obrigatório)" : ""}
+        Comentário (opcional)
         <textarea value={comment} onChange={(event) => onCommentChange(event.target.value)} />
       </label>
     </>

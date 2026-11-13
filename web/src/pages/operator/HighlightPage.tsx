@@ -440,8 +440,8 @@ function HighlightHistoryCard({ row }: { row: HighlightHistoryRow }) {
 }
 
 function HighlightStopDialog({ taskCode, planLabel, reasons, onCancel, onConfirm }: { taskCode: string; planLabel?: string; reasons: StopReason[]; onCancel: () => void; onConfirm: (code: string, comment: string) => unknown }) {
-  const [code, setCode] = useState(""); const [comment, setComment] = useState(""); const selected = reasons.find((reason) => reason.codigo === code);
-  return <OperatorDialog title="Parar Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span>{planLabel ? <span><small>Plano</small><strong>{planLabel}</strong></span> : null}</div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim())} onClick={() => onConfirm(code, comment)}>Confirmar parada</AsyncButton></div></OperatorDialog>;
+  const [code, setCode] = useState(""); const [comment, setComment] = useState("");
+  return <OperatorDialog title="Parar Destaque" size="wide" context={<div className="operator-context-line"><span><small>Tarefa</small><strong>{taskCode}</strong></span>{planLabel ? <span><small>Plano</small><strong>{planLabel}</strong></span> : null}</div>} onCancel={onCancel}><StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} /><div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code} onClick={() => onConfirm(code, comment)}>Confirmar parada</AsyncButton></div></OperatorDialog>;
 }
 
 /**

@@ -235,7 +235,7 @@
 .wb2 .cards .state-box { min-height: 0; color: var(--w-faint); background: transparent; border-color: var(--w-divider); }
 
 /* Card da fila / histórico (também usado na lista completa). */
-.operator-workbench.wb2 .card, .operator-dialog .card.operator-production-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; column-gap: 12px; width: 100%; min-height: 0; margin: 0; padding: 12px 16px; border: 1px solid var(--w-border); border-radius: 10px; color: var(--w-text); background: var(--w-surface-alt); text-align: left; box-shadow: none; font-family: Arial, Helvetica, sans-serif; }
+.operator-workbench.wb2 .card, .operator-dialog .card.operator-production-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; column-gap: 12px; width: 100%; flex: none; min-height: 0; margin: 0; padding: 12px 16px; border: 1px solid var(--w-border); border-radius: 10px; color: var(--w-text); background: var(--w-surface-alt); text-align: left; box-shadow: none; font-family: Arial, Helvetica, sans-serif; }
 .card.operator-production-card .op { min-width: 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
 .card.operator-production-card.sel .op::before { content: "✓ "; color: var(--w-primary); }
 .card.operator-production-card .pill { display: inline-flex; align-items: center; justify-self: end; height: 26px; padding: 0 10px; border: 1px solid; border-radius: 13px; font-size: 13px; font-weight: 700; white-space: nowrap; }
@@ -382,3 +382,7 @@ body.wb2-dialogs .operator-dialog .operator-dialog__actions > .button.operator-s
    com uma área tracejada centralizada, em vez de texto solto no alto. */
 .operator-workbench.wb2 .operator-workbench__aside { display: flex; align-items: stretch; }
 .wb2 .cards .state-box { flex: 1; display: grid; place-content: center; gap: 4px; border: 2px dashed var(--w-divider); border-radius: 10px; text-align: center; font-size: 18px; }
+
+/* 13/11/2026: motivo de parada longo quebra em até 2 linhas, sem reticências. */
+.operator-workbench.wb2 .wb2-status .st:has(.why--long) { align-items: center; }
+.operator-workbench.wb2 .wb2-status .why.why--long { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: clamp(18px, 2.9vh, 32px); line-height: 1.1; white-space: normal; overflow-wrap: anywhere; }

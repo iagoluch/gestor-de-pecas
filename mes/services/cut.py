@@ -150,8 +150,6 @@ class CutService:
             or status.get("grupo_codigo") == "0001"
         ):
             return CutResult(False, "Selecione um motivo de parada válido.", code="motivo_invalido")
-        if status.get("requer_comentario") and not str(comentario or "").strip():
-            return CutResult(False, "O motivo selecionado exige comentário.", code="comentario_obrigatorio")
         current = self.estado_recurso(machine)
         if current and current.get("categoria") == "parada":
             return CutResult(False, "O recurso já está parado.", code="ja_parado", data=current)

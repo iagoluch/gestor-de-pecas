@@ -506,12 +506,6 @@ class OperatorFlowService:
                 "Selecione um motivo de parada válido do catálogo.",
                 "motivo_parada_invalido",
             )
-        if status.get("requer_comentario") and not str(comentario or "").strip():
-            return OperatorFlowResult(
-                False,
-                "O motivo selecionado exige comentário.",
-                "comentario_obrigatorio",
-            )
         state_service = ResourceStateService(self.db, self.operador)
         current = state_service.atual(recurso)
         if current and str(current.get("categoria") or "") == EventCategory.DOWNTIME.value:
@@ -1212,12 +1206,6 @@ class OperatorFlowService:
                 )
                 if value
             )
-            if status_recurso.get("requer_comentario") and not str(comentario or "").strip():
-                return OperatorFlowResult(
-                    False,
-                    "O motivo selecionado exige comentário.",
-                    "comentario_obrigatorio",
-                )
 
         atual = self._buscar_ativo(codigo, setor, recurso, operacao)
         enfileirado_agora = None

@@ -543,8 +543,11 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
   // guarda o primeiro Setup (o backend não sobrescreve).
   // Com o Setup em curso o clique reabre as cotas, inclusive após a conferência.
   // Setores sem checklist continuam recebendo a orientação para Retomar.
-  const canSetup = canPoint
-    && ["", "Aguardando", "Em processo", "Parada", "Retrabalho", "Setup"].includes(currentStatus);
+  // 13/11/2026: com o recurso (ou a OP) parado, Setup e Retrabalho ficam
+  // travados — primeiro retoma, depois prepara ou retrabalha.
+  const resourceStopped = resourceState?.categoria === "parada" || currentStatus === "Parada";
+  const canSetup = canPoint && !resourceStopped
+    && ["", "Aguardando", "Em processo", "Retrabalho", "Setup"].includes(currentStatus);
   const canInterrupt = canPoint && ["Setup", "Em processo", "Parada"].includes(currentStatus);
   const stopContext = activeCard ? {
     op: String(activeCard.op ?? ""),
@@ -962,7 +965,7 @@ export function WorkbenchPage({ sector, resource, hasSetup = true }: { sector: s
         <button type="button" className="ab a-start operator-action operator-action--start" disabled={submitting || !canStart} onClick={() => { if (startsActivity) { setDialog({ kind: "activity", action: "Início" }); return; } void execute(startAction); }}><OperatorActionIcon name="start" /><span>{startLabel}</span></button>
         {showSetup ? <button type="button" className="ab a-setup operator-action operator-action--setup" disabled={submitting || !canSetup} aria-pressed={currentStatus === "Setup"} onClick={() => void setupAppointment()}><OperatorActionIcon name="setup" /><span>Setup</span></button> : null}
         <button type="button" className="ab a-stop operator-action operator-action--stop" disabled={submitting || stoppedWithoutOp || (activeCards.length > 0 && !stoppableCards.length)} onClick={openStopDialog}><OperatorActionIcon name="stop" /><span>{activeCard ? "Parada" : "Parada do posto"}</span></button>
-        <button type="button" className="ab a-rework operator-action operator-action--rework" disabled={submitting || !canPoint} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
+        <button type="button" className="ab a-rework operator-action operator-action--rework" disabled={submitting || !canPoint || (resourceStopped && currentStatus !== "Retrabalho")} onClick={() => { if (currentStatus === "Retrabalho") { setDialog({ kind: "finishRework" }); return; } if (firstPiece?.bloqueio_ativo) { openGate(); return; } setDialog({ kind: "confirm", action: "Retrabalho" }); }}><OperatorActionIcon name="rework" /><span>{currentStatus === "Retrabalho" ? "Finalizar Ret." : "Retrabalho"}</span></button>
         <button type="button" className="ab a-finish operator-action operator-action--finish" disabled={submitting || !canFinish} title={canFinish ? undefined : inRework ? "Encerre o retrabalho primeiro (Finalizar Ret.)." : firstPiece?.message} onClick={finishAppointment}><OperatorActionIcon name="finish" /><span>Finalizar</span></button>
         {/* 10/11/2026: a OP volta para a fila sem lançar quantidade nem mexer no
             Protheus. Retrabalho fica de fora: ele sai pelo Finalizar Ret. */}
@@ -1543,7 +1546,6 @@ function StopDialog({ context, reasons, cards, initial, onCancel, onConfirm }: {
   // Guarda a chave, não o cartão: a lista é recarregada enquanto a janela está aberta.
   const [targetKeys, setTargetKeys] = useState<string[]>(initial ? [cardKey(initial)] : []);
   const targets = cards.filter((card) => targetKeys.includes(cardKey(card)));
-  const selected = reasons.find((item) => item.codigo === code);
   // Com uma OP só não há o que escolher: a janela continua como sempre foi.
   const choosing = cards.length > 1;
   function toggle(card: OperatorCard) {
@@ -1556,7 +1558,7 @@ function StopDialog({ context, reasons, cards, initial, onCancel, onConfirm }: {
       {cards.map((card) => <label key={cardKey(card)}><input type="checkbox" checked={targetKeys.includes(cardKey(card))} onChange={() => toggle(card)} /><span><strong>OP {String(card.op ?? "")}</strong> · {String(card.operation ?? card.numero_operacao ?? "")} · {String(card.status ?? "")}</span></label>)}
     </fieldset> : null}
     <StopReasonFields reasons={reasons} code={code} comment={comment} onCodeChange={setCode} onCommentChange={setComment} />
-    <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || Boolean(selected?.requer_comentario && !comment.trim()) || (choosing && !targets.length)} onClick={() => onConfirm(code, comment, choosing ? targets : [])}>Confirmar parada</AsyncButton></div>
+    <div className="operator-dialog__actions"><button type="button" onClick={onCancel}>Cancelar</button><AsyncButton pendingLabel="Enviando…" className="button operator-danger" disabled={!code || (choosing && !targets.length)} onClick={() => onConfirm(code, comment, choosing ? targets : [])}>Confirmar parada</AsyncButton></div>
   </OperatorDialog>;
 }
 

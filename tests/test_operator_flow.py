@@ -488,7 +488,7 @@ class OperatorFlowTests(unittest.TestCase):
         self.assertFalse(recusa.ok)
         self.assertEqual(recusa.code, "recurso_parado")
 
-    def test_parada_valida_codigo_e_comentario_obrigatorio(self):
+    def test_parada_valida_codigo_e_comentario_opcional(self):
         _db, service, operation = self._service()
         reason_codes = {item["codigo"] for item in service.listar_motivos_parada()}
         self.assertNotIn("1005", reason_codes)
@@ -508,15 +508,8 @@ class OperatorFlowTests(unittest.TestCase):
             motivo_codigo="0040",
         )
         self.assertEqual(invalid_rework_reason.code, "motivo_parada_invalido")
-        missing_comment = service.executar(
-            "Parada",
-            op="OP-OPERADOR",
-            setor="Dobra",
-            recurso="1303",
-            operacao=operation,
-            motivo_codigo="0015",
-        )
-        self.assertEqual(missing_comment.code, "comentario_obrigatorio")
+        # 13/11/2026: comentário da parada é opcional, mesmo em motivo marcado
+        # com requer_comentario na planilha de status.
         stopped = service.executar(
             "Parada",
             op="OP-OPERADOR",
@@ -524,7 +517,6 @@ class OperatorFlowTests(unittest.TestCase):
             recurso="1303",
             operacao=operation,
             motivo_codigo="0015",
-            comentario="Peça separada para análise.",
         )
         self.assertTrue(stopped.ok)
         self.assertEqual(stopped.data["codigo_status_recurso"], "0015")

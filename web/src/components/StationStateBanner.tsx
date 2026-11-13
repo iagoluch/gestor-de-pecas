@@ -83,7 +83,7 @@ export function StationStateBanner({ state, semOp = false, timer = false, opCoun
       <div className={`station-state station-state--${known.tone} station-state--inline wb2-status s-${known.tone}`} role="status" aria-label="Estado do posto">
         <div className="si" aria-hidden="true">{STATE_ICONS[known.tone] ?? STATE_ICONS.neutral}</div>
         <div className="wb2-status__text">
-          <strong className="st">{known.label}{reason ? <span className="why station-state__reason">{reason}</span> : null}</strong>
+          <strong className="st">{known.label}{reason ? <span className={`why station-state__reason${reason.length > 22 ? " why--long" : ""}`}>{reason}</span> : null}</strong>
           {details ? <div className="sub">{details}</div> : null}
         </div>
         <div className="tm">{hasTimer ? <><small>Neste estado há</small><b><ElapsedTimer since={state!.data_inicio!} /></b></> : null}</div>

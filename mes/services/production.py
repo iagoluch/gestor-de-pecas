@@ -123,8 +123,6 @@ class ProductionService:
             or row.get("grupo_codigo") == "0001"
         ):
             return None, "Selecione um motivo de parada válido do catálogo."
-        if row.get("requer_comentario") and not str(comentario or "").strip():
-            return None, "O motivo selecionado exige comentário."
         motivo = " - ".join(
             value
             for value in (
