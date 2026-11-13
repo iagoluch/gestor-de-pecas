@@ -1,4 +1,6 @@
-/* Avisos do posto: popups no canto superior direito + sino na barra superior.
+/* Avisos do posto: popups no canto inferior direito + sino na barra superior.
+   13/11/2026: saiu do canto superior direito porque tampava o quadro de crachá;
+   embaixo à direita fica sobre a fila (que tem "Ver todas"), não sobre o roteiro.
    Mesmas cores da bancada (tokens --w- da maquete), com fundo opaco porque
    ficam por cima da tela. */
 .op-toasts, .op-bell {
@@ -7,9 +9,9 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.op-toasts { position: fixed; z-index: 60; top: 84px; right: 20px; display: flex; flex-direction: column; gap: 10px; width: min(460px, calc(100vw - 40px)); pointer-events: none; }
+.op-toasts { position: fixed; z-index: 60; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 10px; width: min(460px, calc(100vw - 40px)); pointer-events: none; }
 .op-toasts .op-notice { pointer-events: auto; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); animation: op-notice-in .22s ease-out; }
-@keyframes op-notice-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes op-notice-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .op-toasts .op-notice { animation: none; } }
 
 .op-notice { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 14px 14px 14px 16px; border: 1.5px solid var(--tone); border-radius: 10px; color: var(--n-text); background: var(--n-surface); font-size: 17px; line-height: 1.35; text-align: left; }

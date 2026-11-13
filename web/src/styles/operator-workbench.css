@@ -363,6 +363,8 @@ body.wb2-dialogs .operator-dialog .operator-dialog__actions > .button.operator-s
   /* Botões grandes (clique fácil); o roteiro fica com o que sobra. */
   .operator-workbench.wb2 .ab { height: clamp(84px, 16vh, 170px); gap: clamp(6px, 1vh, 12px); font-size: clamp(19px, 2.5vh, 27px); }
   .operator-workbench.wb2 .ab svg { width: clamp(30px, 4.4vh, 48px); height: clamp(30px, 4.4vh, 48px); }
+  /* "Interromper OP" em 1 linha na coluna estreita de 190px. */
+  .operator-workbench.wb2 .a-int { font-size: clamp(16px, 2vh, 21px); white-space: nowrap; }
 
   .wb2 .msg { min-height: clamp(38px, 6.3vh, 68px); padding: clamp(4px, 0.9vh, 10px) 18px; font-size: clamp(15px, 1.75vh, 19px); }
   .wb2 .msg svg { width: clamp(22px, 2.8vh, 30px); height: clamp(22px, 2.8vh, 30px); }
@@ -380,13 +382,13 @@ body.wb2-dialogs .operator-dialog .operator-dialog__actions > .button.operator-s
      crescem com a altura do próprio card (cq*), limitados pela largura. */
   @supports (container-type: size) {
     .wb2 .rbody { container-type: size; min-height: 0; }
-    .wb2 .step { --dot: clamp(30px, min(36cqh, 11cqw), 110px); }
+    .wb2 .step { --dot: clamp(30px, min(46cqh, 11cqw), 136px); }
     .wb2 .step .dot { font-size: clamp(13px, calc(var(--dot) * 0.34), 30px); }
     .wb2 .step.done .dot svg { width: 50%; height: 50%; }
     .wb2 .step::after { height: clamp(4px, calc(var(--dot) / 12), 7px); }
-    .wb2 .step .nm { font-size: clamp(14px, min(9cqh, 2.4cqw), 30px); }
-    .wb2 .step.cur .nm { font-size: clamp(15px, min(10cqh, 2.7cqw), 34px); }
-    .wb2 .step .sl { font-size: clamp(12px, min(6.5cqh, 1.8cqw), 21px); }
+    .wb2 .step .nm { font-size: clamp(14px, min(11cqh, 2.6cqw), 34px); }
+    .wb2 .step.cur .nm { font-size: clamp(15px, min(12cqh, 2.9cqw), 38px); }
+    .wb2 .step .sl { font-size: clamp(12px, min(7.5cqh, 1.9cqw), 24px); }
   }
 }
 
